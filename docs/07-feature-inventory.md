@@ -15,6 +15,8 @@ This file tracks every major feature family discussed so far. Status values:
 | Split source modules: `route`, `router`, `browser`, `internal` | implemented |
 | `GET = page(...)` route capability | implemented |
 | `@layout.tsx` nested layouts | implemented |
+| App-provided loading/not-found browser fallbacks | implemented |
+| Inherited `@loading.tsx`, `@not-found.tsx`, `@error.tsx` | designed |
 | Dynamic path variables with `[slug]` | implemented |
 | Catchall path variables with `[...path]` | implemented |
 | `path` instead of public `params` vocabulary | implemented |

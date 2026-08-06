@@ -1,4 +1,5 @@
 import {
+  ComponentType,
   MouseEvent,
   ReactNode,
   createContext,
@@ -17,6 +18,10 @@ import {
 
 type FileRouterOptions = {
   routes: Record<string, RouteImporter>;
+  loading?: ComponentType;
+  notFound?: ComponentType<{
+    pathname: string;
+  }>;
 };
 
 export function createFileRouter(options: FileRouterOptions) {
@@ -64,7 +69,11 @@ export function createFileRouter(options: FileRouterOptions) {
 
     return createElement(RouterContext.Provider, {
       value: router,
-      children: createElement(RouteRenderer, { match }),
+      children: createElement(RouteRenderer, {
+        Loading: options.loading,
+        NotFound: options.notFound,
+        match,
+      }),
     });
   };
 }
@@ -92,18 +101,21 @@ export function Link(props: {
   );
 }
 
-function RouteRenderer({ match }: { match: PendingRouteMatch }) {
+function RouteRenderer({
+  Loading,
+  NotFound,
+  match,
+}: {
+  Loading?: ComponentType;
+  NotFound?: ComponentType<{ pathname: string }>;
+  match: PendingRouteMatch;
+}) {
   if (match.status === "loading") {
-    return <main className="page-shell">Loading...</main>;
+    return Loading ? createElement(Loading) : null;
   }
 
   if (match.status === "not-found") {
-    return (
-      <main className="page-shell">
-        <h1>Not found</h1>
-        <p>No route matched {match.pathname}.</p>
-      </main>
-    );
+    return NotFound ? createElement(NotFound, { pathname: match.pathname }) : null;
   }
 
   const { page, layouts, path, pathname } = match.match;

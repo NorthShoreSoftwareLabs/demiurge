@@ -21,8 +21,13 @@ export const GET = page(() => <HomePage />);
   - `@layout.tsx`
   - `@policy.ts`
   - `@middleware.ts`
+  - `@loading.tsx`
+  - `@not-found.tsx`
+  - `@error.tsx`
 - Keep normal files like `policy.ts`, `layout.ts`, and `middleware.ts`
   available as real routes.
+- Do not hardcode framework fallback markup. Loading, not-found, and error UI
+  must be supplied by the app or inherited framework-attached files.
 
 ## Phase 2: Typed Route Context
 

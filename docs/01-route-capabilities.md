@@ -28,6 +28,7 @@ Only filenames beginning with `@` are reserved for framework behavior:
 @middleware.ts
 @error.tsx
 @loading.tsx
+@not-found.tsx
 ```
 
 Everything else belongs to the app's URL space:
@@ -40,6 +41,12 @@ layout.ts      -> /layout
 
 This lets apps expose real endpoints such as `/policy` without colliding with
 inherited framework configuration.
+
+Framework-attached UI files should define app-owned UI. The framework should not
+emit opinionated markup, CSS classes, copy, or document structure for loading,
+not-found, or error states. MVP `0.0.1` supports app-provided browser fallbacks
+through `createFileRouter`; future runtime work should move this into inherited
+`@loading.tsx`, `@not-found.tsx`, and `@error.tsx` files.
 
 ## Nested Layouts
 
