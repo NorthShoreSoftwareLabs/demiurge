@@ -1,0 +1,159 @@
+:root {
+  color: #202124;
+  background: #f7f5ef;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+code {
+  border: 1px solid #d8d0c1;
+  border-radius: 6px;
+  background: #fffaf0;
+  padding: 0.08rem 0.32rem;
+  font-size: 0.92em;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid #ded7c9;
+  padding: 1rem clamp(1rem, 4vw, 3rem);
+}
+
+.site-header nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+}
+
+.site-header a {
+  text-decoration: none;
+}
+
+.brand {
+  font-weight: 800;
+}
+
+.page-shell {
+  width: min(960px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: clamp(2rem, 5vw, 4rem) 0;
+}
+
+.intro {
+  max-width: 760px;
+}
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  color: #9b3f2f;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  max-width: 820px;
+  margin-bottom: 1rem;
+  font-size: clamp(2.2rem, 7vw, 5.8rem);
+  line-height: 0.96;
+}
+
+h2 {
+  margin-bottom: 0.75rem;
+  font-size: 1.25rem;
+}
+
+.intro p,
+article p,
+.sidebar p {
+  color: #555047;
+  font-size: 1.05rem;
+}
+
+.panel {
+  border-top: 1px solid #ded7c9;
+  border-bottom: 1px solid #ded7c9;
+  margin: 2rem 0;
+  padding: 1.4rem 0;
+}
+
+.panel ul {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  border: 1px solid #202124;
+  border-radius: 8px;
+  padding: 0 1rem;
+  background: #202124;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.blog-shell {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: clamp(1.5rem, 5vw, 4rem);
+}
+
+.sidebar {
+  border-right: 1px solid #ded7c9;
+  padding-right: 1.5rem;
+}
+
+.content {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .site-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .blog-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid #ded7c9;
+    padding-right: 0;
+    padding-bottom: 1rem;
+  }
+}
