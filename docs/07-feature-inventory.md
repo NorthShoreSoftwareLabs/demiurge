@@ -33,6 +33,7 @@ This file tracks every major feature family discussed so far. Status values:
 | Middleware with cascade | designed |
 | Declarative `@policy.ts` cascade | designed |
 | Typed route manifest | designed |
+| Manual typed route builders | implemented |
 | Typed path/search inference | designed |
 | Unit tests for route matching and loading | implemented |
 | Framework testing strategy | designed |

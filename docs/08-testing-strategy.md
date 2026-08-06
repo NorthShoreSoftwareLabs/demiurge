@@ -164,6 +164,7 @@ MVP `0.0.1` currently verifies:
   method-not-allowed, and missing routes.
 - Vite plugin dev handling serves HTTP capabilities and falls through page or
   unmatched routes to Vite.
+- Typed route builders require path input and produce encoded URL strings.
 
 ## Principle
 

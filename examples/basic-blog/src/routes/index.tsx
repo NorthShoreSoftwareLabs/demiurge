@@ -1,4 +1,5 @@
 import { Link, page, type RouteProps } from "demiurge";
+import { routes } from "../app-routes";
 
 export const GET = page({
   view: HomePage,
@@ -43,7 +44,7 @@ function HomePage(_props: RouteProps) {
         </ul>
       </section>
 
-      <Link className="button" to="/blog">
+      <Link className="button" to={routes.blog.index()}>
         Open blog routes
       </Link>
     </main>

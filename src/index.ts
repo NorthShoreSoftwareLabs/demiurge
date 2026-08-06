@@ -1,4 +1,5 @@
 export { createFileRouter, Link } from "./browser";
+export { defineRoutes, route } from "./routing";
 export { createRequestHandler, handleRequestWithManifest } from "./server";
 export {
   html,
@@ -10,6 +11,7 @@ export {
   text,
   toResponse,
 } from "./route";
+export type { RouteBuilder } from "./routing";
 export type {
   HtmlCapability,
   HttpMethod,

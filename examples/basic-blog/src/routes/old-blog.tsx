@@ -1,3 +1,4 @@
 import { redirect } from "demiurge";
+import { routes } from "../app-routes";
 
-export const GET = redirect("/blog", 301);
+export const GET = redirect(routes.blog.index(), 301);

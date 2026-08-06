@@ -58,6 +58,37 @@ export default defineConfig({
 In development, non-page route capabilities are served as HTTP responses. Page
 routes fall through to Vite so the browser app can handle client navigation.
 
+## Typed Route Builders
+
+MVP `0.0.1` includes a manual typed route builder as the first step toward a
+generated route manifest:
+
+```ts
+export const routes = defineRoutes({
+  home: route("/"),
+  blog: {
+    index: route("/blog"),
+    post: route<{ slug: string }>("/blog/[slug]", ({ slug }) =>
+      `/blog/${encodeURIComponent(slug)}`,
+    ),
+  },
+});
+```
+
+Use it in links and redirects:
+
+```tsx
+<Link to={routes.blog.post({ slug: "file-based-routing" })}>Read</Link>
+```
+
+```ts
+export const GET = redirect(routes.blog.index(), 301);
+```
+
+This manifest is still hand-authored. A future type-generation pass should infer
+these builders from the file tree so route URLs, redirects, prefetches, and
+invalidation paths autocomplete without duplicate route definitions.
+
 ## Framework-Attached Files
 
 Only filenames beginning with `@` are reserved for framework behavior:

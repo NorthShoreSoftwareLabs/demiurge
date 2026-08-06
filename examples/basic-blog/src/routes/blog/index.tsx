@@ -1,4 +1,5 @@
 import { Link, page, type RouteProps } from "demiurge";
+import { routes } from "../../app-routes";
 
 export const GET = page({
   view: BlogIndex,
@@ -12,7 +13,10 @@ function BlogIndex(_props: RouteProps) {
       <p>
         This page is rendered by <code>routes/blog/index.tsx</code>.
       </p>
-      <Link className="button" to="/blog/file-based-routing">
+      <Link
+        className="button"
+        to={routes.blog.post({ slug: "file-based-routing" })}
+      >
         Read a dynamic route
       </Link>
     </article>
