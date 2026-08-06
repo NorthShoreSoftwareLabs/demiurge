@@ -11,11 +11,16 @@
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@demiurge/router": ["src/mini-framework/router.tsx"]
+    },
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src"],
+  "include": ["src", "tests", "examples"],
+  "exclude": ["vite.config.ts", "examples/**/vite.config.ts"],
   "references": []
 }

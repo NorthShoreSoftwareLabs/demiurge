@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "vite examples/basic-blog",
+    "build": "tsc --noEmit && npm run build:example",
+    "build:example": "vite build examples/basic-blog",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

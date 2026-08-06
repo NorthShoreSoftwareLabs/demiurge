@@ -1,4 +1,4 @@
-import { Link, page, type RouteProps } from "../../mini-framework/router";
+import { Link, page, type RouteProps } from "@demiurge/router";
 
 export const GET = page({
   view: BlogIndex,
@@ -10,7 +10,7 @@ function BlogIndex(_props: RouteProps) {
       <p className="eyebrow">Index route</p>
       <h1>Blog index</h1>
       <p>
-        This page is rendered by <code>src/routes/blog/index.tsx</code>.
+        This page is rendered by <code>routes/blog/index.tsx</code>.
       </p>
       <Link className="button" to="/blog/file-based-routing">
         Read a dynamic route

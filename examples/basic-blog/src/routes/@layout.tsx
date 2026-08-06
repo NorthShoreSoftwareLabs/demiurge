@@ -1,4 +1,4 @@
-import { Link, type LayoutProps } from "../mini-framework/router";
+import { Link, type LayoutProps } from "@demiurge/router";
 
 export default function RootLayout({ children }: LayoutProps) {
   return (

@@ -19,10 +19,11 @@ Unit tests cover pure framework logic:
 - cache key/tag behavior
 - typed helper output
 
-Current `0.0.1` tests live next to the router:
+Current `0.0.1` tests live under `tests/router`:
 
 ```txt
-src/mini-framework/router.test.tsx
+tests/router/file-conventions.test.tsx
+tests/router/load-route.test.tsx
 ```
 
 ### Type Tests
@@ -51,10 +52,16 @@ exports can stay ergonomic while still being validated.
 Frameworks usually need fixture apps because real behavior depends on bundling,
 file discovery, rendering mode, and adapter behavior.
 
-Potential structure:
+Current fixture:
 
 ```txt
-fixtures/
+examples/basic-blog/
+```
+
+Potential future fixture structure:
+
+```txt
+examples/
   basic-routes/
   nested-layouts/
   static-blog/

@@ -1,4 +1,4 @@
-import { Link, page, type RouteProps } from "../mini-framework/router";
+import { Link, page, type RouteProps } from "@demiurge/router";
 
 export const GET = page({
   view: HomePage,
@@ -8,12 +8,11 @@ function HomePage(_props: RouteProps) {
   return (
     <main className="page-shell">
       <section className="intro">
-        <p className="eyebrow">MVP 0.0.1</p>
+        <p className="eyebrow">MVP 0.0.1 fixture</p>
         <h1>Route files own addresses, not pages.</h1>
         <p>
-          This app discovers route files, turns filenames into URL patterns,
-          loads the matched <code>GET</code> capability, and renders page
-          results without a full page reload.
+          This fixture app exercises the framework router from outside the
+          framework source tree.
         </p>
       </section>
 
@@ -21,17 +20,19 @@ function HomePage(_props: RouteProps) {
         <h2>Routes are files</h2>
         <ul>
           <li>
-            <code>src/routes/index.tsx</code> becomes <code>/</code>
+            <code>examples/basic-blog/src/routes/index.tsx</code> becomes{" "}
+            <code>/</code>
           </li>
           <li>
-            <code>src/routes/blog/index.tsx</code> becomes <code>/blog</code>
+            <code>examples/basic-blog/src/routes/blog/index.tsx</code> becomes{" "}
+            <code>/blog</code>
           </li>
           <li>
-            <code>src/routes/blog/[slug].tsx</code> becomes{" "}
+            <code>examples/basic-blog/src/routes/blog/[slug].tsx</code> becomes{" "}
             <code>/blog/:slug</code>
           </li>
           <li>
-            <code>src/routes/@layout.tsx</code> wraps every page
+            <code>@layout.tsx</code> files wrap page-compatible routes
           </li>
           <li>
             Route files export <code>GET = page(...)</code>

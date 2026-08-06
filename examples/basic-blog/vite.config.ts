@@ -7,7 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@demiurge/router": fileURLToPath(
-        new URL("./src/mini-framework/router.tsx", import.meta.url),
+        new URL("../../src/mini-framework/router.tsx", import.meta.url),
       ),
     },
   },

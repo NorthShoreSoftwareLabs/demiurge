@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { createFileRouter } from "./mini-framework/router";
-import type { RouteModule } from "./mini-framework/router";
+import { createFileRouter } from "@demiurge/router";
+import type { RouteModule } from "@demiurge/router";
 import "./styles.css";
 
 const routes = import.meta.glob<RouteModule>("./routes/**/*.tsx");
@@ -12,5 +12,3 @@ createRoot(document.getElementById("root")!).render(
     <Router />
   </StrictMode>,
 );
-
-export type { RouteModule } from "./mini-framework/router";

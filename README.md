@@ -10,20 +10,20 @@ exports declare what can happen at that address.
 
 Current conventions:
 
-- `src/routes/index.tsx` maps to `/`
-- `src/routes/about.tsx` maps to `/about`
-- `src/routes/blog/index.tsx` maps to `/blog`
-- `src/routes/blog/[slug].tsx` maps to `/blog/:slug`
-- `src/routes/docs/[...path].tsx` maps to `/docs/*path`
-- `src/routes/@layout.tsx` wraps every page-compatible route
-- `src/routes/blog/@layout.tsx` wraps every page-compatible route below `/blog`
+- framework source lives under `src/mini-framework`
+- example apps live under `examples`
+- `examples/basic-blog/src/routes/index.tsx` maps to `/`
+- `examples/basic-blog/src/routes/blog/index.tsx` maps to `/blog`
+- `examples/basic-blog/src/routes/blog/[slug].tsx` maps to `/blog/:slug`
+- `examples/basic-blog/src/routes/@layout.tsx` wraps every page-compatible route
+- `examples/basic-blog/src/routes/blog/@layout.tsx` wraps every page-compatible route below `/blog`
 - route files export `GET = page(...)`
 - dynamic path values are exposed as `path`, not `params`
 
 Example route:
 
 ```tsx
-import { page } from "../mini-framework/router";
+import { page } from "@demiurge/router";
 
 export const GET = page({
   view: ({ path }) => <Post slug={path.slug} />,
@@ -35,6 +35,14 @@ Run it with:
 ```sh
 npm install
 npm run dev
+```
+
+Run the checks with:
+
+```sh
+npm run typecheck
+npm test
+npm run build
 ```
 
 ## Design notes

@@ -1,4 +1,4 @@
-import type { LayoutProps } from "../../mini-framework/router";
+import type { LayoutProps } from "@demiurge/router";
 
 export default function BlogLayout({ children }: LayoutProps) {
   return (
@@ -7,8 +7,8 @@ export default function BlogLayout({ children }: LayoutProps) {
         <p className="eyebrow">Nested layout</p>
         <h2>Blog</h2>
         <p>
-          This sidebar comes from <code>src/routes/blog/@layout.tsx</code>, so
-          it wraps every route under <code>/blog</code>.
+          This sidebar comes from <code>routes/blog/@layout.tsx</code>, so it
+          wraps every route under <code>/blog</code>.
         </p>
       </aside>
       <section className="content">{children}</section>
