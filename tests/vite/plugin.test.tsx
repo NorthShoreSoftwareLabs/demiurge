@@ -7,7 +7,9 @@ import { json, page, redirect, type RouteModule, type RouteProps } from "demiurg
 import { unstable_createRouteManifest } from "demiurge/internal/testing";
 import {
   demiurge,
+  unstable_createClientEntrySource,
   unstable_createDevRouteImporters,
+  unstable_createDocumentHtml,
   unstable_handleDevRequest,
 } from "demiurge/vite";
 
@@ -64,7 +66,7 @@ describe("Vite plugin dev request handling", () => {
     expect(result.headers.get("location")).toBe("/blog");
   });
 
-  it("falls through page routes to the browser app", async () => {
+  it("marks page routes as document requests", async () => {
     const manifest = unstable_createRouteManifest({
       "./routes/index.tsx": routeModule({
         GET: page(View),
@@ -76,7 +78,7 @@ describe("Vite plugin dev request handling", () => {
         manifest,
         new Request("https://example.test/"),
       ),
-    ).resolves.toBe("next");
+    ).resolves.toBe("document");
   });
 
   it("falls through unmatched routes to Vite", async () => {
@@ -199,6 +201,85 @@ describe("Vite plugin dev request handling", () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/json");
     expect(response.body).toContain('"ok":true');
+  });
+
+  it("serves the framework document for page routes in Vite dev", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-document-"));
+    const routesDir = join(root, "routes");
+    const plugin = demiurge({
+      document: { title: "Docs & Routes" },
+      routesDir: "routes",
+    }) as PluginHarness;
+    const middleware = createMiddlewareHarness();
+    const server = {
+      config: { root },
+      middlewares: {
+        use: middleware.use,
+      },
+      ssrLoadModule: vi.fn(async () => ({ GET: page(View) })),
+      transformIndexHtml: vi.fn(async (_url: string, html: string) =>
+        html.replace("</head>", '<script type="module" src="/@vite/client"></script></head>'),
+      ),
+      watcher: createWatcherHarness(),
+    };
+
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(join(routesDir, "index.tsx"), "export {}");
+
+    plugin.configureServer?.(server as never);
+
+    const response = new CapturingResponse();
+    await middleware.handler(
+      requestFor("/", {
+        headers: {
+          accept: "text/html",
+          host: "example.test",
+        },
+      }) as never,
+      response as never,
+      vi.fn(),
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(response.body).toContain("<title>Docs &amp; Routes</title>");
+    expect(response.body).toContain('src="/virtual:demiurge/client-entry"');
+    expect(response.body).toContain("/@vite/client");
+  });
+
+  it("serves the framework document for HTML navigation misses", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-missing-document-"));
+    const routesDir = join(root, "routes");
+    const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
+    const middleware = createMiddlewareHarness();
+    const server = {
+      config: { root },
+      middlewares: {
+        use: middleware.use,
+      },
+      ssrLoadModule: vi.fn(),
+      transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
+      watcher: createWatcherHarness(),
+    };
+
+    await mkdir(routesDir, { recursive: true });
+
+    plugin.configureServer?.(server as never);
+
+    const response = new CapturingResponse();
+    await middleware.handler(
+      requestFor("/missing", {
+        headers: {
+          accept: "text/html",
+          host: "example.test",
+        },
+      }) as never,
+      response as never,
+      vi.fn(),
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("virtual:demiurge/client-entry");
   });
 
   it("passes POST request bodies and repeated headers to route handlers", async () => {
@@ -328,6 +409,43 @@ describe("Vite plugin dev request handling", () => {
     await middleware.handler(requestFor("/api") as never, new CapturingResponse() as never, next);
 
     expect(next).toHaveBeenCalledWith(error);
+  });
+});
+
+describe("Vite plugin document runtime", () => {
+  it("creates an escaped framework-owned document", () => {
+    const html = unstable_createDocumentHtml({
+      entrySrc: "/assets/app.js",
+      lang: 'en" data-test="bad',
+      title: "Demiurge <Blog>",
+    });
+
+    expect(html).toContain('<html lang="en&quot; data-test=&quot;bad">');
+    expect(html).toContain("<title>Demiurge &lt;Blog&gt;</title>");
+    expect(html).toContain('<div id="root"></div>');
+    expect(html).toContain('<script type="module" src="/assets/app.js"></script>');
+  });
+
+  it("creates a virtual client entry from route files and app-owned styles", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-client-entry-"));
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "styles.css"), "body {}");
+
+    const source = unstable_createClientEntrySource(root);
+
+    expect(source).toContain('import "/src/styles.css";');
+    expect(source).toContain('import.meta.glob("/src/routes/**/*.tsx")');
+    expect(source).toContain('const routePrefix = "/src/routes/";');
+    expect(source).toContain("./routes/");
+    expect(source).toContain("createFileRouter({ routes })");
+  });
+
+  it("omits the virtual style import when styles are disabled", () => {
+    const source = unstable_createClientEntrySource("/tmp/none", {
+      styles: false,
+    });
+
+    expect(source).not.toContain(".css");
   });
 });
 

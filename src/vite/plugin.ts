@@ -1,8 +1,10 @@
+import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { resolve, relative, sep } from "node:path";
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
-import type { Plugin, ViteDevServer } from "vite";
+import type { OutputBundle, OutputChunk } from "rollup";
+import type { Plugin, UserConfig, ViteDevServer } from "vite";
 import { generateRoutes } from "../routing/generate";
 import {
   createRouteManifest,
@@ -20,11 +22,19 @@ import {
 } from "../route";
 
 export type DemiurgeVitePluginOptions = {
+  document?: {
+    lang?: string;
+    title?: string;
+  };
   routesDir?: string;
+  styles?: false | string;
   typedRoutes?: boolean | {
     outputFile?: string;
   };
 };
+
+const CLIENT_ENTRY_ID = "virtual:demiurge/client-entry";
+const RESOLVED_CLIENT_ENTRY_ID = `\0${CLIENT_ENTRY_ID}`;
 
 const supportedMethods = [
   "GET",
@@ -41,8 +51,42 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
 
   return {
     name: "demiurge",
+    config(config) {
+      return createViteConfig(config);
+    },
     configResolved(config) {
       root = config.root;
+    },
+    resolveId(id) {
+      if (id === CLIENT_ENTRY_ID) {
+        return RESOLVED_CLIENT_ENTRY_ID;
+      }
+
+      return null;
+    },
+    load(id) {
+      if (id === RESOLVED_CLIENT_ENTRY_ID) {
+        return createClientEntrySource(root, options);
+      }
+
+      return null;
+    },
+    generateBundle(_outputOptions, bundle) {
+      const entry = findClientEntryChunk(bundle);
+
+      if (!entry) {
+        return;
+      }
+
+      this.emitFile({
+        fileName: "index.html",
+        source: createDocumentHtml({
+          entrySrc: `/${entry.fileName}`,
+          lang: options.document?.lang,
+          title: options.document?.title,
+        }),
+        type: "asset",
+      });
     },
     async buildStart() {
       if (!options.typedRoutes) {
@@ -89,7 +133,17 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
           const result = await handleDevRequest(manifest, webRequest);
 
           if (result === "next") {
+            if (shouldServeDocument(webRequest)) {
+              await writeHtmlResponse(response, await createDevDocument(server, options));
+              return;
+            }
+
             next();
+            return;
+          }
+
+          if (result === "document") {
+            await writeHtmlResponse(response, await createDevDocument(server, options));
             return;
           }
 
@@ -100,6 +154,130 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       });
     },
   };
+}
+
+function createViteConfig(config: UserConfig): UserConfig {
+  return {
+    appType: "custom",
+    build: {
+      rollupOptions: {
+        input: config.build?.rollupOptions?.input ?? CLIENT_ENTRY_ID,
+      },
+    },
+  };
+}
+
+export function createClientEntrySource(
+  root: string,
+  options: DemiurgeVitePluginOptions = {},
+) {
+  const routesDir = options.routesDir ?? "src/routes";
+  const routesGlob = toRootAbsoluteGlob(routesDir);
+  const routesPrefix = toRootAbsolutePrefix(routesDir);
+  const stylesImport = createStylesImport(root, options);
+
+  return `import { StrictMode, createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { createFileRouter } from "demiurge";
+${stylesImport}
+
+const routeModules = import.meta.glob(${JSON.stringify(routesGlob)});
+const routePrefix = ${JSON.stringify(routesPrefix)};
+const routes = Object.fromEntries(
+  Object.entries(routeModules).map(([file, load]) => [
+    \`./routes/\${file.slice(routePrefix.length)}\`,
+    load,
+  ]),
+);
+const Router = createFileRouter({ routes });
+const root = document.getElementById("root");
+
+if (!root) {
+  throw new Error("Demiurge expected a #root element in the framework document.");
+}
+
+createRoot(root).render(
+  createElement(StrictMode, null, createElement(Router)),
+);
+`;
+}
+
+function toRootAbsoluteGlob(routesDir: string) {
+  return `/${routesDir.replace(/^\/|\/$/g, "")}/**/*.tsx`;
+}
+
+function toRootAbsolutePrefix(routesDir: string) {
+  return `/${routesDir.replace(/^\/|\/$/g, "")}/`;
+}
+
+function createStylesImport(
+  root: string,
+  options: DemiurgeVitePluginOptions,
+) {
+  if (options.styles === false) {
+    return "";
+  }
+
+  const stylesFile = options.styles ?? "src/styles.css";
+  const resolvedStylesFile = resolve(root, stylesFile);
+
+  return existsSync(resolvedStylesFile)
+    ? `import ${JSON.stringify(`/${stylesFile.replace(/^\/+/, "")}`)};`
+    : "";
+}
+
+async function createDevDocument(
+  server: ViteDevServer,
+  options: DemiurgeVitePluginOptions,
+) {
+  const html = createDocumentHtml({
+    entrySrc: `/${CLIENT_ENTRY_ID}`,
+    lang: options.document?.lang,
+    title: options.document?.title,
+  });
+
+  return await server.transformIndexHtml("/", html);
+}
+
+export function createDocumentHtml({
+  entrySrc,
+  lang = "en",
+  title = "Demiurge App",
+}: {
+  entrySrc: string;
+  lang?: string;
+  title?: string;
+}) {
+  return `<!doctype html>
+<html lang="${escapeHtml(lang)}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtml(title)}</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="${escapeHtml(entrySrc)}"></script>
+  </body>
+</html>
+`;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function findClientEntryChunk(bundle: OutputBundle) {
+  return Object.values(bundle).find(
+    (item): item is OutputChunk =>
+      item.type === "chunk" &&
+      item.isEntry &&
+      item.facadeModuleId === RESOLVED_CLIENT_ENTRY_ID,
+  );
 }
 
 async function generateTypedRoutes(
@@ -165,7 +343,7 @@ export async function handleDevRequest(
   }
 
   if (capability.kind === "page") {
-    return "next" as const;
+    return "document" as const;
   }
 
   const response = await toResponse(capability, {
@@ -185,6 +363,25 @@ export async function handleDevRequest(
   }
 
   return response;
+}
+
+function shouldServeDocument(request: Request) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return false;
+  }
+
+  const accept = request.headers.get("accept");
+
+  return !accept || accept.includes("text/html");
+}
+
+function writeHtmlResponse(
+  serverResponse: ServerResponse,
+  html: string,
+) {
+  serverResponse.statusCode = 200;
+  serverResponse.setHeader("content-type", "text/html; charset=utf-8");
+  serverResponse.end(html);
 }
 
 async function findRouteFiles(directory: string) {

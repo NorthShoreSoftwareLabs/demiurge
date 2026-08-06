@@ -32,11 +32,12 @@ Each implementation task needs:
 ## Priority Queue
 
 1. `01-pipeline-quality-gates.md`
-2. `02-security-policy-and-csp.md`
-3. `03-route-policies-and-middleware.md`
-4. `04-metadata-scripts-document-output.md`
-5. `05-data-cache-and-static-generation.md`
-6. `06-rendering-ssr-streaming-rsc.md`
-7. `07-realtime-protocols.md`
-8. `08-platform-features.md`
-9. `09-adapters-and-deployment.md`
+2. `10-framework-owned-document-runtime.md`
+3. `02-security-policy-and-csp.md`
+4. `03-route-policies-and-middleware.md`
+5. `04-metadata-scripts-document-output.md`
+6. `05-data-cache-and-static-generation.md`
+7. `06-rendering-ssr-streaming-rsc.md`
+8. `07-realtime-protocols.md`
+9. `08-platform-features.md`
+10. `09-adapters-and-deployment.md`

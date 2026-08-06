@@ -41,8 +41,9 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
 
   for (const [file, load] of Object.entries(routes)) {
     const routePath = file
+      .replace(/^\/src\/routes\//, "")
       .replace(/^\.\/routes\//, "")
-      .replace(/\.tsx$/, "")
+      .replace(/\.tsx?$/, "")
       .split("/");
 
     const basename = routePath.at(-1);
