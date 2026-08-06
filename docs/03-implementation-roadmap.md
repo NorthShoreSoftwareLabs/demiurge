@@ -48,6 +48,7 @@ export const GET = page(() => <HomePage />);
 
 ## Phase 3: HTTP Runtime
 
+- Add a framework request handler for route capabilities.
 - Add a tiny development server.
 - Resolve route files for real HTTP requests.
 - Use the existing `toResponse(...)` helper to turn response capabilities into

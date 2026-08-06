@@ -33,6 +33,18 @@ The browser router only renders page-compatible `GET` routes. Non-page `GET`
 routes are valid route capabilities, but they are not browser navigation
 targets until the HTTP runtime exists.
 
+The first HTTP request handler is implemented through `createRequestHandler(...)`:
+
+```ts
+const handler = createRequestHandler({
+  routes: import.meta.glob<RouteModule>("./routes/**/*.tsx"),
+});
+```
+
+It can resolve non-page route capabilities to platform `Response` objects. Page
+routes currently return `501` through this handler until SSR/RSC renderers are
+implemented.
+
 ## Framework-Attached Files
 
 Only filenames beginning with `@` are reserved for framework behavior:

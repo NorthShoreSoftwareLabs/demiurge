@@ -10,3 +10,4 @@ export {
   splitPathname as unstable_splitPathname,
   toRouteSegments as unstable_toRouteSegments,
 } from "../router";
+export { handleRequestWithManifest } from "../server";

@@ -1,4 +1,5 @@
 export { createFileRouter, Link } from "./browser";
+export { createRequestHandler, handleRequestWithManifest } from "./server";
 export {
   html,
   json,
@@ -11,6 +12,7 @@ export {
 } from "./route";
 export type {
   HtmlCapability,
+  HttpMethod,
   HttpRouteContext,
   JsonCapability,
   LayoutProps,
@@ -30,3 +32,4 @@ export type {
   RouteValue,
   TextCapability,
 } from "./route";
+export type { RequestHandler, RequestHandlerOptions } from "./server";

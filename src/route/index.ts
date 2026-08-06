@@ -11,6 +11,7 @@ export {
 export type {
   HtmlCapability,
   HttpRouteContext,
+  HttpMethod,
   JsonCapability,
   LayoutProps,
   MaybePromise,

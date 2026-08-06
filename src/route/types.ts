@@ -76,6 +76,15 @@ export type ResponseCapability =
 
 export type RouteCapability = PageCapability | ResponseCapability;
 
+export type HttpMethod =
+  | "GET"
+  | "POST"
+  | "PUT"
+  | "PATCH"
+  | "DELETE"
+  | "OPTIONS"
+  | "HEAD";
+
 export type PageOptions = {
   view: ComponentType<RouteProps>;
   layout?: false;

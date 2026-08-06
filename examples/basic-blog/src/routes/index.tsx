@@ -37,6 +37,9 @@ function HomePage(_props: RouteProps) {
           <li>
             Route files export <code>GET = page(...)</code>
           </li>
+          <li>
+            API routes can export helpers like <code>GET = json(...)</code>
+          </li>
         </ul>
       </section>
 
