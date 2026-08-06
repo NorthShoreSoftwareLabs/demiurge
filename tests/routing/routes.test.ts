@@ -6,12 +6,14 @@ declare module "demiurge" {
     "/": {};
     "/blog": {};
     "/blog/[slug]": { slug: PathValue };
+    "/files/[...path]": { path: PathValue };
   }
 
   interface RouteConcretePaths {
     "/": "/";
     "/blog": "/blog";
     "/blog/[slug]": `/blog/${PathValue}`;
+    "/files/[...path]": `/files/${PathValue}`;
   }
 }
 
@@ -33,8 +35,20 @@ describe("typed URL routes", () => {
     );
   });
 
+  it("fills catchall route patterns segment by segment", () => {
+    expect(
+      href({ to: "/files/[...path]", path: { path: "docs/hello world" } }),
+    ).toBe("/files/docs/hello%20world");
+  });
+
+  it("throws when a runtime dynamic target is missing path values", () => {
+    expect(() =>
+      href({ to: "/blog/[slug]", path: {} as never }),
+    ).toThrow('Missing path value for "slug"');
+  });
+
   it("rejects unknown routes and invalid path values at typecheck time", () => {
-    if (false) {
+    typecheckOnly(() => {
       // @ts-expect-error unknown URLs are not valid once route types are generated
       href("/bloog");
 
@@ -52,8 +66,12 @@ describe("typed URL routes", () => {
         to: "/blog/[slug]",
       };
       void invalidLinkProps;
-    }
+    });
 
     expect(true).toBe(true);
   });
 });
+
+function typecheckOnly(_callback: () => void) {
+  return;
+}

@@ -6,6 +6,10 @@ This file tracks every major feature family discussed so far. Status values:
 - `designed`: documented API direction, not implemented.
 - `planned`: identified as important, needs deeper design.
 
+Executable feature work now lives in `tasks/`. Keep this file as the inventory
+snapshot and update the matching task file when a feature moves toward
+implementation.
+
 ## Routing
 
 | Feature | Status |

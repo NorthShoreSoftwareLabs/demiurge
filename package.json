@@ -22,8 +22,11 @@
     "build": "npm run generate:routes && tsc --noEmit && npm run build:example",
     "build:example": "vite build examples/basic-blog",
     "generate:routes": "tsx scripts/generate-basic-blog-routes.ts",
+    "lint": "eslint .",
+    "coverage": "vitest run --coverage",
     "typecheck": "npm run generate:routes && tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify": "npm run lint && npm run typecheck && npm run coverage && npm run build"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
@@ -33,12 +36,17 @@
     "vite": "^6.0.7"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^26.1.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "@vitest/coverage-v8": "^4.1.10",
+    "eslint": "^10.8.0",
+    "globals": "^17.9.0",
     "jsdom": "^30.0.1",
     "tsx": "^4.20.6",
+    "typescript-eslint": "^8.66.0",
     "vitest": "^4.1.10"
   }
 }

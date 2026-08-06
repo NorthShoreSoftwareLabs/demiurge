@@ -1,12 +1,22 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
-import { createFileRouter } from "demiurge";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  createFileRouter,
+  Link,
+  page,
+  type LayoutProps,
+  type RouteProps,
+} from "demiurge";
 
 describe("browser router fallbacks", () => {
   beforeEach(() => {
     window.history.replaceState(null, "", "/");
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it("does not render framework-owned loading markup by default", () => {
@@ -41,7 +51,69 @@ describe("browser router fallbacks", () => {
       expect(screen.getByText("App not found: /missing")).toBeTruthy();
     });
   });
+
+  it("renders matched pages inside inherited layouts", async () => {
+    const Router = createFileRouter({
+      routes: {
+        "./routes/@layout.tsx": routeModule({ default: RootLayout }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    window.history.replaceState(null, "", "/blog");
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Root layout")).toBeTruthy();
+      expect(screen.getByText("Blog page at /blog")).toBeTruthy();
+    });
+  });
+
+  it("navigates internal links without a document reload", async () => {
+    const Router = createFileRouter({
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(HomePage) }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Home")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText("Blog"));
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/blog");
+      expect(screen.getByText("Blog page at /blog")).toBeTruthy();
+    });
+  });
+
+  it("leaves non-primary link clicks to the browser", async () => {
+    const Router = createFileRouter({
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(SelfLinkPage) }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Self")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText("Self"), { button: 1 });
+
+    expect(window.location.pathname).toBe("/");
+  });
 });
+
+function routeModule(module: Record<string, unknown>) {
+  return async () => module;
+}
 
 function Loading() {
   return <p>App loading</p>;
@@ -49,4 +121,30 @@ function Loading() {
 
 function NotFound({ pathname }: { pathname: string }) {
   return <p>App not found: {pathname}</p>;
+}
+
+function RootLayout({ children }: LayoutProps) {
+  return (
+    <section>
+      <h1>Root layout</h1>
+      {children}
+    </section>
+  );
+}
+
+function HomePage(_props: RouteProps) {
+  return (
+    <>
+      <h1>Home</h1>
+      <Link to="/blog">Blog</Link>
+    </>
+  );
+}
+
+function BlogPage({ pathname }: RouteProps) {
+  return <p>Blog page at {pathname}</p>;
+}
+
+function SelfLinkPage(_props: RouteProps) {
+  return <Link to="/">Self</Link>;
 }

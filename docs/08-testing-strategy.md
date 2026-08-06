@@ -130,10 +130,16 @@ header strings can look correct while runtime behavior still fails.
 Current commands:
 
 ```sh
+npm run lint
 npm run typecheck
 npm test
+npm run coverage
 npm run build
+npm run verify
 ```
+
+`npm run verify` is the pipeline command. It runs lint, generated route
+typechecking, Vitest coverage with 80% thresholds, and the example build.
 
 Future commands:
 

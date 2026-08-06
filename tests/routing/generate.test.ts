@@ -20,7 +20,7 @@ describe("typed route manifest generator", () => {
 
     const source = await readFile(outputFile, "utf8");
 
-    expect(source).toContain('"\/": {};');
+    expect(source).toContain('"/": {};');
     expect(source).toContain('"/blog": {};');
     expect(source).toContain('"/blog/[slug]": { slug: PathValue };');
     expect(source).toContain('"/blog/[slug]": `/blog/${PathValue}`;');
