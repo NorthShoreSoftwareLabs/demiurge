@@ -20,8 +20,9 @@ This file tracks every major feature family discussed so far. Status values:
 | Dynamic path variables with `[slug]` | implemented |
 | Catchall path variables with `[...path]` | implemented |
 | `path` instead of public `params` vocabulary | implemented |
-| Real API route helpers: `json`, `text`, `html`, `file` | designed |
-| Redirect and not-found helpers | designed |
+| Real API route helpers: `json`, `text`, `html` | implemented |
+| Redirect and not-found helpers | implemented |
+| Raw `response(...)` helper | implemented |
 | SSE/JSONL/readable stream helpers | designed |
 | WebSocket `WS` capability | designed |
 | WebTransport capability | planned |

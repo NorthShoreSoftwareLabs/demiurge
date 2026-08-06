@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  json,
   page,
   type LayoutProps,
   type RouteModule,
@@ -7,7 +8,7 @@ import {
 } from "demiurge";
 import {
   unstable_createRouteManifest,
-  unstable_loadRoute,
+  unstable_loadPageRoute,
 } from "demiurge/internal/testing";
 
 function View(_props: RouteProps) {
@@ -34,7 +35,10 @@ describe("route loading", () => {
       "./routes/blog/[slug].tsx": routeModule({ GET: page(View) }),
     });
 
-    const match = await unstable_loadRoute(manifest, "/blog/file-based-routing");
+    const match = await unstable_loadPageRoute(
+      manifest,
+      "/blog/file-based-routing",
+    );
 
     expect(match.status).toBe("ready");
     if (match.status !== "ready") return;
@@ -55,7 +59,7 @@ describe("route loading", () => {
       }),
     });
 
-    const match = await unstable_loadRoute(manifest, "/embed");
+    const match = await unstable_loadPageRoute(manifest, "/embed");
 
     expect(match.status).toBe("ready");
     if (match.status !== "ready") return;
@@ -65,10 +69,14 @@ describe("route loading", () => {
 
   it("treats files without page-compatible GET as not found", async () => {
     const manifest = unstable_createRouteManifest({
-      "./routes/api/health.tsx": routeModule({}),
+      "./routes/api/health.tsx": routeModule({
+        GET: json({ ok: true }),
+      }),
     });
 
-    await expect(unstable_loadRoute(manifest, "/api/health")).resolves.toEqual({
+    await expect(
+      unstable_loadPageRoute(manifest, "/api/health"),
+    ).resolves.toEqual({
       status: "not-found",
       pathname: "/api/health",
     });

@@ -1,7 +1,9 @@
 export {
   createRouteManifest,
   findPageMatch,
+  findRouteMatch,
   isLayoutForPage,
+  loadPageRoute,
   loadRoute,
   matchSegments,
   scoreRoute,
@@ -11,7 +13,7 @@ export {
 export type {
   LayoutRoute,
   LoadedRouteMatch,
-  PageRoute,
   PendingRouteMatch,
+  RouteRecord,
   RouteManifest,
 } from "./manifest";

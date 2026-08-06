@@ -1,12 +1,32 @@
 export { createFileRouter, Link } from "./browser";
-export { page } from "./route";
+export {
+  html,
+  json,
+  notFound,
+  page,
+  redirect,
+  response,
+  text,
+  toResponse,
+} from "./route";
 export type {
+  HtmlCapability,
+  HttpRouteContext,
+  JsonCapability,
   LayoutProps,
+  MaybePromise,
+  NotFoundCapability,
   PageCapability,
   PageOptions,
   PathVars,
+  RawResponseCapability,
+  RedirectCapability,
+  ResponseCapability,
+  RouteCapability,
   RouteContext,
   RouteImporter,
   RouteModule,
   RouteProps,
+  RouteValue,
+  TextCapability,
 } from "./route";

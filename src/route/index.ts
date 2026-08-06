@@ -1,11 +1,31 @@
 export { page } from "./page";
+export {
+  html,
+  json,
+  notFound,
+  redirect,
+  response,
+  text,
+  toResponse,
+} from "./response";
 export type {
+  HtmlCapability,
+  HttpRouteContext,
+  JsonCapability,
   LayoutProps,
+  MaybePromise,
+  NotFoundCapability,
   PageCapability,
   PageOptions,
   PathVars,
+  RawResponseCapability,
+  RedirectCapability,
+  ResponseCapability,
+  RouteCapability,
   RouteContext,
   RouteImporter,
   RouteModule,
   RouteProps,
+  RouteValue,
+  TextCapability,
 } from "./types";

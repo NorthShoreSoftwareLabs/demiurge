@@ -12,7 +12,7 @@ import {
 import type { RouteImporter } from "../route";
 import {
   createRouteManifest,
-  loadRoute,
+  loadPageRoute,
   type PendingRouteMatch,
 } from "../router";
 
@@ -46,7 +46,7 @@ export function createFileRouter(options: FileRouterOptions) {
       let cancelled = false;
 
       setMatch({ status: "loading" });
-      loadRoute(manifest, location.pathname).then((nextMatch) => {
+      loadPageRoute(manifest, location.pathname).then((nextMatch) => {
         if (!cancelled) {
           setMatch(nextMatch);
         }

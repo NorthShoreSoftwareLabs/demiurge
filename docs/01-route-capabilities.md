@@ -18,6 +18,21 @@ export const POST = json(...)
 export const WS = socket(...)
 ```
 
+MVP `0.0.1` implements `page(...)` plus the first HTTP response helpers:
+
+```ts
+json(...)
+text(...)
+html(...)
+redirect(...)
+notFound(...)
+response(...)
+```
+
+The browser router only renders page-compatible `GET` routes. Non-page `GET`
+routes are valid route capabilities, but they are not browser navigation
+targets until the HTTP runtime exists.
+
 ## Framework-Attached Files
 
 Only filenames beginning with `@` are reserved for framework behavior:
@@ -257,12 +272,36 @@ Initial helpers:
 
 ```ts
 page(...)
-react(...)
 json(...)
 text(...)
 html(...)
 redirect(...)
 notFound(...)
+empty(...)
+status(...)
+file(...)
+download(...)
+stream(...)
+sse(...)
+jsonl(...)
+```
+
+Implemented in MVP `0.0.1`:
+
+```ts
+page(...)
+json(...)
+text(...)
+html(...)
+redirect(...)
+notFound(...)
+response(...)
+```
+
+Still designed/planned:
+
+```ts
+react(...)
 empty(...)
 status(...)
 file(...)

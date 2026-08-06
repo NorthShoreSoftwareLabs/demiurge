@@ -7,7 +7,7 @@ import {
 } from "demiurge";
 import {
   unstable_createRouteManifest,
-  unstable_findPageMatch,
+  unstable_findRouteMatch,
   unstable_matchSegments,
   unstable_splitPathname,
   unstable_toRouteSegments,
@@ -75,7 +75,7 @@ describe("file route conventions", () => {
       "./routes/@layout.tsx",
       "./routes/blog/@layout.tsx",
     ]);
-    expect(manifest.pages.map((route) => route.file)).toContain(
+    expect(manifest.routes.map((route) => route.file)).toContain(
       "./routes/policy.tsx",
     );
   });
@@ -86,9 +86,9 @@ describe("file route conventions", () => {
       "./routes/blog/archive.tsx": routeModule({ GET: page(View) }),
     });
 
-    const match = unstable_findPageMatch(manifest.pages, "/blog/archive");
+    const match = unstable_findRouteMatch(manifest.routes, "/blog/archive");
 
-    expect(match?.page.file).toBe("./routes/blog/archive.tsx");
+    expect(match?.route.file).toBe("./routes/blog/archive.tsx");
     expect(match?.path).toEqual({});
   });
 });

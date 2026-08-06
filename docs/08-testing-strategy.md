@@ -14,6 +14,7 @@ Unit tests cover pure framework logic:
 - path variable extraction
 - manifest ordering
 - layout inheritance
+- response helper conversion
 - policy merging
 - CSP header generation
 - cache key/tag behavior
@@ -157,6 +158,7 @@ MVP `0.0.1` currently verifies:
 - matched routes load inherited layouts root-to-leaf.
 - `layout: false` skips inherited layouts.
 - route files without a page-compatible `GET` are not page matches.
+- HTTP helpers convert to platform `Response` objects.
 
 ## Principle
 

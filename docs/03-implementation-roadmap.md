@@ -8,6 +8,10 @@
   - `json(...)`
   - `redirect(...)`
   - `notFound(...)`
+- Add basic HTTP result helpers:
+  - `text(...)`
+  - `html(...)`
+  - `response(...)`
 - Teach the client router to navigate only page-compatible `GET` routes.
 - Keep the existing Vite browser demo working.
 
@@ -46,7 +50,10 @@ export const GET = page(() => <HomePage />);
 
 - Add a tiny development server.
 - Resolve route files for real HTTP requests.
-- Support `GET`, `POST`, redirects, JSON, and page responses.
+- Use the existing `toResponse(...)` helper to turn response capabilities into
+  platform `Response` objects.
+- Support `GET`, `POST`, redirects, JSON, text, HTML, raw responses, and page
+  responses.
 - Add preflight handling for route-level CORS.
 
 ## Phase 4: Security Presets

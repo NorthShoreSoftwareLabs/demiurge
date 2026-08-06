@@ -6,7 +6,7 @@ import type {
   RouteProps,
 } from "../route";
 
-export type PageRoute = {
+export type RouteRecord = {
   file: string;
   segments: string[];
   score: number;
@@ -20,7 +20,7 @@ export type LayoutRoute = {
 };
 
 export type RouteManifest = {
-  pages: PageRoute[];
+  routes: RouteRecord[];
   layouts: LayoutRoute[];
 };
 
@@ -37,7 +37,7 @@ export type PendingRouteMatch =
   | { status: "ready"; match: LoadedRouteMatch };
 
 export function createRouteManifest(routes: Record<string, RouteImporter>) {
-  const manifest: RouteManifest = { pages: [], layouts: [] };
+  const manifest: RouteManifest = { routes: [], layouts: [] };
 
   for (const [file, load] of Object.entries(routes)) {
     const routePath = file
@@ -56,7 +56,7 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
       continue;
     }
 
-    manifest.pages.push({
+    manifest.routes.push({
       file,
       segments: toRouteSegments(routePath),
       score: scoreRoute(routePath),
@@ -64,27 +64,27 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
     });
   }
 
-  manifest.pages.sort((a, b) => b.score - a.score || a.file.localeCompare(b.file));
+  manifest.routes.sort((a, b) => b.score - a.score || a.file.localeCompare(b.file));
   manifest.layouts.sort((a, b) => a.segments.length - b.segments.length);
 
   return manifest;
 }
 
-export async function loadRoute(
+export async function loadPageRoute(
   manifest: RouteManifest,
   pathname: string,
 ): Promise<PendingRouteMatch> {
-  const pageMatch = findPageMatch(manifest.pages, pathname);
+  const routeMatch = findRouteMatch(manifest.routes, pathname);
 
-  if (!pageMatch) {
+  if (!routeMatch) {
     return { status: "not-found", pathname };
   }
 
   const matchingLayouts = manifest.layouts.filter((layout) =>
-    isLayoutForPage(layout.segments, pageMatch.page.segments),
+    isLayoutForPage(layout.segments, routeMatch.route.segments),
   );
 
-  const pageModule = await pageMatch.page.load();
+  const pageModule = await routeMatch.route.load();
 
   if (!pageModule.GET || pageModule.GET.kind !== "page") {
     return { status: "not-found", pathname };
@@ -102,25 +102,28 @@ export async function loadRoute(
       layouts: layoutModules.map(
         (module) => module.default as ComponentType<LayoutProps>,
       ),
-      path: pageMatch.path,
+      path: routeMatch.path,
       pathname,
     },
   };
 }
 
-export function findPageMatch(pages: PageRoute[], pathname: string) {
+export function findRouteMatch(routes: RouteRecord[], pathname: string) {
   const pathnameSegments = splitPathname(pathname);
 
-  for (const page of pages) {
-    const path = matchSegments(page.segments, pathnameSegments);
+  for (const route of routes) {
+    const path = matchSegments(route.segments, pathnameSegments);
 
     if (path) {
-      return { page, path };
+      return { route, path };
     }
   }
 
   return null;
 }
+
+export const loadRoute = loadPageRoute;
+export const findPageMatch = findRouteMatch;
 
 export function matchSegments(
   routeSegments: string[],
