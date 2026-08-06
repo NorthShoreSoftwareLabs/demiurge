@@ -11,6 +11,8 @@ This file tracks every major feature family discussed so far. Status values:
 | Feature | Status |
 | --- | --- |
 | File-based route discovery | implemented |
+| Framework package public API from `demiurge` | implemented |
+| Split source modules: `route`, `router`, `browser`, `internal` | implemented |
 | `GET = page(...)` route capability | implemented |
 | `@layout.tsx` nested layouts | implemented |
 | Dynamic path variables with `[slug]` | implemented |

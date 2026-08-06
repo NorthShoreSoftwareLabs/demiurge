@@ -1,4 +1,4 @@
-import { Link, page, type RouteProps } from "@demiurge/router";
+import { Link, page, type RouteProps } from "demiurge";
 
 export const GET = page({
   view: BlogIndex,

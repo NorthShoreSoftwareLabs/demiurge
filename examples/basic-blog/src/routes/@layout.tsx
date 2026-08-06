@@ -1,4 +1,4 @@
-import { Link, type LayoutProps } from "@demiurge/router";
+import { Link, type LayoutProps } from "demiurge";
 
 export default function RootLayout({ children }: LayoutProps) {
   return (

@@ -6,8 +6,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@demiurge/router": fileURLToPath(
-        new URL("../../src/mini-framework/router.tsx", import.meta.url),
+      demiurge: fileURLToPath(new URL("../../src/index.ts", import.meta.url)),
+      "demiurge/internal/testing": fileURLToPath(
+        new URL("../../src/internal/testing.ts", import.meta.url),
       ),
     },
   },

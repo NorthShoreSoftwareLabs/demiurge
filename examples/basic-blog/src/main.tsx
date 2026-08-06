@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { createFileRouter } from "@demiurge/router";
-import type { RouteModule } from "@demiurge/router";
+import { createFileRouter } from "demiurge";
+import type { RouteModule } from "demiurge";
 import "./styles.css";
 
 const routes = import.meta.glob<RouteModule>("./routes/**/*.tsx");

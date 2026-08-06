@@ -10,7 +10,9 @@ exports declare what can happen at that address.
 
 Current conventions:
 
-- framework source lives under `src/mini-framework`
+- framework source lives under `src`
+- public API is exported from `demiurge`
+- test-only internals are exported from `demiurge/internal/testing`
 - example apps live under `examples`
 - `examples/basic-blog/src/routes/index.tsx` maps to `/`
 - `examples/basic-blog/src/routes/blog/index.tsx` maps to `/blog`
@@ -23,7 +25,7 @@ Current conventions:
 Example route:
 
 ```tsx
-import { page } from "@demiurge/router";
+import { page } from "demiurge";
 
 export const GET = page({
   view: ({ path }) => <Post slug={path.slug} />,
@@ -44,6 +46,13 @@ npm run typecheck
 npm test
 npm run build
 ```
+
+Current source modules:
+
+- `src/route`: route capability helpers and public route types
+- `src/router`: file-route manifest, matching, and route loading
+- `src/browser`: browser router and `<Link />`
+- `src/internal`: explicit test-only framework internals
 
 ## Design notes
 

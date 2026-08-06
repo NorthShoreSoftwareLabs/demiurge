@@ -13,7 +13,8 @@
     "moduleResolution": "Bundler",
     "baseUrl": ".",
     "paths": {
-      "@demiurge/router": ["src/mini-framework/router.tsx"]
+      "demiurge": ["src/index.ts"],
+      "demiurge/internal/testing": ["src/internal/testing.ts"]
     },
     "resolveJsonModule": true,
     "isolatedModules": true,

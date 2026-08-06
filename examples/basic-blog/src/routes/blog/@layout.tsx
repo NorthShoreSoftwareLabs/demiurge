@@ -1,4 +1,4 @@
-import type { LayoutProps } from "@demiurge/router";
+import type { LayoutProps } from "demiurge";
 
 export default function BlogLayout({ children }: LayoutProps) {
   return (

@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   page,
-  unstable_createRouteManifest,
-  unstable_loadRoute,
   type LayoutProps,
   type RouteModule,
   type RouteProps,
-} from "@demiurge/router";
+} from "demiurge";
+import {
+  unstable_createRouteManifest,
+  unstable_loadRoute,
+} from "demiurge/internal/testing";
 
 function View(_props: RouteProps) {
   return null;
