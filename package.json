@@ -11,6 +11,10 @@
     "./internal/testing": {
       "types": "./src/internal/testing.ts",
       "default": "./src/internal/testing.ts"
+    },
+    "./vite": {
+      "types": "./src/vite/index.ts",
+      "default": "./src/vite/index.ts"
     }
   },
   "scripts": {
@@ -29,6 +33,7 @@
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
+    "@types/node": "^26.1.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "jsdom": "^30.0.1",

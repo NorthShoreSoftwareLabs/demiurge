@@ -45,6 +45,19 @@ It can resolve non-page route capabilities to platform `Response` objects. Page
 routes currently return `501` through this handler until SSR/RSC renderers are
 implemented.
 
+The Vite plugin wires this into development:
+
+```ts
+import { demiurge } from "demiurge/vite";
+
+export default defineConfig({
+  plugins: [demiurge(), react()],
+});
+```
+
+In development, non-page route capabilities are served as HTTP responses. Page
+routes fall through to Vite so the browser app can handle client navigation.
+
 ## Framework-Attached Files
 
 Only filenames beginning with `@` are reserved for framework behavior:

@@ -49,7 +49,9 @@ export const GET = page(() => <HomePage />);
 ## Phase 3: HTTP Runtime
 
 - Add a framework request handler for route capabilities.
-- Add a tiny development server.
+- Add Vite development integration for non-page route capabilities.
+- Add a tiny standalone development server later if Vite is not the only
+  adapter.
 - Resolve route files for real HTTP requests.
 - Use the existing `toResponse(...)` helper to turn response capabilities into
   platform `Response` objects.

@@ -52,6 +52,8 @@ Current source modules:
 - `src/route`: route capability helpers and public route types
 - `src/router`: file-route manifest, matching, and route loading
 - `src/browser`: browser router and `<Link />`
+- `src/server`: request handling for HTTP route capabilities
+- `src/vite`: Vite integration for development
 - `src/internal`: explicit test-only framework internals
 
 ## Design notes

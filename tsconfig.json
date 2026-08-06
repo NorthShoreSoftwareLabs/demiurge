@@ -14,7 +14,8 @@
     "baseUrl": ".",
     "paths": {
       "demiurge": ["src/index.ts"],
-      "demiurge/internal/testing": ["src/internal/testing.ts"]
+      "demiurge/internal/testing": ["src/internal/testing.ts"],
+      "demiurge/vite": ["src/vite/index.ts"]
     },
     "resolveJsonModule": true,
     "isolatedModules": true,

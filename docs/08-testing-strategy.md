@@ -162,6 +162,8 @@ MVP `0.0.1` currently verifies:
 - HTTP helpers convert to platform `Response` objects.
 - HTTP request handler resolves response routes, redirects, HEAD fallback,
   method-not-allowed, and missing routes.
+- Vite plugin dev handling serves HTTP capabilities and falls through page or
+  unmatched routes to Vite.
 
 ## Principle
 

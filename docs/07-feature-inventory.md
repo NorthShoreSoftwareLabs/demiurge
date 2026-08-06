@@ -15,6 +15,7 @@ This file tracks every major feature family discussed so far. Status values:
 | Split source modules: `route`, `router`, `browser`, `internal` | implemented |
 | `GET = page(...)` route capability | implemented |
 | HTTP request handler for response capabilities | implemented |
+| Vite plugin for non-page HTTP route capabilities | implemented |
 | `@layout.tsx` nested layouts | implemented |
 | App-provided loading/not-found browser fallbacks | implemented |
 | Inherited `@loading.tsx`, `@not-found.tsx`, `@error.tsx` | designed |
