@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { demiurge } from "../../src/vite/plugin";
 
 export default defineConfig({
-  plugins: [demiurge(), react()],
+  plugins: [demiurge({ typedRoutes: true }), react()],
   resolve: {
     alias: {
       demiurge: fileURLToPath(new URL("../../src/index.ts", import.meta.url)),

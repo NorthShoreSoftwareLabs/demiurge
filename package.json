@@ -18,10 +18,11 @@
     }
   },
   "scripts": {
-    "dev": "vite examples/basic-blog",
-    "build": "tsc --noEmit && npm run build:example",
+    "dev": "npm run generate:routes && vite examples/basic-blog",
+    "build": "npm run generate:routes && tsc --noEmit && npm run build:example",
     "build:example": "vite build examples/basic-blog",
-    "typecheck": "tsc --noEmit",
+    "generate:routes": "tsx scripts/generate-basic-blog-routes.ts",
+    "typecheck": "npm run generate:routes && tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
@@ -37,6 +38,7 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "jsdom": "^30.0.1",
+    "tsx": "^4.20.6",
     "vitest": "^4.1.10"
   }
 }

@@ -3,6 +3,7 @@ import { Readable } from "node:stream";
 import { resolve, relative, sep } from "node:path";
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin, ViteDevServer } from "vite";
+import { generateRoutes } from "../routing/generate";
 import {
   createRouteManifest,
   findRouteMatch,
@@ -20,6 +21,9 @@ import {
 
 export type DemiurgeVitePluginOptions = {
   routesDir?: string;
+  typedRoutes?: boolean | {
+    outputFile?: string;
+  };
 };
 
 const supportedMethods = [
@@ -33,9 +37,46 @@ const supportedMethods = [
 ] satisfies HttpMethod[];
 
 export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
+  let root = process.cwd();
+
   return {
     name: "demiurge",
+    configResolved(config) {
+      root = config.root;
+    },
+    async buildStart() {
+      if (!options.typedRoutes) {
+        return;
+      }
+
+      await generateTypedRoutes(root, options);
+    },
     configureServer(server) {
+      if (options.typedRoutes) {
+        const routesDir = resolve(
+          server.config.root,
+          options.routesDir ?? "src/routes",
+        );
+
+        void generateTypedRoutes(server.config.root, options);
+        server.watcher.add(routesDir);
+        server.watcher.on("add", (file) => {
+          if (isRouteFile(routesDir, file)) {
+            void generateTypedRoutes(server.config.root, options);
+          }
+        });
+        server.watcher.on("change", (file) => {
+          if (isRouteFile(routesDir, file)) {
+            void generateTypedRoutes(server.config.root, options);
+          }
+        });
+        server.watcher.on("unlink", (file) => {
+          if (isRouteFile(routesDir, file)) {
+            void generateTypedRoutes(server.config.root, options);
+          }
+        });
+      }
+
       server.middlewares.use(async (request, response, next) => {
         try {
           const routesDir = resolve(
@@ -59,6 +100,28 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       });
     },
   };
+}
+
+async function generateTypedRoutes(
+  root: string,
+  options: DemiurgeVitePluginOptions,
+) {
+  const routesDir = resolve(root, options.routesDir ?? "src/routes");
+  const outputFile = resolve(
+    root,
+    typeof options.typedRoutes === "object"
+      ? options.typedRoutes.outputFile ?? "src/route-manifest.d.ts"
+      : "src/route-manifest.d.ts",
+  );
+
+  await generateRoutes({ outputFile, routesDir });
+}
+
+function isRouteFile(routesDir: string, file: string) {
+  return (
+    file.startsWith(routesDir) &&
+    /\.tsx?$/.test(file)
+  );
 }
 
 export async function createDevRouteImporters(

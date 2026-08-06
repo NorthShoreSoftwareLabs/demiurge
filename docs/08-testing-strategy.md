@@ -34,7 +34,7 @@ Type tests should lock in developer experience:
 
 - inferred `path` variables from filenames
 - typed `search` schemas
-- typed route manifest functions
+- generated actual URL manifest types
 - typed redirects
 - typed invalidation paths and tags
 - invalid static `paths` exports
@@ -164,7 +164,7 @@ MVP `0.0.1` currently verifies:
   method-not-allowed, and missing routes.
 - Vite plugin dev handling serves HTTP capabilities and falls through page or
   unmatched routes to Vite.
-- Typed route builders require path input and produce encoded URL strings.
+- Generated typed URL helpers require path input and produce encoded URL strings.
 
 ## Principle
 

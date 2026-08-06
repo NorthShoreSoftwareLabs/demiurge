@@ -1,17 +1,16 @@
 import { Link, type LayoutProps } from "demiurge";
-import { routes } from "../app-routes";
 
 export default function RootLayout({ children }: LayoutProps) {
   return (
     <div>
       <header className="site-header">
-        <Link className="brand" to={routes.home()}>
+        <Link className="brand" to="/">
           Demiurge
         </Link>
         <nav>
-          <Link to={routes.home()}>Home</Link>
-          <Link to={routes.blog.index()}>Blog</Link>
-          <Link to={routes.blog.post({ slug: "file-based-routing" })}>
+          <Link to="/">Home</Link>
+          <Link to="/blog">Blog</Link>
+          <Link to="/blog/[slug]" path={{ slug: "file-based-routing" }}>
             Dynamic route
           </Link>
         </nav>

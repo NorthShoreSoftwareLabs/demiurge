@@ -10,6 +10,7 @@ import type {
   RouteValue,
   TextCapability,
 } from "./types";
+import { href, type AppHref, type LinkTarget } from "../routing";
 
 export function json<T>(
   value: JsonCapability<T>["value"],
@@ -38,13 +39,21 @@ export function html(value: RouteValue<string>, init?: ResponseInit) {
   } satisfies HtmlCapability;
 }
 
+export function redirect<const TTo extends AppHref>(
+  to: LinkTarget<TTo>,
+  init?: ResponseInit | number,
+): RedirectCapability;
 export function redirect(
   to: RouteValue<string | URL>,
+  init?: ResponseInit | number,
+): RedirectCapability;
+export function redirect(
+  to: LinkTarget | RouteValue<string | URL>,
   init?: ResponseInit | number,
 ) {
   return {
     kind: "redirect",
-    to,
+    to: isLinkTargetObject(to) ? href(to) : to,
     init: typeof init === "number" ? { status: init } : init,
   } satisfies RedirectCapability;
 }
@@ -149,4 +158,13 @@ function withDefaultHeader(
   }
 
   return nextHeaders;
+}
+
+function isLinkTargetObject(value: unknown): value is LinkTarget {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !(value instanceof URL) &&
+    "to" in value
+  );
 }

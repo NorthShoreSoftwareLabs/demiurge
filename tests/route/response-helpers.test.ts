@@ -51,6 +51,15 @@ describe("response helpers", () => {
     expect(result.headers.get("location")).toBe("/login");
   });
 
+  it("creates redirects from typed URL targets", async () => {
+    const result = await toResponse(
+      redirect({ to: "/blog/[slug]", path: { slug: "hello world" } }),
+      context,
+    );
+
+    expect(result.headers.get("location")).toBe("/blog/hello%20world");
+  });
+
   it("creates not-found responses", async () => {
     const result = await toResponse(notFound("missing"), context);
 

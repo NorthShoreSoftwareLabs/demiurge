@@ -147,7 +147,7 @@ Server-side invalidation:
 
 ```ts
 invalidate.tags([tags.posts()]);
-invalidate.path(routes.posts.index());
+invalidate.path("/posts");
 invalidate.key(["post", slug]);
 ```
 
@@ -168,7 +168,7 @@ export const create = action({
   async handler({ input, invalidate, routes }) {
     const post = await db.posts.create(input);
     invalidate.tags([tags.posts()]);
-    return redirect(routes.posts.detail({ slug: post.slug }));
+    return redirect({ to: "/posts/[slug]", path: { slug: post.slug } });
   },
 });
 ```
@@ -181,21 +181,21 @@ separate concepts.
 Route files should generate a typed route manifest:
 
 ```ts
-routes.home()
-routes.posts.index()
-routes.posts.detail({ slug: string })
-routes.org.settings({ orgId: string })
+href("/")
+href("/posts")
+href({ to: "/posts/[slug]", path: { slug } })
+href({ to: "/org/[orgId]/settings", path: { orgId } })
 ```
 
 Use it everywhere:
 
 ```tsx
-<Link to={routes.posts.detail({ slug })}>Read post</Link>
+<Link to="/posts/[slug]" path={{ slug }}>Read post</Link>
 ```
 
 ```ts
-return redirect(routes.posts.detail({ slug }));
-invalidate.path(routes.posts.detail({ slug }));
+return redirect({ to: "/posts/[slug]", path: { slug } });
+invalidate.path({ to: "/posts/[slug]", path: { slug } });
 ```
 
 Cache tags should also be typed:

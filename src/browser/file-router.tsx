@@ -15,6 +15,7 @@ import {
   loadPageRoute,
   type PendingRouteMatch,
 } from "../router";
+import { href, type AppHref, type LinkTarget, type LinkTo } from "../routing";
 
 type FileRouterOptions = {
   routes: Record<string, RouteImporter>;
@@ -78,21 +79,21 @@ export function createFileRouter(options: FileRouterOptions) {
   };
 }
 
-export function Link(props: {
-  to: string;
+export function Link<const TTo extends AppHref>(props: LinkTo<TTo> & {
   children: ReactNode;
   className?: string;
 }) {
   const router = useRouter();
+  const to = href(props as LinkTarget<TTo>);
 
   return (
     <a
       className={props.className}
-      href={props.to}
+      href={to}
       onClick={(event) => {
         if (shouldHandleLinkClick(event)) {
           event.preventDefault();
-          router.push(props.to);
+          router.push(to);
         }
       }}
     >

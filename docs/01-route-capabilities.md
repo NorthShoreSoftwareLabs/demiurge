@@ -58,36 +58,40 @@ export default defineConfig({
 In development, non-page route capabilities are served as HTTP responses. Page
 routes fall through to Vite so the browser app can handle client navigation.
 
-## Typed Route Builders
+## Generated Typed URLs
 
-MVP `0.0.1` includes a manual typed route builder as the first step toward a
-generated route manifest:
-
-```ts
-export const routes = defineRoutes({
-  home: route("/"),
-  blog: {
-    index: route("/blog"),
-    post: route<{ slug: string }>("/blog/[slug]", ({ slug }) =>
-      `/blog/${encodeURIComponent(slug)}`,
-    ),
-  },
-});
-```
-
-Use it in links and redirects:
+Demiurge generates route types from the `routes` folder. App code still writes
+actual URLs and file route patterns:
 
 ```tsx
-<Link to={routes.blog.post({ slug: "file-based-routing" })}>Read</Link>
+<Link to="/blog">Blog</Link>
+<Link to="/blog/[slug]" path={{ slug: "file-based-routing" }}>Read</Link>
+<Link to="/blog/file-based-routing">Read</Link>
 ```
+
+The generated manifest augments the framework package:
 
 ```ts
-export const GET = redirect(routes.blog.index(), 301);
+declare module "demiurge" {
+  interface RoutePathVars {
+    "/blog/[slug]": { slug: PathValue };
+  }
+
+  interface RouteConcretePaths {
+    "/blog/[slug]": `/blog/${PathValue}`;
+  }
+}
 ```
 
-This manifest is still hand-authored. A future type-generation pass should infer
-these builders from the file tree so route URLs, redirects, prefetches, and
-invalidation paths autocomplete without duplicate route definitions.
+This means unknown URLs fail typecheck, dynamic patterns require their `path`
+values, and concrete dynamic URLs can still autocomplete as real strings.
+
+The Vite plugin can generate this file on startup and watch route files during
+development:
+
+```ts
+demiurge({ typedRoutes: true })
+```
 
 ## Framework-Attached Files
 

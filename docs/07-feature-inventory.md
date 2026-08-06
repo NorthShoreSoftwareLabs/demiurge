@@ -32,8 +32,9 @@ This file tracks every major feature family discussed so far. Status values:
 | Route groups such as `(admin)` | designed |
 | Middleware with cascade | designed |
 | Declarative `@policy.ts` cascade | designed |
-| Typed route manifest | designed |
-| Manual typed route builders | implemented |
+| Generated typed URL manifest | implemented |
+| Actual URL string type-safety for `Link`/`href` | implemented |
+| Manual typed route builders | rejected |
 | Typed path/search inference | designed |
 | Unit tests for route matching and loading | implemented |
 | Framework testing strategy | designed |
