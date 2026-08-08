@@ -28,9 +28,17 @@ export type PolicyRoute = {
   load: RouteImporter;
 };
 
+export type MiddlewareRoute = {
+  file: string;
+  fileSegments: string[];
+  segments: string[];
+  load: RouteImporter;
+};
+
 export type RouteManifest = {
   routes: RouteRecord[];
   layouts: LayoutRoute[];
+  middlewares: MiddlewareRoute[];
   policies: PolicyRoute[];
 };
 
@@ -47,7 +55,12 @@ export type PendingRouteMatch =
   | { status: "ready"; match: LoadedRouteMatch };
 
 export function createRouteManifest(routes: Record<string, RouteImporter>) {
-  const manifest: RouteManifest = { routes: [], layouts: [], policies: [] };
+  const manifest: RouteManifest = {
+    routes: [],
+    layouts: [],
+    middlewares: [],
+    policies: [],
+  };
 
   for (const [file, load] of Object.entries(routes)) {
     const routePath = file
@@ -78,6 +91,16 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
       continue;
     }
 
+    if (basename === "@middleware") {
+      manifest.middlewares.push({
+        file,
+        fileSegments: routePath.slice(0, -1),
+        segments: toRouteSegments(routePath.slice(0, -1)),
+        load,
+      });
+      continue;
+    }
+
     manifest.routes.push({
       file,
       fileSegments: routePath,
@@ -92,6 +115,9 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
     (a, b) => a.fileSegments.length - b.fileSegments.length || a.file.localeCompare(b.file),
   );
   manifest.policies.sort(
+    (a, b) => a.fileSegments.length - b.fileSegments.length || a.file.localeCompare(b.file),
+  );
+  manifest.middlewares.sort(
     (a, b) => a.fileSegments.length - b.fileSegments.length || a.file.localeCompare(b.file),
   );
 

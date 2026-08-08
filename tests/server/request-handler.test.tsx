@@ -599,6 +599,134 @@ describe("request handler", () => {
     expect(publicSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("runs inherited @middleware files root-to-leaf around route handlers", async () => {
+    const events: string[] = [];
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/@middleware.ts": routeModule({
+          middleware: async (_context, next) => {
+            events.push("root before");
+            const response = await next();
+            events.push("root after");
+            response.headers.set("x-root", "1");
+            return response;
+          },
+        }),
+        "./routes/api/@middleware.ts": routeModule({
+          middleware: async (_context, next) => {
+            events.push("api before");
+            const response = await next();
+            events.push("api after");
+            response.headers.set("x-api", "1");
+            return response;
+          },
+        }),
+        "./routes/api/health.tsx": routeModule({
+          GET: text(() => {
+            events.push("handler");
+            return "ok";
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/health"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-root")).toBe("1");
+    expect(response.headers.get("x-api")).toBe("1");
+    await expect(response.text()).resolves.toBe("ok");
+    expect(events).toEqual([
+      "root before",
+      "api before",
+      "handler",
+      "api after",
+      "root after",
+    ]);
+  });
+
+  it("lets inherited @middleware short-circuit route handlers", async () => {
+    const handlerSpy = vi.fn(() => "ok");
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/@middleware.ts": routeModule({
+          middleware: ({ request }, next) => {
+            if (!request.headers.has("authorization")) {
+              return new Response("Unauthorized", { status: 401 });
+            }
+
+            return next();
+          },
+        }),
+        "./routes/api/profile.tsx": routeModule({
+          GET: text(handlerSpy),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile"),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.text()).resolves.toBe("Unauthorized");
+    expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
+  it("scopes inherited @middleware files to route group subtrees", async () => {
+    const adminSpy = vi.fn(() => "admin");
+    const publicSpy = vi.fn(() => "public");
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/(admin)/@middleware.ts": routeModule({
+          middleware: () => new Response("Admin only", { status: 403 }),
+        }),
+        "./routes/(admin)/dashboard.tsx": routeModule({
+          GET: text(adminSpy),
+        }),
+        "./routes/public.tsx": routeModule({
+          GET: text(publicSpy),
+        }),
+      },
+    });
+
+    const adminResponse = await handler(
+      new Request("https://example.test/dashboard"),
+    );
+    const publicResponse = await handler(
+      new Request("https://example.test/public"),
+    );
+
+    expect(adminResponse.status).toBe(403);
+    await expect(adminResponse.text()).resolves.toBe("Admin only");
+    expect(adminSpy).not.toHaveBeenCalled();
+    expect(publicResponse.status).toBe(200);
+    await expect(publicResponse.text()).resolves.toBe("public");
+    expect(publicSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects middleware that calls next more than once", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/@middleware.ts": routeModule({
+          middleware: async (_context, next) => {
+            await next();
+            return await next();
+          },
+        }),
+        "./routes/api/health.tsx": routeModule({
+          GET: text("ok"),
+        }),
+      },
+    });
+
+    await expect(
+      handler(new Request("https://example.test/api/health")),
+    ).rejects.toThrow("Demiurge route middleware next() called multiple times.");
+  });
+
   it("rejects unsafe CSRF-protected requests without matching tokens", async () => {
     const handlerSpy = vi.fn(({ request }: { request: Request }) => request.text());
     const handler = createRequestHandler({

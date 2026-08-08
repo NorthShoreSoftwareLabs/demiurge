@@ -160,11 +160,14 @@ MVP `0.0.1` currently verifies:
 - pathnames split predictably.
 - path variables decode URL-encoded values.
 - `@layout.tsx` files are classified as layouts.
+- `@middleware.ts` files are classified as framework-attached middleware files.
 - `@policy.ts` files are classified as framework-attached policy files.
 - normal names like `policy.tsx` remain route files.
 - static routes outrank dynamic routes.
 - matched routes load inherited layouts root-to-leaf.
 - `layout: false` skips inherited layouts.
+- HTTP middleware runs root-to-leaf, can short-circuit, and respects route group
+  scope.
 - route files without a page-compatible `GET` are not page matches.
 - HTTP helpers convert to platform `Response` objects.
 - HTTP request handler resolves response routes, redirects, HEAD fallback,

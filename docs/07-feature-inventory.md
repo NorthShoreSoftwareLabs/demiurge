@@ -34,7 +34,8 @@ implementation.
 | WebTransport capability | planned |
 | WebRTC signaling helpers | planned |
 | Route groups such as `(admin)` | implemented |
-| Middleware with cascade | designed |
+| HTTP `@middleware.ts` cascade | implemented |
+| Typed middleware-added context | designed |
 | Framework-attached `@policy.ts` discovery | implemented |
 | HTTP route security `@policy.ts` cascade | implemented |
 | Declarative `@policy.ts` cascade | designed |

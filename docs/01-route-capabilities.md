@@ -141,6 +141,8 @@ through `createFileRouter`; future runtime work should move this into inherited
 
 `@policy.ts` files are also framework-attached and collected separately from URL
 routes. Ordinary `policy.ts` or `policy.tsx` files remain real route files.
+`@middleware.ts` files are collected separately too; ordinary `middleware.ts` or
+`middleware.tsx` files remain real route files.
 
 ## Nested Layouts
 
@@ -274,6 +276,22 @@ The request pipeline is:
 
 Policies are declarative and inheritable. Middleware is imperative and
 composable. Layouts are UI composition. Route handlers are capabilities.
+
+The first middleware slice supports inherited HTTP route middleware exported
+from `@middleware.ts` files:
+
+```ts
+export const middleware = async ({ request }, next) => {
+  if (!request.headers.has("authorization")) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  return await next();
+};
+```
+
+Middleware runs root-to-leaf around the matched route handler and can
+short-circuit by returning a platform `Response`.
 
 ## Entry Capabilities
 

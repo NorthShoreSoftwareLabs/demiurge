@@ -72,6 +72,8 @@ describe("file route conventions", () => {
       "./routes/@layout.tsx": routeModule({ default: RootLayout }),
       "./routes/blog/@layout.tsx": routeModule({ default: BlogLayout }),
       "./routes/(admin)/@layout.tsx": routeModule({ default: BlogLayout }),
+      "./routes/@middleware.ts": routeModule({}),
+      "./routes/(admin)/@middleware.ts": routeModule({}),
       "./routes/(admin)/@policy.ts": routeModule({ policy: adminPolicy }),
       "./routes/(admin)/users.tsx": routeModule({ GET: page(View) }),
       "./routes/index.tsx": routeModule({ GET: page(View) }),
@@ -90,6 +92,9 @@ describe("file route conventions", () => {
     );
     expect(manifest.routes.map((route) => route.file)).not.toContain(
       "./routes/@policy.ts",
+    );
+    expect(manifest.routes.map((route) => route.file)).not.toContain(
+      "./routes/@middleware.ts",
     );
     expect(
       manifest.routes.find((route) => route.file === "./routes/(admin)/users.tsx")
@@ -111,6 +116,13 @@ describe("file route conventions", () => {
       [],
       ["(admin)"],
     ]);
+    expect(manifest.middlewares.map((middleware) => middleware.file)).toEqual([
+      "./routes/@middleware.ts",
+      "./routes/(admin)/@middleware.ts",
+    ]);
+    expect(
+      manifest.middlewares.map((middleware) => middleware.fileSegments),
+    ).toEqual([[], ["(admin)"]]);
   });
 
   it("prefers static routes over dynamic routes", () => {

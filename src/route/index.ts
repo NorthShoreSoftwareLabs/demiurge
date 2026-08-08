@@ -33,6 +33,8 @@ export type {
   RouteCapability,
   RouteContext,
   RouteImporter,
+  RouteMiddleware,
+  RouteMiddlewareNext,
   RouteModule,
   RoutePolicy,
   RouteProps,

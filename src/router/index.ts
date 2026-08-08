@@ -14,6 +14,7 @@ export {
 export type {
   LayoutRoute,
   LoadedRouteMatch,
+  MiddlewareRoute,
   PendingRouteMatch,
   PolicyRoute,
   RouteRecord,

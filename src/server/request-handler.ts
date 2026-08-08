@@ -12,6 +12,7 @@ import {
   type ResponseCapability,
   type RouteCapability,
   type RouteImporter,
+  type RouteMiddleware,
   type RouteModule,
 } from "../route";
 import {
@@ -135,24 +136,22 @@ export async function handleRequestWithManifest(
     return applyCorsHeaders(requestSecurityResponse, capability.cors, request);
   }
 
-  const response = await toResponse(capability, {
+  const context = {
     path: routeMatch.path,
     pathname: url.pathname,
     request,
     search: url.searchParams,
     url,
-  } satisfies HttpRouteContext);
-  const corsResponse = applyCorsHeaders(response, capability.cors, request);
+  } satisfies HttpRouteContext;
+  const middlewares = await loadInheritedRouteMiddleware(
+    manifest,
+    routeMatch.route,
+  );
+  const response = await runRouteMiddleware(middlewares, context, () =>
+    toResponse(capability, context),
+  );
 
-  if (method === "HEAD") {
-    return new Response(null, {
-      headers: corsResponse.headers,
-      status: corsResponse.status,
-      statusText: corsResponse.statusText,
-    });
-  }
-
-  return corsResponse;
+  return finalizeRouteResponse(response, capability, request, method);
 }
 
 async function loadInheritedRoutePolicy(
@@ -174,6 +173,68 @@ async function loadInheritedRoutePolicy(
     routeModule.policy,
     { security: capability.security },
   );
+}
+
+async function loadInheritedRouteMiddleware(
+  manifest: RouteManifest,
+  route: RouteRecord,
+) {
+  const middlewareModules = await Promise.all(
+    manifest.middlewares
+      .filter((middleware) =>
+        isAttachedFileForRoute(middleware.fileSegments, route.fileSegments),
+      )
+      .map((middleware) => middleware.load()),
+  );
+
+  return middlewareModules.flatMap((module) =>
+    module.middleware ? [module.middleware] : [],
+  );
+}
+
+async function runRouteMiddleware(
+  middlewares: RouteMiddleware[],
+  context: HttpRouteContext,
+  handler: () => Promise<Response>,
+) {
+  let index = -1;
+
+  async function dispatch(nextIndex: number): Promise<Response> {
+    if (nextIndex <= index) {
+      throw new Error("Demiurge route middleware next() called multiple times.");
+    }
+
+    index = nextIndex;
+
+    const middleware = middlewares[nextIndex];
+
+    if (!middleware) {
+      return await handler();
+    }
+
+    return await middleware(context, () => dispatch(nextIndex + 1));
+  }
+
+  return await dispatch(0);
+}
+
+function finalizeRouteResponse(
+  response: Response,
+  capability: ResponseCapability,
+  request: Request,
+  method: HttpMethod,
+) {
+  const corsResponse = applyCorsHeaders(response, capability.cors, request);
+
+  if (method === "HEAD") {
+    return new Response(null, {
+      headers: corsResponse.headers,
+      status: corsResponse.status,
+      statusText: corsResponse.statusText,
+    });
+  }
+
+  return corsResponse;
 }
 
 function normalizeMethod(method: string): HttpMethod | null {

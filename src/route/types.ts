@@ -22,6 +22,13 @@ export type HttpRouteContext<TPath extends string = string> = RouteContext<TPath
   url: URL;
 };
 
+export type RouteMiddlewareNext = () => MaybePromise<Response>;
+
+export type RouteMiddleware<TPath extends string = string> = (
+  context: HttpRouteContext<TPath>,
+  next: RouteMiddlewareNext,
+) => MaybePromise<Response>;
+
 export type RouteValue<T> =
   | T
   | ((context: HttpRouteContext) => MaybePromise<T>);
@@ -123,6 +130,7 @@ export type RouteModule = {
   OPTIONS?: ResponseCapability;
   HEAD?: ResponseCapability;
   default?: ComponentType<LayoutProps>;
+  middleware?: RouteMiddleware;
   policy?: RoutePolicy;
 };
 

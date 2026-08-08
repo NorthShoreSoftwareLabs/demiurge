@@ -38,6 +38,8 @@ while preserving file-based routing and allowing real URL files like
   ordinary `policy.tsx` files remain real URL routes.
 - Inherited `@policy.ts` route security is merged root-to-leaf and enforced by
   the HTTP request handler before route handlers run.
+- Inherited `@middleware.ts` files run root-to-leaf around HTTP route handlers
+  and can short-circuit with a platform `Response`.
 
 ## Open Decisions
 
