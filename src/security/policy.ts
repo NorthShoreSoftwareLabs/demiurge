@@ -101,6 +101,22 @@ export const security = {
   },
 };
 
+export function defineSecurityPolicy(policy: SecurityPolicy) {
+  return policy;
+}
+
+export function mergeSecurityPolicies(
+  ...policies: Array<SecurityPolicy | false | undefined>
+) {
+  return policies.reduce<SecurityPolicy>((merged, policy) => {
+    if (!policy) {
+      return merged;
+    }
+
+    return mergeSecurityPolicy(merged, policy);
+  }, {});
+}
+
 export async function cspHash(
   source: string,
   algorithm: CspHashAlgorithm = "sha256",
@@ -134,7 +150,7 @@ function mergeSecurityPolicy(
   override: SecurityPolicy,
 ): SecurityPolicy {
   return {
-    csp: mergeOptionalObject(base.csp, override.csp),
+    csp: mergeCsp(base.csp, override.csp),
     headers: mergeObject(base.headers, override.headers),
     trustedTypes: override.trustedTypes ?? base.trustedTypes,
   };
@@ -154,22 +170,52 @@ function mergeObject<T extends object>(
   return base;
 }
 
-function mergeOptionalObject<T extends object>(
-  base: T | false | undefined,
-  override: T | false | undefined,
+function mergeCsp(
+  base: ContentSecurityPolicy | false | undefined,
+  override: ContentSecurityPolicy | false | undefined,
 ) {
   if (override === false) {
     return false;
   }
 
-  if (override) {
-    return {
-      ...(base === false || !base ? {} : base),
-      ...override,
-    };
+  if (!override) {
+    return base;
   }
 
-  return base;
+  if (!base) {
+    return override;
+  }
+
+  const merged: ContentSecurityPolicy = {
+    ...base,
+    ...override,
+  };
+
+  for (const [name, value] of cspDirectiveEntries(override)) {
+    const baseValue = base[name];
+
+    if (Array.isArray(baseValue) && Array.isArray(value)) {
+      setCspDirective(merged, name, dedupeSources([...baseValue, ...value]));
+    }
+  }
+
+  return merged;
+}
+
+function dedupeSources(sources: readonly string[]) {
+  return [...new Set(sources)];
+}
+
+function setCspDirective(
+  policy: ContentSecurityPolicy,
+  name: keyof ContentSecurityPolicy,
+  value: readonly string[],
+) {
+  if (name === "upgradeInsecureRequests") {
+    return;
+  }
+
+  policy[name] = value;
 }
 
 function applySecurityHeaders(

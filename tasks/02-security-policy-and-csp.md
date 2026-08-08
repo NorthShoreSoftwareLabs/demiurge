@@ -26,6 +26,8 @@ with React rendering modes instead of being left to user middleware.
 ## Implemented Slices
 
 - Public `security` helpers for strict, API, and cross-origin-isolated presets.
+- `defineSecurityPolicy(...)` and `mergeSecurityPolicies(...)` for app/layout/
+  route policy cascade.
 - `createSecurityHeaders(...)` for deterministic CSP, security header, HSTS,
   and Trusted Types header rendering.
 - Strict CSP nonce substitution fails closed when the nonce is missing.

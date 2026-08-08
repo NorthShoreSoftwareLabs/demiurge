@@ -5,8 +5,10 @@ import {
   createSecurityAudit,
   createSecurityHeaders,
   cspHash,
+  defineSecurityPolicy,
   enforceAllowedMethods,
   enforceRateLimit,
+  mergeSecurityPolicies,
   parseCookieHeader,
   parseBodySize,
   parseRateLimitWindow,
@@ -66,7 +68,7 @@ describe("security policy headers", () => {
       "connect-src 'self' https://api.example.com",
     );
     expect(headers.get("content-security-policy")).toContain(
-      "img-src 'self' https://images.example.com",
+      "img-src 'self' data: blob: https://images.example.com",
     );
   });
 
@@ -147,6 +149,73 @@ describe("security policy headers", () => {
     expect(headers.get("strict-transport-security")).toBe(
       "max-age=63072000; includeSubDomains; preload",
     );
+  });
+});
+
+describe("security policy cascade", () => {
+  it("defines app-owned security policy objects", () => {
+    const policy = defineSecurityPolicy({
+      headers: {
+        referrerPolicy: "same-origin",
+      },
+    });
+
+    expect(policy.headers?.referrerPolicy).toBe("same-origin");
+  });
+
+  it("merges CSP source directives additively from parent to child", () => {
+    const policy = mergeSecurityPolicies(
+      security.static(),
+      {
+        csp: {
+          connectSrc: ["https://api.example.com"],
+          imgSrc: ["https://images.example.com"],
+        },
+      },
+      {
+        csp: {
+          connectSrc: ["https://metrics.example.com", "https://api.example.com"],
+        },
+      },
+    );
+    const headers = createSecurityHeaders(policy);
+
+    expect(headers.get("content-security-policy")).toContain(
+      "connect-src 'self' https://api.example.com https://metrics.example.com",
+    );
+    expect(headers.get("content-security-policy")).toContain(
+      "img-src 'self' data: blob: https://images.example.com",
+    );
+  });
+
+  it("lets child policy override scalar security headers", () => {
+    const policy = mergeSecurityPolicies(
+      security.strict({
+        headers: {
+          referrerPolicy: "same-origin",
+        },
+      }),
+      {
+        headers: {
+          referrerPolicy: "no-referrer",
+        },
+      },
+    );
+
+    expect(
+      createSecurityHeaders(policy, { nonce: "cascade" }).get("referrer-policy"),
+    ).toBe("no-referrer");
+  });
+
+  it("lets child policy explicitly disable inherited CSP", () => {
+    const policy = mergeSecurityPolicies(
+      security.strict(),
+      {
+        csp: false,
+      },
+    );
+
+    expect(createSecurityHeaders(policy).has("content-security-policy")).toBe(false);
   });
 });
 

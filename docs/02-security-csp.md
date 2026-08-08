@@ -464,6 +464,29 @@ export const GET = react({
 });
 ```
 
+Security policy composition should work from app to layout to route:
+
+```ts
+import { defineSecurityPolicy, mergeSecurityPolicies, security } from "demiurge";
+
+export const appPolicy = defineSecurityPolicy(security.strict());
+
+export const routePolicy = mergeSecurityPolicies(appPolicy, {
+  csp: {
+    connectSrc: ["https://api.example.com"],
+  },
+  headers: {
+    crossOriginEmbedderPolicy: "require-corp",
+  },
+});
+```
+
+The first cascade slice exposes `defineSecurityPolicy(...)` and
+`mergeSecurityPolicies(...)`. CSP source directives merge additively with
+de-duplication, while scalar headers and Trusted Types settings use child
+override semantics. A child policy can explicitly disable inherited CSP with
+`csp: false`.
+
 The framework should expose named presets:
 
 ```ts

@@ -14,6 +14,8 @@ export {
 export {
   createSecurityHeaders,
   cspHash,
+  defineSecurityPolicy,
+  mergeSecurityPolicies,
   security,
 } from "./policy";
 export {
