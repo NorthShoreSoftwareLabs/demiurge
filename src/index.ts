@@ -1,5 +1,10 @@
 export { createFileRouter, Link } from "./browser";
 export {
+  assertAdapterCapabilities,
+  checkAdapterCapabilities,
+  defineAdapter,
+} from "./adapter";
+export {
   createMemoryCache,
   defineTags,
   parseCacheDuration,
@@ -71,6 +76,13 @@ export {
   toResponse,
   webhook,
 } from "./route";
+export type {
+  Adapter,
+  AdapterCapability,
+  AdapterCapabilityCheck,
+  AdapterCapabilityMap,
+  AdapterDefinition,
+} from "./adapter";
 export type {
   Cache,
   CacheDuration,

@@ -138,6 +138,6 @@ implementation.
 | Node adapter | planned |
 | Edge adapter | planned |
 | Static adapter | planned |
-| Adapter capability checks | designed |
+| Adapter capability checks | implemented |
 | Cloud Run deployment guidance | planned |
 | Shared cache adapters such as Redis | designed |

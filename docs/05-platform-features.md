@@ -381,6 +381,28 @@ routePolicy({
 });
 ```
 
+### Adapter Capabilities
+
+Adapters should declare what deployment features they support:
+
+```ts
+const adapter = defineAdapter({
+  name: "node",
+  capabilities: {
+    nonceInjection: true,
+    streaming: true,
+    webSocket: true,
+  },
+});
+
+assertAdapterCapabilities(adapter, ["streaming", "nonceInjection"]);
+```
+
+The first adapter slice exposes capability checks for nonce injection,
+streaming, WebSocket, WebTransport, cross-origin isolation headers, static
+output, and shared cache support. Concrete Node, Edge, and static adapters still
+need their own runtime implementations.
+
 ### Devtools And Audits
 
 Demiurge should expose a route audit view:

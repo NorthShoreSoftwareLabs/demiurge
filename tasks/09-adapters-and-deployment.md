@@ -1,6 +1,6 @@
 # Adapters And Deployment
 
-Status: planned
+Status: in progress
 
 ## Goal
 
@@ -31,6 +31,13 @@ shared caching.
 - Static adapter output tests.
 - Streaming capability tests.
 - Cache adapter tests.
+
+## Implemented Slices
+
+- `defineAdapter(...)`, `checkAdapterCapabilities(...)`, and
+  `assertAdapterCapabilities(...)` provide the first adapter capability contract
+  for nonce injection, streaming, WebSocket, WebTransport, cross-origin
+  isolation headers, static output, and shared cache support.
 
 ## Open Decisions
 
