@@ -279,6 +279,29 @@ rateLimit: {
 Adapters must declare whether they can enforce rate limits locally, through a
 shared cache, or through platform features.
 
+## Secret And Env Validation
+
+Runtime configuration should fail closed before request handling starts:
+
+```ts
+import { defineEnvSchema, env, validateEnv } from "demiurge";
+
+const schema = defineEnvSchema({
+  API_ORIGIN: env.url({ protocols: ["https:"] }),
+  NODE_ENV: env.enum(["development", "production", "test"]),
+  PORT: env.integer({ min: 1, max: 65_535 }),
+  SESSION_SECRET: env.secret({ minLength: 32 }),
+});
+
+const config = validateEnv(schema, process.env);
+```
+
+The first env validation slice parses strings, secrets, URLs, integers,
+booleans, and string enums from an explicit environment source. Missing and
+invalid variables are reported together through `EnvValidationError`, and
+secret schema entries are marked as sensitive so diagnostics can avoid leaking
+values.
+
 The first request-limit slice supports helper-attached request body limits:
 
 ```ts

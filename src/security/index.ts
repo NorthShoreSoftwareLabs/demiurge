@@ -12,6 +12,12 @@ export {
   parseCookieHeader,
 } from "./csrf";
 export {
+  EnvValidationError,
+  defineEnvSchema,
+  env,
+  validateEnv,
+} from "./env";
+export {
   createSecurityHeaders,
   cspHash,
   defineRoutePolicy,
@@ -59,3 +65,10 @@ export type {
   StrictTransportSecurityPolicy,
   TrustedTypesPolicy,
 } from "./types";
+export type {
+  EnvSchema,
+  EnvSource,
+  EnvValidationIssue,
+  EnvVariable,
+  InferEnvSchema,
+} from "./env";

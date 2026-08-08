@@ -97,7 +97,7 @@ implementation.
 | Trusted Types report-only mode | designed |
 | Trusted Types enforce mode | designed |
 | COOP/COEP/CORP cross-origin isolation preset | designed |
-| Secret/env validation | planned |
+| Secret/env validation | implemented |
 | Dependency/script audit | planned |
 
 ## Document Output

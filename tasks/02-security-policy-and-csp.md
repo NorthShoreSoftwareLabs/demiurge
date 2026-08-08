@@ -48,6 +48,8 @@ with React rendering modes instead of being left to user middleware.
   policy inspection, and structured security findings.
 - `createSecurityAudit(...)` reports document static scripts that are missing
   required CSP nonces or are not allowed by the effective `script-src` policy.
+- `defineEnvSchema(...)`, `env.*(...)`, and `validateEnv(...)` validate runtime
+  configuration and secrets before request handling starts.
 
 ## Examples Required
 
