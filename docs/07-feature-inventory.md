@@ -98,7 +98,7 @@ implementation.
 | Trusted Types enforce mode | designed |
 | COOP/COEP/CORP cross-origin isolation preset | designed |
 | Secret/env validation | implemented |
-| Dependency/script audit | planned |
+| Dependency/script audit | implemented |
 
 ## Document Output
 
@@ -124,7 +124,7 @@ implementation.
 | Remote image allowlists | implemented |
 | Font optimization and self-hosted fonts | designed |
 | Analytics integrations | designed |
-| GTM integration with trust-boundary audit | designed |
+| GTM integration with trust-boundary audit | partially implemented |
 | Sentry/PostHog/Plausible integrations | planned |
 | OpenTelemetry instrumentation | designed |
 | Core Web Vitals reporting | designed |

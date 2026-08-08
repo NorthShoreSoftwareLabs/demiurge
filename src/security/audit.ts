@@ -7,6 +7,7 @@ import type {
   CorsPolicy,
   CspSource,
   RouteSecurityPolicy,
+  ScriptDependencyAuditOptions,
   SecurityAudit,
   SecurityAuditFinding,
   SecurityAuditOptions,
@@ -33,6 +34,15 @@ export function createSecurityAudit(options: SecurityAuditOptions = {}) {
       document.headers,
       findings,
     );
+
+    if (document.scriptDependencies) {
+      findings.push(
+        ...auditScriptDependencies(
+          document.scripts,
+          normalizeScriptDependencyAuditOptions(document.scriptDependencies),
+        ),
+      );
+    }
   }
 
   return {
@@ -40,6 +50,60 @@ export function createSecurityAudit(options: SecurityAuditOptions = {}) {
     headers,
     route,
   } satisfies SecurityAudit;
+}
+
+export function auditScriptDependencies(
+  scripts: readonly ScriptTag[],
+  options: ScriptDependencyAuditOptions = {},
+) {
+  const requirePurpose = options.requirePurpose ?? true;
+  const findings: SecurityAuditFinding[] = [];
+
+  for (const script of scripts) {
+    const dependency = getExternalScriptDependency(script);
+
+    if (!dependency) {
+      continue;
+    }
+
+    if (requirePurpose && !script.purpose) {
+      findings.push({
+        code: "script-purpose-missing",
+        message: `Third-party script ${script.src} should declare a purpose for audits and consent flows.`,
+        severity: "warning",
+      });
+    }
+
+    if (options.requireIntegrity && !script.integrity) {
+      findings.push({
+        code: "script-integrity-missing",
+        message: `Third-party script ${script.src} should declare an integrity hash or an explicit trust-boundary exception.`,
+        severity: "warning",
+      });
+    }
+
+    if (
+      script.strategy === "beforeInteractive" &&
+      !options.allowBeforeInteractiveThirdParty
+    ) {
+      findings.push({
+        code: "script-third-party-before-interactive",
+        message: `Third-party script ${script.src} runs before the app is interactive and should be justified by policy.`,
+        severity: "warning",
+      });
+    }
+
+    if (isGoogleTagManager(dependency)) {
+      findings.push({
+        code: "script-gtm-wide-trust-boundary",
+        message:
+          "Google Tag Manager can load additional scripts at runtime and should be treated as a wide trust boundary.",
+        severity: "warning",
+      });
+    }
+  }
+
+  return findings;
 }
 
 function auditDocumentPolicy(
@@ -94,6 +158,12 @@ function auditDocumentScripts(
       });
     }
   }
+}
+
+function normalizeScriptDependencyAuditOptions(
+  options: boolean | ScriptDependencyAuditOptions,
+): ScriptDependencyAuditOptions {
+  return typeof options === "boolean" ? {} : options;
 }
 
 function getScriptSources(policy: ContentSecurityPolicy) {
@@ -223,4 +293,25 @@ function auditUnsafeMethodPolicy(
       severity: "warning",
     });
   }
+}
+
+function getExternalScriptDependency(script: ScriptTag) {
+  try {
+    const url = new URL(script.src);
+
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return url;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function isGoogleTagManager(url: URL) {
+  return (
+    url.hostname === "www.googletagmanager.com" &&
+    (url.pathname === "/gtm.js" || url.pathname === "/ns.html")
+  );
 }

@@ -1,4 +1,5 @@
 export {
+  auditScriptDependencies,
   createSecurityAudit,
 } from "./audit";
 export {
@@ -59,6 +60,7 @@ export type {
   SecurityAudit,
   SecurityAuditFinding,
   SecurityAuditOptions,
+  ScriptDependencyAuditOptions,
   RequestSecurityPolicy,
   RoutePolicy,
   RouteSecurityPolicy,

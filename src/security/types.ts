@@ -128,6 +128,7 @@ export type SecurityAuditOptions = {
   document?: {
     headers?: SecurityHeadersOptions;
     policy: SecurityPolicy;
+    scriptDependencies?: boolean | ScriptDependencyAuditOptions;
     scripts?: readonly ScriptTag[];
   };
   route?: {
@@ -141,6 +142,12 @@ export type SecurityAudit = {
   findings: SecurityAuditFinding[];
   headers: Record<string, string>;
   route?: SecurityAuditOptions["route"];
+};
+
+export type ScriptDependencyAuditOptions = {
+  allowBeforeInteractiveThirdParty?: boolean;
+  requireIntegrity?: boolean;
+  requirePurpose?: boolean;
 };
 
 export type SecurityHeaderPolicy = {

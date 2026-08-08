@@ -50,6 +50,10 @@ with React rendering modes instead of being left to user middleware.
   required CSP nonces or are not allowed by the effective `script-src` policy.
 - `defineEnvSchema(...)`, `env.*(...)`, and `validateEnv(...)` validate runtime
   configuration and secrets before request handling starts.
+- `auditScriptDependencies(...)` and opt-in `createSecurityAudit(...)`
+  dependency checks warn about undeclared third-party script purposes, missing
+  integrity when required, early third-party execution, and Google Tag Manager's
+  wide runtime trust boundary.
 
 ## Examples Required
 

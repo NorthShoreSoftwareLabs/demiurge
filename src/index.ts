@@ -39,6 +39,7 @@ export {
   planImageTransform,
 } from "./platform";
 export {
+  auditScriptDependencies,
   createCorsHeaders,
   createMemoryRateLimitStore,
   createSecurityAudit,
@@ -212,6 +213,7 @@ export type {
   SecurityAudit,
   SecurityAuditFinding,
   SecurityAuditOptions,
+  ScriptDependencyAuditOptions,
   RequestSecurityPolicy,
   RoutePolicy,
   RouteSecurityPolicy,

@@ -40,6 +40,8 @@ document/security systems instead of added through unsafe snippets.
 - `serverTiming(...)` attaches typed `Server-Timing` metrics to route response
   helpers, and HTTP/Vite dev request handlers append the serialized header while
   preserving app-provided timing entries.
+- Script dependency audits provide the first GTM trust-boundary diagnostic
+  foundation without yet implementing full analytics integration helpers.
 
 ## Open Decisions
 

@@ -198,7 +198,9 @@ headers, preserving existing app-provided `Server-Timing` values on raw
 responses.
 
 GTM should be supported, but it is inherently broad because it can load other
-scripts. The framework should label it as a wide trust boundary in audits.
+scripts. The first dependency audit slice labels Google Tag Manager as a wide
+trust boundary and warns about third-party scripts that lack declared purposes,
+required integrity hashes, or early `beforeInteractive` execution.
 
 ### Images
 

@@ -664,6 +664,26 @@ meaningful loading attributes and sorted by loading strategy before document
 rendering. Security audits report static document scripts that are missing a
 required CSP nonce or are not allowed by the effective `script-src` policy.
 
+The first dependency audit slice adds trust-boundary diagnostics for third-party
+script dependencies:
+
+```ts
+createSecurityAudit({
+  document: {
+    policy: security.static(),
+    scriptDependencies: {
+      requireIntegrity: true,
+    },
+    scripts,
+  },
+});
+```
+
+`auditScriptDependencies(...)` and the opt-in `scriptDependencies` audit mode
+warn about third-party scripts without a declared `purpose`, missing integrity
+hashes when required by policy, third-party scripts running
+`beforeInteractive`, and Google Tag Manager's wide runtime trust boundary.
+
 ### Render-Discovered Scripts
 
 Known only if a component actually renders:
