@@ -45,6 +45,7 @@ export {
   createSecurityHeaders,
   cspHash,
   EnvValidationError,
+  checkWebSocketOrigin,
   defineRoutePolicy,
   defineEnvSchema,
   defineSecurityPolicy,
@@ -53,6 +54,7 @@ export {
   enforceAllowedMethods,
   enforceRateLimit,
   enforceRequestSecurity,
+  enforceWebSocketOrigin,
   mergeRoutePolicies,
   mergeRouteSecurityPolicies,
   mergeSecurityPolicies,
@@ -219,5 +221,7 @@ export type {
   SecurityPreset,
   StrictTransportSecurityPolicy,
   TrustedTypesPolicy,
+  WebSocketOriginCheck,
+  WebSocketOriginPolicy,
 } from "./security";
 export type { RequestHandler, RequestHandlerOptions } from "./server";

@@ -38,6 +38,10 @@ export {
   enforceRequestSecurity,
   parseBodySize,
 } from "./request";
+export {
+  checkWebSocketOrigin,
+  enforceWebSocketOrigin,
+} from "./websocket";
 export type {
   ContentSecurityPolicy,
   CorsPolicy,
@@ -72,3 +76,7 @@ export type {
   EnvVariable,
   InferEnvSchema,
 } from "./env";
+export type {
+  WebSocketOriginCheck,
+  WebSocketOriginPolicy,
+} from "./websocket";

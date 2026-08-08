@@ -41,6 +41,10 @@ page or ordinary request/response endpoint.
 - `stream(...)` provides generic HTTP streaming for string and byte chunks from
   sync iterables, async iterables, and `ReadableStream` sources with buffering
   control headers through both the request handler and Vite dev handler.
+- `checkWebSocketOrigin(...)` and `enforceWebSocketOrigin(...)` provide the
+  first WebSocket security primitive with same-origin checks, exact allowlists,
+  malformed-origin rejection, and explicit trusted non-browser missing-origin
+  handling.
 
 ## Open Decisions
 

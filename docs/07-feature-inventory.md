@@ -92,7 +92,7 @@ implementation.
 | Rate limiting | designed |
 | Request size limits | designed |
 | Upload limits | designed |
-| WebSocket origin checks | designed |
+| WebSocket origin checks | implemented |
 | Webhook verification helpers | designed |
 | Trusted Types report-only mode | designed |
 | Trusted Types enforce mode | designed |

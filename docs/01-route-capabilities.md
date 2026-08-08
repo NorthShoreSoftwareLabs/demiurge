@@ -337,6 +337,22 @@ export const WS = socket({
 });
 ```
 
+The first WebSocket security slice exposes origin checks before the full route
+capability exists:
+
+```ts
+import { enforceWebSocketOrigin } from "demiurge";
+
+const response = enforceWebSocketOrigin(
+  { origins: ["https://app.example.com"] },
+  request,
+);
+```
+
+`origins: "same-origin"` compares the request URL origin with the browser
+`Origin` header. Missing origins fail closed unless `allowMissingOrigin: true`
+is set for trusted non-browser clients.
+
 ### WebTransport
 
 WebTransport is a future-facing capability built on HTTP/3. It supports

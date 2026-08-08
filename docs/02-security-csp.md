@@ -302,6 +302,27 @@ invalid variables are reported together through `EnvValidationError`, and
 secret schema entries are marked as sensitive so diagnostics can avoid leaking
 values.
 
+## WebSocket Origin Checks
+
+WebSocket routes need explicit origin checks because browser upgrade requests
+can carry cookies and other ambient credentials:
+
+```ts
+import { enforceWebSocketOrigin } from "demiurge";
+
+const rejected = enforceWebSocketOrigin(
+  { origins: "same-origin" },
+  request,
+);
+```
+
+The first WebSocket security slice provides `checkWebSocketOrigin(...)` for
+structured diagnostics and `enforceWebSocketOrigin(...)` for a fail-closed `403`
+response. Exact allowlists can use normalized origins such as
+`https://app.example.com`; `origins: "same-origin"` compares against the request
+URL's own origin. Missing origins are rejected unless the policy explicitly sets
+`allowMissingOrigin: true` for trusted non-browser clients.
+
 The first request-limit slice supports helper-attached request body limits:
 
 ```ts
