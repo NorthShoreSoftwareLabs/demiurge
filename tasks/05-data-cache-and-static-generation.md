@@ -52,6 +52,9 @@ handlers and React server components without hiding when work runs.
   request context and a request-scoped framework cache during route loading.
 - Route modules can export typed `paths`, and static path collection validates
   dynamic route entries before expanding them into concrete encoded pathnames.
+- `createMemoryIdempotencyStore(...)` and `runIdempotentMutation(...)` provide
+  the first retry-safe mutation primitive with in-flight dedupe, TTL-based
+  replay, and failure retry behavior.
 
 ## Open Decisions
 

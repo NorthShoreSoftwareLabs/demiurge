@@ -8,6 +8,10 @@ export {
   serializeCacheTag,
   tag,
 } from "./cache";
+export {
+  createMemoryIdempotencyStore,
+  runIdempotentMutation,
+} from "./idempotency";
 export type {
   Cache,
   CacheDuration,
@@ -21,3 +25,8 @@ export type {
   Query,
   QueryDefinition,
 } from "./cache";
+export type {
+  IdempotencyRequest,
+  IdempotencyResult,
+  IdempotencyStore,
+} from "./idempotency";

@@ -196,6 +196,27 @@ export const create = action({
 Client router refresh/prefetch and server data-cache invalidation should be
 separate concepts.
 
+## Idempotent Mutations
+
+Retryable mutations should be guarded by client-provided idempotency keys:
+
+```ts
+const idempotency = createMemoryIdempotencyStore();
+
+const result = await runIdempotentMutation(idempotency, {
+  key: ["create-post", request.headers.get("idempotency-key")],
+  ttl: "24h",
+  fn: () => db.posts.create(input),
+});
+```
+
+The first idempotency slice exposes `createMemoryIdempotencyStore(...)` and
+`runIdempotentMutation(...)`. The memory store dedupes in-flight work, replays
+completed results for matching keys until TTL expiry, and removes failed
+mutations so callers can retry after transient errors. First-class action
+helpers still need to thread this into request parsing, validation, and
+invalidation.
+
 ## Typed Routes, Redirects, And Tags
 
 Route files should generate a typed route manifest:

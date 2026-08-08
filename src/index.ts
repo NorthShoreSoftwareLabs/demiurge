@@ -6,10 +6,12 @@ export {
 } from "./adapter";
 export {
   createInvalidation,
+  createMemoryIdempotencyStore,
   createMemoryCache,
   defineTags,
   parseCacheDuration,
   query,
+  runIdempotentMutation,
   serializeCacheKey,
   serializeCacheTag,
   tag,
@@ -102,6 +104,9 @@ export type {
   CacheTag,
   Invalidation,
   InvalidationResult,
+  IdempotencyRequest,
+  IdempotencyResult,
+  IdempotencyStore,
   Query,
   QueryDefinition,
 } from "./data";
