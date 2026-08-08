@@ -160,6 +160,8 @@ MVP `0.0.1` currently verifies:
 - pathnames split predictably.
 - path variables decode URL-encoded values.
 - `@layout.tsx` files are classified as layouts.
+- `@loading.tsx` and `@not-found.tsx` files are classified as app-owned browser
+  fallback files.
 - `@middleware.ts` files are classified as framework-attached middleware files.
 - `@policy.ts` files are classified as framework-attached policy files.
 - normal names like `policy.tsx` remain route files.
@@ -168,6 +170,7 @@ MVP `0.0.1` currently verifies:
 - `layout: false` skips inherited layouts.
 - HTTP middleware runs root-to-leaf, can short-circuit, and respects route group
   scope.
+- Browser routing renders inherited app-owned loading and not-found fallbacks.
 - route files without a page-compatible `GET` are not page matches.
 - HTTP helpers convert to platform `Response` objects.
 - HTTP request handler resolves response routes, redirects, HEAD fallback,

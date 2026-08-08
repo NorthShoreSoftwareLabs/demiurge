@@ -9,9 +9,10 @@ import {
   useMemo,
   useState,
 } from "react";
-import type { RouteImporter } from "../route";
+import type { NotFoundProps, RouteImporter } from "../route";
 import {
   createRouteManifest,
+  loadLoadingFallback,
   loadPageRoute,
   type PendingRouteMatch,
 } from "../router";
@@ -20,9 +21,7 @@ import { href, type AppHref, type LinkTarget, type LinkTo } from "../routing";
 type FileRouterOptions = {
   routes: Record<string, RouteImporter>;
   loading?: ComponentType;
-  notFound?: ComponentType<{
-    pathname: string;
-  }>;
+  notFound?: ComponentType<NotFoundProps>;
 };
 
 export function createFileRouter(options: FileRouterOptions) {
@@ -47,6 +46,11 @@ export function createFileRouter(options: FileRouterOptions) {
       let cancelled = false;
 
       setMatch({ status: "loading" });
+      loadLoadingFallback(manifest, location.pathname).then((Loading) => {
+        if (!cancelled && Loading) {
+          setMatch({ loading: Loading, status: "loading" });
+        }
+      });
       loadPageRoute(manifest, location.pathname).then((nextMatch) => {
         if (!cancelled) {
           setMatch(nextMatch);
@@ -112,11 +116,17 @@ function RouteRenderer({
   match: PendingRouteMatch;
 }) {
   if (match.status === "loading") {
-    return Loading ? createElement(Loading) : null;
+    const AppLoading = match.loading ?? Loading;
+
+    return AppLoading ? createElement(AppLoading) : null;
   }
 
   if (match.status === "not-found") {
-    return NotFound ? createElement(NotFound, { pathname: match.pathname }) : null;
+    const AppNotFound = match.notFound ?? NotFound;
+
+    return AppNotFound
+      ? createElement(AppNotFound, { pathname: match.pathname })
+      : null;
   }
 
   const { page, layouts, path, pathname } = match.match;

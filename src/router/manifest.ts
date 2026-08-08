@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import type {
   LayoutProps,
+  NotFoundProps,
   PathVars,
   RouteImporter,
   RouteProps,
@@ -35,7 +36,18 @@ export type MiddlewareRoute = {
   load: RouteImporter;
 };
 
+export type FallbackRoute = {
+  file: string;
+  fileSegments: string[];
+  segments: string[];
+  load: RouteImporter;
+};
+
 export type RouteManifest = {
+  fallbacks: {
+    loading: FallbackRoute[];
+    notFound: FallbackRoute[];
+  };
   routes: RouteRecord[];
   layouts: LayoutRoute[];
   middlewares: MiddlewareRoute[];
@@ -50,12 +62,20 @@ export type LoadedRouteMatch = {
 };
 
 export type PendingRouteMatch =
-  | { status: "loading" }
-  | { status: "not-found"; pathname: string }
+  | { loading?: ComponentType; status: "loading" }
+  | {
+      notFound?: ComponentType<NotFoundProps>;
+      pathname: string;
+      status: "not-found";
+    }
   | { status: "ready"; match: LoadedRouteMatch };
 
 export function createRouteManifest(routes: Record<string, RouteImporter>) {
   const manifest: RouteManifest = {
+    fallbacks: {
+      loading: [],
+      notFound: [],
+    },
     routes: [],
     layouts: [],
     middlewares: [],
@@ -101,6 +121,26 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
       continue;
     }
 
+    if (basename === "@loading") {
+      manifest.fallbacks.loading.push({
+        file,
+        fileSegments: routePath.slice(0, -1),
+        segments: toRouteSegments(routePath.slice(0, -1)),
+        load,
+      });
+      continue;
+    }
+
+    if (basename === "@not-found") {
+      manifest.fallbacks.notFound.push({
+        file,
+        fileSegments: routePath.slice(0, -1),
+        segments: toRouteSegments(routePath.slice(0, -1)),
+        load,
+      });
+      continue;
+    }
+
     manifest.routes.push({
       file,
       fileSegments: routePath,
@@ -120,6 +160,12 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
   manifest.middlewares.sort(
     (a, b) => a.fileSegments.length - b.fileSegments.length || a.file.localeCompare(b.file),
   );
+  manifest.fallbacks.loading.sort(
+    (a, b) => a.fileSegments.length - b.fileSegments.length || a.file.localeCompare(b.file),
+  );
+  manifest.fallbacks.notFound.sort(
+    (a, b) => a.fileSegments.length - b.fileSegments.length || a.file.localeCompare(b.file),
+  );
 
   return manifest;
 }
@@ -131,7 +177,11 @@ export async function loadPageRoute(
   const routeMatch = findRouteMatch(manifest.routes, pathname);
 
   if (!routeMatch) {
-    return { status: "not-found", pathname };
+    return {
+      notFound: await loadNotFoundFallbackForPath(manifest, pathname),
+      pathname,
+      status: "not-found",
+    };
   }
 
   const matchingLayouts = manifest.layouts.filter((layout) =>
@@ -141,7 +191,11 @@ export async function loadPageRoute(
   const pageModule = await routeMatch.route.load();
 
   if (!pageModule.GET || pageModule.GET.kind !== "page") {
-    return { status: "not-found", pathname };
+    return {
+      notFound: await loadNotFoundFallbackForRoute(manifest, routeMatch.route),
+      pathname,
+      status: "not-found",
+    };
   }
 
   const layoutModules =
@@ -160,6 +214,102 @@ export async function loadPageRoute(
       pathname,
     },
   };
+}
+
+export async function loadLoadingFallback(
+  manifest: RouteManifest,
+  pathname: string,
+) {
+  const routeMatch = findRouteMatch(manifest.routes, pathname);
+
+  if (!routeMatch) {
+    return undefined;
+  }
+
+  return await loadFallbackComponent(
+    findClosestAttachedFile(manifest.fallbacks.loading, routeMatch.route),
+  );
+}
+
+async function loadNotFoundFallbackForRoute(
+  manifest: RouteManifest,
+  route: RouteRecord,
+) {
+  return await loadNotFoundFallbackComponent(
+    findClosestAttachedFile(manifest.fallbacks.notFound, route),
+  );
+}
+
+async function loadNotFoundFallbackForPath(
+  manifest: RouteManifest,
+  pathname: string,
+) {
+  return await loadNotFoundFallbackComponent(
+    findClosestFallbackForPath(manifest.fallbacks.notFound, pathname),
+  );
+}
+
+function findClosestAttachedFile(
+  fallbacks: FallbackRoute[],
+  route: RouteRecord,
+) {
+  for (let index = fallbacks.length - 1; index >= 0; index -= 1) {
+    const fallback = fallbacks[index];
+
+    if (isAttachedFileForRoute(fallback.fileSegments, route.fileSegments)) {
+      return fallback;
+    }
+  }
+
+  return undefined;
+}
+
+function findClosestFallbackForPath(
+  fallbacks: FallbackRoute[],
+  pathname: string,
+) {
+  const pathnameSegments = splitPathname(pathname);
+
+  for (let index = fallbacks.length - 1; index >= 0; index -= 1) {
+    const fallback = fallbacks[index];
+
+    if (isFallbackForPath(fallback.segments, pathnameSegments)) {
+      return fallback;
+    }
+  }
+
+  return undefined;
+}
+
+function isFallbackForPath(
+  fallbackSegments: string[],
+  pathnameSegments: string[],
+) {
+  return fallbackSegments.every(
+    (segment, index) => pathnameSegments[index] === segment,
+  );
+}
+
+async function loadFallbackComponent(fallback: FallbackRoute | undefined) {
+  if (!fallback) {
+    return undefined;
+  }
+
+  const module = await fallback.load();
+
+  return module.default as ComponentType | undefined;
+}
+
+async function loadNotFoundFallbackComponent(
+  fallback: FallbackRoute | undefined,
+) {
+  if (!fallback) {
+    return undefined;
+  }
+
+  const module = await fallback.load();
+
+  return module.default as ComponentType<NotFoundProps> | undefined;
 }
 
 export function findRouteMatch(routes: RouteRecord[], pathname: string) {

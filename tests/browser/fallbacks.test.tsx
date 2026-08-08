@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createFileRouter,
   Link,
@@ -49,6 +49,48 @@ describe("browser router fallbacks", () => {
 
     await waitFor(() => {
       expect(screen.getByText("App not found: /missing")).toBeTruthy();
+    });
+  });
+
+  it("renders inherited @loading UI while matched routes load", async () => {
+    const routeResolver = deferred<Record<string, unknown>>();
+    const Router = createFileRouter({
+      loading: Loading,
+      routes: {
+        "./routes/@loading.tsx": routeModule({ default: RouteLoading }),
+        "./routes/blog/index.tsx": vi.fn(() => routeResolver.promise),
+      },
+    });
+
+    window.history.replaceState(null, "", "/blog");
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Route loading")).toBeTruthy();
+    });
+
+    routeResolver.resolve({ GET: page(BlogPage) });
+
+    await waitFor(() => {
+      expect(screen.getByText("Blog page at /blog")).toBeTruthy();
+    });
+  });
+
+  it("renders inherited @not-found UI for missing routes", async () => {
+    window.history.replaceState(null, "", "/blog/missing");
+
+    const Router = createFileRouter({
+      notFound: NotFound,
+      routes: {
+        "./routes/@not-found.tsx": routeModule({ default: NotFound }),
+        "./routes/blog/@not-found.tsx": routeModule({ default: BlogNotFound }),
+      },
+    });
+
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Blog not found: /blog/missing")).toBeTruthy();
     });
   });
 
@@ -115,12 +157,29 @@ function routeModule(module: Record<string, unknown>) {
   return async () => module;
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+}
+
 function Loading() {
   return <p>App loading</p>;
 }
 
+function RouteLoading() {
+  return <p>Route loading</p>;
+}
+
 function NotFound({ pathname }: { pathname: string }) {
   return <p>App not found: {pathname}</p>;
+}
+
+function BlogNotFound({ pathname }: { pathname: string }) {
+  return <p>Blog not found: {pathname}</p>;
 }
 
 function RootLayout({ children }: LayoutProps) {

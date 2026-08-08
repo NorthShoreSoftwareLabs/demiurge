@@ -4,6 +4,7 @@ export {
   findRouteMatch,
   isAttachedFileForRoute,
   isLayoutForPage,
+  loadLoadingFallback,
   loadPageRoute,
   loadRoute,
   matchSegments,

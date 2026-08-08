@@ -9,6 +9,7 @@ import {
 import {
   unstable_createRouteManifest,
   unstable_findRouteMatch,
+  unstable_loadLoadingFallback,
   unstable_matchSegments,
   unstable_splitPathname,
   unstable_toRouteSegments,
@@ -72,6 +73,8 @@ describe("file route conventions", () => {
       "./routes/@layout.tsx": routeModule({ default: RootLayout }),
       "./routes/blog/@layout.tsx": routeModule({ default: BlogLayout }),
       "./routes/(admin)/@layout.tsx": routeModule({ default: BlogLayout }),
+      "./routes/@loading.tsx": routeModule({ default: RootLayout }),
+      "./routes/blog/@not-found.tsx": routeModule({ default: BlogLayout }),
       "./routes/@middleware.ts": routeModule({}),
       "./routes/(admin)/@middleware.ts": routeModule({}),
       "./routes/(admin)/@policy.ts": routeModule({ policy: adminPolicy }),
@@ -123,6 +126,33 @@ describe("file route conventions", () => {
     expect(
       manifest.middlewares.map((middleware) => middleware.fileSegments),
     ).toEqual([[], ["(admin)"]]);
+    expect(manifest.fallbacks.loading.map((fallback) => fallback.file)).toEqual([
+      "./routes/@loading.tsx",
+    ]);
+    expect(manifest.fallbacks.notFound.map((fallback) => fallback.file)).toEqual([
+      "./routes/blog/@not-found.tsx",
+    ]);
+  });
+
+  it("loads the closest inherited loading fallback for matched page routes", async () => {
+    const AdminLoading = () => null;
+    const RootLoading = () => null;
+    const manifest = unstable_createRouteManifest({
+      "./routes/@loading.tsx": routeModule({ default: RootLoading }),
+      "./routes/(admin)/@loading.tsx": routeModule({ default: AdminLoading }),
+      "./routes/(admin)/users.tsx": routeModule({ GET: page(View) }),
+      "./routes/about.tsx": routeModule({ GET: page(View) }),
+    });
+
+    await expect(unstable_loadLoadingFallback(manifest, "/users")).resolves.toBe(
+      AdminLoading,
+    );
+    await expect(unstable_loadLoadingFallback(manifest, "/about")).resolves.toBe(
+      RootLoading,
+    );
+    await expect(unstable_loadLoadingFallback(manifest, "/missing")).resolves.toBe(
+      undefined,
+    );
   });
 
   it("prefers static routes over dynamic routes", () => {

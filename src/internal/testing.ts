@@ -4,6 +4,7 @@ export {
   findRouteMatch as unstable_findRouteMatch,
   isAttachedFileForRoute as unstable_isAttachedFileForRoute,
   isLayoutForPage as unstable_isLayoutForPage,
+  loadLoadingFallback as unstable_loadLoadingFallback,
   loadPageRoute as unstable_loadPageRoute,
   loadRoute as unstable_loadRoute,
   matchSegments as unstable_matchSegments,

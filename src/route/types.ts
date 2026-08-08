@@ -39,6 +39,15 @@ export type LayoutProps<TPath extends string = string> = RouteContext<TPath> & {
   children: ReactNode;
 };
 
+export type NotFoundProps = {
+  pathname: string;
+};
+
+export type RouteDefaultComponent =
+  | ComponentType
+  | ComponentType<LayoutProps>
+  | ComponentType<NotFoundProps>;
+
 export type PageCapability<TPath extends string = string> = {
   kind: "page";
   view: ComponentType<RouteProps<TPath>>;
@@ -129,7 +138,7 @@ export type RouteModule = {
   DELETE?: ResponseCapability;
   OPTIONS?: ResponseCapability;
   HEAD?: ResponseCapability;
-  default?: ComponentType<LayoutProps>;
+  default?: RouteDefaultComponent;
   middleware?: RouteMiddleware;
   policy?: RoutePolicy;
 };

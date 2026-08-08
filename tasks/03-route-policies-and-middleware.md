@@ -40,6 +40,8 @@ while preserving file-based routing and allowing real URL files like
   the HTTP request handler before route handlers run.
 - Inherited `@middleware.ts` files run root-to-leaf around HTTP route handlers
   and can short-circuit with a platform `Response`.
+- Inherited app-owned `@loading.tsx` and `@not-found.tsx` files render browser
+  loading and not-found fallbacks without framework-owned markup.
 
 ## Open Decisions
 

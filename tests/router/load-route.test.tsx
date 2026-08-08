@@ -27,6 +27,14 @@ function BlogLayout(_props: LayoutProps) {
   return null;
 }
 
+function RootNotFound() {
+  return null;
+}
+
+function BlogNotFound() {
+  return null;
+}
+
 function routeModule(module: RouteModule) {
   return vi.fn(async () => module);
 }
@@ -98,6 +106,7 @@ describe("route loading", () => {
 
   it("treats files without page-compatible GET as not found", async () => {
     const manifest = unstable_createRouteManifest({
+      "./routes/@not-found.tsx": routeModule({ default: RootNotFound }),
       "./routes/api/health.tsx": routeModule({
         GET: json({ ok: true }),
       }),
@@ -108,6 +117,25 @@ describe("route loading", () => {
     ).resolves.toEqual({
       status: "not-found",
       pathname: "/api/health",
+      notFound: RootNotFound,
+    });
+  });
+
+  it("loads the closest not-found fallback for missing paths", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/@not-found.tsx": routeModule({ default: RootNotFound }),
+      "./routes/blog/@not-found.tsx": routeModule({ default: BlogNotFound }),
+    });
+
+    await expect(unstable_loadPageRoute(manifest, "/blog/missing")).resolves.toEqual({
+      notFound: BlogNotFound,
+      pathname: "/blog/missing",
+      status: "not-found",
+    });
+    await expect(unstable_loadPageRoute(manifest, "/missing")).resolves.toEqual({
+      notFound: RootNotFound,
+      pathname: "/missing",
+      status: "not-found",
     });
   });
 });
