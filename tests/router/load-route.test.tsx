@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  defineLinks,
   defineMetadata,
   defineScripts,
   json,
+  modulePreload,
   page,
+  preconnect,
+  preload,
   script,
   type LayoutProps,
   type RouteModule,
@@ -47,6 +51,10 @@ describe("route loading", () => {
     const manifest = unstable_createRouteManifest({
       "./routes/@layout.tsx": routeModule({
         default: RootLayout,
+        links: defineLinks([
+          preconnect("https://api.example.com"),
+          preload("/root.css", { as: "style" }),
+        ]),
         metadata: defineMetadata({
           description: "Root description",
           title: {
@@ -63,6 +71,9 @@ describe("route loading", () => {
       }),
       "./routes/blog/@layout.tsx": routeModule({
         default: BlogLayout,
+        links: defineLinks([
+          modulePreload("/assets/blog-editor.js"),
+        ]),
         metadata: defineMetadata({
           openGraph: {
             image: "/blog-og.png",
@@ -76,6 +87,10 @@ describe("route loading", () => {
       }),
       "./routes/blog/[slug].tsx": routeModule({
         GET: page(View),
+        links: defineLinks([
+          preload("/root.css", { as: "style" }),
+          preload("/post.avif", { as: "image", type: "image/avif" }),
+        ]),
         metadata: defineMetadata({
           title: "File based routing",
         }),
@@ -102,6 +117,31 @@ describe("route loading", () => {
     expect(match.match.page).toBe(View);
     expect(match.match.path).toEqual({ slug: "file-based-routing" });
     expect(match.match.layouts).toEqual([RootLayout, BlogLayout]);
+    expect(match.match.links).toEqual([
+      {
+        href: "https://api.example.com",
+        kind: "link",
+        rel: "preconnect",
+      },
+      {
+        as: "image",
+        href: "/post.avif",
+        kind: "link",
+        rel: "preload",
+        type: "image/avif",
+      },
+      {
+        as: "style",
+        href: "/root.css",
+        kind: "link",
+        rel: "preload",
+      },
+      {
+        href: "/assets/blog-editor.js",
+        kind: "link",
+        rel: "modulepreload",
+      },
+    ]);
     expect(match.match.metadata).toMatchObject({
       description: "Root description",
       openGraph: {

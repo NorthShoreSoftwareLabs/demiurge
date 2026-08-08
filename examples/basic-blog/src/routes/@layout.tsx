@@ -1,11 +1,18 @@
 import {
   Link,
+  defineLinks,
   defineMetadata,
   defineScripts,
+  preconnect,
+  preload,
   script,
   type LayoutProps,
 } from "demiurge";
 
+export const links = defineLinks([
+  preconnect("https://api.example.com"),
+  preload("/basic-blog-shell.js", { as: "script" }),
+]);
 export const metadata = defineMetadata({
   description: "A small Demiurge blog example.",
   title: {

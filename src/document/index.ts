@@ -1,4 +1,11 @@
 export {
+  defineLinks,
+  modulePreload,
+  preconnect,
+  preload,
+  resolveLinks,
+} from "./links";
+export {
   defineMetadata,
   link,
   meta,
@@ -9,6 +16,11 @@ export {
   resolveScripts,
   script,
 } from "./scripts";
+export type {
+  LinkContribution,
+  PreconnectOptions,
+  PreloadOptions,
+} from "./links";
 export type {
   DocumentMetadataTag,
   LinkTag,

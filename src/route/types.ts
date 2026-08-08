@@ -1,5 +1,9 @@
 import type { ComponentType, ReactNode } from "react";
-import type { Metadata, ScriptContribution } from "../document";
+import type {
+  LinkContribution,
+  Metadata,
+  ScriptContribution,
+} from "../document";
 import type { RouteParamsFor } from "../routing/types";
 import type {
   CorsPolicy,
@@ -146,6 +150,7 @@ export type RouteModule = {
   OPTIONS?: ResponseCapability;
   HEAD?: ResponseCapability;
   default?: RouteDefaultComponent;
+  links?: LinkContribution;
   metadata?: Metadata;
   middleware?: RouteMiddleware;
   policy?: RoutePolicy;

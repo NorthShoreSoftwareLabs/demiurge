@@ -24,10 +24,13 @@ export type MetaTag = {
 };
 
 export type LinkTag = {
+  as?: string;
+  crossOrigin?: "anonymous" | "use-credentials";
   href: string;
   hrefLang?: string;
   kind: "link";
   rel: string;
+  type?: string;
 };
 
 export type Metadata = {

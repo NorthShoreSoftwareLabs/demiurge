@@ -216,6 +216,10 @@ export const links = defineLinks([
 ```
 
 These must flow through the document plan and security audit.
+The first resource hint slice exposes `defineLinks(...)`, `preconnect(...)`,
+`preload(...)`, `modulePreload(...)`, and `resolveLinks(...)`. Page route
+loading resolves inherited layout links root-to-leaf, then leaf route links,
+with dedupe and deterministic hint ordering before document rendering.
 
 ### Observability
 

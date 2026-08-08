@@ -1,7 +1,9 @@
 import type { ComponentType } from "react";
 import {
+  resolveLinks,
   resolveMetadata,
   resolveScripts,
+  type LinkTag,
   type ResolvedMetadata,
   type ScriptTag,
 } from "../document";
@@ -64,6 +66,7 @@ export type RouteManifest = {
 
 export type LoadedRouteMatch = {
   error?: ComponentType<RouteErrorProps>;
+  links: LinkTag[];
   page: ComponentType<RouteProps>;
   layouts: ComponentType<LayoutProps>[];
   metadata: ResolvedMetadata;
@@ -245,6 +248,13 @@ export async function loadPageRoute(
     status: "ready",
     match: {
       error: await loadErrorFallbackForRoute(manifest, routeMatch.route),
+      links: await resolveLinks(
+        [
+          ...layoutModules.map((module) => module.links),
+          pageModule.links,
+        ],
+        context,
+      ),
       page: pageModule.GET.view,
       layouts: layoutModules.map(
         (module) => module.default as ComponentType<LayoutProps>,

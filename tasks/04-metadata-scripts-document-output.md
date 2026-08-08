@@ -45,6 +45,10 @@ routes, including scripts that may be statically declared or render-discovered.
   static script contributions. Page route loading resolves inherited layout
   scripts root-to-leaf, then leaf route scripts, with dedupe and strategy
   ordering before document rendering.
+- `defineLinks(...)`, `preconnect(...)`, `preload(...)`, `modulePreload(...)`,
+  and `resolveLinks(...)` provide typed resource hints. Page route loading
+  resolves inherited layout links root-to-leaf, then leaf route links, with
+  dedupe and deterministic hint ordering before document rendering.
 
 ## Open Decisions
 
