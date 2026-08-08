@@ -46,6 +46,8 @@ with React rendering modes instead of being left to user middleware.
   invalid signatures before the app handler runs.
 - `createSecurityAudit(...)` for rendered header snapshots, effective route
   policy inspection, and structured security findings.
+- `createSecurityAudit(...)` reports document static scripts that are missing
+  required CSP nonces or are not allowed by the effective `script-src` policy.
 
 ## Examples Required
 

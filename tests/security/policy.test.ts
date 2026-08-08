@@ -15,6 +15,7 @@ import {
   parseBodySize,
   parseRateLimitWindow,
   security,
+  script,
   validateCorsPolicy,
   validateRateLimitPolicy,
 } from "demiurge";
@@ -331,6 +332,79 @@ describe("security audit output", () => {
     });
 
     expect(audit.findings).toEqual([]);
+  });
+
+  it("reports static document scripts blocked by the effective CSP", () => {
+    const audit = createSecurityAudit({
+      document: {
+        policy: security.static(),
+        scripts: [
+          script({
+            src: "/assets/app.js",
+          }),
+          script({
+            src: "https://js.stripe.com/v3/",
+          }),
+        ],
+      },
+    });
+
+    expect(audit.findings).toEqual([
+      {
+        code: "csp-script-src-blocked",
+        message:
+          "Document script https://js.stripe.com/v3/ is not allowed by the effective script-src policy.",
+        severity: "error",
+      },
+    ]);
+  });
+
+  it("accepts document scripts allowed by script-src hosts", () => {
+    const audit = createSecurityAudit({
+      document: {
+        policy: security.static({
+          csp: {
+            scriptSrc: ["'self'", "https://js.stripe.com"],
+          },
+        }),
+        scripts: [
+          script({
+            src: "https://js.stripe.com/v3/",
+          }),
+        ],
+      },
+    });
+
+    expect(audit.findings).toEqual([]);
+  });
+
+  it("reports strict nonce-backed document scripts without a matching nonce", () => {
+    const audit = createSecurityAudit({
+      document: {
+        headers: {
+          nonce: "audit",
+        },
+        policy: security.strict(),
+        scripts: [
+          script({
+            src: "https://cdn.example.com/root.js",
+          }),
+          script({
+            nonce: "audit",
+            src: "https://cdn.example.com/nonced.js",
+          }),
+        ],
+      },
+    });
+
+    expect(audit.findings).toEqual([
+      {
+        code: "csp-script-missing-nonce",
+        message:
+          "Document script https://cdn.example.com/root.js needs a nonce for the effective script-src policy.",
+        severity: "error",
+      },
+    ]);
   });
 });
 

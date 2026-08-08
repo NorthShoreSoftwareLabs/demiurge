@@ -1,3 +1,4 @@
+import type { ScriptTag } from "../document/scripts";
 import type { HttpMethod } from "../route/types";
 
 export type CspSource =
@@ -127,6 +128,7 @@ export type SecurityAuditOptions = {
   document?: {
     headers?: SecurityHeadersOptions;
     policy: SecurityPolicy;
+    scripts?: readonly ScriptTag[];
   };
   route?: {
     cors?: CorsPolicy;

@@ -604,7 +604,8 @@ The first static script slice exposes `script(...)`, `defineScripts(...)`, and
 `resolveScripts(...)`. Page route loading resolves inherited layout scripts
 root-to-leaf, then leaf route scripts. Scripts are deduped by source plus
 meaningful loading attributes and sorted by loading strategy before document
-rendering.
+rendering. Security audits report static document scripts that are missing a
+required CSP nonce or are not allowed by the effective `script-src` policy.
 
 ### Render-Discovered Scripts
 
