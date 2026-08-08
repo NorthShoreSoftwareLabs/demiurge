@@ -261,6 +261,11 @@ The first request-limit slice supports helper-attached request body limits:
 ```ts
 export const POST = text(({ request }) => request.text(), {
   security: {
+    rateLimit: {
+      key: "ip",
+      limit: 60,
+      window: "1m",
+    },
     request: {
       allowedMethods: ["POST"],
       maxBodySize: "1mb",
@@ -275,6 +280,12 @@ Malformed declared lengths on limited routes fail with `400`.
 Route-level `allowedMethods` additionally returns `405` before the handler runs
 when a route capability exists but policy disallows that method. `HEAD` is
 allowed when `GET` is allowed.
+
+The first rate-limit slice adds fixed-window helper-attached limits. The default
+server handler uses a per-handler memory store; production adapters can provide
+a shared store through `createRequestHandler({ rateLimitStore, routes })`.
+Rate-limit rejections return `429` with `Retry-After` and `X-RateLimit-*`
+headers before the handler reads the body.
 
 ## Uploads
 

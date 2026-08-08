@@ -83,8 +83,32 @@ export type RequestSecurityPolicy = {
   maxBodySize?: number | `${number}${"b" | "gb" | "kb" | "mb"}`;
 };
 
+export type RateLimitKey = "ip" | {
+  header: string;
+};
+
+export type RateLimitPolicy = {
+  key: RateLimitKey;
+  limit: number;
+  window: number | `${number}${"h" | "m" | "s"}`;
+};
+
+export type RateLimitResult = {
+  count: number;
+  resetAt: number;
+};
+
+export type RateLimitStore = {
+  increment: (
+    key: string,
+    windowMs: number,
+    now: number,
+  ) => RateLimitResult;
+};
+
 export type RouteSecurityPolicy = {
   csrf?: CsrfPolicy;
+  rateLimit?: RateLimitPolicy;
   request?: RequestSecurityPolicy;
 };
 

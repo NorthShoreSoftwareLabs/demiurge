@@ -35,6 +35,8 @@ with React rendering modes instead of being left to user middleware.
   oversized declared bodies.
 - Helper-attached request allowed-method policy enforced before route handlers
   run.
+- Helper-attached fixed-window rate limits with pluggable server storage and
+  dev in-memory storage.
 - Explicit helper-attached CSRF protection for unsafe methods with configurable
   cookie/header token names.
 

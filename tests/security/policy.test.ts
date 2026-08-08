@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   createCorsHeaders,
+  createMemoryRateLimitStore,
   createSecurityHeaders,
   enforceAllowedMethods,
+  enforceRateLimit,
   parseCookieHeader,
   parseBodySize,
+  parseRateLimitWindow,
   security,
   validateCorsPolicy,
+  validateRateLimitPolicy,
 } from "demiurge";
 
 describe("security policy headers", () => {
@@ -260,6 +264,55 @@ describe("request security policy", () => {
 
     expect(response?.status).toBe(405);
     expect(response?.headers.get("allow")).toBe("GET, HEAD");
+  });
+});
+
+describe("rate limit policy", () => {
+  it("parses rate limit windows", () => {
+    expect(parseRateLimitWindow(250)).toBe(250);
+    expect(parseRateLimitWindow("10s")).toBe(10_000);
+    expect(parseRateLimitWindow("2m")).toBe(120_000);
+    expect(parseRateLimitWindow("1h")).toBe(3_600_000);
+  });
+
+  it("rejects invalid rate limit policy", () => {
+    expect(() =>
+      validateRateLimitPolicy({
+        key: "ip",
+        limit: 0,
+        window: "1m",
+      }),
+    ).toThrow("Demiurge rate limit limit must be a positive integer.");
+    expect(() => parseRateLimitWindow("1d")).toThrow(
+      "Demiurge rate limit window must use an s/m/h suffix.",
+    );
+  });
+
+  it("enforces fixed-window rate limits with memory storage", async () => {
+    const store = createMemoryRateLimitStore();
+    const policy = {
+      key: {
+        header: "x-user-id",
+      },
+      limit: 2,
+      window: "1m",
+    } as const;
+    const request = new Request("https://example.test", {
+      headers: {
+        "x-user-id": "demo",
+      },
+    });
+
+    expect(enforceRateLimit(policy, request, store, 0)).toBe(null);
+    expect(enforceRateLimit(policy, request, store, 1)).toBe(null);
+
+    const response = enforceRateLimit(policy, request, store, 2);
+
+    expect(response?.status).toBe(429);
+    expect(response?.headers.get("retry-after")).toBe("60");
+    expect(response?.headers.get("x-ratelimit-limit")).toBe("2");
+    expect(response?.headers.get("x-ratelimit-remaining")).toBe("0");
+    await expect(response?.text()).resolves.toBe("Rate limit exceeded.");
   });
 });
 

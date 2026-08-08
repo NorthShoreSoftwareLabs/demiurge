@@ -400,6 +400,85 @@ describe("request handler", () => {
     );
   });
 
+  it("rate limits route requests before route handlers run", async () => {
+    const handlerSpy = vi.fn(() => "ok");
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          POST: text(handlerSpy, {
+            security: {
+              rateLimit: {
+                key: {
+                  header: "x-user-id",
+                },
+                limit: 1,
+                window: "1m",
+              },
+            },
+          }),
+        }),
+      },
+    });
+    const request = () =>
+      new Request("https://example.test/api/profile", {
+        headers: {
+          "x-user-id": "demo",
+        },
+        method: "POST",
+      });
+
+    expect((await handler(request())).status).toBe(200);
+
+    const response = await handler(request());
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("60");
+    expect(response.headers.get("x-ratelimit-limit")).toBe("1");
+    expect(response.headers.get("x-ratelimit-remaining")).toBe("0");
+    await expect(response.text()).resolves.toBe("Rate limit exceeded.");
+    expect(handlerSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps CORS headers on rate limit rejections", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          POST: text("ok", {
+            cors: {
+              origins: ["https://app.example.com"],
+            },
+            security: {
+              rateLimit: {
+                key: {
+                  header: "x-user-id",
+                },
+                limit: 1,
+                window: "1m",
+              },
+            },
+          }),
+        }),
+      },
+    });
+    const request = () =>
+      new Request("https://example.test/api/profile", {
+        headers: {
+          origin: "https://app.example.com",
+          "x-user-id": "demo",
+        },
+        method: "POST",
+      });
+
+    expect((await handler(request())).status).toBe(200);
+
+    const response = await handler(request());
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+  });
+
   it("keeps CORS headers on request size rejections", async () => {
     const handler = createRequestHandler({
       routes: {

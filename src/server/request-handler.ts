@@ -15,12 +15,20 @@ import {
 import {
   applyCorsHeaders,
   createCorsPreflightResponse,
+  createMemoryRateLimitStore,
   enforceCsrfProtection,
+  enforceRateLimit,
   enforceRequestSecurity,
+  type RateLimitStore,
 } from "../security";
 
 export type RequestHandlerOptions = {
+  rateLimitStore?: RateLimitStore;
   routes: Record<string, RouteImporter>;
+};
+
+type RequestRuntimeOptions = {
+  rateLimitStore: RateLimitStore;
 };
 
 export type RequestHandler = (request: Request) => Promise<Response>;
@@ -35,17 +43,25 @@ const supportedMethods = [
   "HEAD",
 ] satisfies HttpMethod[];
 
+const defaultRateLimitStore = createMemoryRateLimitStore();
+
 export function createRequestHandler(options: RequestHandlerOptions) {
   const manifest = createRouteManifest(options.routes);
+  const rateLimitStore = options.rateLimitStore ?? createMemoryRateLimitStore();
 
   return async function handleRequest(request: Request) {
-    return await handleRequestWithManifest(manifest, request);
+    return await handleRequestWithManifest(manifest, request, {
+      rateLimitStore,
+    });
   };
 }
 
 export async function handleRequestWithManifest(
   manifest: RouteManifest,
   request: Request,
+  options: RequestRuntimeOptions = {
+    rateLimitStore: defaultRateLimitStore,
+  },
 ) {
   const url = new URL(request.url);
   const routeMatch = findRouteMatch(manifest.routes, url.pathname);
@@ -86,6 +102,16 @@ export async function handleRequestWithManifest(
 
   if (csrfResponse) {
     return applyCorsHeaders(csrfResponse, capability.cors, request);
+  }
+
+  const rateLimitResponse = enforceRateLimit(
+    capability.security?.rateLimit,
+    request,
+    options.rateLimitStore,
+  );
+
+  if (rateLimitResponse) {
+    return applyCorsHeaders(rateLimitResponse, capability.cors, request);
   }
 
   const requestSecurityResponse = enforceRequestSecurity(

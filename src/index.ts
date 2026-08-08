@@ -2,14 +2,18 @@ export { createFileRouter, Link } from "./browser";
 export { href } from "./routing";
 export {
   createCorsHeaders,
+  createMemoryRateLimitStore,
   createSecurityHeaders,
   enforceCsrfProtection,
   enforceAllowedMethods,
+  enforceRateLimit,
   enforceRequestSecurity,
   parseCookieHeader,
   parseBodySize,
+  parseRateLimitWindow,
   security,
   validateCorsPolicy,
+  validateRateLimitPolicy,
 } from "./security";
 export { createRequestHandler, handleRequestWithManifest } from "./server";
 export {
@@ -64,6 +68,10 @@ export type {
   CsrfPolicy,
   CspDirectiveValue,
   CspSource,
+  RateLimitKey,
+  RateLimitPolicy,
+  RateLimitResult,
+  RateLimitStore,
   ReferrerPolicy,
   RequestSecurityPolicy,
   RouteSecurityPolicy,

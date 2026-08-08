@@ -13,6 +13,12 @@ export {
   security,
 } from "./policy";
 export {
+  createMemoryRateLimitStore,
+  enforceRateLimit,
+  parseRateLimitWindow,
+  validateRateLimitPolicy,
+} from "./rate-limit";
+export {
   enforceAllowedMethods,
   enforceRequestSecurity,
   parseBodySize,
@@ -25,6 +31,10 @@ export type {
   CsrfPolicy,
   CspDirectiveValue,
   CspSource,
+  RateLimitKey,
+  RateLimitPolicy,
+  RateLimitResult,
+  RateLimitStore,
   ReferrerPolicy,
   RequestSecurityPolicy,
   RouteSecurityPolicy,

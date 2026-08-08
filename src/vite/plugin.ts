@@ -23,7 +23,9 @@ import {
 import {
   applyCorsHeaders,
   createCorsPreflightResponse,
+  createMemoryRateLimitStore,
   enforceCsrfProtection,
+  enforceRateLimit,
   enforceRequestSecurity,
 } from "../security";
 
@@ -42,6 +44,7 @@ export type DemiurgeVitePluginOptions = {
 const CLIENT_ENTRY_ID = "virtual:demiurge/client-entry";
 const RESOLVED_CLIENT_ENTRY_ID = `\0${CLIENT_ENTRY_ID}`;
 const DEFAULT_TYPED_ROUTES_OUTPUT = ".demiurge/route-manifest.d.ts";
+const devRateLimitStore = createMemoryRateLimitStore();
 
 const supportedMethods = [
   "GET",
@@ -366,6 +369,16 @@ export async function handleDevRequest(
 
   if (csrfResponse) {
     return applyCorsHeaders(csrfResponse, capability.cors, request);
+  }
+
+  const rateLimitResponse = enforceRateLimit(
+    capability.security?.rateLimit,
+    request,
+    devRateLimitStore,
+  );
+
+  if (rateLimitResponse) {
+    return applyCorsHeaders(rateLimitResponse, capability.cors, request);
   }
 
   const requestSecurityResponse = enforceRequestSecurity(

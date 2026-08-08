@@ -146,6 +146,44 @@ describe("Vite plugin dev request handling", () => {
     expect(handlerSpy).not.toHaveBeenCalled();
   });
 
+  it("enforces rate limits in Vite dev", async () => {
+    const handlerSpy = vi.fn(() => "ok");
+    const manifest = unstable_createRouteManifest({
+      "./routes/api/rate-limited.tsx": routeModule({
+        POST: text(handlerSpy, {
+          security: {
+            rateLimit: {
+              key: {
+                header: "x-vite-rate-limit-user",
+              },
+              limit: 1,
+              window: "1m",
+            },
+          },
+        }),
+      }),
+    });
+    const request = () =>
+      new Request("https://example.test/api/rate-limited", {
+        headers: {
+          "x-vite-rate-limit-user": "demo",
+        },
+        method: "POST",
+      });
+
+    const first = await unstable_handleDevRequest(manifest, request());
+    const second = await unstable_handleDevRequest(manifest, request());
+
+    expect(first).toBeInstanceOf(Response);
+    expect(second).toBeInstanceOf(Response);
+    if (!(first instanceof Response) || !(second instanceof Response)) return;
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(429);
+    expect(second.headers.get("x-ratelimit-limit")).toBe("1");
+    expect(handlerSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("enforces CSRF protection in Vite dev", async () => {
     const handlerSpy = vi.fn(({ request }: { request: Request }) => request.text());
     const manifest = unstable_createRouteManifest({
