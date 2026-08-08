@@ -54,6 +54,12 @@ server components:
 const post = await cache.get(postBySlug(path.slug));
 ```
 
+The first data slice exposes `query(...)`, `createMemoryCache(...)`, `tag(...)`,
+and `defineTags(...)`. Query objects produce typed cache requests with stable
+keys, tags, TTLs, and scopes. The memory cache supports request dedupe, shared
+build/public/private entries, `none` bypass, TTL expiry, and key/tag
+invalidation.
+
 ## Render Timing And Data Timing
 
 Default rule:

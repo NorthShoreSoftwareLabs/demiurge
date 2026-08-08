@@ -1,5 +1,14 @@
 export { createFileRouter, Link } from "./browser";
 export {
+  createMemoryCache,
+  defineTags,
+  parseCacheDuration,
+  query,
+  serializeCacheKey,
+  serializeCacheTag,
+  tag,
+} from "./data";
+export {
   defineLinks,
   defineMetadata,
   defineScripts,
@@ -48,6 +57,17 @@ export {
   toResponse,
   webhook,
 } from "./route";
+export type {
+  Cache,
+  CacheDuration,
+  CacheKey,
+  CacheKeyPart,
+  CacheRequest,
+  CacheScope,
+  CacheTag,
+  Query,
+  QueryDefinition,
+} from "./data";
 export type {
   DocumentMetadataTag,
   LinkTag,

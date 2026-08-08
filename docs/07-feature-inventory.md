@@ -66,11 +66,11 @@ implementation.
 | --- | --- |
 | Route-level `data` for page `GET` | designed |
 | Component-level server data through request context | designed |
-| Reusable `query(...)` objects | designed |
-| Explicit cache API | designed |
-| Cache scopes: build/public/private/request/none | designed |
-| Cache adapters: memory/Redis/KV/custom | designed |
-| Typed tags and invalidation | designed |
+| Reusable `query(...)` objects | implemented |
+| Explicit cache API | implemented |
+| Cache scopes: build/public/private/request/none | implemented |
+| Cache adapters: memory/Redis/KV/custom | partially implemented |
+| Typed tags and invalidation | implemented |
 | Client router refresh/prefetch separate from server invalidation | designed |
 | Actions/mutations | designed |
 | Idempotency for retryable mutations | designed |

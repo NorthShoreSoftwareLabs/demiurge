@@ -1,6 +1,6 @@
 # Data Cache And Static Generation
 
-Status: planned
+Status: in progress
 
 ## Goal
 
@@ -36,6 +36,16 @@ handlers and React server components without hiding when work runs.
 - Type tests for `paths`, route path values, and invalidation helpers.
 - Fixture build tests for static dynamic routes.
 - Adapter contract tests for shared cache behavior.
+
+## Implemented Slices
+
+- `query(...)` creates typed reusable cache requests with stable keys, tags,
+  scopes, TTLs, and typed return values.
+- `createMemoryCache(...)` provides a framework-owned memory cache with
+  request-scoped dedupe, shared build/public/private entries, `none` bypass,
+  TTL expiry, and key/tag invalidation.
+- `tag(...)`, `defineTags(...)`, `serializeCacheKey(...)`, and
+  `parseCacheDuration(...)` cover the first cache key/tag behavior tests.
 
 ## Open Decisions
 
