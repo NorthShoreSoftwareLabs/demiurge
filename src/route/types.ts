@@ -1,6 +1,10 @@
 import type { ComponentType, ReactNode } from "react";
 import type { RouteParamsFor } from "../routing/types";
-import type { CorsPolicy, RouteSecurityPolicy } from "../security/types";
+import type {
+  CorsPolicy,
+  RouteSecurityPolicy,
+  SecurityPolicy,
+} from "../security/types";
 
 export type MaybePromise<T> = T | Promise<T>;
 
@@ -99,6 +103,11 @@ export type HttpMethod =
   | "OPTIONS"
   | "HEAD";
 
+export type RoutePolicy = {
+  document?: SecurityPolicy;
+  security?: RouteSecurityPolicy;
+};
+
 export type PageOptions<TPath extends string = string> = {
   view: ComponentType<RouteProps<TPath>>;
   layout?: false;
@@ -118,6 +127,7 @@ export type RouteModule = {
   OPTIONS?: ResponseCapability;
   HEAD?: ResponseCapability;
   default?: ComponentType<LayoutProps>;
+  policy?: RoutePolicy;
 };
 
 export type RouteImporter = () => Promise<RouteModule>;

@@ -15,6 +15,10 @@ function View(_props: RouteProps) {
   return null;
 }
 
+function AboutView(_props: RouteProps) {
+  return null;
+}
+
 function RootLayout(_props: LayoutProps) {
   return null;
 }
@@ -72,6 +76,7 @@ describe("route loading", () => {
       "./routes/@layout.tsx": routeModule({ default: RootLayout }),
       "./routes/(admin)/@layout.tsx": routeModule({ default: BlogLayout }),
       "./routes/(admin)/users.tsx": routeModule({ GET: page(View) }),
+      "./routes/about.tsx": routeModule({ GET: page(AboutView) }),
     });
 
     const match = await unstable_loadPageRoute(manifest, "/users");
@@ -81,6 +86,14 @@ describe("route loading", () => {
 
     expect(match.match.page).toBe(View);
     expect(match.match.layouts).toEqual([RootLayout, BlogLayout]);
+
+    const siblingMatch = await unstable_loadPageRoute(manifest, "/about");
+
+    expect(siblingMatch.status).toBe("ready");
+    if (siblingMatch.status !== "ready") return;
+
+    expect(siblingMatch.match.page).toBe(AboutView);
+    expect(siblingMatch.match.layouts).toEqual([RootLayout]);
   });
 
   it("treats files without page-compatible GET as not found", async () => {

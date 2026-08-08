@@ -2,6 +2,7 @@ export {
   createRouteManifest,
   findPageMatch,
   findRouteMatch,
+  isAttachedFileForRoute,
   isLayoutForPage,
   loadPageRoute,
   loadRoute,
@@ -14,6 +15,7 @@ export type {
   LayoutRoute,
   LoadedRouteMatch,
   PendingRouteMatch,
+  PolicyRoute,
   RouteRecord,
   RouteManifest,
 } from "./manifest";

@@ -8,6 +8,7 @@ import type {
 
 export type RouteRecord = {
   file: string;
+  fileSegments: string[];
   segments: string[];
   score: number;
   load: RouteImporter;
@@ -15,6 +16,14 @@ export type RouteRecord = {
 
 export type LayoutRoute = {
   file: string;
+  fileSegments: string[];
+  segments: string[];
+  load: RouteImporter;
+};
+
+export type PolicyRoute = {
+  file: string;
+  fileSegments: string[];
   segments: string[];
   load: RouteImporter;
 };
@@ -22,6 +31,7 @@ export type LayoutRoute = {
 export type RouteManifest = {
   routes: RouteRecord[];
   layouts: LayoutRoute[];
+  policies: PolicyRoute[];
 };
 
 export type LoadedRouteMatch = {
@@ -37,7 +47,7 @@ export type PendingRouteMatch =
   | { status: "ready"; match: LoadedRouteMatch };
 
 export function createRouteManifest(routes: Record<string, RouteImporter>) {
-  const manifest: RouteManifest = { routes: [], layouts: [] };
+  const manifest: RouteManifest = { routes: [], layouts: [], policies: [] };
 
   for (const [file, load] of Object.entries(routes)) {
     const routePath = file
@@ -51,6 +61,17 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
     if (basename === "@layout") {
       manifest.layouts.push({
         file,
+        fileSegments: routePath.slice(0, -1),
+        segments: toRouteSegments(routePath.slice(0, -1)),
+        load,
+      });
+      continue;
+    }
+
+    if (basename === "@policy") {
+      manifest.policies.push({
+        file,
+        fileSegments: routePath.slice(0, -1),
         segments: toRouteSegments(routePath.slice(0, -1)),
         load,
       });
@@ -59,6 +80,7 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
 
     manifest.routes.push({
       file,
+      fileSegments: routePath,
       segments: toRouteSegments(routePath),
       score: scoreRoute(routePath),
       load,
@@ -66,7 +88,12 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
   }
 
   manifest.routes.sort((a, b) => b.score - a.score || a.file.localeCompare(b.file));
-  manifest.layouts.sort((a, b) => a.segments.length - b.segments.length);
+  manifest.layouts.sort(
+    (a, b) => a.fileSegments.length - b.fileSegments.length || a.file.localeCompare(b.file),
+  );
+  manifest.policies.sort(
+    (a, b) => a.fileSegments.length - b.fileSegments.length || a.file.localeCompare(b.file),
+  );
 
   return manifest;
 }
@@ -82,7 +109,7 @@ export async function loadPageRoute(
   }
 
   const matchingLayouts = manifest.layouts.filter((layout) =>
-    isLayoutForPage(layout.segments, routeMatch.route.segments),
+    isAttachedFileForRoute(layout.fileSegments, routeMatch.route.fileSegments),
   );
 
   const pageModule = await routeMatch.route.load();
@@ -161,6 +188,15 @@ export function matchSegments(
 export function isLayoutForPage(layoutSegments: string[], pageSegments: string[]) {
   return layoutSegments.every(
     (segment, index) => pageSegments[index] === segment,
+  );
+}
+
+export function isAttachedFileForRoute(
+  attachedFileSegments: string[],
+  routeFileSegments: string[],
+) {
+  return attachedFileSegments.every(
+    (segment, index) => routeFileSegments[index] === segment,
   );
 }
 

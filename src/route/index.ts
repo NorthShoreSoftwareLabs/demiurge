@@ -34,6 +34,7 @@ export type {
   RouteContext,
   RouteImporter,
   RouteModule,
+  RoutePolicy,
   RouteProps,
   RouteValue,
   TextCapability,

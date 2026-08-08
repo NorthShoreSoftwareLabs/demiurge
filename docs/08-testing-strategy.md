@@ -160,6 +160,7 @@ MVP `0.0.1` currently verifies:
 - pathnames split predictably.
 - path variables decode URL-encoded values.
 - `@layout.tsx` files are classified as layouts.
+- `@policy.ts` files are classified as framework-attached policy files.
 - normal names like `policy.tsx` remain route files.
 - static routes outrank dynamic routes.
 - matched routes load inherited layouts root-to-leaf.

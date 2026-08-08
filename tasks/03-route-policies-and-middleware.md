@@ -34,6 +34,8 @@ while preserving file-based routing and allowing real URL files like
 
 - Route groups such as `(admin)` organize route files and framework-attached
   files without changing generated URLs or runtime path matching.
+- `@policy.ts` files are discovered as framework-attached policy files, while
+  ordinary `policy.tsx` files remain real URL routes.
 
 ## Open Decisions
 

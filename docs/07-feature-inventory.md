@@ -33,8 +33,9 @@ implementation.
 | WebSocket `WS` capability | designed |
 | WebTransport capability | planned |
 | WebRTC signaling helpers | planned |
-| Route groups such as `(admin)` | designed |
+| Route groups such as `(admin)` | implemented |
 | Middleware with cascade | designed |
+| Framework-attached `@policy.ts` discovery | implemented |
 | Declarative `@policy.ts` cascade | designed |
 | Generated typed URL manifest | implemented |
 | Actual URL string type-safety for `Link`/`href` | implemented |

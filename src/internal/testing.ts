@@ -2,6 +2,7 @@ export {
   createRouteManifest as unstable_createRouteManifest,
   findPageMatch as unstable_findPageMatch,
   findRouteMatch as unstable_findRouteMatch,
+  isAttachedFileForRoute as unstable_isAttachedFileForRoute,
   isLayoutForPage as unstable_isLayoutForPage,
   loadPageRoute as unstable_loadPageRoute,
   loadRoute as unstable_loadRoute,

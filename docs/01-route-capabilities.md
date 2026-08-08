@@ -139,6 +139,9 @@ not-found, or error states. MVP `0.0.1` supports app-provided browser fallbacks
 through `createFileRouter`; future runtime work should move this into inherited
 `@loading.tsx`, `@not-found.tsx`, and `@error.tsx` files.
 
+`@policy.ts` files are also framework-attached and collected separately from URL
+routes. Ordinary `policy.ts` or `policy.tsx` files remain real route files.
+
 ## Nested Layouts
 
 `@layout.tsx` attaches to a folder and wraps every page-compatible handler below

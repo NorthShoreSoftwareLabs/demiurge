@@ -3,6 +3,7 @@ import {
   page,
   type LayoutProps,
   type RouteModule,
+  type RoutePolicy,
   type RouteProps,
 } from "demiurge";
 import {
@@ -64,12 +65,17 @@ describe("file route conventions", () => {
   });
 
   it("classifies @layout files as layouts and normal names as routes", () => {
+    const adminPolicy = {
+      security: { csrf: true },
+    } satisfies RoutePolicy;
     const manifest = unstable_createRouteManifest({
       "./routes/@layout.tsx": routeModule({ default: RootLayout }),
       "./routes/blog/@layout.tsx": routeModule({ default: BlogLayout }),
       "./routes/(admin)/@layout.tsx": routeModule({ default: BlogLayout }),
+      "./routes/(admin)/@policy.ts": routeModule({ policy: adminPolicy }),
       "./routes/(admin)/users.tsx": routeModule({ GET: page(View) }),
       "./routes/index.tsx": routeModule({ GET: page(View) }),
+      "./routes/@policy.ts": routeModule({ policy: { security: { csrf: true } } }),
       "./routes/policy.tsx": routeModule({ GET: page(View) }),
       "./routes/blog/[slug].tsx": routeModule({ GET: page(View) }),
     });
@@ -82,10 +88,29 @@ describe("file route conventions", () => {
     expect(manifest.routes.map((route) => route.file)).toContain(
       "./routes/policy.tsx",
     );
+    expect(manifest.routes.map((route) => route.file)).not.toContain(
+      "./routes/@policy.ts",
+    );
     expect(
       manifest.routes.find((route) => route.file === "./routes/(admin)/users.tsx")
         ?.segments,
     ).toEqual(["users"]);
+    expect(
+      manifest.routes.find((route) => route.file === "./routes/(admin)/users.tsx")
+        ?.fileSegments,
+    ).toEqual(["(admin)", "users"]);
+    expect(manifest.policies.map((policy) => policy.file)).toEqual([
+      "./routes/@policy.ts",
+      "./routes/(admin)/@policy.ts",
+    ]);
+    expect(manifest.policies.map((policy) => policy.segments)).toEqual([
+      [],
+      [],
+    ]);
+    expect(manifest.policies.map((policy) => policy.fileSegments)).toEqual([
+      [],
+      ["(admin)"],
+    ]);
   });
 
   it("prefers static routes over dynamic routes", () => {
