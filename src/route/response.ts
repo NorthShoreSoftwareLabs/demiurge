@@ -17,6 +17,9 @@ import type {
   ServerSentEventsCapability,
   ServerSentEventSource,
   TextCapability,
+  StreamCapability,
+  StreamChunk,
+  StreamSource,
 } from "./types";
 import { href, type AppHref, type LinkTarget } from "../routing";
 
@@ -118,6 +121,20 @@ export function response(
   } satisfies RawResponseCapability;
 }
 
+export function stream(
+  body: RouteValue<StreamSource>,
+  init?: ResponseOptions,
+) {
+  return {
+    body,
+    cors: init?.cors,
+    init: withoutRouteOptions(init),
+    kind: "stream",
+    security: init?.security,
+    timing: normalizeServerTiming(init?.timing),
+  } satisfies StreamCapability;
+}
+
 export function sse(
   events: RouteValue<ServerSentEventSource>,
   init?: ResponseOptions,
@@ -207,6 +224,18 @@ export async function toResponse(
     }
     case "response": {
       return await resolveValue(capability.response, context);
+    }
+    case "stream": {
+      return new Response(
+        createGenericStream(await resolveValue(capability.body, context)),
+        {
+          ...capability.init,
+          headers: withDefaultHeaders(capability.init?.headers, {
+            "content-type": "application/octet-stream",
+            "x-accel-buffering": "no",
+          }),
+        },
+      );
     }
     case "sse": {
       return new Response(
@@ -300,6 +329,31 @@ function createJsonLinesStream(lines: JsonLinesSource) {
       await iterator.return?.();
     },
   });
+}
+
+function createGenericStream(body: StreamSource) {
+  const encoder = new TextEncoder();
+  const iterator = toAsyncIteratorSource(body);
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const next = await iterator.next();
+
+      if (next.done) {
+        controller.close();
+        return;
+      }
+
+      controller.enqueue(encodeStreamChunk(next.value, encoder));
+    },
+    async cancel() {
+      await iterator.return?.();
+    },
+  });
+}
+
+function encodeStreamChunk(chunk: StreamChunk, encoder: TextEncoder) {
+  return typeof chunk === "string" ? encoder.encode(chunk) : chunk;
 }
 
 function toAsyncIteratorSource<T>(

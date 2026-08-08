@@ -38,6 +38,9 @@ page or ordinary request/response endpoint.
   async iterables, and `ReadableStream` sources with `application/x-ndjson`,
   no-cache, and buffering control headers through both the request handler and
   Vite dev handler.
+- `stream(...)` provides generic HTTP streaming for string and byte chunks from
+  sync iterables, async iterables, and `ReadableStream` sources with buffering
+  control headers through both the request handler and Vite dev handler.
 
 ## Open Decisions
 

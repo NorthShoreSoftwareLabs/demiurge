@@ -8,6 +8,7 @@ import {
   response,
   serverTiming,
   sse,
+  stream,
   text,
   toResponse,
   type HttpRouteContext,
@@ -49,6 +50,23 @@ describe("response helpers", () => {
     await expect(result.text()).resolves.toBe(
       '{"id":1,"title":"First"}\n"plain"\nnull\n',
     );
+  });
+
+  it("creates generic readable streams", async () => {
+    const result = await toResponse(
+      stream(["hello ", new TextEncoder().encode("world")], {
+        headers: {
+          "content-type": "text/plain; charset=utf-8",
+        },
+      }),
+      context,
+    );
+
+    expect(result.headers.get("content-type")).toBe(
+      "text/plain; charset=utf-8",
+    );
+    expect(result.headers.get("x-accel-buffering")).toBe("no");
+    await expect(result.text()).resolves.toBe("hello world");
   });
 
   it("creates text responses", async () => {

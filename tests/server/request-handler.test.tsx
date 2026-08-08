@@ -9,6 +9,7 @@ import {
   response as rawResponse,
   serverTiming,
   sse,
+  stream,
   text,
   webhook,
   type RouteModule,
@@ -178,6 +179,49 @@ describe("request handler", () => {
     );
     expect(response.headers.get("server-timing")).toBe("feed;dur=3");
     await expect(response.text()).resolves.toBe('{"id":1}\n{"id":2}\n');
+  });
+
+  it("serves generic stream responses", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/download.tsx": routeModule({
+          GET: stream(
+            async function* body() {
+              yield "hello ";
+              yield new TextEncoder().encode("world");
+            },
+            {
+              cors: {
+                origins: ["https://app.example.com"],
+              },
+              headers: {
+                "content-type": "text/plain; charset=utf-8",
+              },
+              timing: { duration: 5, name: "download" },
+            },
+          ),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/download", {
+        headers: {
+          origin: "https://app.example.com",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "text/plain; charset=utf-8",
+    );
+    expect(response.headers.get("x-accel-buffering")).toBe("no");
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+    expect(response.headers.get("server-timing")).toBe("download;dur=5");
+    await expect(response.text()).resolves.toBe("hello world");
   });
 
   it("strips server-sent event bodies for HEAD requests", async () => {

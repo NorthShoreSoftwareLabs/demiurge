@@ -8,6 +8,7 @@ export {
   response,
   serverTiming,
   sse,
+  stream,
   text,
   toResponse,
 } from "./response";
@@ -57,5 +58,8 @@ export type {
   StaticPath,
   StaticPathsContext,
   StaticPathsFunction,
+  StreamCapability,
+  StreamChunk,
+  StreamSource,
   TextCapability,
 } from "./types";

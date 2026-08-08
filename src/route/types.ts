@@ -176,6 +176,22 @@ export type RawResponseCapability = {
   timing?: readonly ServerTimingMetric[];
 };
 
+export type StreamChunk = string | Uint8Array;
+
+export type StreamSource =
+  | Iterable<StreamChunk>
+  | AsyncIterable<StreamChunk>
+  | ReadableStream<StreamChunk>;
+
+export type StreamCapability = {
+  body: RouteValue<StreamSource>;
+  cors?: CorsPolicy;
+  init?: ResponseInit;
+  kind: "stream";
+  security?: RouteSecurityPolicy;
+  timing?: readonly ServerTimingMetric[];
+};
+
 export type ServerSentEvent = {
   comment?: string;
   data?: unknown;
@@ -206,6 +222,7 @@ export type ResponseCapability =
   | RedirectCapability
   | NotFoundCapability
   | RawResponseCapability
+  | StreamCapability
   | ServerSentEventsCapability;
 
 export type RouteCapability = AnyPageCapability | ResponseCapability;

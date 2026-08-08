@@ -20,6 +20,7 @@ import {
   script,
   serverTiming,
   sse,
+  stream,
   structuredData,
   text,
   webhook,
@@ -134,6 +135,31 @@ describe("Vite plugin dev request handling", () => {
       "application/x-ndjson; charset=utf-8",
     );
     await expect(result.text()).resolves.toBe('{"id":1}\n{"id":2}\n');
+  });
+
+  it("serves generic stream responses in Vite dev", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/api/download.tsx": routeModule({
+        GET: stream(["hello ", "world"], {
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+          },
+        }),
+      }),
+    });
+
+    const result = await unstable_handleDevRequest(
+      manifest,
+      new Request("https://example.test/api/download"),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    if (!(result instanceof Response)) return;
+
+    expect(result.headers.get("content-type")).toBe(
+      "text/plain; charset=utf-8",
+    );
+    await expect(result.text()).resolves.toBe("hello world");
   });
 
   it("serves CORS preflight responses in Vite dev", async () => {
