@@ -9,6 +9,7 @@ import {
 import {
   unstable_createRouteManifest,
   unstable_findRouteMatch,
+  unstable_loadErrorFallback,
   unstable_loadLoadingFallback,
   unstable_matchSegments,
   unstable_splitPathname,
@@ -73,6 +74,7 @@ describe("file route conventions", () => {
       "./routes/@layout.tsx": routeModule({ default: RootLayout }),
       "./routes/blog/@layout.tsx": routeModule({ default: BlogLayout }),
       "./routes/(admin)/@layout.tsx": routeModule({ default: BlogLayout }),
+      "./routes/@error.tsx": routeModule({ default: RootLayout }),
       "./routes/@loading.tsx": routeModule({ default: RootLayout }),
       "./routes/blog/@not-found.tsx": routeModule({ default: BlogLayout }),
       "./routes/@middleware.ts": routeModule({}),
@@ -129,6 +131,9 @@ describe("file route conventions", () => {
     expect(manifest.fallbacks.loading.map((fallback) => fallback.file)).toEqual([
       "./routes/@loading.tsx",
     ]);
+    expect(manifest.fallbacks.error.map((fallback) => fallback.file)).toEqual([
+      "./routes/@error.tsx",
+    ]);
     expect(manifest.fallbacks.notFound.map((fallback) => fallback.file)).toEqual([
       "./routes/blog/@not-found.tsx",
     ]);
@@ -152,6 +157,27 @@ describe("file route conventions", () => {
     );
     await expect(unstable_loadLoadingFallback(manifest, "/missing")).resolves.toBe(
       undefined,
+    );
+  });
+
+  it("loads the closest inherited error fallback for matched routes and paths", async () => {
+    const AdminError = () => null;
+    const RootError = () => null;
+    const manifest = unstable_createRouteManifest({
+      "./routes/@error.tsx": routeModule({ default: RootError }),
+      "./routes/(admin)/@error.tsx": routeModule({ default: AdminError }),
+      "./routes/(admin)/users.tsx": routeModule({ GET: page(View) }),
+      "./routes/about.tsx": routeModule({ GET: page(View) }),
+    });
+
+    await expect(unstable_loadErrorFallback(manifest, "/users")).resolves.toBe(
+      AdminError,
+    );
+    await expect(unstable_loadErrorFallback(manifest, "/about")).resolves.toBe(
+      RootError,
+    );
+    await expect(unstable_loadErrorFallback(manifest, "/missing")).resolves.toBe(
+      RootError,
     );
   });
 

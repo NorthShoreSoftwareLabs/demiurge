@@ -3,6 +3,7 @@ import type {
   LayoutProps,
   NotFoundProps,
   PathVars,
+  RouteErrorProps,
   RouteImporter,
   RouteProps,
 } from "../route";
@@ -45,6 +46,7 @@ export type FallbackRoute = {
 
 export type RouteManifest = {
   fallbacks: {
+    error: FallbackRoute[];
     loading: FallbackRoute[];
     notFound: FallbackRoute[];
   };
@@ -55,6 +57,7 @@ export type RouteManifest = {
 };
 
 export type LoadedRouteMatch = {
+  error?: ComponentType<RouteErrorProps>;
   page: ComponentType<RouteProps>;
   layouts: ComponentType<LayoutProps>[];
   path: PathVars;
@@ -62,6 +65,12 @@ export type LoadedRouteMatch = {
 };
 
 export type PendingRouteMatch =
+  | {
+      error: unknown;
+      Error?: ComponentType<RouteErrorProps>;
+      pathname: string;
+      status: "error";
+    }
   | { loading?: ComponentType; status: "loading" }
   | {
       notFound?: ComponentType<NotFoundProps>;
@@ -73,6 +82,7 @@ export type PendingRouteMatch =
 export function createRouteManifest(routes: Record<string, RouteImporter>) {
   const manifest: RouteManifest = {
     fallbacks: {
+      error: [],
       loading: [],
       notFound: [],
     },
@@ -131,6 +141,16 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
       continue;
     }
 
+    if (basename === "@error") {
+      manifest.fallbacks.error.push({
+        file,
+        fileSegments: routePath.slice(0, -1),
+        segments: toRouteSegments(routePath.slice(0, -1)),
+        load,
+      });
+      continue;
+    }
+
     if (basename === "@not-found") {
       manifest.fallbacks.notFound.push({
         file,
@@ -161,6 +181,9 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
     (a, b) => a.fileSegments.length - b.fileSegments.length || a.file.localeCompare(b.file),
   );
   manifest.fallbacks.loading.sort(
+    (a, b) => a.fileSegments.length - b.fileSegments.length || a.file.localeCompare(b.file),
+  );
+  manifest.fallbacks.error.sort(
     (a, b) => a.fileSegments.length - b.fileSegments.length || a.file.localeCompare(b.file),
   );
   manifest.fallbacks.notFound.sort(
@@ -206,6 +229,7 @@ export async function loadPageRoute(
   return {
     status: "ready",
     match: {
+      error: await loadErrorFallbackForRoute(manifest, routeMatch.route),
       page: pageModule.GET.view,
       layouts: layoutModules.map(
         (module) => module.default as ComponentType<LayoutProps>,
@@ -228,6 +252,37 @@ export async function loadLoadingFallback(
 
   return await loadFallbackComponent(
     findClosestAttachedFile(manifest.fallbacks.loading, routeMatch.route),
+  );
+}
+
+export async function loadErrorFallback(
+  manifest: RouteManifest,
+  pathname: string,
+) {
+  const routeMatch = findRouteMatch(manifest.routes, pathname);
+
+  if (routeMatch) {
+    return await loadErrorFallbackForRoute(manifest, routeMatch.route);
+  }
+
+  return await loadErrorFallbackForPath(manifest, pathname);
+}
+
+async function loadErrorFallbackForRoute(
+  manifest: RouteManifest,
+  route: RouteRecord,
+) {
+  return await loadErrorFallbackComponent(
+    findClosestAttachedFile(manifest.fallbacks.error, route),
+  );
+}
+
+async function loadErrorFallbackForPath(
+  manifest: RouteManifest,
+  pathname: string,
+) {
+  return await loadErrorFallbackComponent(
+    findClosestFallbackForPath(manifest.fallbacks.error, pathname),
   );
 }
 
@@ -273,7 +328,10 @@ function findClosestFallbackForPath(
   for (let index = fallbacks.length - 1; index >= 0; index -= 1) {
     const fallback = fallbacks[index];
 
-    if (isFallbackForPath(fallback.segments, pathnameSegments)) {
+    if (
+      !fallback.fileSegments.some(isRouteGroupSegment) &&
+      isFallbackForPath(fallback.segments, pathnameSegments)
+    ) {
       return fallback;
     }
   }
@@ -310,6 +368,16 @@ async function loadNotFoundFallbackComponent(
   const module = await fallback.load();
 
   return module.default as ComponentType<NotFoundProps> | undefined;
+}
+
+async function loadErrorFallbackComponent(fallback: FallbackRoute | undefined) {
+  if (!fallback) {
+    return undefined;
+  }
+
+  const module = await fallback.load();
+
+  return module.default as ComponentType<RouteErrorProps> | undefined;
 }
 
 export function findRouteMatch(routes: RouteRecord[], pathname: string) {

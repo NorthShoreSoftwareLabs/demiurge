@@ -33,6 +33,7 @@ export type {
   ResponseCapability,
   RouteCapability,
   RouteContext,
+  RouteErrorProps,
   RouteImporter,
   RouteDefaultComponent,
   RouteMiddleware,

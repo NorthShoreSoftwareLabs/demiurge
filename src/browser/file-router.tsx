@@ -1,4 +1,5 @@
 import {
+  Component,
   ComponentType,
   MouseEvent,
   ReactNode,
@@ -9,9 +10,10 @@ import {
   useMemo,
   useState,
 } from "react";
-import type { NotFoundProps, RouteImporter } from "../route";
+import type { NotFoundProps, RouteErrorProps, RouteImporter } from "../route";
 import {
   createRouteManifest,
+  loadErrorFallback,
   loadLoadingFallback,
   loadPageRoute,
   type PendingRouteMatch,
@@ -54,6 +56,17 @@ export function createFileRouter(options: FileRouterOptions) {
       loadPageRoute(manifest, location.pathname).then((nextMatch) => {
         if (!cancelled) {
           setMatch(nextMatch);
+        }
+      }).catch(async (error: unknown) => {
+        const ErrorFallback = await loadErrorFallback(manifest, location.pathname);
+
+        if (!cancelled) {
+          setMatch({
+            Error: ErrorFallback,
+            error,
+            pathname: location.pathname,
+            status: "error",
+          });
         }
       });
 
@@ -129,13 +142,68 @@ function RouteRenderer({
       : null;
   }
 
-  const { page, layouts, path, pathname } = match.match;
-  const pageElement = createElement(page, { path, pathname });
+  if (match.status === "error") {
+    return match.Error
+      ? createElement(match.Error, {
+          error: match.error,
+          pathname: match.pathname,
+        })
+      : null;
+  }
 
-  return layouts.reduceRight(
+  const { error, page, layouts, path, pathname } = match.match;
+  const pageElement = createElement(page, { path, pathname });
+  const routeElement = layouts.reduceRight(
     (children, Layout) => createElement(Layout, { path, pathname, children }),
     pageElement,
   );
+
+  return createElement(RouteErrorBoundary, {
+    Error: error,
+    children: routeElement,
+    pathname,
+  });
+}
+
+class RouteErrorBoundary extends Component<
+  {
+    children: ReactNode;
+    Error?: ComponentType<RouteErrorProps>;
+    pathname: string;
+  },
+  { error?: unknown }
+> {
+  static getDerivedStateFromError(error: unknown) {
+    return { error };
+  }
+
+  override state: { error?: unknown } = {};
+
+  override componentDidUpdate(previousProps: {
+    children: ReactNode;
+    Error?: ComponentType<RouteErrorProps>;
+    pathname: string;
+  }) {
+    if (
+      this.state.error !== undefined &&
+      previousProps.pathname !== this.props.pathname
+    ) {
+      this.setState({ error: undefined });
+    }
+  }
+
+  override render() {
+    if (this.state.error !== undefined) {
+      return this.props.Error
+        ? createElement(this.props.Error, {
+            error: this.state.error,
+            pathname: this.props.pathname,
+          })
+        : null;
+    }
+
+    return this.props.children;
+  }
 }
 
 function getCurrentLocation() {

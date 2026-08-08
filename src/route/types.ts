@@ -43,10 +43,16 @@ export type NotFoundProps = {
   pathname: string;
 };
 
+export type RouteErrorProps = {
+  error: unknown;
+  pathname: string;
+};
+
 export type RouteDefaultComponent =
   | ComponentType
   | ComponentType<LayoutProps>
-  | ComponentType<NotFoundProps>;
+  | ComponentType<NotFoundProps>
+  | ComponentType<RouteErrorProps>;
 
 export type PageCapability<TPath extends string = string> = {
   kind: "page";

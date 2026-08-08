@@ -22,8 +22,7 @@ implementation.
 | Vite plugin for non-page HTTP route capabilities | implemented |
 | `@layout.tsx` nested layouts | implemented |
 | App-provided loading/not-found browser fallback options | implemented |
-| Inherited `@loading.tsx` and `@not-found.tsx` | implemented |
-| Inherited `@error.tsx` | designed |
+| Inherited `@loading.tsx`, `@not-found.tsx`, and `@error.tsx` | implemented |
 | Dynamic path variables with `[slug]` | implemented |
 | Catchall path variables with `[...path]` | implemented |
 | `path` instead of public `params` vocabulary | implemented |

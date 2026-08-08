@@ -17,6 +17,7 @@ describe("browser router fallbacks", () => {
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
   });
 
   it("does not render framework-owned loading markup by default", () => {
@@ -91,6 +92,43 @@ describe("browser router fallbacks", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Blog not found: /blog/missing")).toBeTruthy();
+    });
+  });
+
+  it("renders inherited @error UI when a matched route throws", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    window.history.replaceState(null, "", "/blog");
+
+    const Router = createFileRouter({
+      routes: {
+        "./routes/@error.tsx": routeModule({ default: RouteError }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BrokenPage) }),
+      },
+    });
+
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Route error at /blog: render failed")).toBeTruthy();
+    });
+  });
+
+  it("renders inherited @error UI when route loading fails", async () => {
+    window.history.replaceState(null, "", "/blog");
+
+    const Router = createFileRouter({
+      routes: {
+        "./routes/@error.tsx": routeModule({ default: RouteError }),
+        "./routes/blog/index.tsx": vi.fn(async () => {
+          throw new Error("load failed");
+        }),
+      },
+    });
+
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Route error at /blog: load failed")).toBeTruthy();
     });
   });
 
@@ -182,6 +220,16 @@ function BlogNotFound({ pathname }: { pathname: string }) {
   return <p>Blog not found: {pathname}</p>;
 }
 
+function RouteError({ error, pathname }: { error: unknown; pathname: string }) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return (
+    <p>
+      Route error at {pathname}: {message}
+    </p>
+  );
+}
+
 function RootLayout({ children }: LayoutProps) {
   return (
     <section>
@@ -202,6 +250,10 @@ function HomePage(_props: RouteProps) {
 
 function BlogPage({ pathname }: RouteProps) {
   return <p>Blog page at {pathname}</p>;
+}
+
+function BrokenPage(_props: RouteProps): never {
+  throw new Error("render failed");
 }
 
 function SelfLinkPage(_props: RouteProps) {

@@ -136,15 +136,14 @@ inherited framework configuration.
 Framework-attached UI files should define app-owned UI. The framework should not
 emit opinionated markup, CSS classes, copy, or document structure for loading,
 not-found, or error states. Browser routing supports inherited app-owned
-`@loading.tsx` and `@not-found.tsx` files from the route tree; `@error.tsx`
-remains future runtime work.
+`@loading.tsx`, `@not-found.tsx`, and `@error.tsx` files from the route tree.
 
 `@policy.ts` files are also framework-attached and collected separately from URL
 routes. Ordinary `policy.ts` or `policy.tsx` files remain real route files.
 `@middleware.ts` files are collected separately too; ordinary `middleware.ts` or
 `middleware.tsx` files remain real route files.
-`@loading.tsx` and `@not-found.tsx` are collected as app-owned browser
-fallbacks instead of URL routes.
+`@loading.tsx`, `@not-found.tsx`, and `@error.tsx` are collected as app-owned
+browser fallbacks instead of URL routes.
 
 ## Nested Layouts
 

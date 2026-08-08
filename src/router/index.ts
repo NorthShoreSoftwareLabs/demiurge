@@ -4,6 +4,7 @@ export {
   findRouteMatch,
   isAttachedFileForRoute,
   isLayoutForPage,
+  loadErrorFallback,
   loadLoadingFallback,
   loadPageRoute,
   loadRoute,

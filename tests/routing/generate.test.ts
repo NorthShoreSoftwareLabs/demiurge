@@ -16,6 +16,7 @@ describe("typed route manifest generator", () => {
     await writeFile(join(routesDir, "blog", "index.tsx"), "export {}");
     await writeFile(join(routesDir, "blog", "[slug].tsx"), "export {}");
     await writeFile(join(routesDir, "(admin)", "users.tsx"), "export {}");
+    await writeFile(join(routesDir, "@error.tsx"), "export {}");
     await writeFile(join(routesDir, "@layout.tsx"), "export {}");
     await writeFile(join(routesDir, "@loading.tsx"), "export {}");
     await writeFile(join(routesDir, "@middleware.ts"), "export {}");
@@ -31,6 +32,7 @@ describe("typed route manifest generator", () => {
     expect(source).toContain('"/blog/[slug]": { slug: PathValue };');
     expect(source).toContain('"/blog/[slug]": `/blog/${PathValue}`;');
     expect(source).toContain('"/users": {};');
+    expect(source).not.toContain("@error");
     expect(source).not.toContain("@layout");
     expect(source).not.toContain("@loading");
     expect(source).not.toContain("@middleware");
