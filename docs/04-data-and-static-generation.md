@@ -159,10 +159,17 @@ export const recommendationsCache = defineCacheDomain("recommendations", {
 Server-side invalidation:
 
 ```ts
+const invalidate = createInvalidation(cache);
+
 invalidate.tags([tags.posts()]);
-invalidate.path("/posts");
 invalidate.key(["post", slug]);
 ```
+
+The first invalidation slice exposes `createInvalidation(...)` over the
+framework cache. It provides `key(...)`, `keys(...)`, `tag(...)`, and
+`tags(...)` methods that return deterministic `{ kind, deleted }` results.
+Path-level invalidation and client router refresh still remain separate future
+concerns.
 
 Client-side React should not mutate the shared cache directly. Client code calls
 typed actions or server functions:

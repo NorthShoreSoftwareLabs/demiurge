@@ -5,6 +5,7 @@ export {
   defineAdapter,
 } from "./adapter";
 export {
+  createInvalidation,
   createMemoryCache,
   defineTags,
   parseCacheDuration,
@@ -99,6 +100,8 @@ export type {
   CacheRequest,
   CacheScope,
   CacheTag,
+  Invalidation,
+  InvalidationResult,
   Query,
   QueryDefinition,
 } from "./data";

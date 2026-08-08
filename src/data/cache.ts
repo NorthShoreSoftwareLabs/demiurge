@@ -51,6 +51,18 @@ export type Cache = {
   invalidateTags: (tags: readonly CacheTag[]) => number;
 };
 
+export type Invalidation = {
+  key: (key: CacheKey) => InvalidationResult;
+  keys: (keys: readonly CacheKey[]) => InvalidationResult;
+  tag: (tag: CacheTag) => InvalidationResult;
+  tags: (tags: readonly CacheTag[]) => InvalidationResult;
+};
+
+export type InvalidationResult = {
+  deleted: number;
+  kind: "key" | "tag";
+};
+
 type CacheEntry<TResult> = {
   expiresAt: number;
   scope: CacheScope;
@@ -141,6 +153,43 @@ export function createMemoryCache(options: MemoryCacheOptions = {}): Cache {
       deleted += deleteMatchingTags(requestEntries, serializedTags);
 
       return deleted;
+    },
+  };
+}
+
+export function createInvalidation(cache: Pick<Cache, "invalidateKey" | "invalidateTags">): Invalidation {
+  return {
+    key(key) {
+      return {
+        deleted: cache.invalidateKey(key) ? 1 : 0,
+        kind: "key",
+      };
+    },
+    keys(keys) {
+      let deleted = 0;
+
+      for (const key of keys) {
+        if (cache.invalidateKey(key)) {
+          deleted += 1;
+        }
+      }
+
+      return {
+        deleted,
+        kind: "key",
+      };
+    },
+    tag(tag) {
+      return {
+        deleted: cache.invalidateTags([tag]),
+        kind: "tag",
+      };
+    },
+    tags(tags) {
+      return {
+        deleted: cache.invalidateTags(tags),
+        kind: "tag",
+      };
     },
   };
 }

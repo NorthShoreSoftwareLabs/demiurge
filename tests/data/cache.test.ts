@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createInvalidation,
   createMemoryCache,
   defineTags,
   parseCacheDuration,
@@ -126,5 +127,58 @@ describe("data cache primitives", () => {
     await expect(cache.get(request)).resolves.toBe("post-2");
     expect(cache.invalidateKey(["post", "hello"])).toBe(true);
     await expect(cache.get(request)).resolves.toBe("post-3");
+  });
+
+  it("creates framework-owned invalidation helpers over a cache", async () => {
+    const cache = createMemoryCache();
+    const invalidate = createInvalidation(cache);
+    const loadPost = vi.fn(async () => `post-${loadPost.mock.calls.length}`);
+    const loadAuthor = vi.fn(async () => `author-${loadAuthor.mock.calls.length}`);
+
+    await cache.get({
+      fn: loadPost,
+      key: ["post", "hello"],
+      scope: "public",
+      tags: [tag("posts"), tag("post:hello")],
+    });
+    await cache.get({
+      fn: loadAuthor,
+      key: ["author", "ada"],
+      scope: "public",
+      tags: [tag("authors")],
+    });
+
+    expect(invalidate.key(["missing"])).toEqual({
+      deleted: 0,
+      kind: "key",
+    });
+    expect(invalidate.tag(tag("posts"))).toEqual({
+      deleted: 1,
+      kind: "tag",
+    });
+    expect(invalidate.keys([["author", "ada"], ["missing"]])).toEqual({
+      deleted: 1,
+      kind: "key",
+    });
+
+    await cache.get({
+      fn: loadPost,
+      key: ["post", "hello"],
+      scope: "public",
+      tags: [tag("posts"), tag("post:hello")],
+    });
+    await cache.get({
+      fn: loadAuthor,
+      key: ["author", "ada"],
+      scope: "public",
+      tags: [tag("authors")],
+    });
+
+    expect(invalidate.tags([tag("posts"), tag("authors")])).toEqual({
+      deleted: 2,
+      kind: "tag",
+    });
+    expect(loadPost).toHaveBeenCalledTimes(2);
+    expect(loadAuthor).toHaveBeenCalledTimes(2);
   });
 });
