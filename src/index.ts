@@ -3,7 +3,9 @@ export { href } from "./routing";
 export {
   createCorsHeaders,
   createSecurityHeaders,
+  enforceCsrfProtection,
   enforceRequestSecurity,
+  parseCookieHeader,
   parseBodySize,
   security,
   validateCorsPolicy,
@@ -58,6 +60,7 @@ export type {
   CorsPolicy,
   CorsRequestContext,
   CorsResponseOptions,
+  CsrfPolicy,
   CspDirectiveValue,
   CspSource,
   ReferrerPolicy,

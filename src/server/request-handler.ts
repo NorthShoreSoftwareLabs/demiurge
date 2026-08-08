@@ -15,6 +15,7 @@ import {
 import {
   applyCorsHeaders,
   createCorsPreflightResponse,
+  enforceCsrfProtection,
   enforceRequestSecurity,
 } from "../security";
 
@@ -79,6 +80,12 @@ export async function handleRequestWithManifest(
     return new Response("Page responses need an SSR or RSC renderer.", {
       status: 501,
     });
+  }
+
+  const csrfResponse = enforceCsrfProtection(capability.security?.csrf, request);
+
+  if (csrfResponse) {
+    return applyCorsHeaders(csrfResponse, capability.cors, request);
   }
 
   const requestSecurityResponse = enforceRequestSecurity(

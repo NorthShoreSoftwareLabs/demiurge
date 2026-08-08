@@ -5,6 +5,10 @@ export {
   validateCorsPolicy,
 } from "./cors";
 export {
+  enforceCsrfProtection,
+  parseCookieHeader,
+} from "./csrf";
+export {
   createSecurityHeaders,
   security,
 } from "./policy";
@@ -17,6 +21,7 @@ export type {
   CorsPolicy,
   CorsRequestContext,
   CorsResponseOptions,
+  CsrfPolicy,
   CspDirectiveValue,
   CspSource,
   ReferrerPolicy,

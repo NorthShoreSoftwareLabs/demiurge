@@ -198,6 +198,30 @@ Framework responsibilities:
 - Support progressive enhancement for forms.
 - Make same-site cookie settings visible in security audit output.
 
+The first CSRF slice supports explicit helper-attached validation:
+
+```ts
+export const POST = text(({ request }) => request.text(), {
+  security: {
+    csrf: true,
+  },
+});
+```
+
+Unsafe methods protected with `csrf: true` require the default
+`csrf-token` cookie to match the `x-csrf-token` request header. Routes can
+override both names:
+
+```ts
+csrf: {
+  cookie: "demo-csrf",
+  header: "x-demo-csrf",
+}
+```
+
+CSRF failures occur before the route handler reads the body and preserve CORS
+headers when the route also has CORS policy.
+
 ## Rate Limits And Request Limits
 
 Rate limiting and request size limits should be typed policy, not scattered

@@ -33,6 +33,8 @@ with React rendering modes instead of being left to user middleware.
   preflight responses, and wildcard-plus-credentials validation.
 - Helper-attached request body size limits enforced before route handlers read
   oversized declared bodies.
+- Explicit helper-attached CSRF protection for unsafe methods with configurable
+  cookie/header token names.
 
 ## Examples Required
 

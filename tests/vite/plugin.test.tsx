@@ -117,6 +117,38 @@ describe("Vite plugin dev request handling", () => {
     expect(handlerSpy).not.toHaveBeenCalled();
   });
 
+  it("enforces CSRF protection in Vite dev", async () => {
+    const handlerSpy = vi.fn(({ request }: { request: Request }) => request.text());
+    const manifest = unstable_createRouteManifest({
+      "./routes/api/profile.tsx": routeModule({
+        POST: text(handlerSpy, {
+          security: {
+            csrf: true,
+          },
+        }),
+      }),
+    });
+
+    const result = await unstable_handleDevRequest(
+      manifest,
+      new Request("https://example.test/api/profile", {
+        body: "name=demo",
+        headers: {
+          cookie: "csrf-token=abc",
+          "x-csrf-token": "wrong",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    if (!(result instanceof Response)) return;
+
+    expect(result.status).toBe(403);
+    await expect(result.text()).resolves.toBe("Invalid CSRF token.");
+    expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
   it("serves redirects", async () => {
     const manifest = unstable_createRouteManifest({
       "./routes/old-blog.tsx": routeModule({

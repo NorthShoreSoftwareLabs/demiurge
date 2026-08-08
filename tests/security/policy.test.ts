@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createCorsHeaders,
   createSecurityHeaders,
+  parseCookieHeader,
   parseBodySize,
   security,
   validateCorsPolicy,
@@ -247,5 +248,18 @@ describe("request security policy", () => {
     expect(() => parseBodySize("10tb")).toThrow(
       "Demiurge request maxBodySize must use bytes or a b/kb/mb/gb suffix.",
     );
+  });
+});
+
+describe("CSRF policy helpers", () => {
+  it("parses cookie headers for CSRF validation", () => {
+    expect(
+      Object.fromEntries(
+        parseCookieHeader("session=abc; csrf-token=hello%20world; flag"),
+      ),
+    ).toEqual({
+      "csrf-token": "hello world",
+      session: "abc",
+    });
   });
 });

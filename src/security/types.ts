@@ -73,11 +73,17 @@ export type CorsResponseOptions =
     preflight?: false;
   };
 
+export type CsrfPolicy = true | {
+  cookie?: string;
+  header?: string;
+};
+
 export type RequestSecurityPolicy = {
   maxBodySize?: number | `${number}${"b" | "gb" | "kb" | "mb"}`;
 };
 
 export type RouteSecurityPolicy = {
+  csrf?: CsrfPolicy;
   request?: RequestSecurityPolicy;
 };
 

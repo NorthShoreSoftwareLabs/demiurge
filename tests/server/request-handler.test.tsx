@@ -348,6 +348,147 @@ describe("request handler", () => {
     );
   });
 
+  it("rejects unsafe CSRF-protected requests without matching tokens", async () => {
+    const handlerSpy = vi.fn(({ request }: { request: Request }) => request.text());
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          POST: text(handlerSpy, {
+            security: {
+              csrf: true,
+            },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        body: "name=demo",
+        headers: {
+          cookie: "csrf-token=abc",
+          "x-csrf-token": "wrong",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.text()).resolves.toBe("Invalid CSRF token.");
+    expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
+  it("allows unsafe CSRF-protected requests with matching tokens", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          POST: text(({ request }) => request.text(), {
+            security: {
+              csrf: true,
+            },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        body: "name=demo",
+        headers: {
+          cookie: "csrf-token=abc",
+          "x-csrf-token": "abc",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe("name=demo");
+  });
+
+  it("supports custom CSRF cookie and header names", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          PATCH: text("ok", {
+            security: {
+              csrf: {
+                cookie: "demo-csrf",
+                header: "x-demo-csrf",
+              },
+            },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        headers: {
+          cookie: "demo-csrf=token",
+          "x-demo-csrf": "token",
+        },
+        method: "PATCH",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe("ok");
+  });
+
+  it("does not enforce CSRF on safe methods", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          GET: text("ok", {
+            security: {
+              csrf: true,
+            },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile"),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe("ok");
+  });
+
+  it("keeps CORS headers on CSRF rejections", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          POST: text("ok", {
+            cors: {
+              origins: ["https://app.example.com"],
+            },
+            security: {
+              csrf: true,
+            },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        body: "name=demo",
+        headers: {
+          origin: "https://app.example.com",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+  });
+
   it("returns not found for missing routes", async () => {
     const handler = createRequestHandler({ routes: {} });
 

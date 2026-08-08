@@ -23,6 +23,7 @@ import {
 import {
   applyCorsHeaders,
   createCorsPreflightResponse,
+  enforceCsrfProtection,
   enforceRequestSecurity,
 } from "../security";
 
@@ -359,6 +360,12 @@ export async function handleDevRequest(
 
   if (capability.kind === "page") {
     return "document" as const;
+  }
+
+  const csrfResponse = enforceCsrfProtection(capability.security?.csrf, request);
+
+  if (csrfResponse) {
+    return applyCorsHeaders(csrfResponse, capability.cors, request);
   }
 
   const requestSecurityResponse = enforceRequestSecurity(

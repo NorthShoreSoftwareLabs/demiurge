@@ -11,6 +11,7 @@ export const GET = json(({ pathname }) => ({
 
 export const POST = text(({ request }) => request.text(), {
   security: {
+    csrf: true,
     request: {
       maxBodySize: "1kb",
     },
