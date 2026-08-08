@@ -1,6 +1,6 @@
 # Pipeline Quality Gates
 
-Status: in progress
+Status: implemented
 
 ## Goal
 
@@ -13,7 +13,7 @@ fail fast when lint, type safety, tests, coverage, or examples regress.
 - `npm run coverage` using Vitest coverage.
 - 80% coverage threshold for statements, branches, functions, and lines.
 - `npm run verify` as the local and CI entry point.
-- CI workflow once the repo remote/workflow target is decided.
+- CI workflow running `npm run verify`.
 - Coverage should count framework source under `src/`, not examples or tests.
 
 ## Examples Required
