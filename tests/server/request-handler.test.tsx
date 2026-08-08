@@ -7,6 +7,7 @@ import {
   redirect,
   response as rawResponse,
   serverTiming,
+  sse,
   text,
   webhook,
   type RouteModule,
@@ -97,6 +98,66 @@ describe("request handler", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe(
       "text/plain; charset=utf-8",
+    );
+    await expect(response.text()).resolves.toBe("");
+  });
+
+  it("serves server-sent event responses", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/events.tsx": routeModule({
+          GET: sse(
+            async function* events() {
+              yield { event: "ready", data: "ok" };
+            },
+            {
+              cors: {
+                origins: ["https://app.example.com"],
+              },
+              timing: { duration: 2, name: "events" },
+            },
+          ),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/events", {
+        headers: {
+          origin: "https://app.example.com",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "text/event-stream; charset=utf-8",
+    );
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+    expect(response.headers.get("server-timing")).toBe("events;dur=2");
+    await expect(response.text()).resolves.toBe("event: ready\ndata: ok\n\n");
+  });
+
+  it("strips server-sent event bodies for HEAD requests", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/events.tsx": routeModule({
+          GET: sse(["ready"]),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/events", {
+        method: "HEAD",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "text/event-stream; charset=utf-8",
     );
     await expect(response.text()).resolves.toBe("");
   });

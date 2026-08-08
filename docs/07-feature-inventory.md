@@ -29,7 +29,7 @@ implementation.
 | Real API route helpers: `json`, `text`, `html` | implemented |
 | Redirect and not-found helpers | implemented |
 | Raw `response(...)` helper | implemented |
-| SSE/JSONL/readable stream helpers | designed |
+| SSE/JSONL/readable stream helpers | partially implemented |
 | WebSocket `WS` capability | designed |
 | WebTransport capability | planned |
 | WebRTC signaling helpers | planned |

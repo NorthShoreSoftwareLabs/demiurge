@@ -6,6 +6,7 @@ import {
   redirect,
   response,
   serverTiming,
+  sse,
   text,
   toResponse,
   type HttpRouteContext,
@@ -108,5 +109,49 @@ describe("response helpers", () => {
       { name: "cache" },
     ]);
     expect(capability.init).not.toHaveProperty("timing");
+  });
+
+  it("creates server-sent event streams", async () => {
+    const result = await toResponse(
+      sse([
+        "ready",
+        {
+          data: { ok: true },
+          event: "message",
+          id: "evt-1",
+          retry: 1000,
+        },
+        {
+          comment: "keep alive",
+        },
+      ]),
+      context,
+    );
+
+    expect(result.headers.get("content-type")).toBe(
+      "text/event-stream; charset=utf-8",
+    );
+    expect(result.headers.get("cache-control")).toBe("no-cache");
+    expect(result.headers.get("x-accel-buffering")).toBe("no");
+    await expect(result.text()).resolves.toBe([
+      "data: ready",
+      "",
+      'id: evt-1',
+      "event: message",
+      "retry: 1000",
+      'data: {"ok":true}',
+      "",
+      ": keep alive",
+      "",
+      "",
+    ].join("\n"));
+  });
+
+  it("rejects invalid server-sent event retry values", async () => {
+    const result = await toResponse(sse([{ retry: -1 }]), context);
+
+    await expect(result.text()).rejects.toThrow(
+      "SSE retry must be a non-negative integer.",
+    );
   });
 });

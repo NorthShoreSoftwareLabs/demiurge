@@ -6,6 +6,7 @@ export {
   redirect,
   response,
   serverTiming,
+  sse,
   text,
   toResponse,
 } from "./response";
@@ -47,6 +48,9 @@ export type {
   RouteValue,
   ServerTimingInput,
   ServerTimingMetric,
+  ServerSentEvent,
+  ServerSentEventSource,
+  ServerSentEventsCapability,
   StaticPath,
   StaticPathsContext,
   StaticPathsFunction,

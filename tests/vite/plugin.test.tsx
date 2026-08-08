@@ -18,6 +18,7 @@ import {
   resolveMetadata,
   script,
   serverTiming,
+  sse,
   structuredData,
   text,
   webhook,
@@ -88,6 +89,29 @@ describe("Vite plugin dev request handling", () => {
     if (!(result instanceof Response)) return;
 
     expect(result.headers.get("server-timing")).toBe("route;dur=4");
+  });
+
+  it("serves server-sent event responses in Vite dev", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/api/events.tsx": routeModule({
+        GET: sse([{ data: "ready", event: "status" }]),
+      }),
+    });
+
+    const result = await unstable_handleDevRequest(
+      manifest,
+      new Request("https://example.test/api/events"),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    if (!(result instanceof Response)) return;
+
+    expect(result.headers.get("content-type")).toBe(
+      "text/event-stream; charset=utf-8",
+    );
+    await expect(result.text()).resolves.toBe(
+      "event: status\ndata: ready\n\n",
+    );
   });
 
   it("serves CORS preflight responses in Vite dev", async () => {

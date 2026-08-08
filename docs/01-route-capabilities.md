@@ -27,6 +27,7 @@ html(...)
 redirect(...)
 notFound(...)
 response(...)
+sse(...)
 ```
 
 The browser router only renders page-compatible `GET` routes. Non-page `GET`
@@ -406,12 +407,13 @@ status(...)
 file(...)
 download(...)
 stream(...)
-sse(...)
 jsonl(...)
 ```
 
-`stream(...)`, `sse(...)`, `jsonl(...)`, streamed SSR, and streamed RSC are all
-HTTP results. They should not be top-level route capabilities.
+`stream(...)`, `jsonl(...)`, streamed SSR, and streamed RSC are all HTTP
+results. They should not be top-level route capabilities. `sse(...)` is the
+first implemented HTTP streaming helper and returns a normal response
+capability with `text/event-stream` headers.
 
 ## Streaming Taxonomy
 

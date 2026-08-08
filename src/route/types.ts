@@ -162,13 +162,36 @@ export type RawResponseCapability = {
   timing?: readonly ServerTimingMetric[];
 };
 
+export type ServerSentEvent = {
+  comment?: string;
+  data?: unknown;
+  event?: string;
+  id?: string;
+  retry?: number;
+};
+
+export type ServerSentEventSource =
+  | Iterable<ServerSentEvent | string>
+  | AsyncIterable<ServerSentEvent | string>
+  | ReadableStream<ServerSentEvent | string>;
+
+export type ServerSentEventsCapability = {
+  cors?: CorsPolicy;
+  events: RouteValue<ServerSentEventSource>;
+  init?: ResponseInit;
+  kind: "sse";
+  security?: RouteSecurityPolicy;
+  timing?: readonly ServerTimingMetric[];
+};
+
 export type ResponseCapability =
   | JsonCapability
   | TextCapability
   | HtmlCapability
   | RedirectCapability
   | NotFoundCapability
-  | RawResponseCapability;
+  | RawResponseCapability
+  | ServerSentEventsCapability;
 
 export type RouteCapability = AnyPageCapability | ResponseCapability;
 

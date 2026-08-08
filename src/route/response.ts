@@ -11,6 +11,9 @@ import type {
   RouteValue,
   ServerTimingInput,
   ServerTimingMetric,
+  ServerSentEvent,
+  ServerSentEventsCapability,
+  ServerSentEventSource,
   TextCapability,
 } from "./types";
 import { href, type AppHref, type LinkTarget } from "../routing";
@@ -99,6 +102,20 @@ export function response(
   } satisfies RawResponseCapability;
 }
 
+export function sse(
+  events: RouteValue<ServerSentEventSource>,
+  init?: ResponseOptions,
+) {
+  return {
+    cors: init?.cors,
+    events,
+    init: withoutRouteOptions(init),
+    kind: "sse",
+    security: init?.security,
+    timing: normalizeServerTiming(init?.timing),
+  } satisfies ServerSentEventsCapability;
+}
+
 export function serverTiming(
   ...metrics: readonly ServerTimingMetric[]
 ): readonly ServerTimingMetric[] {
@@ -162,6 +179,19 @@ export async function toResponse(
     case "response": {
       return await resolveValue(capability.response, context);
     }
+    case "sse": {
+      return new Response(
+        createSseStream(await resolveValue(capability.events, context)),
+        {
+          ...capability.init,
+          headers: withDefaultHeaders(capability.init?.headers, {
+            "cache-control": "no-cache",
+            "content-type": "text/event-stream; charset=utf-8",
+            "x-accel-buffering": "no",
+          }),
+        },
+      );
+    }
   }
 }
 
@@ -183,13 +213,127 @@ function withDefaultHeader(
   name: string,
   value: string,
 ) {
+  return withDefaultHeaders(headers, { [name]: value });
+}
+
+function withDefaultHeaders(
+  headers: HeadersInit | undefined,
+  defaults: Record<string, string>,
+) {
   const nextHeaders = new Headers(headers);
 
-  if (!nextHeaders.has(name)) {
-    nextHeaders.set(name, value);
+  for (const [name, value] of Object.entries(defaults)) {
+    if (!nextHeaders.has(name)) {
+      nextHeaders.set(name, value);
+    }
   }
 
   return nextHeaders;
+}
+
+function createSseStream(events: ServerSentEventSource) {
+  const encoder = new TextEncoder();
+  const iterator = toSseAsyncIterator(events);
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const next = await iterator.next();
+
+      if (next.done) {
+        controller.close();
+        return;
+      }
+
+      controller.enqueue(encoder.encode(formatServerSentEvent(next.value)));
+    },
+    async cancel() {
+      await iterator.return?.();
+    },
+  });
+}
+
+function toSseAsyncIterator(
+  events: ServerSentEventSource,
+): AsyncIterator<ServerSentEvent | string> {
+  if (events instanceof ReadableStream) {
+    const reader = events.getReader();
+
+    return {
+      async next() {
+        return await reader.read();
+      },
+      async return() {
+        reader.releaseLock();
+        return { done: true, value: undefined };
+      },
+    };
+  }
+
+  if (Symbol.asyncIterator in events) {
+    return events[Symbol.asyncIterator]();
+  }
+
+  return toAsyncIterator(events[Symbol.iterator]());
+}
+
+function toAsyncIterator<T>(iterator: Iterator<T>): AsyncIterator<T> {
+  return {
+    async next() {
+      return iterator.next();
+    },
+    async return() {
+      iterator.return?.();
+      return { done: true, value: undefined };
+    },
+  };
+}
+
+function formatServerSentEvent(event: ServerSentEvent | string) {
+  if (typeof event === "string") {
+    return formatSseData(event);
+  }
+
+  const lines: string[] = [];
+
+  if (event.comment !== undefined) {
+    lines.push(...formatSseField("", event.comment));
+  }
+
+  if (event.id !== undefined) {
+    lines.push(...formatSseField("id", event.id));
+  }
+
+  if (event.event !== undefined) {
+    lines.push(...formatSseField("event", event.event));
+  }
+
+  if (event.retry !== undefined) {
+    if (!Number.isInteger(event.retry) || event.retry < 0) {
+      throw new Error("SSE retry must be a non-negative integer.");
+    }
+
+    lines.push(`retry: ${event.retry}`);
+  }
+
+  if (event.data !== undefined) {
+    lines.push(...formatSseField("data", stringifySseData(event.data)));
+  }
+
+  return `${lines.join("\n")}\n\n`;
+}
+
+function formatSseData(data: string) {
+  return `${formatSseField("data", data).join("\n")}\n\n`;
+}
+
+function formatSseField(name: string, value: string) {
+  return value.split(/\r\n|\r|\n/).map((line) =>
+    name ? `${name}: ${line}` : `: ${line}`,
+  );
+}
+
+function stringifySseData(data: unknown) {
+  return typeof data === "string" ? data : JSON.stringify(data);
 }
 
 function isLinkTargetObject(value: unknown): value is LinkTarget {
