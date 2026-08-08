@@ -87,6 +87,28 @@ Resolved document output emits these entries as escaped
 `application/ld+json` scripts and applies the document nonce when one is
 available.
 
+The first sitemap/robots slice supports typed standalone SEO outputs:
+
+```ts
+const sitemap = defineSitemap([
+  {
+    url: "https://example.com/blog/file-routing",
+    lastModified: "2026-01-02",
+    changeFrequency: "weekly",
+    priority: 0.8,
+  },
+]);
+
+const robots = defineRobots({
+  rules: [{ userAgent: "*", allow: "/", disallow: "/admin" }],
+  sitemap: "https://example.com/sitemap.xml",
+});
+```
+
+`renderSitemap(...)` emits escaped sitemap XML, and `renderRobots(...)` emits
+`robots.txt` content. Static and server adapters still need to wire these
+helpers into generated `/sitemap.xml` and `/robots.txt` outputs.
+
 The framework should emit default charset and viewport metadata unless the app
 intentionally overrides them.
 

@@ -113,7 +113,7 @@ implementation.
 | Static versus render-discovered script model | designed |
 | Resource hints: preload/preconnect/modulepreload | implemented |
 | Structured data | implemented |
-| Sitemap and robots generation | designed |
+| Sitemap and robots generation | partially implemented |
 | OG image generation | designed |
 
 ## Platform Features

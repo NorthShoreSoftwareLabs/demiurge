@@ -17,6 +17,12 @@ export {
   resolveScripts,
   script,
 } from "./scripts";
+export {
+  defineRobots,
+  defineSitemap,
+  renderRobots,
+  renderSitemap,
+} from "./seo";
 export type {
   LinkContribution,
   PreconnectOptions,
@@ -39,3 +45,11 @@ export type {
   ScriptStrategy,
   ScriptTag,
 } from "./scripts";
+export type {
+  Robots,
+  RobotsDirective,
+  Sitemap,
+  SitemapAlternate,
+  SitemapChangeFrequency,
+  SitemapEntry,
+} from "./seo";
