@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  defineOgImage,
   defineRobots,
   defineSitemap,
+  renderOgImageResponse,
+  renderOgImageSvg,
   renderRobots,
   renderSitemap,
 } from "demiurge";
@@ -73,5 +76,46 @@ Host: https://example.com
 Sitemap: https://example.com/sitemap.xml
 Sitemap: https://example.com/news-sitemap.xml
 `);
+  });
+
+  it("renders escaped deterministic OG image SVG", () => {
+    const image = defineOgImage({
+      background: "#003344",
+      brand: "Demiurge <Framework>",
+      foreground: "#ffffff",
+      subtitle: "Typed routes & strict CSP",
+      title: "Build <secure> apps",
+    });
+
+    expect(renderOgImageSvg(image)).toContain(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Build &lt;secure&gt; apps">',
+    );
+    expect(renderOgImageSvg(image)).toContain("Demiurge &lt;Framework&gt;");
+    expect(renderOgImageSvg(image)).toContain("Build &lt;secure&gt; apps");
+    expect(renderOgImageSvg(image)).toContain("Typed routes &amp; strict CSP");
+  });
+
+  it("creates cacheable OG image responses", async () => {
+    const response = renderOgImageResponse(defineOgImage({
+      title: "Hello",
+    }));
+
+    expect(response.headers.get("content-type")).toBe(
+      "image/svg+xml; charset=utf-8",
+    );
+    expect(response.headers.get("cache-control")).toBe(
+      "public, max-age=31536000, immutable",
+    );
+    await expect(response.text()).resolves.toContain(">Hello</text>");
+  });
+
+  it("rejects invalid OG image dimensions", () => {
+    expect(() =>
+      renderOgImageSvg(defineOgImage({
+        height: 630,
+        title: "Hello",
+        width: 0,
+      })),
+    ).toThrow("OG image width must be a positive integer.");
   });
 });

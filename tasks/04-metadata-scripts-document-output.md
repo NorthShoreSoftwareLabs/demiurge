@@ -42,6 +42,9 @@ routes, including scripts that may be statically declared or render-discovered.
   output renders them with escaping and the document nonce when available.
 - `defineSitemap(...)`, `renderSitemap(...)`, `defineRobots(...)`, and
   `renderRobots(...)` provide typed standalone SEO output helpers.
+- `defineOgImage(...)`, `renderOgImageSvg(...)`, and
+  `renderOgImageResponse(...)` provide the first deterministic Open Graph image
+  output helper using escaped SVG and cacheable image responses.
 - Page route loading resolves inherited layout metadata root-to-leaf, then leaf
   route metadata, including title defaults, title formatters, structured fields,
   Open Graph defaults, and custom metadata entries.

@@ -114,7 +114,7 @@ implementation.
 | Resource hints: preload/preconnect/modulepreload | implemented |
 | Structured data | implemented |
 | Sitemap and robots generation | partially implemented |
-| OG image generation | designed |
+| OG image generation | partially implemented |
 
 ## Platform Features
 

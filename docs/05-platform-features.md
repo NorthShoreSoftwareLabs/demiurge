@@ -65,7 +65,7 @@ Core SEO helpers:
 defineMetadata()
 defineSitemap()
 defineRobots()
-ogImage()
+defineOgImage()
 canonical()
 alternates()
 structuredData()
@@ -111,6 +111,22 @@ const robots = defineRobots({
 `renderSitemap(...)` emits escaped sitemap XML, and `renderRobots(...)` emits
 `robots.txt` content. Static and server adapters still need to wire these
 helpers into generated `/sitemap.xml` and `/robots.txt` outputs.
+
+The first OG image slice supports deterministic SVG output:
+
+```ts
+const image = defineOgImage({
+  brand: "Demiurge",
+  title: "File based routing",
+  subtitle: "Typed URLs with strict security defaults",
+});
+
+export const GET = response(renderOgImageResponse(image));
+```
+
+`renderOgImageSvg(...)` escapes text and validates dimensions, while
+`renderOgImageResponse(...)` returns a cacheable `image/svg+xml` response.
+Raster image rendering can build on this API later.
 
 The framework should emit default charset and viewport metadata unless the app
 intentionally overrides them.

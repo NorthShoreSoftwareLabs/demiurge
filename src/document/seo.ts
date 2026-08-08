@@ -36,6 +36,16 @@ export type Robots = {
   sitemap?: string | readonly string[];
 };
 
+export type OgImage = {
+  background?: string;
+  brand?: string;
+  foreground?: string;
+  height?: number;
+  subtitle?: string;
+  title: string;
+  width?: number;
+};
+
 export function defineSitemap(entries: readonly SitemapEntry[]): Sitemap {
   return {
     entries,
@@ -55,6 +65,10 @@ export function renderSitemap(sitemap: Sitemap) {
 }
 
 export function defineRobots(options: Robots): Robots {
+  return options;
+}
+
+export function defineOgImage(options: OgImage): OgImage {
   return options;
 }
 
@@ -86,6 +100,40 @@ export function renderRobots(robots: Robots) {
   }
 
   return `${lines.join("\n").replace(/\n+$/, "")}\n`;
+}
+
+export function renderOgImageSvg(image: OgImage) {
+  const width = image.width ?? 1200;
+  const height = image.height ?? 630;
+  const background = image.background ?? "#101820";
+  const foreground = image.foreground ?? "#ffffff";
+  const title = clampText(image.title, 120);
+  const subtitle = image.subtitle ? clampText(image.subtitle, 160) : undefined;
+  const brand = image.brand ? clampText(image.brand, 80) : undefined;
+
+  validateOgImageDimensions(width, height);
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXmlAttribute(title)}">`,
+    `  <rect width="100%" height="100%" fill="${escapeXmlAttribute(background)}" />`,
+    brand
+      ? `  <text x="72" y="96" fill="${escapeXmlAttribute(foreground)}" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="32" font-weight="700">${escapeXml(brand)}</text>`
+      : null,
+    `  <text x="72" y="${subtitle ? 300 : 340}" fill="${escapeXmlAttribute(foreground)}" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="76" font-weight="800">${escapeXml(title)}</text>`,
+    subtitle
+      ? `  <text x="72" y="392" fill="${escapeXmlAttribute(foreground)}" fill-opacity="0.78" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="38" font-weight="500">${escapeXml(subtitle)}</text>`
+      : null,
+    "</svg>",
+  ].filter((line): line is string => Boolean(line)).join("\n");
+}
+
+export function renderOgImageResponse(image: OgImage) {
+  return new Response(renderOgImageSvg(image), {
+    headers: {
+      "cache-control": "public, max-age=31536000, immutable",
+      "content-type": "image/svg+xml; charset=utf-8",
+    },
+  });
 }
 
 function renderSitemapEntry(entry: SitemapEntry) {
@@ -140,4 +188,18 @@ function escapeXmlAttribute(value: string) {
   return escapeXml(value)
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&apos;");
+}
+
+function clampText(value: string, maxLength: number) {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
+}
+
+function validateOgImageDimensions(width: number, height: number) {
+  if (!Number.isSafeInteger(width) || width <= 0) {
+    throw new Error("OG image width must be a positive integer.");
+  }
+
+  if (!Number.isSafeInteger(height) || height <= 0) {
+    throw new Error("OG image height must be a positive integer.");
+  }
 }

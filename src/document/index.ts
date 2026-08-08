@@ -18,8 +18,11 @@ export {
   script,
 } from "./scripts";
 export {
+  defineOgImage,
   defineRobots,
   defineSitemap,
+  renderOgImageResponse,
+  renderOgImageSvg,
   renderRobots,
   renderSitemap,
 } from "./seo";
@@ -46,6 +49,7 @@ export type {
   ScriptTag,
 } from "./scripts";
 export type {
+  OgImage,
   Robots,
   RobotsDirective,
   Sitemap,
