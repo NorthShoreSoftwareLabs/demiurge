@@ -17,6 +17,7 @@ import {
   redirect,
   resolveMetadata,
   script,
+  serverTiming,
   structuredData,
   text,
   webhook,
@@ -64,6 +65,29 @@ describe("Vite plugin dev request handling", () => {
 
     expect(result.status).toBe(200);
     await expect(result.json()).resolves.toEqual({ ok: true });
+  });
+
+  it("adds Server-Timing headers in Vite dev", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/api/health.tsx": routeModule({
+        GET: json(
+          { ok: true },
+          {
+            timing: serverTiming({ duration: 4, name: "route" }),
+          },
+        ),
+      }),
+    });
+
+    const result = await unstable_handleDevRequest(
+      manifest,
+      new Request("https://example.test/api/health"),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    if (!(result instanceof Response)) return;
+
+    expect(result.headers.get("server-timing")).toBe("route;dur=4");
   });
 
   it("serves CORS preflight responses in Vite dev", async () => {

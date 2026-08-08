@@ -113,6 +113,7 @@ export type JsonCapability<T = unknown> = {
   cors?: CorsPolicy;
   kind: "json";
   security?: RouteSecurityPolicy;
+  timing?: readonly ServerTimingMetric[];
   value: RouteValue<T>;
   init?: ResponseInit;
 };
@@ -121,6 +122,7 @@ export type TextCapability = {
   cors?: CorsPolicy;
   kind: "text";
   security?: RouteSecurityPolicy;
+  timing?: readonly ServerTimingMetric[];
   value: RouteValue<string>;
   init?: ResponseInit;
 };
@@ -129,6 +131,7 @@ export type HtmlCapability = {
   cors?: CorsPolicy;
   kind: "html";
   security?: RouteSecurityPolicy;
+  timing?: readonly ServerTimingMetric[];
   value: RouteValue<string>;
   init?: ResponseInit;
 };
@@ -137,6 +140,7 @@ export type RedirectCapability = {
   cors?: CorsPolicy;
   kind: "redirect";
   security?: RouteSecurityPolicy;
+  timing?: readonly ServerTimingMetric[];
   to: RouteValue<string | URL>;
   init?: ResponseInit;
 };
@@ -145,6 +149,7 @@ export type NotFoundCapability = {
   cors?: CorsPolicy;
   kind: "not-found";
   security?: RouteSecurityPolicy;
+  timing?: readonly ServerTimingMetric[];
   body?: RouteValue<string>;
   init?: ResponseInit;
 };
@@ -154,6 +159,7 @@ export type RawResponseCapability = {
   kind: "response";
   response: RouteValue<Response>;
   security?: RouteSecurityPolicy;
+  timing?: readonly ServerTimingMetric[];
 };
 
 export type ResponseCapability =
@@ -187,7 +193,18 @@ export type PageOptions<
 export type ResponseOptions = ResponseInit & {
   cors?: CorsPolicy;
   security?: RouteSecurityPolicy;
+  timing?: ServerTimingInput;
 };
+
+export type ServerTimingMetric = {
+  description?: string;
+  duration?: number;
+  name: string;
+};
+
+export type ServerTimingInput =
+  | ServerTimingMetric
+  | readonly ServerTimingMetric[];
 
 export type RouteModule = {
   GET?: RouteCapability;

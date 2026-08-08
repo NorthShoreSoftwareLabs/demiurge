@@ -5,6 +5,8 @@ import {
   json,
   page,
   redirect,
+  response as rawResponse,
+  serverTiming,
   text,
   webhook,
   type RouteModule,
@@ -97,6 +99,87 @@ describe("request handler", () => {
       "text/plain; charset=utf-8",
     );
     await expect(response.text()).resolves.toBe("");
+  });
+
+  it("adds Server-Timing headers to route responses", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/health.tsx": routeModule({
+          GET: json(
+            { ok: true },
+            {
+              timing: serverTiming(
+                { duration: 7.25, name: "db", description: "database" },
+                { name: "cache" },
+              ),
+            },
+          ),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/health"),
+    );
+
+    expect(response.headers.get("server-timing")).toBe(
+      'db;dur=7.25;desc="database", cache',
+    );
+  });
+
+  it("appends route Server-Timing to raw response timing headers", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/health.tsx": routeModule({
+          GET: rawResponse(
+            new Response("ok", {
+              headers: {
+                "server-timing": "app;dur=3",
+              },
+            }),
+            {
+              timing: { duration: 1, name: "framework" },
+            },
+          ),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/health"),
+    );
+
+    expect(response.headers.get("server-timing")).toBe(
+      "app;dur=3, framework;dur=1",
+    );
+  });
+
+  it("rejects invalid Server-Timing metrics before sending responses", async () => {
+    const invalidNameHandler = createRequestHandler({
+      routes: {
+        "./routes/api/health.tsx": routeModule({
+          GET: json({ ok: true }, { timing: { name: "bad name" } }),
+        }),
+      },
+    });
+    const invalidDurationHandler = createRequestHandler({
+      routes: {
+        "./routes/api/health.tsx": routeModule({
+          GET: json({ ok: true }, { timing: { duration: -1, name: "db" } }),
+        }),
+      },
+    });
+
+    await expect(
+      invalidNameHandler(new Request("https://example.test/api/health")),
+    ).rejects.toThrow(
+      'Server-Timing metric name "bad name" is not a valid token.',
+    );
+    await expect(
+      invalidDurationHandler(new Request("https://example.test/api/health")),
+    ).rejects.toThrow(
+      "Server-Timing metric duration must be a non-negative finite number.",
+    );
   });
 
   it("returns method-not-allowed for missing method capabilities", async () => {

@@ -15,6 +15,7 @@ import {
   type RouteMiddleware,
   type RouteModule,
 } from "../route";
+import { applyServerTimingHeader } from "../route/response";
 import {
   applyCorsHeaders,
   createCorsPreflightResponse,
@@ -224,7 +225,10 @@ function finalizeRouteResponse(
   request: Request,
   method: HttpMethod,
 ) {
-  const corsResponse = applyCorsHeaders(response, capability.cors, request);
+  const corsResponse = applyServerTimingHeader(
+    applyCorsHeaders(response, capability.cors, request),
+    capability.timing,
+  );
 
   if (method === "HEAD") {
     return new Response(null, {

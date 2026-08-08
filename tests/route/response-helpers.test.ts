@@ -5,6 +5,7 @@ import {
   notFound,
   redirect,
   response,
+  serverTiming,
   text,
   toResponse,
   type HttpRouteContext,
@@ -89,5 +90,23 @@ describe("response helpers", () => {
     );
 
     await expect(result.json()).resolves.toEqual({ pathname: "/api/health" });
+  });
+
+  it("attaches route-owned server timing metadata", () => {
+    const capability = json(
+      { ok: true },
+      {
+        timing: serverTiming(
+          { duration: 12.5, name: "db", description: "database query" },
+          { name: "cache" },
+        ),
+      },
+    );
+
+    expect(capability.timing).toEqual([
+      { duration: 12.5, name: "db", description: "database query" },
+      { name: "cache" },
+    ]);
+    expect(capability.init).not.toHaveProperty("timing");
   });
 });

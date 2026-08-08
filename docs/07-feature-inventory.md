@@ -128,7 +128,7 @@ implementation.
 | Sentry/PostHog/Plausible integrations | planned |
 | OpenTelemetry instrumentation | designed |
 | Core Web Vitals reporting | designed |
-| Server-Timing headers | planned |
+| Server-Timing headers | implemented |
 | Route audit/devtools UI | designed |
 
 ## Adapters

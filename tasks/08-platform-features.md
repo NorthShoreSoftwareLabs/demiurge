@@ -1,6 +1,6 @@
 # Platform Features
 
-Status: planned
+Status: in progress
 
 ## Goal
 
@@ -30,6 +30,12 @@ document/security systems instead of added through unsafe snippets.
 - Unit tests for image URL validation and transform planning.
 - Browser tests for script loading and web vitals beacons.
 - Security tests for remote allowlist and CSP interaction.
+
+## Implemented Slices
+
+- `serverTiming(...)` attaches typed `Server-Timing` metrics to route response
+  helpers, and HTTP/Vite dev request handlers append the serialized header while
+  preserving app-provided timing entries.
 
 ## Open Decisions
 

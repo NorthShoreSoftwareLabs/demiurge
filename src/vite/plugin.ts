@@ -28,6 +28,7 @@ import {
   type RouteImporter,
   type RouteModule,
 } from "../route";
+import { applyServerTimingHeader } from "../route/response";
 import {
   applyCorsHeaders,
   createCorsPreflightResponse,
@@ -597,7 +598,10 @@ export async function handleDevRequest(
     search: url.searchParams,
     url,
   } satisfies HttpRouteContext);
-  const corsResponse = applyCorsHeaders(response, capability.cors, request);
+  const corsResponse = applyServerTimingHeader(
+    applyCorsHeaders(response, capability.cors, request),
+    capability.timing,
+  );
 
   if (method === "HEAD") {
     return new Response(null, {

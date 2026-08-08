@@ -9,6 +9,8 @@ import type {
   ResponseOptions,
   ResponseCapability,
   RouteValue,
+  ServerTimingInput,
+  ServerTimingMetric,
   TextCapability,
 } from "./types";
 import { href, type AppHref, type LinkTarget } from "../routing";
@@ -21,6 +23,7 @@ export function json<T>(
     cors: init?.cors,
     kind: "json",
     security: init?.security,
+    timing: normalizeServerTiming(init?.timing),
     value,
     init: withoutRouteOptions(init),
   } satisfies JsonCapability<T>;
@@ -31,6 +34,7 @@ export function text(value: RouteValue<string>, init?: ResponseOptions) {
     cors: init?.cors,
     kind: "text",
     security: init?.security,
+    timing: normalizeServerTiming(init?.timing),
     value,
     init: withoutRouteOptions(init),
   } satisfies TextCapability;
@@ -41,6 +45,7 @@ export function html(value: RouteValue<string>, init?: ResponseOptions) {
     cors: init?.cors,
     kind: "html",
     security: init?.security,
+    timing: normalizeServerTiming(init?.timing),
     value,
     init: withoutRouteOptions(init),
   } satisfies HtmlCapability;
@@ -64,6 +69,7 @@ export function redirect(
     cors: options?.cors,
     kind: "redirect",
     security: options?.security,
+    timing: normalizeServerTiming(options?.timing),
     to: isLinkTargetObject(to) ? href(to) : to,
     init: typeof init === "number" ? { status: init } : withoutRouteOptions(init),
   } satisfies RedirectCapability;
@@ -74,6 +80,7 @@ export function notFound(body?: RouteValue<string>, init?: ResponseOptions) {
     cors: init?.cors,
     kind: "not-found",
     security: init?.security,
+    timing: normalizeServerTiming(init?.timing),
     body,
     init: withoutRouteOptions(init),
   } satisfies NotFoundCapability;
@@ -81,14 +88,21 @@ export function notFound(body?: RouteValue<string>, init?: ResponseOptions) {
 
 export function response(
   response: RouteValue<Response>,
-  init?: Pick<ResponseOptions, "cors" | "security">,
+  init?: Pick<ResponseOptions, "cors" | "security" | "timing">,
 ) {
   return {
     cors: init?.cors,
     kind: "response",
     response,
     security: init?.security,
+    timing: normalizeServerTiming(init?.timing),
   } satisfies RawResponseCapability;
+}
+
+export function serverTiming(
+  ...metrics: readonly ServerTimingMetric[]
+): readonly ServerTimingMetric[] {
+  return metrics;
 }
 
 export async function toResponse(
@@ -192,6 +206,87 @@ function withoutRouteOptions(options: ResponseOptions | undefined) {
     return undefined;
   }
 
-  const { cors: _cors, security: _security, ...responseInit } = options;
+  const {
+    cors: _cors,
+    security: _security,
+    timing: _timing,
+    ...responseInit
+  } = options;
   return responseInit;
+}
+
+export function applyServerTimingHeader(
+  response: Response,
+  timing: readonly ServerTimingMetric[] | undefined,
+) {
+  if (!timing?.length) {
+    return response;
+  }
+
+  const headers = new Headers(response.headers);
+  const timingHeader = renderServerTimingHeader(timing);
+  const existingTimingHeader = headers.get("server-timing");
+
+  headers.set(
+    "server-timing",
+    existingTimingHeader
+      ? `${existingTimingHeader}, ${timingHeader}`
+      : timingHeader,
+  );
+
+  return new Response(response.body, {
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+}
+
+export function renderServerTimingHeader(
+  timing: readonly ServerTimingMetric[],
+) {
+  return timing.map(renderServerTimingMetric).join(", ");
+}
+
+function normalizeServerTiming(timing: ServerTimingInput | undefined) {
+  if (!timing) {
+    return undefined;
+  }
+
+  return Array.isArray(timing) ? timing : [timing];
+}
+
+function renderServerTimingMetric(metric: ServerTimingMetric) {
+  if (!isServerTimingToken(metric.name)) {
+    throw new Error(
+      `Server-Timing metric name "${metric.name}" is not a valid token.`,
+    );
+  }
+
+  const parts = [metric.name];
+
+  if (metric.duration !== undefined) {
+    if (!Number.isFinite(metric.duration) || metric.duration < 0) {
+      throw new Error("Server-Timing metric duration must be a non-negative finite number.");
+    }
+
+    parts.push(`dur=${formatServerTimingDuration(metric.duration)}`);
+  }
+
+  if (metric.description !== undefined) {
+    parts.push(`desc="${escapeServerTimingDescription(metric.description)}"`);
+  }
+
+  return parts.join(";");
+}
+
+function isServerTimingToken(value: string) {
+  return /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(value);
+}
+
+function formatServerTimingDuration(duration: number) {
+  return Number.isInteger(duration) ? String(duration) : String(duration);
+}
+
+function escapeServerTimingDescription(value: string) {
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 }

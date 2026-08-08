@@ -178,6 +178,25 @@ First-class concerns:
 - CSP-aware script loading.
 - No raw GTM snippets as the preferred path.
 
+The first server timing slice lets route response helpers attach framework-owned
+`Server-Timing` entries:
+
+```ts
+export const GET = json(
+  { ok: true },
+  {
+    timing: serverTiming(
+      { name: "db", duration: 12.5, description: "database" },
+      { name: "cache" },
+    ),
+  },
+);
+```
+
+The request handler and Vite dev server append these metrics to response
+headers, preserving existing app-provided `Server-Timing` values on raw
+responses.
+
 GTM should be supported, but it is inherently broad because it can load other
 scripts. The framework should label it as a wide trust boundary in audits.
 

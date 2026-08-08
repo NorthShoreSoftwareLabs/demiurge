@@ -5,6 +5,7 @@ export {
   notFound,
   redirect,
   response,
+  serverTiming,
   text,
   toResponse,
 } from "./response";
@@ -44,6 +45,8 @@ export type {
   RoutePolicy,
   RouteProps,
   RouteValue,
+  ServerTimingInput,
+  ServerTimingMetric,
   StaticPath,
   StaticPathsContext,
   StaticPathsFunction,
