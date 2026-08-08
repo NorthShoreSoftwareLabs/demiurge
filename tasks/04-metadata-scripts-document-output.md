@@ -1,6 +1,6 @@
 # Metadata Scripts And Document Output
 
-Status: planned
+Status: in progress
 
 ## Goal
 
@@ -33,6 +33,14 @@ routes, including scripts that may be statically declared or render-discovered.
 - Type tests for required and custom metadata.
 - Browser tests for conditional script loading.
 - Security tests for CSP nonce/hash handling.
+
+## Implemented Slices
+
+- `defineMetadata(...)`, `meta(...)`, `link(...)`, and `resolveMetadata(...)`
+  provide typed app-owned metadata objects with default charset and viewport.
+- Page route loading resolves inherited layout metadata root-to-leaf, then leaf
+  route metadata, including title defaults, title formatters, structured fields,
+  Open Graph defaults, and custom metadata entries.
 
 ## Open Decisions
 

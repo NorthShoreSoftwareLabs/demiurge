@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { resolveMetadata, type ResolvedMetadata } from "../document";
 import type {
   LayoutProps,
   NotFoundProps,
@@ -60,6 +61,7 @@ export type LoadedRouteMatch = {
   error?: ComponentType<RouteErrorProps>;
   page: ComponentType<RouteProps>;
   layouts: ComponentType<LayoutProps>[];
+  metadata: ResolvedMetadata;
   path: PathVars;
   pathname: string;
 };
@@ -233,6 +235,10 @@ export async function loadPageRoute(
       page: pageModule.GET.view,
       layouts: layoutModules.map(
         (module) => module.default as ComponentType<LayoutProps>,
+      ),
+      metadata: resolveMetadata(
+        ...layoutModules.map((module) => module.metadata),
+        pageModule.metadata,
       ),
       path: routeMatch.path,
       pathname,

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  defineMetadata,
   json,
   page,
   type LayoutProps,
@@ -42,9 +43,30 @@ function routeModule(module: RouteModule) {
 describe("route loading", () => {
   it("loads the matched page capability and inherited layouts", async () => {
     const manifest = unstable_createRouteManifest({
-      "./routes/@layout.tsx": routeModule({ default: RootLayout }),
-      "./routes/blog/@layout.tsx": routeModule({ default: BlogLayout }),
-      "./routes/blog/[slug].tsx": routeModule({ GET: page(View) }),
+      "./routes/@layout.tsx": routeModule({
+        default: RootLayout,
+        metadata: defineMetadata({
+          description: "Root description",
+          title: {
+            default: "Demiurge",
+            format: (title) => `${title} | Demiurge`,
+          },
+        }),
+      }),
+      "./routes/blog/@layout.tsx": routeModule({
+        default: BlogLayout,
+        metadata: defineMetadata({
+          openGraph: {
+            image: "/blog-og.png",
+          },
+        }),
+      }),
+      "./routes/blog/[slug].tsx": routeModule({
+        GET: page(View),
+        metadata: defineMetadata({
+          title: "File based routing",
+        }),
+      }),
     });
 
     const match = await unstable_loadPageRoute(
@@ -58,6 +80,15 @@ describe("route loading", () => {
     expect(match.match.page).toBe(View);
     expect(match.match.path).toEqual({ slug: "file-based-routing" });
     expect(match.match.layouts).toEqual([RootLayout, BlogLayout]);
+    expect(match.match.metadata).toMatchObject({
+      description: "Root description",
+      openGraph: {
+        description: "Root description",
+        image: "/blog-og.png",
+        title: "File based routing | Demiurge",
+      },
+      title: "File based routing | Demiurge",
+    });
   });
 
   it("skips inherited layouts when a page declares layout false", async () => {

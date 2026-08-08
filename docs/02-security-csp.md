@@ -515,6 +515,8 @@ Metadata should be a first-class route/layout export, not arbitrary raw head
 markup.
 
 ```ts
+import { defineMetadata } from "demiurge";
+
 export const metadata = defineMetadata({
   title: "Checkout",
   description: "Complete your order securely.",
@@ -532,6 +534,8 @@ export const metadata = defineMetadata({
 Layouts can provide defaults:
 
 ```ts
+import { defineMetadata } from "demiurge";
+
 export const metadata = defineMetadata({
   title: {
     default: "Demiurge",
@@ -558,6 +562,9 @@ defineMetadata({
 
 Metadata resolution should happen before document streaming starts because
 titles, canonical links, preload hints, and CSP headers must be known early.
+The first metadata slice exposes `defineMetadata(...)`, `meta(...)`, `link(...)`,
+and `resolveMetadata(...)`, then resolves inherited layout metadata plus the
+leaf route metadata during route loading.
 
 ## Scripts
 

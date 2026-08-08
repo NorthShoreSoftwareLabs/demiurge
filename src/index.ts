@@ -1,4 +1,10 @@
 export { createFileRouter, Link } from "./browser";
+export {
+  defineMetadata,
+  link,
+  meta,
+  resolveMetadata,
+} from "./document";
 export { href } from "./routing";
 export {
   createCorsHeaders,
@@ -34,6 +40,16 @@ export {
   toResponse,
   webhook,
 } from "./route";
+export type {
+  DocumentMetadataTag,
+  LinkTag,
+  Metadata,
+  MetadataTitle,
+  MetaTag,
+  OpenGraphMetadata,
+  ResolvedMetadata,
+  RobotsMetadata,
+} from "./document";
 export type {
   AppHref,
   AppPath,

@@ -1,7 +1,13 @@
-import { page, type RouteProps } from "demiurge";
+import { defineMetadata, page, type RouteProps } from "demiurge";
 
 export const GET = page({
   view: BlogPost,
+});
+export const metadata = defineMetadata({
+  openGraph: {
+    image: "/blog-og.png",
+  },
+  title: "Blog post",
 });
 
 function BlogPost({ path }: RouteProps<"/blog/[slug]">) {

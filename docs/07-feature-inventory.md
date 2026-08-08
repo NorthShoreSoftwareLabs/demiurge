@@ -104,10 +104,10 @@ implementation.
 
 | Feature | Status |
 | --- | --- |
-| `defineMetadata` | designed |
-| Cascading metadata | designed |
-| Title defaults and `format` callback | designed |
-| Structured custom `meta(...)` and `link(...)` | designed |
+| `defineMetadata` | implemented |
+| Cascading layout-to-route metadata | implemented |
+| Title defaults and `format` callback | implemented |
+| Structured custom `meta(...)` and `link(...)` | implemented |
 | `defineScripts` | designed |
 | Managed `<Script />` | designed |
 | Static versus render-discovered script model | designed |
