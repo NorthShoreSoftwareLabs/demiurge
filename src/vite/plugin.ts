@@ -5,6 +5,12 @@ import { resolve, relative, sep } from "node:path";
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import type { OutputBundle, OutputChunk } from "rollup";
 import type { Plugin, UserConfig, ViteDevServer } from "vite";
+import type {
+  DocumentMetadataTag,
+  LinkTag,
+  ResolvedMetadata,
+  ScriptTag,
+} from "../document";
 import { generateRoutes } from "../routing/generate";
 import {
   createRouteManifest,
@@ -252,25 +258,165 @@ async function createDevDocument(
 export function createDocumentHtml({
   entrySrc,
   lang = "en",
+  links = [],
+  metadata,
+  scripts = [],
   title = "Demiurge App",
 }: {
   entrySrc: string;
   lang?: string;
+  links?: LinkTag[];
+  metadata?: ResolvedMetadata;
+  scripts?: ScriptTag[];
   title?: string;
 }) {
+  const documentTitle = metadata?.title ?? title;
+
   return `<!doctype html>
 <html lang="${escapeHtml(lang)}">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${escapeHtml(title)}</title>
+${renderHeadTags({ links, metadata, title: documentTitle })}
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="${escapeHtml(entrySrc)}"></script>
+${scripts.map((scriptTag) => `    ${renderScriptTag(scriptTag)}`).join("\n")}${scripts.length ? "\n" : ""}    <script type="module" src="${escapeHtml(entrySrc)}"></script>
   </body>
 </html>
 `;
+}
+
+function renderHeadTags({
+  links,
+  metadata,
+  title,
+}: {
+  links: LinkTag[];
+  metadata: ResolvedMetadata | undefined;
+  title: string;
+}) {
+  return [
+    renderMetaTag({
+      content: metadata?.charset ?? "UTF-8",
+      kind: "meta",
+      name: "charset",
+    }),
+    renderMetaTag({
+      content: metadata?.viewport ?? "width=device-width, initial-scale=1.0",
+      kind: "meta",
+      name: "viewport",
+    }),
+    `    <title>${escapeHtml(title)}</title>`,
+    ...(metadata?.description
+      ? [
+          renderMetaTag({
+            content: metadata.description,
+            kind: "meta",
+            name: "description",
+          }),
+        ]
+      : []),
+    ...(metadata?.canonical
+      ? [
+          renderLinkTag({
+            href: metadata.canonical,
+            kind: "link",
+            rel: "canonical",
+          }),
+        ]
+      : []),
+    ...renderRobotsTags(metadata),
+    ...renderOpenGraphTags(metadata),
+    ...(metadata?.custom ?? []).map(renderDocumentMetadataTag),
+    ...links.map(renderLinkTag),
+  ].join("\n");
+}
+
+function renderRobotsTags(metadata: ResolvedMetadata | undefined) {
+  if (!metadata?.robots) {
+    return [];
+  }
+
+  const directives = [
+    metadata.robots.index === false ? "noindex" : "index",
+    metadata.robots.follow === false ? "nofollow" : "follow",
+  ];
+
+  return [
+    renderMetaTag({
+      content: directives.join(", "),
+      kind: "meta",
+      name: "robots",
+    }),
+  ];
+}
+
+function renderOpenGraphTags(metadata: ResolvedMetadata | undefined) {
+  if (!metadata?.openGraph) {
+    return [];
+  }
+
+  return [
+    metadata.openGraph.title
+      ? renderMetaTag({
+          content: metadata.openGraph.title,
+          kind: "meta",
+          property: "og:title",
+        })
+      : null,
+    metadata.openGraph.description
+      ? renderMetaTag({
+          content: metadata.openGraph.description,
+          kind: "meta",
+          property: "og:description",
+        })
+      : null,
+    metadata.openGraph.image
+      ? renderMetaTag({
+          content: metadata.openGraph.image,
+          kind: "meta",
+          property: "og:image",
+        })
+      : null,
+  ].filter((tag): tag is string => Boolean(tag));
+}
+
+function renderDocumentMetadataTag(tag: DocumentMetadataTag) {
+  if (tag.kind === "link") {
+    return renderLinkTag(tag);
+  }
+
+  return renderMetaTag(tag);
+}
+
+function renderMetaTag(tag: DocumentMetadataTag & { kind: "meta" }) {
+  if (tag.name === "charset") {
+    return `    <meta charset="${escapeHtml(tag.content)}" />`;
+  }
+
+  const name = tag.name ? ` name="${escapeHtml(tag.name)}"` : "";
+  const property = tag.property ? ` property="${escapeHtml(tag.property)}"` : "";
+
+  return `    <meta${name}${property} content="${escapeHtml(tag.content)}" />`;
+}
+
+function renderLinkTag(tag: LinkTag) {
+  return `    <link${renderAttribute("rel", tag.rel)}${renderAttribute("href", tag.href)}${renderAttribute("as", tag.as)}${renderAttribute("type", tag.type)}${renderAttribute("crossorigin", tag.crossOrigin)}${renderAttribute("hreflang", tag.hrefLang)} />`;
+}
+
+function renderScriptTag(scriptTag: ScriptTag) {
+  return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("src", scriptTag.src)}${renderAttribute("type", scriptTag.type ?? scriptTypeForStrategy(scriptTag.strategy))}${renderAttribute("nonce", scriptTag.nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderBooleanAttribute("async", scriptTag.async)}${renderBooleanAttribute("defer", scriptTag.defer)}></script>`;
+}
+
+function scriptTypeForStrategy(strategy: ScriptTag["strategy"]) {
+  return strategy === "module" ? "module" : undefined;
+}
+
+function renderAttribute(name: string, value: string | undefined) {
+  return value ? ` ${name}="${escapeHtml(value)}"` : "";
+}
+
+function renderBooleanAttribute(name: string, value: boolean | undefined) {
+  return value ? ` ${name}` : "";
 }
 
 function escapeHtml(value: string) {

@@ -3,7 +3,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
-import { json, page, redirect, text, webhook, type RouteModule, type RouteProps } from "demiurge";
+import {
+  defineMetadata,
+  json,
+  link,
+  meta,
+  modulePreload,
+  page,
+  preconnect,
+  preload,
+  redirect,
+  resolveMetadata,
+  script,
+  text,
+  webhook,
+  type RouteModule,
+  type RouteProps,
+} from "demiurge";
 import { unstable_createRouteManifest } from "demiurge/internal/testing";
 import {
   demiurge,
@@ -638,6 +654,80 @@ describe("Vite plugin document runtime", () => {
     expect(html).toContain("<title>Demiurge &lt;Blog&gt;</title>");
     expect(html).toContain('<div id="root"></div>');
     expect(html).toContain('<script type="module" src="/assets/app.js"></script>');
+  });
+
+  it("renders resolved document metadata, links, and scripts", () => {
+    const html = unstable_createDocumentHtml({
+      entrySrc: "/assets/app.js",
+      links: [
+        preconnect("https://api.example.com", { crossOrigin: "anonymous" }),
+        preload("/hero.avif", { as: "image", type: "image/avif" }),
+        modulePreload("/assets/editor.js"),
+      ],
+      metadata: resolveMetadata(
+        defineMetadata({
+          canonical: "/checkout",
+          custom: [
+            meta({ content: "#fff", name: "theme-color" }),
+            link({ href: "/feed.xml", rel: "alternate" }),
+          ],
+          description: "Complete your order.",
+          openGraph: {
+            image: "/og.png",
+          },
+          robots: {
+            follow: false,
+            index: false,
+          },
+          title: "Checkout <Secure>",
+        }),
+      ),
+      scripts: [
+        script({
+          async: true,
+          integrity: "sha384-demo",
+          nonce: "abc123",
+          src: "https://cdn.example.com/app.js",
+        }),
+        script({
+          src: "/assets/module.js",
+          strategy: "module",
+        }),
+      ],
+    });
+
+    expect(html).toContain("<title>Checkout &lt;Secure&gt;</title>");
+    expect(html).toContain(
+      '<meta name="description" content="Complete your order." />',
+    );
+    expect(html).toContain('<link rel="canonical" href="/checkout" />');
+    expect(html).toContain(
+      '<meta name="robots" content="noindex, nofollow" />',
+    );
+    expect(html).toContain(
+      '<meta property="og:title" content="Checkout &lt;Secure&gt;" />',
+    );
+    expect(html).toContain('<meta property="og:image" content="/og.png" />');
+    expect(html).toContain('<meta name="theme-color" content="#fff" />');
+    expect(html).toContain('<link rel="alternate" href="/feed.xml" />');
+    expect(html).toContain(
+      '<link rel="preconnect" href="https://api.example.com" crossorigin="anonymous" />',
+    );
+    expect(html).toContain(
+      '<link rel="preload" href="/hero.avif" as="image" type="image/avif" />',
+    );
+    expect(html).toContain(
+      '<link rel="modulepreload" href="/assets/editor.js" />',
+    );
+    expect(html).toContain(
+      '<script src="https://cdn.example.com/app.js" nonce="abc123" integrity="sha384-demo" async></script>',
+    );
+    expect(html).toContain(
+      '<script src="/assets/module.js" type="module"></script>',
+    );
+    expect(html).toContain(
+      '<script type="module" src="/assets/app.js"></script>',
+    );
   });
 
   it("creates a virtual client entry from route files and app-owned styles", async () => {

@@ -49,6 +49,8 @@ routes, including scripts that may be statically declared or render-discovered.
   and `resolveLinks(...)` provide typed resource hints. Page route loading
   resolves inherited layout links root-to-leaf, then leaf route links, with
   dedupe and deterministic hint ordering before document rendering.
+- The framework-owned document renderer can emit resolved metadata, custom meta
+  and link tags, resource hints, and static script tags with HTML escaping.
 
 ## Open Decisions
 

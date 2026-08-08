@@ -37,6 +37,8 @@ rendering mode coordination all meet.
 - Add a strict CSP document renderer that can attach per-request nonces and
   build-time hashes.
 - Hoist route/layout script declarations into the document when requested.
+- Render resolved metadata, resource hints, and static scripts in the
+  framework-owned document.
 - Add SSR, streaming, static, and RSC document variants.
 - Add adapter contracts for platforms that do not use Vite in production.
 
