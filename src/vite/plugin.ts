@@ -290,6 +290,7 @@ export function createDocumentHtml({
   lang = "en",
   links = [],
   metadata,
+  nonce,
   scripts = [],
   title = "Demiurge App",
 }: {
@@ -297,6 +298,7 @@ export function createDocumentHtml({
   lang?: string;
   links?: LinkTag[];
   metadata?: ResolvedMetadata;
+  nonce?: string;
   scripts?: ScriptTag[];
   title?: string;
 }) {
@@ -309,7 +311,7 @@ ${renderHeadTags({ links, metadata, title: documentTitle })}
   </head>
   <body>
     <div id="root"></div>
-${scripts.map((scriptTag) => `    ${renderScriptTag(scriptTag)}`).join("\n")}${scripts.length ? "\n" : ""}    <script type="module" src="${escapeHtml(entrySrc)}"></script>
+${scripts.map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`).join("\n")}${scripts.length ? "\n" : ""}    <script type="module" src="${escapeHtml(entrySrc)}"${renderAttribute("nonce", nonce)}></script>
   </body>
 </html>
 `;
@@ -433,8 +435,8 @@ function renderLinkTag(tag: LinkTag) {
   return `    <link${renderAttribute("rel", tag.rel)}${renderAttribute("href", tag.href)}${renderAttribute("as", tag.as)}${renderAttribute("type", tag.type)}${renderAttribute("crossorigin", tag.crossOrigin)}${renderAttribute("hreflang", tag.hrefLang)} />`;
 }
 
-function renderScriptTag(scriptTag: ScriptTag) {
-  return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("src", scriptTag.src)}${renderAttribute("type", scriptTag.type ?? scriptTypeForStrategy(scriptTag.strategy))}${renderAttribute("nonce", scriptTag.nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderBooleanAttribute("async", scriptTag.async)}${renderBooleanAttribute("defer", scriptTag.defer)}></script>`;
+function renderScriptTag(scriptTag: ScriptTag, nonce: string | undefined) {
+  return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("src", scriptTag.src)}${renderAttribute("type", scriptTag.type ?? scriptTypeForStrategy(scriptTag.strategy))}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderBooleanAttribute("async", scriptTag.async)}${renderBooleanAttribute("defer", scriptTag.defer)}></script>`;
 }
 
 function scriptTypeForStrategy(strategy: ScriptTag["strategy"]) {

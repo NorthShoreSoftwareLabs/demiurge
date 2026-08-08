@@ -787,6 +787,32 @@ describe("Vite plugin document runtime", () => {
     );
   });
 
+  it("applies a document nonce to framework-managed scripts", () => {
+    const html = unstable_createDocumentHtml({
+      entrySrc: "/assets/app.js",
+      nonce: "doc-nonce",
+      scripts: [
+        script({
+          src: "https://cdn.example.com/app.js",
+        }),
+        script({
+          nonce: "script-nonce",
+          src: "https://cdn.example.com/explicit.js",
+        }),
+      ],
+    });
+
+    expect(html).toContain(
+      '<script src="https://cdn.example.com/app.js" nonce="doc-nonce"></script>',
+    );
+    expect(html).toContain(
+      '<script src="https://cdn.example.com/explicit.js" nonce="script-nonce"></script>',
+    );
+    expect(html).toContain(
+      '<script type="module" src="/assets/app.js" nonce="doc-nonce"></script>',
+    );
+  });
+
   it("creates a virtual client entry from route files and app-owned styles", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-client-entry-"));
     await mkdir(join(root, "src"), { recursive: true });

@@ -27,6 +27,7 @@ rendering mode coordination all meet.
   not-found routing can run.
 - Build with the virtual client entry instead of an app-owned HTML entry.
 - Emit framework-generated `index.html` during build.
+- Apply a document nonce to framework-managed script tags when provided.
 - Remove `examples/basic-blog/index.html`.
 - Remove `examples/basic-blog/src/main.tsx`.
 
@@ -35,8 +36,7 @@ rendering mode coordination all meet.
 - Replace document title config with route/layout metadata collection.
 - Add inherited route fallback files such as `@loading.tsx`, `@not-found.tsx`,
   and `@error.tsx`.
-- Add a strict CSP document renderer that can attach per-request nonces and
-  build-time hashes.
+- Add build-time hash support to the strict CSP document renderer.
 - Hoist route/layout script declarations into the document when requested.
 - Render resolved metadata, resource hints, and static scripts in the
   framework-owned document.

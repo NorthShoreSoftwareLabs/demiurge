@@ -58,6 +58,10 @@ Dynamic SSR can use a per-request nonce:
 4. Expose it to server rendering through a typed request context.
 5. Never expose it to client code as app data.
 
+The framework-owned document renderer can apply a provided nonce to static
+document scripts and the framework client entry, while preserving an explicit
+nonce on a script contribution.
+
 ```ts
 export const GET = react({
   server: "ssr",
