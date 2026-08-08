@@ -1,3 +1,7 @@
+export {
+  action,
+  actionInput,
+} from "./action";
 export { page } from "./page";
 export {
   html,
@@ -13,6 +17,12 @@ export {
   toResponse,
 } from "./response";
 export { webhook } from "./webhook";
+export type {
+  ActionContext,
+  ActionIdempotency,
+  ActionInput,
+  ActionOptions,
+} from "./action";
 export type {
   WebhookHmacAlgorithm,
   WebhookHmacContext,

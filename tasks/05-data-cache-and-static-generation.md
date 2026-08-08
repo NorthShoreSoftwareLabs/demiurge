@@ -55,6 +55,9 @@ handlers and React server components without hiding when work runs.
 - `createMemoryIdempotencyStore(...)` and `runIdempotentMutation(...)` provide
   the first retry-safe mutation primitive with in-flight dedupe, TTL-based
   replay, and failure retry behavior.
+- `action(...)` and `actionInput` provide the first server-side mutation helper
+  with JSON/form/text input parsing, existing response-helper returns, and
+  optional idempotent response replay.
 
 ## Open Decisions
 

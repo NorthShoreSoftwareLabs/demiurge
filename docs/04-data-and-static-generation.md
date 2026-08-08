@@ -183,7 +183,12 @@ The server action performs invalidation:
 
 ```ts
 export const create = action({
-  input: PostInput,
+  input: actionInput.json,
+  idempotency: {
+    key: ({ request }) => ["create-post", request.headers.get("idempotency-key")],
+    store: idempotency,
+    ttl: "24h",
+  },
 
   async handler({ input, invalidate, routes }) {
     const post = await db.posts.create(input);
@@ -192,6 +197,13 @@ export const create = action({
   },
 });
 ```
+
+The first action slice exposes `action(...)` and `actionInput` helpers for
+JSON, form data, and text request bodies. Actions return existing response
+capabilities or platform `Response` objects, and can opt into the idempotency
+store so retrying the same mutation key replays the original response instead
+of running the handler again. Typed schema validation, client submission
+helpers, and automatic invalidation context still need dedicated slices.
 
 Client router refresh/prefetch and server data-cache invalidation should be
 separate concepts.
@@ -213,9 +225,7 @@ const result = await runIdempotentMutation(idempotency, {
 The first idempotency slice exposes `createMemoryIdempotencyStore(...)` and
 `runIdempotentMutation(...)`. The memory store dedupes in-flight work, replays
 completed results for matching keys until TTL expiry, and removes failed
-mutations so callers can retry after transient errors. First-class action
-helpers still need to thread this into request parsing, validation, and
-invalidation.
+mutations so callers can retry after transient errors.
 
 ## Typed Routes, Redirects, And Tags
 

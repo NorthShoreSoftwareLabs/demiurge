@@ -345,6 +345,10 @@ export const POST = action({
 });
 ```
 
+The first action slice provides server-side `action(...)` and `actionInput`
+helpers. It parses JSON, form data, or text input, lets handlers return existing
+response helpers, and composes with idempotency stores for retry-safe mutations.
+
 Core concerns:
 
 - Progressive enhancement.

@@ -72,7 +72,7 @@ implementation.
 | Cache adapters: memory/Redis/KV/custom | partially implemented |
 | Typed tags and invalidation | implemented |
 | Client router refresh/prefetch separate from server invalidation | designed |
-| Actions/mutations | designed |
+| Actions/mutations | partially implemented |
 | Idempotency for retryable mutations | implemented |
 | Static `paths` export for dynamic static generation | partially implemented |
 

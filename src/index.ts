@@ -73,6 +73,8 @@ export {
 } from "./security";
 export { createRequestHandler, handleRequestWithManifest } from "./server";
 export {
+  action,
+  actionInput,
   html,
   json,
   jsonl,
@@ -94,6 +96,12 @@ export type {
   AdapterCapabilityMap,
   AdapterDefinition,
 } from "./adapter";
+export type {
+  ActionContext,
+  ActionIdempotency,
+  ActionInput,
+  ActionOptions,
+} from "./route";
 export type {
   Cache,
   CacheDuration,
