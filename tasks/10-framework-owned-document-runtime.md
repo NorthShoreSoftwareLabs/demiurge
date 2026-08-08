@@ -22,6 +22,7 @@ rendering mode coordination all meet.
 - Auto-import app-owned styles when `src/styles.css` exists.
 - Let apps configure the initial document title and language.
 - Serve framework-generated HTML in Vite dev for page routes.
+- Feed matched page route document contributions into Vite dev documents.
 - Serve framework-generated HTML for browser navigation misses so client
   not-found routing can run.
 - Build with the virtual client entry instead of an app-owned HTML entry.

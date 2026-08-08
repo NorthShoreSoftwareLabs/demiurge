@@ -692,9 +692,9 @@ type DocumentPlan = {
 
 The document plan is the bridge between DX and strict CSP.
 The framework document renderer can render resolved metadata, custom meta/link
-tags, resource hints, and static external scripts with HTML escaping. Route-aware
-document planning still needs to feed per-route contributions into the renderer
-for dev and build documents.
+tags, resource hints, and static external scripts with HTML escaping. Vite dev
+documents for matched page routes feed route/layout metadata, resource hints,
+and static script contributions into the renderer.
 
 ## Non-Goals For The First Pass
 

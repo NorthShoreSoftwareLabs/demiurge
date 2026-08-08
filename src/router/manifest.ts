@@ -207,6 +207,7 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
 export async function loadPageRoute(
   manifest: RouteManifest,
   pathname: string,
+  request = new Request(`http://demiurge.local${pathname}`),
 ): Promise<PendingRouteMatch> {
   const routeMatch = findRouteMatch(manifest.routes, pathname);
 
@@ -236,12 +237,13 @@ export async function loadPageRoute(
     pageModule.GET.layout === false
       ? []
       : await Promise.all(matchingLayouts.map((layout) => layout.load()));
+  const url = new URL(request.url);
   const context = {
     path: routeMatch.path,
     pathname,
-    request: new Request(`http://demiurge.local${pathname}`),
-    search: new URLSearchParams(),
-    url: new URL(`http://demiurge.local${pathname}`),
+    request,
+    search: url.searchParams,
+    url,
   };
 
   return {

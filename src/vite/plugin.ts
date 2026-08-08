@@ -15,6 +15,7 @@ import { generateRoutes } from "../routing/generate";
 import {
   createRouteManifest,
   findRouteMatch,
+  loadPageRoute,
   type RouteManifest,
 } from "../router";
 import {
@@ -150,7 +151,10 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
 
           if (result === "next") {
             if (shouldServeDocument(webRequest)) {
-              await writeHtmlResponse(response, await createDevDocument(server, options));
+              await writeHtmlResponse(
+                response,
+                await createDevDocument(server, options, manifest, webRequest),
+              );
               return;
             }
 
@@ -159,7 +163,10 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
           }
 
           if (result === "document") {
-            await writeHtmlResponse(response, await createDevDocument(server, options));
+            await writeHtmlResponse(
+              response,
+              await createDevDocument(server, options, manifest, webRequest),
+            );
             return;
           }
 
@@ -245,14 +252,37 @@ function createStylesImport(
 async function createDevDocument(
   server: ViteDevServer,
   options: DemiurgeVitePluginOptions,
+  manifest?: RouteManifest,
+  request?: Request,
 ) {
+  const documentPlan = manifest && request
+    ? await createDevDocumentPlan(manifest, request)
+    : {};
   const html = createDocumentHtml({
     entrySrc: `/${CLIENT_ENTRY_ID}`,
     lang: options.document?.lang,
+    links: documentPlan.links,
+    metadata: documentPlan.metadata,
+    scripts: documentPlan.scripts,
     title: options.document?.title,
   });
 
   return await server.transformIndexHtml("/", html);
+}
+
+async function createDevDocumentPlan(manifest: RouteManifest, request: Request) {
+  const url = new URL(request.url);
+  const match = await loadPageRoute(manifest, url.pathname, request);
+
+  if (match.status !== "ready") {
+    return {};
+  }
+
+  return {
+    links: match.match.links,
+    metadata: match.match.metadata,
+    scripts: match.match.scripts,
+  };
 }
 
 export function createDocumentHtml({

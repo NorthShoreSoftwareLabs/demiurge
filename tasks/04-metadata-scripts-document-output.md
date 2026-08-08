@@ -51,6 +51,8 @@ routes, including scripts that may be statically declared or render-discovered.
   dedupe and deterministic hint ordering before document rendering.
 - The framework-owned document renderer can emit resolved metadata, custom meta
   and link tags, resource hints, and static script tags with HTML escaping.
+- Vite dev documents for matched page routes feed route/layout metadata,
+  resource hints, and static script contributions into the document renderer.
 
 ## Open Decisions
 

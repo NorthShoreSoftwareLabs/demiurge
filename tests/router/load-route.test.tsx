@@ -170,6 +170,54 @@ describe("route loading", () => {
     ]);
   });
 
+  it("resolves request-aware document contributions with the matched request", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/checkout.tsx": routeModule({
+        GET: page(View),
+        links: defineLinks(({ search }) =>
+          search.get("hero") === "true"
+            ? [preload("/checkout.avif", { as: "image" })]
+            : [],
+        ),
+        scripts: defineScripts(({ search }) =>
+          search.get("payment") === "true"
+            ? [
+                script({
+                  src: "https://js.stripe.com/v3/",
+                  strategy: "beforeInteractive",
+                }),
+              ]
+            : [],
+        ),
+      }),
+    });
+
+    const match = await unstable_loadPageRoute(
+      manifest,
+      "/checkout",
+      new Request("https://example.test/checkout?hero=true&payment=true"),
+    );
+
+    expect(match.status).toBe("ready");
+    if (match.status !== "ready") return;
+
+    expect(match.match.links).toEqual([
+      {
+        as: "image",
+        href: "/checkout.avif",
+        kind: "link",
+        rel: "preload",
+      },
+    ]);
+    expect(match.match.scripts).toEqual([
+      {
+        kind: "script",
+        src: "https://js.stripe.com/v3/",
+        strategy: "beforeInteractive",
+      },
+    ]);
+  });
+
   it("skips inherited layouts when a page declares layout false", async () => {
     const manifest = unstable_createRouteManifest({
       "./routes/@layout.tsx": routeModule({ default: RootLayout }),

@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import {
+  defineLinks,
   defineMetadata,
+  defineScripts,
   json,
   link,
   meta,
@@ -446,7 +448,46 @@ describe("Vite plugin dev request handling", () => {
       middlewares: {
         use: middleware.use,
       },
-      ssrLoadModule: vi.fn(async () => ({ GET: page(View) })),
+      ssrLoadModule: vi.fn(async (file: string) => {
+        if (file.endsWith("@layout.tsx")) {
+          return {
+            default: View,
+            links: defineLinks([
+              preconnect("https://api.example.com"),
+            ]),
+            metadata: defineMetadata({
+              description: "Root document description",
+              title: {
+                default: "Docs & Routes",
+                format: (title) => `${title} | Demo`,
+              },
+            }),
+            scripts: defineScripts([
+              script({
+                src: "https://cdn.example.com/root.js",
+                strategy: "beforeInteractive",
+              }),
+            ]),
+          };
+        }
+
+        return {
+          GET: page(View),
+          links: defineLinks(({ search }) =>
+            search.get("hero") === "true"
+              ? [preload("/hero.avif", { as: "image" })]
+              : [],
+          ),
+          metadata: defineMetadata({
+            title: "Route document",
+          }),
+          scripts: defineScripts(({ search }) =>
+            search.get("checkout") === "true"
+              ? [script({ src: "https://js.stripe.com/v3/" })]
+              : [],
+          ),
+        };
+      }),
       transformIndexHtml: vi.fn(async (_url: string, html: string) =>
         html.replace("</head>", '<script type="module" src="/@vite/client"></script></head>'),
       ),
@@ -454,13 +495,14 @@ describe("Vite plugin dev request handling", () => {
     };
 
     await mkdir(routesDir, { recursive: true });
+    await writeFile(join(routesDir, "@layout.tsx"), "export {}");
     await writeFile(join(routesDir, "index.tsx"), "export {}");
 
     plugin.configureServer?.(server as never);
 
     const response = new CapturingResponse();
     await middleware.handler(
-      requestFor("/", {
+      requestFor("/?hero=true&checkout=true", {
         headers: {
           accept: "text/html",
           host: "example.test",
@@ -472,7 +514,22 @@ describe("Vite plugin dev request handling", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
-    expect(response.body).toContain("<title>Docs &amp; Routes</title>");
+    expect(response.body).toContain("<title>Route document | Demo</title>");
+    expect(response.body).toContain(
+      '<meta name="description" content="Root document description" />',
+    );
+    expect(response.body).toContain(
+      '<link rel="preconnect" href="https://api.example.com" />',
+    );
+    expect(response.body).toContain(
+      '<link rel="preload" href="/hero.avif" as="image" />',
+    );
+    expect(response.body).toContain(
+      '<script src="https://cdn.example.com/root.js"></script>',
+    );
+    expect(response.body).toContain(
+      '<script src="https://js.stripe.com/v3/"></script>',
+    );
     expect(response.body).toContain('src="/virtual:demiurge/client-entry"');
     expect(response.body).toContain("/@vite/client");
   });
