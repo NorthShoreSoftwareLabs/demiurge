@@ -10,6 +10,7 @@ export {
 } from "./csrf";
 export {
   createSecurityHeaders,
+  cspHash,
   security,
 } from "./policy";
 export {
@@ -29,6 +30,7 @@ export type {
   CorsRequestContext,
   CorsResponseOptions,
   CsrfPolicy,
+  CspHashAlgorithm,
   CspDirectiveValue,
   CspSource,
   RateLimitKey,

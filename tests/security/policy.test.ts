@@ -3,6 +3,7 @@ import {
   createCorsHeaders,
   createMemoryRateLimitStore,
   createSecurityHeaders,
+  cspHash,
   enforceAllowedMethods,
   enforceRateLimit,
   parseCookieHeader,
@@ -82,6 +83,30 @@ describe("security policy headers", () => {
 
     expect(headers.get("cross-origin-opener-policy")).toBe("same-origin");
     expect(headers.get("cross-origin-embedder-policy")).toBe("require-corp");
+  });
+
+  it("creates static CSP headers without requiring a nonce", () => {
+    const headers = createSecurityHeaders(security.preset("static"));
+
+    expect(headers.get("content-security-policy")).toContain("script-src 'self'");
+    expect(headers.get("content-security-policy")).toContain("style-src 'self'");
+    expect(headers.get("content-security-policy")).not.toContain("nonce-");
+  });
+
+  it("creates deterministic CSP hashes for static output", async () => {
+    const hash = await cspHash("console.log('demo')");
+    const headers = createSecurityHeaders(
+      security.static({
+        csp: {
+          scriptSrc: ["'self'", hash],
+        },
+      }),
+    );
+
+    expect(hash).toBe("'sha256-g7KK/qfukTAg7aIkV6Z6HRyIMe5S6WH5Kh+rck3jha4='");
+    expect(headers.get("content-security-policy")).toContain(
+      `script-src 'self' ${hash}`,
+    );
   });
 
   it("renders Trusted Types headers in report-only and enforce modes", () => {

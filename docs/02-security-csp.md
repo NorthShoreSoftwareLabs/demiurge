@@ -82,6 +82,23 @@ export const GET = react({
 });
 ```
 
+The first static CSP slice exposes a static preset and deterministic hash helper:
+
+```ts
+import { createSecurityHeaders, cspHash, security } from "demiurge";
+
+createSecurityHeaders(
+  security.static({
+    csp: {
+      scriptSrc: ["'self'", await cspHash("console.log('stable')")],
+    },
+  }),
+);
+```
+
+Unlike the strict nonce preset, the static preset renders without a per-request
+nonce and is suitable for build-time CSP composition.
+
 ### React Streaming SSR
 
 Streaming SSR needs nonce support for every framework-emitted script chunk.
@@ -409,12 +426,13 @@ import { createSecurityHeaders, security } from "demiurge";
 
 createSecurityHeaders(security.preset("strict"), { nonce });
 createSecurityHeaders(security.preset("cross-origin-isolated"), { nonce });
+createSecurityHeaders(security.preset("static"));
 createSecurityHeaders(security.preset("api"));
 ```
 
-The first implemented slice exposes strict, cross-origin-isolated, and API
-presets plus deterministic header rendering. Strict CSP uses a nonce placeholder
-and fails if headers are rendered without the per-request nonce.
+The first implemented slices expose strict, cross-origin-isolated, static, and
+API presets plus deterministic header rendering. Strict CSP uses a nonce
+placeholder and fails if headers are rendered without the per-request nonce.
 
 ## Metadata And Document Contributions
 

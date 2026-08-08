@@ -128,7 +128,8 @@ export type SecurityPolicy = {
   trustedTypes?: TrustedTypesPolicy | false;
 };
 
-export type SecurityPreset = "api" | "cross-origin-isolated" | "strict";
+export type SecurityPreset = "api" | "cross-origin-isolated" | "static" | "strict";
+export type CspHashAlgorithm = "sha256" | "sha384" | "sha512";
 
 export type SecurityHeadersOptions = {
   nonce?: string;

@@ -1,5 +1,6 @@
 import type {
   ContentSecurityPolicy,
+  CspHashAlgorithm,
   CspDirectiveValue,
   SecurityHeadersOptions,
   SecurityHeaderPolicy,
@@ -23,6 +24,12 @@ const strictCsp = {
   scriptSrc: [`'nonce-${nonceToken}'`, "'strict-dynamic'"],
   styleSrc: ["'self'", `'nonce-${nonceToken}'`],
   upgradeInsecureRequests: true,
+} satisfies ContentSecurityPolicy;
+
+const staticCsp = {
+  ...strictCsp,
+  scriptSrc: ["'self'"],
+  styleSrc: ["'self'"],
 } satisfies ContentSecurityPolicy;
 
 const strictHeaders = {
@@ -57,7 +64,20 @@ export const security = {
       return security.crossOriginIsolated(options);
     }
 
+    if (name === "static") {
+      return security.static(options);
+    }
+
     return security.strict(options);
+  },
+  static(options: SecurityPolicy = {}) {
+    return mergeSecurityPolicy(
+      {
+        csp: staticCsp,
+        headers: strictHeaders,
+      },
+      options,
+    );
   },
   strict(options: SecurityPolicy = {}) {
     return mergeSecurityPolicy(
@@ -80,6 +100,18 @@ export const security = {
     );
   },
 };
+
+export async function cspHash(
+  source: string,
+  algorithm: CspHashAlgorithm = "sha256",
+) {
+  const digest = await globalThis.crypto.subtle.digest(
+    toWebCryptoAlgorithm(algorithm),
+    new TextEncoder().encode(source),
+  );
+
+  return `'${algorithm}-${toBase64(new Uint8Array(digest))}'`;
+}
 
 export function createSecurityHeaders(
   policy: SecurityPolicy,
@@ -257,4 +289,30 @@ function renderCspSources(
 
 function toCspDirectiveName(name: keyof ContentSecurityPolicy) {
   return name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+}
+
+function toWebCryptoAlgorithm(algorithm: CspHashAlgorithm) {
+  if (algorithm === "sha384") {
+    return "SHA-384";
+  }
+
+  if (algorithm === "sha512") {
+    return "SHA-512";
+  }
+
+  return "SHA-256";
+}
+
+function toBase64(bytes: Uint8Array) {
+  let binary = "";
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  if (typeof btoa === "function") {
+    return btoa(binary);
+  }
+
+  return Buffer.from(binary, "binary").toString("base64");
 }
