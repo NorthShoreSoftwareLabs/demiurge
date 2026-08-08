@@ -1,3 +1,5 @@
+import type { HttpMethod } from "../route/types";
+
 export type CspSource =
   | "'self'"
   | "'none'"
@@ -47,6 +49,29 @@ export type TrustedTypesPolicy = {
   policies: readonly string[];
   requireFor?: readonly ["script"];
 };
+
+export type CorsPolicy = {
+  credentials?: boolean;
+  exposeHeaders?: readonly string[];
+  headers?: readonly string[];
+  maxAge?: number;
+  methods?: readonly HttpMethod[];
+  origins: "*" | readonly string[];
+};
+
+export type CorsRequestContext = {
+  request: Request;
+};
+
+export type CorsResponseOptions =
+  | {
+    methods: readonly HttpMethod[];
+    preflight: true;
+  }
+  | {
+    methods?: readonly HttpMethod[];
+    preflight?: false;
+  };
 
 export type SecurityHeaderPolicy = {
   contentTypeOptions?: "nosniff" | false;

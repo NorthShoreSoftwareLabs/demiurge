@@ -6,6 +6,7 @@ import type {
   NotFoundCapability,
   RawResponseCapability,
   RedirectCapability,
+  ResponseOptions,
   ResponseCapability,
   RouteValue,
   TextCapability,
@@ -14,60 +15,71 @@ import { href, type AppHref, type LinkTarget } from "../routing";
 
 export function json<T>(
   value: JsonCapability<T>["value"],
-  init?: ResponseInit,
+  init?: ResponseOptions,
 ) {
   return {
+    cors: init?.cors,
     kind: "json",
     value,
-    init,
+    init: withoutRouteOptions(init),
   } satisfies JsonCapability<T>;
 }
 
-export function text(value: RouteValue<string>, init?: ResponseInit) {
+export function text(value: RouteValue<string>, init?: ResponseOptions) {
   return {
+    cors: init?.cors,
     kind: "text",
     value,
-    init,
+    init: withoutRouteOptions(init),
   } satisfies TextCapability;
 }
 
-export function html(value: RouteValue<string>, init?: ResponseInit) {
+export function html(value: RouteValue<string>, init?: ResponseOptions) {
   return {
+    cors: init?.cors,
     kind: "html",
     value,
-    init,
+    init: withoutRouteOptions(init),
   } satisfies HtmlCapability;
 }
 
 export function redirect<const TTo extends AppHref>(
   to: LinkTarget<TTo>,
-  init?: ResponseInit | number,
+  init?: ResponseOptions | number,
 ): RedirectCapability;
 export function redirect(
   to: RouteValue<string | URL>,
-  init?: ResponseInit | number,
+  init?: ResponseOptions | number,
 ): RedirectCapability;
 export function redirect(
   to: LinkTarget | RouteValue<string | URL>,
-  init?: ResponseInit | number,
+  init?: ResponseOptions | number,
 ) {
+  const options = typeof init === "number" ? undefined : init;
+
   return {
+    cors: options?.cors,
     kind: "redirect",
     to: isLinkTargetObject(to) ? href(to) : to,
-    init: typeof init === "number" ? { status: init } : init,
+    init: typeof init === "number" ? { status: init } : withoutRouteOptions(init),
   } satisfies RedirectCapability;
 }
 
-export function notFound(body?: RouteValue<string>, init?: ResponseInit) {
+export function notFound(body?: RouteValue<string>, init?: ResponseOptions) {
   return {
+    cors: init?.cors,
     kind: "not-found",
     body,
-    init,
+    init: withoutRouteOptions(init),
   } satisfies NotFoundCapability;
 }
 
-export function response(response: RouteValue<Response>) {
+export function response(
+  response: RouteValue<Response>,
+  init?: Pick<ResponseOptions, "cors">,
+) {
   return {
+    cors: init?.cors,
     kind: "response",
     response,
   } satisfies RawResponseCapability;
@@ -167,4 +179,13 @@ function isLinkTargetObject(value: unknown): value is LinkTarget {
     !(value instanceof URL) &&
     "to" in value
   );
+}
+
+function withoutRouteOptions(options: ResponseOptions | undefined) {
+  if (!options) {
+    return undefined;
+  }
+
+  const { cors: _cors, ...responseInit } = options;
+  return responseInit;
 }

@@ -12,6 +12,10 @@ import {
   type RouteImporter,
   type RouteModule,
 } from "../route";
+import {
+  applyCorsHeaders,
+  createCorsPreflightResponse,
+} from "../security";
 
 export type RequestHandlerOptions = {
   routes: Record<string, RouteImporter>;
@@ -49,6 +53,15 @@ export async function handleRequestWithManifest(
   }
 
   const routeModule = await routeMatch.route.load();
+
+  if (request.method.toUpperCase() === "OPTIONS") {
+    const preflightResponse = createCorsPreflightResponse(routeModule, request);
+
+    if (preflightResponse) {
+      return preflightResponse;
+    }
+  }
+
   const method = normalizeMethod(request.method);
 
   if (!method) {
@@ -74,16 +87,17 @@ export async function handleRequestWithManifest(
     search: url.searchParams,
     url,
   } satisfies HttpRouteContext);
+  const corsResponse = applyCorsHeaders(response, capability.cors, request);
 
   if (method === "HEAD") {
     return new Response(null, {
-      headers: response.headers,
-      status: response.status,
-      statusText: response.statusText,
+      headers: corsResponse.headers,
+      status: corsResponse.status,
+      statusText: corsResponse.statusText,
     });
   }
 
-  return response;
+  return corsResponse;
 }
 
 function normalizeMethod(method: string): HttpMethod | null {

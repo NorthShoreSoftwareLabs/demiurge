@@ -1,6 +1,11 @@
 export { createFileRouter, Link } from "./browser";
 export { href } from "./routing";
-export { createSecurityHeaders, security } from "./security";
+export {
+  createCorsHeaders,
+  createSecurityHeaders,
+  security,
+  validateCorsPolicy,
+} from "./security";
 export { createRequestHandler, handleRequestWithManifest } from "./server";
 export {
   html,
@@ -36,6 +41,7 @@ export type {
   PathVars,
   RawResponseCapability,
   RedirectCapability,
+  ResponseOptions,
   ResponseCapability,
   RouteCapability,
   RouteContext,
@@ -47,6 +53,9 @@ export type {
 } from "./route";
 export type {
   ContentSecurityPolicy,
+  CorsPolicy,
+  CorsRequestContext,
+  CorsResponseOptions,
   CspDirectiveValue,
   CspSource,
   ReferrerPolicy,

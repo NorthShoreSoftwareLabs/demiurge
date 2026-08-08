@@ -21,6 +21,7 @@ export type {
   PathVars,
   RawResponseCapability,
   RedirectCapability,
+  ResponseOptions,
   ResponseCapability,
   RouteCapability,
   RouteContext,

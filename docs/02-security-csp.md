@@ -159,6 +159,24 @@ Framework responsibilities:
 - Type-check allowed methods against exported route methods.
 - Keep CORS separate from CSP and CORP. They solve different problems.
 
+The first CORS slice supports helper-attached route policy:
+
+```ts
+export const POST = json(handler, {
+  cors: {
+    origins: ["https://app.example.com"],
+    methods: ["POST"],
+    headers: ["content-type", "authorization"],
+    credentials: true,
+    maxAge: 600,
+  },
+});
+```
+
+The framework adds CORS headers to actual route responses and generates
+`OPTIONS` preflight responses when the requested method maps to a route
+capability with CORS policy. Wildcard origins with credentials fail closed.
+
 ## CSRF
 
 Cookie-authenticated unsafe methods should get CSRF protection by default.

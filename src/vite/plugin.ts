@@ -20,6 +20,10 @@ import {
   type RouteImporter,
   type RouteModule,
 } from "../route";
+import {
+  applyCorsHeaders,
+  createCorsPreflightResponse,
+} from "../security";
 
 export type DemiurgeVitePluginOptions = {
   document?: {
@@ -331,6 +335,15 @@ export async function handleDevRequest(
   }
 
   const routeModule = await routeMatch.route.load();
+
+  if (request.method.toUpperCase() === "OPTIONS") {
+    const preflightResponse = createCorsPreflightResponse(routeModule, request);
+
+    if (preflightResponse) {
+      return preflightResponse;
+    }
+  }
+
   const method = normalizeMethod(request.method);
 
   if (!method) {
@@ -354,16 +367,17 @@ export async function handleDevRequest(
     search: url.searchParams,
     url,
   } satisfies HttpRouteContext);
+  const corsResponse = applyCorsHeaders(response, capability.cors, request);
 
   if (method === "HEAD") {
     return new Response(null, {
-      headers: response.headers,
-      status: response.status,
-      statusText: response.statusText,
+      headers: corsResponse.headers,
+      status: corsResponse.status,
+      statusText: corsResponse.statusText,
     });
   }
 
-  return response;
+  return corsResponse;
 }
 
 function shouldServeDocument(request: Request) {

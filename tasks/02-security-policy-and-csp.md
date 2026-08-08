@@ -29,6 +29,8 @@ with React rendering modes instead of being left to user middleware.
 - `createSecurityHeaders(...)` for deterministic CSP, security header, HSTS,
   and Trusted Types header rendering.
 - Strict CSP nonce substitution fails closed when the nonce is missing.
+- Helper-attached CORS policy, actual response CORS headers, generated
+  preflight responses, and wildcard-plus-credentials validation.
 
 ## Examples Required
 

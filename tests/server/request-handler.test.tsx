@@ -116,6 +116,143 @@ describe("request handler", () => {
     expect(response.headers.get("allow")).toBe("GET, HEAD");
   });
 
+  it("adds CORS headers to matching route responses", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/health.tsx": routeModule({
+          GET: json(
+            { ok: true },
+            {
+              cors: {
+                credentials: true,
+                origins: ["https://app.example.com"],
+              },
+            },
+          ),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/health", {
+        headers: {
+          origin: "https://app.example.com",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+    expect(response.headers.get("access-control-allow-credentials")).toBe("true");
+    expect(response.headers.get("vary")).toBe("Origin");
+  });
+
+  it("generates CORS preflight responses from route policy", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/posts.tsx": routeModule({
+          POST: json(
+            { ok: true },
+            {
+              cors: {
+                headers: ["content-type"],
+                maxAge: 300,
+                methods: ["POST"],
+                origins: ["https://app.example.com"],
+              },
+            },
+          ),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/posts", {
+        headers: {
+          "access-control-request-method": "POST",
+          origin: "https://app.example.com",
+        },
+        method: "OPTIONS",
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+    expect(response.headers.get("access-control-allow-methods")).toBe("POST");
+    expect(response.headers.get("access-control-allow-headers")).toBe(
+      "content-type",
+    );
+    expect(response.headers.get("access-control-max-age")).toBe("300");
+  });
+
+  it("falls back from HEAD to GET while preserving CORS headers", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/health.tsx": routeModule({
+          GET: text("ok", {
+            cors: {
+              origins: ["https://app.example.com"],
+            },
+            headers: {
+              vary: "Accept",
+            },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/health", {
+        headers: {
+          origin: "https://app.example.com",
+        },
+        method: "HEAD",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+    expect(response.headers.get("vary")).toBe("Accept, Origin");
+    await expect(response.text()).resolves.toBe("");
+  });
+
+  it("does not generate preflight responses for unsupported requested methods", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/posts.tsx": routeModule({
+          POST: json(
+            { ok: true },
+            {
+              cors: {
+                methods: ["POST"],
+                origins: ["https://app.example.com"],
+              },
+            },
+          ),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/posts", {
+        headers: {
+          "access-control-request-method": "DELETE",
+          origin: "https://app.example.com",
+        },
+        method: "OPTIONS",
+      }),
+    );
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("POST");
+  });
+
   it("returns not found for missing routes", async () => {
     const handler = createRequestHandler({ routes: {} });
 

@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 import type { RouteParamsFor } from "../routing/types";
+import type { CorsPolicy } from "../security/types";
 
 export type MaybePromise<T> = T | Promise<T>;
 
@@ -33,36 +34,42 @@ export type PageCapability<TPath extends string = string> = {
 };
 
 export type JsonCapability<T = unknown> = {
+  cors?: CorsPolicy;
   kind: "json";
   value: RouteValue<T>;
   init?: ResponseInit;
 };
 
 export type TextCapability = {
+  cors?: CorsPolicy;
   kind: "text";
   value: RouteValue<string>;
   init?: ResponseInit;
 };
 
 export type HtmlCapability = {
+  cors?: CorsPolicy;
   kind: "html";
   value: RouteValue<string>;
   init?: ResponseInit;
 };
 
 export type RedirectCapability = {
+  cors?: CorsPolicy;
   kind: "redirect";
   to: RouteValue<string | URL>;
   init?: ResponseInit;
 };
 
 export type NotFoundCapability = {
+  cors?: CorsPolicy;
   kind: "not-found";
   body?: RouteValue<string>;
   init?: ResponseInit;
 };
 
 export type RawResponseCapability = {
+  cors?: CorsPolicy;
   kind: "response";
   response: RouteValue<Response>;
 };
@@ -89,6 +96,10 @@ export type HttpMethod =
 export type PageOptions<TPath extends string = string> = {
   view: ComponentType<RouteProps<TPath>>;
   layout?: false;
+};
+
+export type ResponseOptions = ResponseInit & {
+  cors?: CorsPolicy;
 };
 
 export type RouteModule = {

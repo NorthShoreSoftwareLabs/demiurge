@@ -47,6 +47,43 @@ describe("Vite plugin dev request handling", () => {
     await expect(result.json()).resolves.toEqual({ ok: true });
   });
 
+  it("serves CORS preflight responses in Vite dev", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/api/posts.tsx": routeModule({
+        POST: json(
+          { ok: true },
+          {
+            cors: {
+              headers: ["content-type"],
+              methods: ["POST"],
+              origins: ["https://app.example.com"],
+            },
+          },
+        ),
+      }),
+    });
+
+    const result = await unstable_handleDevRequest(
+      manifest,
+      new Request("https://example.test/api/posts", {
+        headers: {
+          "access-control-request-method": "POST",
+          origin: "https://app.example.com",
+        },
+        method: "OPTIONS",
+      }),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    if (!(result instanceof Response)) return;
+
+    expect(result.status).toBe(204);
+    expect(result.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+    expect(result.headers.get("access-control-allow-methods")).toBe("POST");
+  });
+
   it("serves redirects", async () => {
     const manifest = unstable_createRouteManifest({
       "./routes/old-blog.tsx": routeModule({

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createSecurityHeaders, security } from "demiurge";
+import {
+  createCorsHeaders,
+  createSecurityHeaders,
+  security,
+  validateCorsPolicy,
+} from "demiurge";
 
 describe("security policy headers", () => {
   it("creates strict production security headers with a CSP nonce", () => {
@@ -91,5 +96,136 @@ describe("security policy headers", () => {
     expect(reportOnly.has("trusted-types")).toBe(false);
     expect(enforce.get("trusted-types")).toBe("demiurge");
     expect(enforce.get("require-trusted-types-for")).toBe("'script'");
+  });
+
+  it("renders optional strict transport security directives", () => {
+    const headers = createSecurityHeaders(
+      security.api({
+        headers: {
+          strictTransportSecurity: {
+            includeSubDomains: true,
+            maxAge: 63072000,
+            preload: true,
+          },
+        },
+      }),
+    );
+
+    expect(headers.get("strict-transport-security")).toBe(
+      "max-age=63072000; includeSubDomains; preload",
+    );
+  });
+});
+
+describe("CORS policy headers", () => {
+  it("renders CORS headers for allowed origins", () => {
+    const headers = createCorsHeaders(
+      {
+        credentials: true,
+        exposeHeaders: ["x-request-id"],
+        origins: ["https://app.example.com"],
+      },
+      {
+        request: new Request("https://api.example.test", {
+          headers: {
+            origin: "https://app.example.com",
+          },
+        }),
+      },
+    );
+
+    expect(headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+    expect(headers.get("access-control-allow-credentials")).toBe("true");
+    expect(headers.get("access-control-expose-headers")).toBe("x-request-id");
+    expect(headers.get("vary")).toBe("Origin");
+  });
+
+  it("renders preflight CORS headers", () => {
+    const headers = createCorsHeaders(
+      {
+        headers: ["content-type", "authorization"],
+        maxAge: 600,
+        origins: "*",
+      },
+      {
+        request: new Request("https://api.example.test", {
+          headers: {
+            origin: "https://app.example.com",
+          },
+        }),
+      },
+      {
+        methods: ["POST"],
+        preflight: true,
+      },
+    );
+
+    expect(headers.get("access-control-allow-origin")).toBe("*");
+    expect(headers.get("access-control-allow-methods")).toBe("POST");
+    expect(headers.get("access-control-allow-headers")).toBe(
+      "content-type, authorization",
+    );
+    expect(headers.get("access-control-max-age")).toBe("600");
+  });
+
+  it("uses requested preflight headers when policy headers are omitted", () => {
+    const headers = createCorsHeaders(
+      {
+        origins: "*",
+      },
+      {
+        request: new Request("https://api.example.test", {
+          headers: {
+            "access-control-request-headers": "x-demo, x-trace",
+            origin: "https://app.example.com",
+          },
+        }),
+      },
+      {
+        methods: ["PUT"],
+        preflight: true,
+      },
+    );
+
+    expect(headers.get("access-control-allow-headers")).toBe("x-demo, x-trace");
+  });
+
+  it("omits CORS headers when the request has no allowed origin", () => {
+    const noOrigin = createCorsHeaders(
+      {
+        origins: ["https://app.example.com"],
+      },
+      {
+        request: new Request("https://api.example.test"),
+      },
+    );
+    const deniedOrigin = createCorsHeaders(
+      {
+        origins: ["https://app.example.com"],
+      },
+      {
+        request: new Request("https://api.example.test", {
+          headers: {
+            origin: "https://evil.example.com",
+          },
+        }),
+      },
+    );
+
+    expect([...noOrigin]).toEqual([]);
+    expect([...deniedOrigin]).toEqual([]);
+  });
+
+  it("rejects wildcard origins with credentials", () => {
+    expect(() =>
+      validateCorsPolicy({
+        credentials: true,
+        origins: "*",
+      }),
+    ).toThrow(
+      "Demiurge CORS policy cannot use wildcard origins with credentials.",
+    );
   });
 });
