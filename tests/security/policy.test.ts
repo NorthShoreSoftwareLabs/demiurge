@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createCorsHeaders,
   createSecurityHeaders,
+  parseBodySize,
   security,
   validateCorsPolicy,
 } from "demiurge";
@@ -226,6 +227,25 @@ describe("CORS policy headers", () => {
       }),
     ).toThrow(
       "Demiurge CORS policy cannot use wildcard origins with credentials.",
+    );
+  });
+});
+
+describe("request security policy", () => {
+  it("parses request body size limits", () => {
+    expect(parseBodySize(12)).toBe(12);
+    expect(parseBodySize("10b")).toBe(10);
+    expect(parseBodySize("2kb")).toBe(2048);
+    expect(parseBodySize("3mb")).toBe(3 * 1024 ** 2);
+    expect(parseBodySize("1gb")).toBe(1024 ** 3);
+  });
+
+  it("rejects invalid request body size limits", () => {
+    expect(() => parseBodySize(-1)).toThrow(
+      "Demiurge request maxBodySize must be a non-negative integer.",
+    );
+    expect(() => parseBodySize("10tb")).toThrow(
+      "Demiurge request maxBodySize must use bytes or a b/kb/mb/gb suffix.",
     );
   });
 });

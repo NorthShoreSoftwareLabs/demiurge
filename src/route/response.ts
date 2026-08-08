@@ -20,6 +20,7 @@ export function json<T>(
   return {
     cors: init?.cors,
     kind: "json",
+    security: init?.security,
     value,
     init: withoutRouteOptions(init),
   } satisfies JsonCapability<T>;
@@ -29,6 +30,7 @@ export function text(value: RouteValue<string>, init?: ResponseOptions) {
   return {
     cors: init?.cors,
     kind: "text",
+    security: init?.security,
     value,
     init: withoutRouteOptions(init),
   } satisfies TextCapability;
@@ -38,6 +40,7 @@ export function html(value: RouteValue<string>, init?: ResponseOptions) {
   return {
     cors: init?.cors,
     kind: "html",
+    security: init?.security,
     value,
     init: withoutRouteOptions(init),
   } satisfies HtmlCapability;
@@ -60,6 +63,7 @@ export function redirect(
   return {
     cors: options?.cors,
     kind: "redirect",
+    security: options?.security,
     to: isLinkTargetObject(to) ? href(to) : to,
     init: typeof init === "number" ? { status: init } : withoutRouteOptions(init),
   } satisfies RedirectCapability;
@@ -69,6 +73,7 @@ export function notFound(body?: RouteValue<string>, init?: ResponseOptions) {
   return {
     cors: init?.cors,
     kind: "not-found",
+    security: init?.security,
     body,
     init: withoutRouteOptions(init),
   } satisfies NotFoundCapability;
@@ -76,12 +81,13 @@ export function notFound(body?: RouteValue<string>, init?: ResponseOptions) {
 
 export function response(
   response: RouteValue<Response>,
-  init?: Pick<ResponseOptions, "cors">,
+  init?: Pick<ResponseOptions, "cors" | "security">,
 ) {
   return {
     cors: init?.cors,
     kind: "response",
     response,
+    security: init?.security,
   } satisfies RawResponseCapability;
 }
 
@@ -186,6 +192,6 @@ function withoutRouteOptions(options: ResponseOptions | undefined) {
     return undefined;
   }
 
-  const { cors: _cors, ...responseInit } = options;
+  const { cors: _cors, security: _security, ...responseInit } = options;
   return responseInit;
 }

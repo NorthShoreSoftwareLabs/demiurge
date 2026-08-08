@@ -23,6 +23,7 @@ import {
 import {
   applyCorsHeaders,
   createCorsPreflightResponse,
+  enforceRequestSecurity,
 } from "../security";
 
 export type DemiurgeVitePluginOptions = {
@@ -358,6 +359,15 @@ export async function handleDevRequest(
 
   if (capability.kind === "page") {
     return "document" as const;
+  }
+
+  const requestSecurityResponse = enforceRequestSecurity(
+    capability.security?.request,
+    request,
+  );
+
+  if (requestSecurityResponse) {
+    return applyCorsHeaders(requestSecurityResponse, capability.cors, request);
   }
 
   const response = await toResponse(capability, {

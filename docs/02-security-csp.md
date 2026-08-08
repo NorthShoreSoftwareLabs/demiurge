@@ -232,6 +232,22 @@ rateLimit: {
 Adapters must declare whether they can enforce rate limits locally, through a
 shared cache, or through platform features.
 
+The first request-limit slice supports helper-attached request body limits:
+
+```ts
+export const POST = text(({ request }) => request.text(), {
+  security: {
+    request: {
+      maxBodySize: "1mb",
+    },
+  },
+});
+```
+
+The server and Vite dev handlers reject requests whose declared
+`Content-Length` exceeds the route limit before the handler reads the body.
+Malformed declared lengths on limited routes fail with `400`.
+
 ## Uploads
 
 Uploads need explicit limits and streaming support:

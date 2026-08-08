@@ -253,6 +253,101 @@ describe("request handler", () => {
     expect(response.headers.get("allow")).toBe("POST");
   });
 
+  it("rejects oversized request bodies before route handlers run", async () => {
+    const handlerSpy = vi.fn(({ request }: { request: Request }) => request.text());
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/echo.tsx": routeModule({
+          POST: text(handlerSpy, {
+            security: {
+              request: {
+                maxBodySize: "4b",
+              },
+            },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/echo", {
+        body: "hello",
+        headers: {
+          "content-length": "5",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.text()).resolves.toBe("Request body too large.");
+    expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid declared content length for limited routes", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/echo.tsx": routeModule({
+          POST: text(({ request }) => request.text(), {
+            security: {
+              request: {
+                maxBodySize: 10,
+              },
+            },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/echo", {
+        body: "hello",
+        headers: {
+          "content-length": "not-a-number",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.text()).resolves.toBe("Invalid Content-Length.");
+  });
+
+  it("keeps CORS headers on request size rejections", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/echo.tsx": routeModule({
+          POST: text(({ request }) => request.text(), {
+            cors: {
+              origins: ["https://app.example.com"],
+            },
+            security: {
+              request: {
+                maxBodySize: 1,
+              },
+            },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/echo", {
+        body: "hello",
+        headers: {
+          "content-length": "5",
+          origin: "https://app.example.com",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(413);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+  });
+
   it("returns not found for missing routes", async () => {
     const handler = createRequestHandler({ routes: {} });
 

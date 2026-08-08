@@ -3,6 +3,8 @@ export { href } from "./routing";
 export {
   createCorsHeaders,
   createSecurityHeaders,
+  enforceRequestSecurity,
+  parseBodySize,
   security,
   validateCorsPolicy,
 } from "./security";
@@ -59,6 +61,8 @@ export type {
   CspDirectiveValue,
   CspSource,
   ReferrerPolicy,
+  RequestSecurityPolicy,
+  RouteSecurityPolicy,
   SecurityHeadersOptions,
   SecurityHeaderPolicy,
   SecurityPolicy,

@@ -73,6 +73,14 @@ export type CorsResponseOptions =
     preflight?: false;
   };
 
+export type RequestSecurityPolicy = {
+  maxBodySize?: number | `${number}${"b" | "gb" | "kb" | "mb"}`;
+};
+
+export type RouteSecurityPolicy = {
+  request?: RequestSecurityPolicy;
+};
+
 export type SecurityHeaderPolicy = {
   contentTypeOptions?: "nosniff" | false;
   crossOriginEmbedderPolicy?: "require-corp" | "credentialless" | false;

@@ -31,6 +31,8 @@ with React rendering modes instead of being left to user middleware.
 - Strict CSP nonce substitution fails closed when the nonce is missing.
 - Helper-attached CORS policy, actual response CORS headers, generated
   preflight responses, and wildcard-plus-credentials validation.
+- Helper-attached request body size limits enforced before route handlers read
+  oversized declared bodies.
 
 ## Examples Required
 

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
-import { json, page, redirect, type RouteModule, type RouteProps } from "demiurge";
+import { json, page, redirect, text, type RouteModule, type RouteProps } from "demiurge";
 import { unstable_createRouteManifest } from "demiurge/internal/testing";
 import {
   demiurge,
@@ -82,6 +82,39 @@ describe("Vite plugin dev request handling", () => {
       "https://app.example.com",
     );
     expect(result.headers.get("access-control-allow-methods")).toBe("POST");
+  });
+
+  it("enforces request body limits in Vite dev", async () => {
+    const handlerSpy = vi.fn(({ request }: { request: Request }) => request.text());
+    const manifest = unstable_createRouteManifest({
+      "./routes/api/echo.tsx": routeModule({
+        POST: text(handlerSpy, {
+          security: {
+            request: {
+              maxBodySize: "4b",
+            },
+          },
+        }),
+      }),
+    });
+
+    const result = await unstable_handleDevRequest(
+      manifest,
+      new Request("https://example.test/api/echo", {
+        body: "hello",
+        headers: {
+          "content-length": "5",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    if (!(result instanceof Response)) return;
+
+    expect(result.status).toBe(413);
+    await expect(result.text()).resolves.toBe("Request body too large.");
+    expect(handlerSpy).not.toHaveBeenCalled();
   });
 
   it("serves redirects", async () => {

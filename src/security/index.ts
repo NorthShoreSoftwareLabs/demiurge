@@ -8,6 +8,10 @@ export {
   createSecurityHeaders,
   security,
 } from "./policy";
+export {
+  enforceRequestSecurity,
+  parseBodySize,
+} from "./request";
 export type {
   ContentSecurityPolicy,
   CorsPolicy,
@@ -16,6 +20,8 @@ export type {
   CspDirectiveValue,
   CspSource,
   ReferrerPolicy,
+  RequestSecurityPolicy,
+  RouteSecurityPolicy,
   SecurityHeadersOptions,
   SecurityHeaderPolicy,
   SecurityPolicy,

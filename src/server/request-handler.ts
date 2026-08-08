@@ -15,6 +15,7 @@ import {
 import {
   applyCorsHeaders,
   createCorsPreflightResponse,
+  enforceRequestSecurity,
 } from "../security";
 
 export type RequestHandlerOptions = {
@@ -78,6 +79,15 @@ export async function handleRequestWithManifest(
     return new Response("Page responses need an SSR or RSC renderer.", {
       status: 501,
     });
+  }
+
+  const requestSecurityResponse = enforceRequestSecurity(
+    capability.security?.request,
+    request,
+  );
+
+  if (requestSecurityResponse) {
+    return applyCorsHeaders(requestSecurityResponse, capability.cors, request);
   }
 
   const response = await toResponse(capability, {
