@@ -1,15 +1,16 @@
 import type { ComponentType, ReactNode } from "react";
+import type { RouteParamsFor } from "../routing/types";
 
 export type MaybePromise<T> = T | Promise<T>;
 
 export type PathVars = Record<string, string>;
 
-export type RouteContext = {
-  path: PathVars;
+export type RouteContext<TPath extends string = string> = {
+  path: RouteParamsFor<TPath>;
   pathname: string;
 };
 
-export type HttpRouteContext = RouteContext & {
+export type HttpRouteContext<TPath extends string = string> = RouteContext<TPath> & {
   request: Request;
   search: URLSearchParams;
   url: URL;
@@ -19,15 +20,15 @@ export type RouteValue<T> =
   | T
   | ((context: HttpRouteContext) => MaybePromise<T>);
 
-export type RouteProps = RouteContext;
+export type RouteProps<TPath extends string = string> = RouteContext<TPath>;
 
-export type LayoutProps = RouteContext & {
+export type LayoutProps<TPath extends string = string> = RouteContext<TPath> & {
   children: ReactNode;
 };
 
-export type PageCapability = {
+export type PageCapability<TPath extends string = string> = {
   kind: "page";
-  view: ComponentType<RouteProps>;
+  view: ComponentType<RouteProps<TPath>>;
   layout?: false;
 };
 
@@ -85,8 +86,8 @@ export type HttpMethod =
   | "OPTIONS"
   | "HEAD";
 
-export type PageOptions = {
-  view: ComponentType<RouteProps>;
+export type PageOptions<TPath extends string = string> = {
+  view: ComponentType<RouteProps<TPath>>;
   layout?: false;
 };
 

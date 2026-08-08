@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { href, Link, type PathValue } from "demiurge";
+import { href, Link, page, type PathValue, type RouteProps } from "demiurge";
 
 declare module "demiurge" {
   interface RoutePathVars {
@@ -66,6 +66,19 @@ describe("typed URL routes", () => {
         to: "/blog/[slug]",
       };
       void invalidLinkProps;
+
+      const routeProps = null as never as RouteProps<"/blog/[slug]">;
+      const slug: string = routeProps.path.slug;
+      void slug;
+
+      // @ts-expect-error route props only expose the path variables for their route
+      void routeProps.path.id;
+
+      const typedPage = page<"/blog/[slug]">(({ path }) => {
+        const pageSlug: string = path.slug;
+        return pageSlug;
+      });
+      void typedPage;
     });
 
     expect(true).toBe(true);

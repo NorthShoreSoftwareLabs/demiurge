@@ -6,6 +6,7 @@ export type {
   LinkTo,
   PathValue,
   PathVarsFor,
+  RouteParamsFor,
   RouteConcretePaths,
   RoutePathVars,
 } from "./types";

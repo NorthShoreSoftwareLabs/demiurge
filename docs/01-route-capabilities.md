@@ -60,8 +60,9 @@ routes fall through to Vite so the browser app can handle client navigation.
 
 ## Generated Typed URLs
 
-Demiurge generates route types from the `routes` folder. App code still writes
-actual URLs and file route patterns:
+Demiurge generates route types from the `routes` folder into a framework-owned
+hidden directory at `.demiurge/`. App code still writes actual URLs and file
+route patterns:
 
 ```tsx
 <Link to="/blog">Blog</Link>
@@ -69,7 +70,7 @@ actual URLs and file route patterns:
 <Link to="/blog/file-based-routing">Read</Link>
 ```
 
-The generated manifest augments the framework package:
+The hidden generated route type file augments the framework package:
 
 ```ts
 declare module "demiurge" {
@@ -85,6 +86,21 @@ declare module "demiurge" {
 
 This means unknown URLs fail typecheck, dynamic patterns require their `path`
 values, and concrete dynamic URLs can still autocomplete as real strings.
+
+Route components and handlers can opt into the same generated route map with a
+route-pattern generic:
+
+```tsx
+import { page, type RouteProps } from "demiurge";
+
+export const GET = page({
+  view: BlogPost,
+});
+
+function BlogPost({ path }: RouteProps<"/blog/[slug]">) {
+  return <h1>{path.slug}</h1>;
+}
+```
 
 The Vite plugin can generate this file on startup and watch route files during
 development:

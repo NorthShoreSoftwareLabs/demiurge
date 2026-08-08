@@ -171,6 +171,21 @@ describe("Vite plugin dev request handling", () => {
     await expect(readText(outputFile)).resolves.toContain('"/": {};');
   });
 
+  it("writes typed routes to a hidden framework directory by default", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-build-default-"));
+    const routesDir = join(root, "src", "routes");
+    const outputFile = join(root, ".demiurge", "route-manifest.d.ts");
+    const plugin = demiurge({ typedRoutes: true }) as PluginHarness;
+
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(join(routesDir, "blog.tsx"), "export {}");
+
+    plugin.configResolved?.({ root } as never);
+    await plugin.buildStart?.({} as never);
+
+    await expect(readText(outputFile)).resolves.toContain('"/blog": {};');
+  });
+
   it("wires middleware responses in Vite dev", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-middleware-"));
     const routesDir = join(root, "routes");

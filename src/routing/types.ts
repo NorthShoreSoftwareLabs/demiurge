@@ -1,4 +1,5 @@
 export type PathValue = string | number | boolean;
+export type PathVars = Record<string, string>;
 
 export interface RoutePathVars {}
 
@@ -16,6 +17,11 @@ export type AppHref = HasGeneratedRoutes extends true
 
 export type PathVarsFor<TPath extends string> =
   TPath extends KnownRoutePath ? RoutePathVars[TPath] : never;
+
+export type RouteParamsFor<TPath extends string> =
+  TPath extends KnownRoutePath
+    ? { [K in keyof RoutePathVars[TPath]]: string }
+    : PathVars;
 
 type HasPathVars<TPath extends string> =
   keyof PathVarsFor<TPath> extends never ? false : true;

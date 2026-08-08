@@ -4,7 +4,7 @@ export const GET = page({
   view: BlogPost,
 });
 
-function BlogPost({ path }: RouteProps) {
+function BlogPost({ path }: RouteProps<"/blog/[slug]">) {
   return (
     <article>
       <p className="eyebrow">Dynamic route</p>

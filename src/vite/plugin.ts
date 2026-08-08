@@ -35,6 +35,7 @@ export type DemiurgeVitePluginOptions = {
 
 const CLIENT_ENTRY_ID = "virtual:demiurge/client-entry";
 const RESOLVED_CLIENT_ENTRY_ID = `\0${CLIENT_ENTRY_ID}`;
+const DEFAULT_TYPED_ROUTES_OUTPUT = ".demiurge/route-manifest.d.ts";
 
 const supportedMethods = [
   "GET",
@@ -288,8 +289,8 @@ async function generateTypedRoutes(
   const outputFile = resolve(
     root,
     typeof options.typedRoutes === "object"
-      ? options.typedRoutes.outputFile ?? "src/route-manifest.d.ts"
-      : "src/route-manifest.d.ts",
+      ? options.typedRoutes.outputFile ?? DEFAULT_TYPED_ROUTES_OUTPUT
+      : DEFAULT_TYPED_ROUTES_OUTPUT,
   );
 
   await generateRoutes({ outputFile, routesDir });
