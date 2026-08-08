@@ -9,6 +9,7 @@ import {
   preconnect,
   preload,
   script,
+  query,
   type LayoutProps,
   type RouteModule,
   type RouteProps,
@@ -23,6 +24,21 @@ function View(_props: RouteProps) {
 }
 
 function AboutView(_props: RouteProps) {
+  return null;
+}
+
+type PostData = {
+  first: {
+    slug: string;
+    title: string;
+  };
+  second: {
+    slug: string;
+    title: string;
+  };
+};
+
+function DataView(_props: RouteProps<string, PostData>) {
   return null;
 }
 
@@ -216,6 +232,49 @@ describe("route loading", () => {
         strategy: "beforeInteractive",
       },
     ]);
+  });
+
+  it("resolves route-level page data with the matched request and cache", async () => {
+    const loadPost = vi.fn(async (slug: string) => ({
+      slug,
+      title: "File based routing",
+    }));
+    const postBySlug = query({
+      fn: loadPost,
+      key: (slug: string) => ["post", slug],
+      scope: "request",
+    });
+    const manifest = unstable_createRouteManifest({
+      "./routes/blog/[slug].tsx": routeModule({
+        GET: page({
+          data: async ({ cache, path }) => ({
+            first: await cache.get(postBySlug(path.slug)),
+            second: await cache.get(postBySlug(path.slug)),
+          }),
+          view: DataView,
+        }),
+      }),
+    });
+
+    const match = await unstable_loadPageRoute(
+      manifest,
+      "/blog/file-based-routing",
+    );
+
+    expect(match.status).toBe("ready");
+    if (match.status !== "ready") return;
+
+    expect(match.match.data).toEqual({
+      first: {
+        slug: "file-based-routing",
+        title: "File based routing",
+      },
+      second: {
+        slug: "file-based-routing",
+        title: "File based routing",
+      },
+    });
+    expect(loadPost).toHaveBeenCalledTimes(1);
   });
 
   it("skips inherited layouts when a page declares layout false", async () => {

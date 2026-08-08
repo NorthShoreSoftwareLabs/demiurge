@@ -1,5 +1,3 @@
-import type { MaybePromise } from "../route";
-
 export type CacheScope =
   | "build"
   | "none"
@@ -22,6 +20,8 @@ export type CacheTag = {
 };
 
 export type CacheDuration = number | `${number}${"h" | "m" | "ms" | "s"}`;
+
+type MaybePromise<T> = T | Promise<T>;
 
 export type CacheRequest<TResult> = {
   fn: () => MaybePromise<TResult>;

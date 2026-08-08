@@ -64,7 +64,7 @@ implementation.
 
 | Feature | Status |
 | --- | --- |
-| Route-level `data` for page `GET` | designed |
+| Route-level `data` for page `GET` | partially implemented |
 | Component-level server data through request context | designed |
 | Reusable `query(...)` objects | implemented |
 | Explicit cache API | implemented |

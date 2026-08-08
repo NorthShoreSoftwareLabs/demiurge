@@ -46,6 +46,8 @@ handlers and React server components without hiding when work runs.
   TTL expiry, and key/tag invalidation.
 - `tag(...)`, `defineTags(...)`, `serializeCacheKey(...)`, and
   `parseCacheDuration(...)` cover the first cache key/tag behavior tests.
+- `page({ data, view })` resolves route-level page data with the matched
+  request context and a request-scoped framework cache during route loading.
 
 ## Open Decisions
 

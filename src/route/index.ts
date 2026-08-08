@@ -24,6 +24,8 @@ export type {
   MaybePromise,
   NotFoundCapability,
   NotFoundProps,
+  PageDataContext,
+  PageDataFunction,
   PageCapability,
   PageOptions,
   PathVars,

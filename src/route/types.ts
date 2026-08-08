@@ -1,4 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
+import type { Cache } from "../data";
 import type {
   LinkContribution,
   Metadata,
@@ -27,6 +28,15 @@ export type HttpRouteContext<TPath extends string = string> = RouteContext<TPath
   url: URL;
 };
 
+export type PageDataContext<TPath extends string = string> =
+  HttpRouteContext<TPath> & {
+    cache: Cache;
+  };
+
+export type PageDataFunction<TPath extends string = string, TData = unknown> = (
+  context: PageDataContext<TPath>,
+) => MaybePromise<TData>;
+
 export type RouteMiddlewareNext = () => MaybePromise<Response>;
 
 export type RouteMiddleware<TPath extends string = string> = (
@@ -38,7 +48,12 @@ export type RouteValue<T> =
   | T
   | ((context: HttpRouteContext) => MaybePromise<T>);
 
-export type RouteProps<TPath extends string = string> = RouteContext<TPath>;
+export type RouteProps<
+  TPath extends string = string,
+  TData = undefined,
+> = RouteContext<TPath> & ([TData] extends [undefined]
+  ? { data?: undefined }
+  : { data: TData });
 
 export type LayoutProps<TPath extends string = string> = RouteContext<TPath> & {
   children: ReactNode;
@@ -59,10 +74,21 @@ export type RouteDefaultComponent =
   | ComponentType<NotFoundProps>
   | ComponentType<RouteErrorProps>;
 
-export type PageCapability<TPath extends string = string> = {
+export type PageCapability<
+  TPath extends string = string,
+  TData = undefined,
+> = {
+  data?: PageDataFunction<TPath, TData>;
   kind: "page";
-  view: ComponentType<RouteProps<TPath>>;
   layout?: false;
+  view: ComponentType<RouteProps<TPath, TData>>;
+};
+
+export type AnyPageCapability = {
+  data?: PageDataFunction<string, unknown>;
+  kind: "page";
+  layout?: false;
+  view: unknown;
 };
 
 export type JsonCapability<T = unknown> = {
@@ -120,7 +146,7 @@ export type ResponseCapability =
   | NotFoundCapability
   | RawResponseCapability;
 
-export type RouteCapability = PageCapability | ResponseCapability;
+export type RouteCapability = AnyPageCapability | ResponseCapability;
 
 export type HttpMethod =
   | "GET"
@@ -131,9 +157,13 @@ export type HttpMethod =
   | "OPTIONS"
   | "HEAD";
 
-export type PageOptions<TPath extends string = string> = {
-  view: ComponentType<RouteProps<TPath>>;
+export type PageOptions<
+  TPath extends string = string,
+  TData = undefined,
+> = {
+  data?: PageDataFunction<TPath, TData>;
   layout?: false;
+  view: ComponentType<RouteProps<TPath, TData>>;
 };
 
 export type ResponseOptions = ResponseInit & {

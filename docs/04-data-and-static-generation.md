@@ -33,6 +33,13 @@ Both route-level and component-level data should use the same request-aware
 framework primitives so caching, dedupe, cancellation, tracing, and invalidation
 work consistently.
 
+The first route-level slice supports `page({ data, view })` during route
+loading. `data` receives the matched request context, including `path`,
+`pathname`, `request`, `search`, `url`, and a request-scoped framework `cache`.
+Loaded route matches carry the resolved `data` value for the page renderer.
+SSR payloads, static generation, and hydration variants still need dedicated
+wiring.
+
 ## Query Objects
 
 Reusable data should be represented as typed query objects:

@@ -151,9 +151,9 @@ function RouteRenderer({
       : null;
   }
 
-  const { error, page, layouts, path, pathname } = match.match;
-  const pageElement = createElement(page, { path, pathname });
-  const routeElement = layouts.reduceRight(
+  const { data, error, page, layouts, path, pathname } = match.match;
+  const pageElement = createElement(page, { data, path, pathname });
+  const routeElement = layouts.reduceRight<ReactNode>(
     (children, Layout) => createElement(Layout, { path, pathname, children }),
     pageElement,
   );

@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { createMemoryCache } from "../data";
 import {
   resolveLinks,
   resolveMetadata,
@@ -65,9 +66,10 @@ export type RouteManifest = {
 };
 
 export type LoadedRouteMatch = {
+  data?: unknown;
   error?: ComponentType<RouteErrorProps>;
   links: LinkTag[];
-  page: ComponentType<RouteProps>;
+  page: ComponentType<RouteProps<string, unknown>>;
   layouts: ComponentType<LayoutProps>[];
   metadata: ResolvedMetadata;
   path: PathVars;
@@ -238,7 +240,9 @@ export async function loadPageRoute(
       ? []
       : await Promise.all(matchingLayouts.map((layout) => layout.load()));
   const url = new URL(request.url);
+  const cache = createMemoryCache();
   const context = {
+    cache,
     path: routeMatch.path,
     pathname,
     request,
@@ -249,6 +253,9 @@ export async function loadPageRoute(
   return {
     status: "ready",
     match: {
+      data: pageModule.GET.data
+        ? await pageModule.GET.data(context)
+        : undefined,
       error: await loadErrorFallbackForRoute(manifest, routeMatch.route),
       links: await resolveLinks(
         [
@@ -257,7 +264,7 @@ export async function loadPageRoute(
         ],
         context,
       ),
-      page: pageModule.GET.view,
+      page: pageModule.GET.view as ComponentType<RouteProps<string, unknown>>,
       layouts: layoutModules.map(
         (module) => module.default as ComponentType<LayoutProps>,
       ),
