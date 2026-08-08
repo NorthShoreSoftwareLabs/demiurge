@@ -1,6 +1,6 @@
 # Route Policies And Middleware
 
-Status: planned
+Status: in progress
 
 ## Goal
 
@@ -29,6 +29,11 @@ while preserving file-based routing and allowing real URL files like
 - Type tests for middleware-added context.
 - Fixture tests proving `policy.ts` remains a real `/policy` route and
   `@policy.ts` remains framework-attached.
+
+## Implemented Slices
+
+- Route groups such as `(admin)` organize route files and framework-attached
+  files without changing generated URLs or runtime path matching.
 
 ## Open Decisions
 

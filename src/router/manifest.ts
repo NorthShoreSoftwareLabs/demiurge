@@ -166,6 +166,10 @@ export function isLayoutForPage(layoutSegments: string[], pageSegments: string[]
 
 export function toRouteSegments(fileSegments: string[]) {
   return fileSegments.flatMap((segment) => {
+    if (isRouteGroupSegment(segment)) {
+      return [];
+    }
+
     if (segment === "index") {
       return [];
     }
@@ -180,6 +184,10 @@ export function toRouteSegments(fileSegments: string[]) {
 
     return [segment];
   });
+}
+
+export function isRouteGroupSegment(segment: string) {
+  return segment.startsWith("(") && segment.endsWith(")");
 }
 
 export function scoreRoute(fileSegments: string[]) {

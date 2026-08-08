@@ -41,6 +41,7 @@ describe("file route conventions", () => {
       "docs",
       "*path",
     ]);
+    expect(unstable_toRouteSegments(["(admin)", "users"])).toEqual(["users"]);
   });
 
   it("splits pathnames without empty leading or trailing segments", () => {
@@ -66,6 +67,8 @@ describe("file route conventions", () => {
     const manifest = unstable_createRouteManifest({
       "./routes/@layout.tsx": routeModule({ default: RootLayout }),
       "./routes/blog/@layout.tsx": routeModule({ default: BlogLayout }),
+      "./routes/(admin)/@layout.tsx": routeModule({ default: BlogLayout }),
+      "./routes/(admin)/users.tsx": routeModule({ GET: page(View) }),
       "./routes/index.tsx": routeModule({ GET: page(View) }),
       "./routes/policy.tsx": routeModule({ GET: page(View) }),
       "./routes/blog/[slug].tsx": routeModule({ GET: page(View) }),
@@ -73,11 +76,16 @@ describe("file route conventions", () => {
 
     expect(manifest.layouts.map((layout) => layout.file)).toEqual([
       "./routes/@layout.tsx",
+      "./routes/(admin)/@layout.tsx",
       "./routes/blog/@layout.tsx",
     ]);
     expect(manifest.routes.map((route) => route.file)).toContain(
       "./routes/policy.tsx",
     );
+    expect(
+      manifest.routes.find((route) => route.file === "./routes/(admin)/users.tsx")
+        ?.segments,
+    ).toEqual(["users"]);
   });
 
   it("prefers static routes over dynamic routes", () => {

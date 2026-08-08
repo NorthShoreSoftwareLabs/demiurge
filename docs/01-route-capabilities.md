@@ -190,6 +190,7 @@ routes/
 ```
 
 `routes/(app)/dashboard.ts` maps to `/dashboard`.
+Generated route types and runtime matching both omit route group segments.
 
 Layout inheritance should have an escape hatch for embedded or standalone
 documents:

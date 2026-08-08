@@ -67,6 +67,22 @@ describe("route loading", () => {
     expect(match.match.layouts).toEqual([]);
   });
 
+  it("uses route groups for organization without adding URL segments", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/@layout.tsx": routeModule({ default: RootLayout }),
+      "./routes/(admin)/@layout.tsx": routeModule({ default: BlogLayout }),
+      "./routes/(admin)/users.tsx": routeModule({ GET: page(View) }),
+    });
+
+    const match = await unstable_loadPageRoute(manifest, "/users");
+
+    expect(match.status).toBe("ready");
+    if (match.status !== "ready") return;
+
+    expect(match.match.page).toBe(View);
+    expect(match.match.layouts).toEqual([RootLayout, BlogLayout]);
+  });
+
   it("treats files without page-compatible GET as not found", async () => {
     const manifest = unstable_createRouteManifest({
       "./routes/api/health.tsx": routeModule({

@@ -11,9 +11,11 @@ describe("typed route manifest generator", () => {
     const outputFile = join(root, "routes.d.ts");
 
     await mkdir(join(routesDir, "blog"), { recursive: true });
+    await mkdir(join(routesDir, "(admin)"), { recursive: true });
     await writeFile(join(routesDir, "index.tsx"), "export {}");
     await writeFile(join(routesDir, "blog", "index.tsx"), "export {}");
     await writeFile(join(routesDir, "blog", "[slug].tsx"), "export {}");
+    await writeFile(join(routesDir, "(admin)", "users.tsx"), "export {}");
     await writeFile(join(routesDir, "@layout.tsx"), "export {}");
 
     await generateRoutes({ outputFile, routesDir });
@@ -24,6 +26,8 @@ describe("typed route manifest generator", () => {
     expect(source).toContain('"/blog": {};');
     expect(source).toContain('"/blog/[slug]": { slug: PathValue };');
     expect(source).toContain('"/blog/[slug]": `/blog/${PathValue}`;');
+    expect(source).toContain('"/users": {};');
     expect(source).not.toContain("@layout");
+    expect(source).not.toContain("(admin)");
   });
 });

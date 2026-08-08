@@ -50,6 +50,10 @@ function toRouteInfo(routesDir: string, file: string) {
   }
 
   const urlSegments = fileSegments.flatMap((segment) => {
+    if (isRouteGroupSegment(segment)) {
+      return [];
+    }
+
     if (segment === "index") {
       return [];
     }
@@ -66,6 +70,10 @@ function toRouteInfo(routesDir: string, file: string) {
   });
 
   const pathVars = fileSegments.flatMap((segment) => {
+    if (isRouteGroupSegment(segment)) {
+      return [];
+    }
+
     if (segment.startsWith("[...") && segment.endsWith("]")) {
       return [segment.slice(4, -1)];
     }
@@ -81,6 +89,10 @@ function toRouteInfo(routesDir: string, file: string) {
     pathVars,
     pattern: `/${urlSegments.join("/")}`.replace(/\/$/, "") || "/",
   };
+}
+
+function isRouteGroupSegment(segment: string) {
+  return segment.startsWith("(") && segment.endsWith(")");
 }
 
 function renderRoutesModule(routes: RouteInfo[]) {
