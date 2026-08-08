@@ -262,6 +262,7 @@ The first request-limit slice supports helper-attached request body limits:
 export const POST = text(({ request }) => request.text(), {
   security: {
     request: {
+      allowedMethods: ["POST"],
       maxBodySize: "1mb",
     },
   },
@@ -271,6 +272,9 @@ export const POST = text(({ request }) => request.text(), {
 The server and Vite dev handlers reject requests whose declared
 `Content-Length` exceeds the route limit before the handler reads the body.
 Malformed declared lengths on limited routes fail with `400`.
+Route-level `allowedMethods` additionally returns `405` before the handler runs
+when a route capability exists but policy disallows that method. `HEAD` is
+allowed when `GET` is allowed.
 
 ## Uploads
 

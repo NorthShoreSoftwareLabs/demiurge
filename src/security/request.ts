@@ -1,3 +1,4 @@
+import type { HttpMethod } from "../route/types";
 import type { RequestSecurityPolicy } from "./types";
 
 const byteUnits = {
@@ -10,7 +11,14 @@ const byteUnits = {
 export function enforceRequestSecurity(
   policy: RequestSecurityPolicy | undefined,
   request: Request,
+  method: HttpMethod,
 ) {
+  const methodResponse = enforceAllowedMethods(policy, method);
+
+  if (methodResponse) {
+    return methodResponse;
+  }
+
   if (!policy?.maxBodySize) {
     return null;
   }
@@ -38,6 +46,26 @@ export function enforceRequestSecurity(
   }
 
   return null;
+}
+
+export function enforceAllowedMethods(
+  policy: RequestSecurityPolicy | undefined,
+  method: HttpMethod,
+) {
+  if (!policy?.allowedMethods) {
+    return null;
+  }
+
+  if (isAllowedMethod(policy.allowedMethods, method)) {
+    return null;
+  }
+
+  return new Response(null, {
+    headers: {
+      allow: allowedMethodsHeader(policy.allowedMethods),
+    },
+    status: 405,
+  });
 }
 
 export function parseBodySize(value: number | string) {
@@ -75,4 +103,24 @@ function parseContentLength(value: string) {
 
   const contentLength = Number(value);
   return Number.isSafeInteger(contentLength) ? contentLength : null;
+}
+
+function isAllowedMethod(
+  allowedMethods: readonly HttpMethod[],
+  method: HttpMethod,
+) {
+  return (
+    allowedMethods.includes(method) ||
+    (method === "HEAD" && allowedMethods.includes("GET"))
+  );
+}
+
+function allowedMethodsHeader(allowedMethods: readonly HttpMethod[]) {
+  const methods = [...allowedMethods];
+
+  if (methods.includes("GET") && !methods.includes("HEAD")) {
+    methods.push("HEAD");
+  }
+
+  return methods.join(", ");
 }

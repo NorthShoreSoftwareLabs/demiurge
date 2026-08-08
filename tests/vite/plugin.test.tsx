@@ -117,6 +117,35 @@ describe("Vite plugin dev request handling", () => {
     expect(handlerSpy).not.toHaveBeenCalled();
   });
 
+  it("enforces request allowed methods in Vite dev", async () => {
+    const handlerSpy = vi.fn(() => "deleted");
+    const manifest = unstable_createRouteManifest({
+      "./routes/api/profile.tsx": routeModule({
+        DELETE: text(handlerSpy, {
+          security: {
+            request: {
+              allowedMethods: ["POST"],
+            },
+          },
+        }),
+      }),
+    });
+
+    const result = await unstable_handleDevRequest(
+      manifest,
+      new Request("https://example.test/api/profile", {
+        method: "DELETE",
+      }),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    if (!(result instanceof Response)) return;
+
+    expect(result.status).toBe(405);
+    expect(result.headers.get("allow")).toBe("POST");
+    expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
   it("enforces CSRF protection in Vite dev", async () => {
     const handlerSpy = vi.fn(({ request }: { request: Request }) => request.text());
     const manifest = unstable_createRouteManifest({

@@ -91,6 +91,7 @@ export async function handleRequestWithManifest(
   const requestSecurityResponse = enforceRequestSecurity(
     capability.security?.request,
     request,
+    method,
   );
 
   if (requestSecurityResponse) {

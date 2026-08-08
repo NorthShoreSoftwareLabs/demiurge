@@ -79,6 +79,7 @@ export type CsrfPolicy = true | {
 };
 
 export type RequestSecurityPolicy = {
+  allowedMethods?: readonly HttpMethod[];
   maxBodySize?: number | `${number}${"b" | "gb" | "kb" | "mb"}`;
 };
 

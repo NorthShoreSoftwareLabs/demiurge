@@ -313,6 +313,93 @@ describe("request handler", () => {
     await expect(response.text()).resolves.toBe("Invalid Content-Length.");
   });
 
+  it("rejects methods disallowed by route request policy", async () => {
+    const handlerSpy = vi.fn(() => "deleted");
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          DELETE: text(handlerSpy, {
+            security: {
+              request: {
+                allowedMethods: ["POST"],
+              },
+            },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        method: "DELETE",
+      }),
+    );
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("POST");
+    expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
+  it("allows HEAD when route request policy allows GET", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          GET: text("ok", {
+            security: {
+              request: {
+                allowedMethods: ["GET"],
+              },
+            },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        method: "HEAD",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("allow")).toBe(null);
+    await expect(response.text()).resolves.toBe("");
+  });
+
+  it("keeps CORS headers on allowed-method rejections", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          DELETE: text("deleted", {
+            cors: {
+              origins: ["https://app.example.com"],
+            },
+            security: {
+              request: {
+                allowedMethods: ["POST"],
+              },
+            },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        headers: {
+          origin: "https://app.example.com",
+        },
+        method: "DELETE",
+      }),
+    );
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("POST");
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+  });
+
   it("keeps CORS headers on request size rejections", async () => {
     const handler = createRequestHandler({
       routes: {

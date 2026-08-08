@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createCorsHeaders,
   createSecurityHeaders,
+  enforceAllowedMethods,
   parseCookieHeader,
   parseBodySize,
   security,
@@ -248,6 +249,17 @@ describe("request security policy", () => {
     expect(() => parseBodySize("10tb")).toThrow(
       "Demiurge request maxBodySize must use bytes or a b/kb/mb/gb suffix.",
     );
+  });
+
+  it("enforces explicit request allowed methods", () => {
+    expect(enforceAllowedMethods(undefined, "POST")).toBe(null);
+    expect(enforceAllowedMethods({ allowedMethods: ["POST"] }, "POST")).toBe(null);
+    expect(enforceAllowedMethods({ allowedMethods: ["GET"] }, "HEAD")).toBe(null);
+
+    const response = enforceAllowedMethods({ allowedMethods: ["GET"] }, "POST");
+
+    expect(response?.status).toBe(405);
+    expect(response?.headers.get("allow")).toBe("GET, HEAD");
   });
 });
 

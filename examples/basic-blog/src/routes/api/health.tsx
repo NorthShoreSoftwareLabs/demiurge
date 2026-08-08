@@ -13,6 +13,7 @@ export const POST = text(({ request }) => request.text(), {
   security: {
     csrf: true,
     request: {
+      allowedMethods: ["POST"],
       maxBodySize: "1kb",
     },
   },

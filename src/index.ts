@@ -4,6 +4,7 @@ export {
   createCorsHeaders,
   createSecurityHeaders,
   enforceCsrfProtection,
+  enforceAllowedMethods,
   enforceRequestSecurity,
   parseCookieHeader,
   parseBodySize,

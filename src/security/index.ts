@@ -13,6 +13,7 @@ export {
   security,
 } from "./policy";
 export {
+  enforceAllowedMethods,
   enforceRequestSecurity,
   parseBodySize,
 } from "./request";
