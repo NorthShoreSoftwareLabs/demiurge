@@ -21,6 +21,7 @@ export {
   resolveMetadata,
   resolveScripts,
   script,
+  structuredData,
 } from "./document";
 export { href } from "./routing";
 export {
@@ -83,6 +84,8 @@ export type {
   ScriptContribution,
   ScriptStrategy,
   ScriptTag,
+  StructuredDataTag,
+  StructuredDataValue,
 } from "./document";
 export type {
   AppHref,

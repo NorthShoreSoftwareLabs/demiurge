@@ -561,14 +561,23 @@ defineMetadata({
     meta({ name: "theme-color", content: "#ffffff" }),
     link({ rel: "alternate", hrefLang: "es", href: "/es" }),
   ],
+  structuredData: [
+    structuredData({
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "Demiurge",
+    }),
+  ],
 });
 ```
 
 Metadata resolution should happen before document streaming starts because
 titles, canonical links, preload hints, and CSP headers must be known early.
 The first metadata slice exposes `defineMetadata(...)`, `meta(...)`, `link(...)`,
-and `resolveMetadata(...)`, then resolves inherited layout metadata plus the
-leaf route metadata during route loading.
+`structuredData(...)`, and `resolveMetadata(...)`, then resolves inherited
+layout metadata plus the leaf route metadata during route loading. Structured
+data renders as escaped JSON-LD and receives the document nonce when one is
+available.
 
 ## Scripts
 

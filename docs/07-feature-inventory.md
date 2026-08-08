@@ -112,7 +112,7 @@ implementation.
 | Managed `<Script />` | designed |
 | Static versus render-discovered script model | designed |
 | Resource hints: preload/preconnect/modulepreload | implemented |
-| Structured data | designed |
+| Structured data | implemented |
 | Sitemap and robots generation | designed |
 | OG image generation | designed |
 

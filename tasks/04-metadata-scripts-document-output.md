@@ -38,6 +38,8 @@ routes, including scripts that may be statically declared or render-discovered.
 
 - `defineMetadata(...)`, `meta(...)`, `link(...)`, and `resolveMetadata(...)`
   provide typed app-owned metadata objects with default charset and viewport.
+- `structuredData(...)` adds typed JSON-LD entries to metadata and document
+  output renders them with escaping and the document nonce when available.
 - Page route loading resolves inherited layout metadata root-to-leaf, then leaf
   route metadata, including title defaults, title formatters, structured fields,
   Open Graph defaults, and custom metadata entries.

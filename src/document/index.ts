@@ -10,6 +10,7 @@ export {
   link,
   meta,
   resolveMetadata,
+  structuredData,
 } from "./metadata";
 export {
   defineScripts,
@@ -30,6 +31,8 @@ export type {
   OpenGraphMetadata,
   ResolvedMetadata,
   RobotsMetadata,
+  StructuredDataTag,
+  StructuredDataValue,
 } from "./metadata";
 export type {
   ScriptContribution,

@@ -68,6 +68,25 @@ alternates()
 structuredData()
 ```
 
+The first structured data slice supports JSON-LD entries inside route/layout
+metadata:
+
+```ts
+defineMetadata({
+  structuredData: [
+    structuredData({
+      "@context": "https://schema.org",
+      "@type": "Article",
+      headline: "File based routing",
+    }),
+  ],
+});
+```
+
+Resolved document output emits these entries as escaped
+`application/ld+json` scripts and applies the document nonce when one is
+available.
+
 The framework should emit default charset and viewport metadata unless the app
 intentionally overrides them.
 

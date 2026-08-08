@@ -33,12 +33,26 @@ export type LinkTag = {
   type?: string;
 };
 
+export type StructuredDataValue =
+  | boolean
+  | null
+  | number
+  | string
+  | readonly StructuredDataValue[]
+  | { readonly [key: string]: StructuredDataValue };
+
+export type StructuredDataTag = {
+  kind: "structured-data";
+  value: StructuredDataValue;
+};
+
 export type Metadata = {
   canonical?: string;
   custom?: readonly DocumentMetadataTag[];
   description?: string;
   openGraph?: OpenGraphMetadata;
   robots?: RobotsMetadata;
+  structuredData?: readonly StructuredDataTag[];
   title?: MetadataTitle;
 };
 
@@ -51,6 +65,7 @@ export type ResolvedMetadata = {
   description?: string;
   openGraph?: OpenGraphMetadata;
   robots?: RobotsMetadata;
+  structuredData: StructuredDataTag[];
   title?: string;
   viewport: "width=device-width, initial-scale=1";
 };
@@ -73,11 +88,19 @@ export function link(tag: Omit<LinkTag, "kind">): LinkTag {
   };
 }
 
+export function structuredData(value: StructuredDataValue): StructuredDataTag {
+  return {
+    kind: "structured-data",
+    value,
+  };
+}
+
 export function resolveMetadata(
   ...metadataEntries: Array<Metadata | false | undefined>
 ): ResolvedMetadata {
   const state: MetadataState = {
     custom: [],
+    structuredData: [],
   };
 
   for (const metadata of metadataEntries) {
@@ -99,6 +122,7 @@ export function resolveMetadata(
     description,
     openGraph,
     robots: state.robots,
+    structuredData: state.structuredData,
     title,
     viewport: "width=device-width, initial-scale=1",
   };
@@ -110,6 +134,7 @@ type MetadataState = {
   description?: string;
   openGraph?: OpenGraphMetadata;
   robots?: RobotsMetadata;
+  structuredData: StructuredDataTag[];
   title?: string;
   titleDefault?: string;
   titleFormat?: (title: string) => string;
@@ -142,6 +167,10 @@ function applyMetadata(state: MetadataState, metadata: Metadata) {
 
   if (metadata.custom) {
     state.custom.push(...metadata.custom);
+  }
+
+  if (metadata.structuredData) {
+    state.structuredData.push(...metadata.structuredData);
   }
 }
 

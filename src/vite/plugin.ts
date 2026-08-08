@@ -10,6 +10,7 @@ import type {
   LinkTag,
   ResolvedMetadata,
   ScriptTag,
+  StructuredDataTag,
 } from "../document";
 import { generateRoutes } from "../routing/generate";
 import {
@@ -307,7 +308,7 @@ export function createDocumentHtml({
   return `<!doctype html>
 <html lang="${escapeHtml(lang)}">
   <head>
-${renderHeadTags({ links, metadata, title: documentTitle })}
+${renderHeadTags({ links, metadata, nonce, title: documentTitle })}
   </head>
   <body>
     <div id="root"></div>
@@ -320,10 +321,12 @@ ${scripts.map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`).join("\
 function renderHeadTags({
   links,
   metadata,
+  nonce,
   title,
 }: {
   links: LinkTag[];
   metadata: ResolvedMetadata | undefined;
+  nonce: string | undefined;
   title: string;
 }) {
   return [
@@ -359,6 +362,9 @@ function renderHeadTags({
     ...renderRobotsTags(metadata),
     ...renderOpenGraphTags(metadata),
     ...(metadata?.custom ?? []).map(renderDocumentMetadataTag),
+    ...(metadata?.structuredData ?? []).map((tag) =>
+      renderStructuredDataTag(tag, nonce),
+    ),
     ...links.map(renderLinkTag),
   ].join("\n");
 }
@@ -420,6 +426,13 @@ function renderDocumentMetadataTag(tag: DocumentMetadataTag) {
   return renderMetaTag(tag);
 }
 
+function renderStructuredDataTag(
+  tag: StructuredDataTag,
+  nonce: string | undefined,
+) {
+  return `    <script type="application/ld+json"${renderAttribute("nonce", nonce)}>${escapeJsonScript(JSON.stringify(tag.value))}</script>`;
+}
+
 function renderMetaTag(tag: DocumentMetadataTag & { kind: "meta" }) {
   if (tag.name === "charset") {
     return `    <meta charset="${escapeHtml(tag.content)}" />`;
@@ -457,6 +470,14 @@ function escapeHtml(value: string) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function escapeJsonScript(value: string) {
+  return value
+    .replaceAll("<", "\\u003c")
+    .replaceAll(">", "\\u003e")
+    .replaceAll("\u2028", "\\u2028")
+    .replaceAll("\u2029", "\\u2029");
 }
 
 function findClientEntryChunk(bundle: OutputBundle) {

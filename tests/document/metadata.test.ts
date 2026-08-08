@@ -4,6 +4,7 @@ import {
   link,
   meta,
   resolveMetadata,
+  structuredData,
 } from "demiurge";
 
 describe("document metadata", () => {
@@ -92,5 +93,28 @@ describe("document metadata", () => {
       { content: "#ffffff", kind: "meta", name: "theme-color" },
       { href: "/feed.xml", kind: "link", rel: "alternate" },
     ]);
+  });
+
+  it("collects structured data entries from parent to child metadata", () => {
+    const organization = structuredData({
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: "Demiurge",
+    });
+    const article = structuredData({
+      "@context": "https://schema.org",
+      "@type": "Article",
+      headline: "File based routing",
+    });
+    const metadata = resolveMetadata(
+      defineMetadata({
+        structuredData: [organization],
+      }),
+      defineMetadata({
+        structuredData: [article],
+      }),
+    );
+
+    expect(metadata.structuredData).toEqual([organization, article]);
   });
 });

@@ -17,6 +17,7 @@ import {
   redirect,
   resolveMetadata,
   script,
+  structuredData,
   text,
   webhook,
   type RouteModule,
@@ -736,9 +737,17 @@ describe("Vite plugin document runtime", () => {
             follow: false,
             index: false,
           },
+          structuredData: [
+            structuredData({
+              "@context": "https://schema.org",
+              "@type": "Article",
+              headline: "Checkout </script>",
+            }),
+          ],
           title: "Checkout <Secure>",
         }),
       ),
+      nonce: "doc-nonce",
       scripts: [
         script({
           async: true,
@@ -768,6 +777,9 @@ describe("Vite plugin document runtime", () => {
     expect(html).toContain('<meta name="theme-color" content="#fff" />');
     expect(html).toContain('<link rel="alternate" href="/feed.xml" />');
     expect(html).toContain(
+      '<script type="application/ld+json" nonce="doc-nonce">{"@context":"https://schema.org","@type":"Article","headline":"Checkout \\u003c/script\\u003e"}</script>',
+    );
+    expect(html).toContain(
       '<link rel="preconnect" href="https://api.example.com" crossorigin="anonymous" />',
     );
     expect(html).toContain(
@@ -780,10 +792,10 @@ describe("Vite plugin document runtime", () => {
       '<script src="https://cdn.example.com/app.js" nonce="abc123" integrity="sha384-demo" async></script>',
     );
     expect(html).toContain(
-      '<script src="/assets/module.js" type="module"></script>',
+      '<script src="/assets/module.js" type="module" nonce="doc-nonce"></script>',
     );
     expect(html).toContain(
-      '<script type="module" src="/assets/app.js"></script>',
+      '<script type="module" src="/assets/app.js" nonce="doc-nonce"></script>',
     );
   });
 
