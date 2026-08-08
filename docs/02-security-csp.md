@@ -351,6 +351,23 @@ Framework responsibilities:
 - Type event payloads when integration packages can provide types.
 - Provide replay/timestamp validation hooks.
 
+The first webhook slice provides a generic HMAC helper:
+
+```ts
+import { webhook } from "demiurge";
+
+export const POST = webhook.hmac({
+  secret: env.WEBHOOK_SECRET,
+  handler: async ({ rawBody }) => {
+    return Response.json({ received: rawBody.length });
+  },
+});
+```
+
+The helper reads and preserves the raw body, verifies the configured signature
+header before the app handler runs, and marks CSRF disabled for the verified
+webhook route. Provider-specific helpers can build on this primitive.
+
 ## Trusted Types
 
 Trusted Types should be an opt-in strict preset, not silently enabled for every

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
-import { json, page, redirect, text, type RouteModule, type RouteProps } from "demiurge";
+import { json, page, redirect, text, webhook, type RouteModule, type RouteProps } from "demiurge";
 import { unstable_createRouteManifest } from "demiurge/internal/testing";
 import {
   demiurge,
@@ -214,6 +214,36 @@ describe("Vite plugin dev request handling", () => {
     expect(result.status).toBe(403);
     await expect(result.text()).resolves.toBe("Invalid CSRF token.");
     expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
+  it("verifies HMAC webhooks in Vite dev", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/api/webhook.tsx": routeModule({
+        POST: webhook.hmac({
+          handler: ({ rawBody }) => Response.json({ rawBody }),
+          secret: "top-secret",
+        }),
+      }),
+    });
+    const body = "{\"vite\":true}";
+    const signature = await hmacSignature(body, "top-secret");
+
+    const result = await unstable_handleDevRequest(
+      manifest,
+      new Request("https://example.test/api/webhook", {
+        body,
+        headers: {
+          "x-webhook-signature": signature,
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    if (!(result instanceof Response)) return;
+
+    expect(result.status).toBe(200);
+    await expect(result.json()).resolves.toEqual({ rawBody: body });
   });
 
   it("serves redirects", async () => {
@@ -728,4 +758,26 @@ class CapturingResponse extends Writable {
     this.body += chunk.toString();
     callback();
   }
+}
+
+async function hmacSignature(body: string, secret: string) {
+  const key = await globalThis.crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    {
+      hash: "SHA-256",
+      name: "HMAC",
+    },
+    false,
+    ["sign"],
+  );
+  const signature = await globalThis.crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(body),
+  );
+
+  return Array.from(new Uint8Array(signature), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 }

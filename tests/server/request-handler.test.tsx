@@ -5,6 +5,7 @@ import {
   page,
   redirect,
   text,
+  webhook,
   type RouteModule,
   type RouteProps,
 } from "demiurge";
@@ -655,6 +656,74 @@ describe("request handler", () => {
     );
   });
 
+  it("verifies HMAC webhooks and preserves the raw body", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/webhook.tsx": routeModule({
+          POST: webhook.hmac({
+            handler: ({ rawBody }) => Response.json({ rawBody }),
+            secret: "top-secret",
+          }),
+        }),
+      },
+    });
+    const body = "{\"ok\":true}";
+    const signature = await hmacSignature(body, "top-secret");
+
+    const response = await handler(
+      new Request("https://example.test/api/webhook", {
+        body,
+        headers: {
+          "x-webhook-signature": `sha256=${signature}`,
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ rawBody: body });
+  });
+
+  it("rejects webhooks with missing or invalid HMAC signatures", async () => {
+    const handlerSpy = vi.fn(() => Response.json({ ok: true }));
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/webhook.tsx": routeModule({
+          POST: webhook.hmac({
+            handler: handlerSpy,
+            secret: "top-secret",
+          }),
+        }),
+      },
+    });
+
+    const missingSignature = await handler(
+      new Request("https://example.test/api/webhook", {
+        body: "{}",
+        method: "POST",
+      }),
+    );
+    const invalidSignature = await handler(
+      new Request("https://example.test/api/webhook", {
+        body: "{}",
+        headers: {
+          "x-webhook-signature": "sha256=bad",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(missingSignature.status).toBe(401);
+    await expect(missingSignature.text()).resolves.toBe(
+      "Missing webhook signature.",
+    );
+    expect(invalidSignature.status).toBe(401);
+    await expect(invalidSignature.text()).resolves.toBe(
+      "Invalid webhook signature.",
+    );
+    expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
   it("returns not found for missing routes", async () => {
     const handler = createRequestHandler({ routes: {} });
 
@@ -680,3 +749,25 @@ describe("request handler", () => {
     );
   });
 });
+
+async function hmacSignature(body: string, secret: string) {
+  const key = await globalThis.crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    {
+      hash: "SHA-256",
+      name: "HMAC",
+    },
+    false,
+    ["sign"],
+  );
+  const signature = await globalThis.crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(body),
+  );
+
+  return Array.from(new Uint8Array(signature), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}

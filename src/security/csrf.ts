@@ -49,7 +49,7 @@ export function parseCookieHeader(header: string | null) {
   return cookies;
 }
 
-function normalizeCsrfPolicy(policy: CsrfPolicy) {
+function normalizeCsrfPolicy(policy: Exclude<CsrfPolicy, false>) {
   if (policy === true) {
     return {
       cookie: "csrf-token",

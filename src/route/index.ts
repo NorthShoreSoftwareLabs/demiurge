@@ -8,6 +8,13 @@ export {
   text,
   toResponse,
 } from "./response";
+export { webhook } from "./webhook";
+export type {
+  WebhookHmacAlgorithm,
+  WebhookHmacContext,
+  WebhookHmacEncoding,
+  WebhookHmacOptions,
+} from "./webhook";
 export type {
   HtmlCapability,
   HttpRouteContext,

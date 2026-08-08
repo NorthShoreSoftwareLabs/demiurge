@@ -73,7 +73,7 @@ export type CorsResponseOptions =
     preflight?: false;
   };
 
-export type CsrfPolicy = true | {
+export type CsrfPolicy = false | true | {
   cookie?: string;
   header?: string;
 };

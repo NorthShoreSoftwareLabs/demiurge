@@ -40,6 +40,8 @@ with React rendering modes instead of being left to user middleware.
   dev in-memory storage.
 - Explicit helper-attached CSRF protection for unsafe methods with configurable
   cookie/header token names.
+- Generic HMAC webhook helper that preserves raw bodies and rejects missing or
+  invalid signatures before the app handler runs.
 
 ## Examples Required
 
