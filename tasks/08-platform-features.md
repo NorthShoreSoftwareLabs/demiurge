@@ -33,6 +33,10 @@ document/security systems instead of added through unsafe snippets.
 
 ## Implemented Slices
 
+- `defineImages(...)`, `isAllowedImageSource(...)`, and
+  `planImageTransform(...)` provide the first image optimization foundation:
+  local/remote source validation, explicit remote allowlists, deterministic
+  optimizer URLs, responsive variants, and loading/fetch-priority planning.
 - `serverTiming(...)` attaches typed `Server-Timing` metrics to route response
   helpers, and HTTP/Vite dev request handlers append the serialized header while
   preserving app-provided timing entries.

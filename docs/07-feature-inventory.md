@@ -120,8 +120,8 @@ implementation.
 
 | Feature | Status |
 | --- | --- |
-| Image optimization | designed |
-| Remote image allowlists | designed |
+| Image optimization | partially implemented |
+| Remote image allowlists | implemented |
 | Font optimization and self-hosted fonts | designed |
 | Analytics integrations | designed |
 | GTM integration with trust-boundary audit | designed |

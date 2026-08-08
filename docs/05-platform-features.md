@@ -231,12 +231,36 @@ Core image features:
 Remote images should require explicit allowlists:
 
 ```ts
-images: {
+defineImages({
   remote: [
     "https://images.example.com",
   ],
-}
+});
 ```
+
+The first image slice provides adapter-independent validation and transform
+planning:
+
+```ts
+const plan = planImageTransform(
+  {
+    src: post.hero,
+    alt: post.title,
+    width: 1200,
+    height: 630,
+    sizes: "(min-width: 900px) 900px, 100vw",
+    priority: true,
+  },
+  defineImages({
+    remote: ["https://images.example.com"],
+  }),
+);
+```
+
+The planner validates local and remote image sources, requires explicit remote
+allowlists, creates deterministic optimizer URLs and `srcset` variants, and
+sets loading/fetch-priority attributes. The actual `<Image>` component,
+optimizer route, and static image generation remain adapter work.
 
 ### Fonts
 

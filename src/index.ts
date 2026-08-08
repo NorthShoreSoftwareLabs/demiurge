@@ -29,6 +29,11 @@ export {
 } from "./document";
 export { href } from "./routing";
 export {
+  defineImages,
+  isAllowedImageSource,
+  planImageTransform,
+} from "./platform";
+export {
   createCorsHeaders,
   createMemoryRateLimitStore,
   createSecurityAudit,
@@ -98,6 +103,14 @@ export type {
   StructuredDataTag,
   StructuredDataValue,
 } from "./document";
+export type {
+  ImageFormat,
+  ImagePolicy,
+  ImageTransformOptions,
+  ImageTransformPlan,
+  ImageVariant,
+  RemoteImagePattern,
+} from "./platform";
 export type {
   AppHref,
   AppPath,
