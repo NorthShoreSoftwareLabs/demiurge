@@ -1,4 +1,7 @@
 export {
+  createSecurityAudit,
+} from "./audit";
+export {
   applyCorsHeaders,
   createCorsHeaders,
   createCorsPreflightResponse,
@@ -38,6 +41,9 @@ export type {
   RateLimitResult,
   RateLimitStore,
   ReferrerPolicy,
+  SecurityAudit,
+  SecurityAuditFinding,
+  SecurityAuditOptions,
   RequestSecurityPolicy,
   RouteSecurityPolicy,
   SecurityHeadersOptions,

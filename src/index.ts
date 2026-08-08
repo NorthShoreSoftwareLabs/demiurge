@@ -3,6 +3,7 @@ export { href } from "./routing";
 export {
   createCorsHeaders,
   createMemoryRateLimitStore,
+  createSecurityAudit,
   createSecurityHeaders,
   cspHash,
   enforceCsrfProtection,
@@ -80,6 +81,9 @@ export type {
   RateLimitResult,
   RateLimitStore,
   ReferrerPolicy,
+  SecurityAudit,
+  SecurityAuditFinding,
+  SecurityAuditOptions,
   RequestSecurityPolicy,
   RouteSecurityPolicy,
   SecurityHeadersOptions,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createCorsHeaders,
   createMemoryRateLimitStore,
+  createSecurityAudit,
   createSecurityHeaders,
   cspHash,
   enforceAllowedMethods,
@@ -146,6 +147,90 @@ describe("security policy headers", () => {
     expect(headers.get("strict-transport-security")).toBe(
       "max-age=63072000; includeSubDomains; preload",
     );
+  });
+});
+
+describe("security audit output", () => {
+  it("audits rendered document headers and effective route policy", () => {
+    const audit = createSecurityAudit({
+      document: {
+        headers: {
+          nonce: "audit",
+        },
+        policy: security.strict(),
+      },
+      route: {
+        cors: {
+          origins: ["https://app.example.com"],
+        },
+        method: "POST",
+        security: {
+          csrf: true,
+          rateLimit: {
+            key: "ip",
+            limit: 60,
+            window: "1m",
+          },
+          request: {
+            maxBodySize: "1mb",
+          },
+        },
+      },
+    });
+
+    expect(audit.headers["content-security-policy"]).toContain(
+      "script-src 'nonce-audit' 'strict-dynamic'",
+    );
+    expect(audit.route?.method).toBe("POST");
+    expect(audit.route?.security?.csrf).toBe(true);
+    expect(audit.findings).toEqual([]);
+  });
+
+  it("reports security header rendering failures", () => {
+    const audit = createSecurityAudit({
+      document: {
+        policy: security.strict(),
+      },
+    });
+
+    expect(audit.headers).toEqual({});
+    expect(audit.findings).toContainEqual({
+      code: "security-header-render-failed",
+      message: "Demiurge security policy requires a CSP nonce.",
+      severity: "error",
+    });
+  });
+
+  it("reports invalid CORS and missing unsafe route controls", () => {
+    const audit = createSecurityAudit({
+      route: {
+        cors: {
+          credentials: true,
+          origins: "*",
+        },
+        method: "POST",
+        security: {
+          csrf: false,
+        },
+      },
+    });
+
+    expect(audit.findings.map((finding) => finding.code)).toEqual([
+      "cors-invalid",
+      "csrf-disabled",
+      "rate-limit-missing",
+      "request-body-limit-missing",
+    ]);
+  });
+
+  it("does not warn safe route methods about unsafe-route controls", () => {
+    const audit = createSecurityAudit({
+      route: {
+        method: "GET",
+      },
+    });
+
+    expect(audit.findings).toEqual([]);
   });
 });
 

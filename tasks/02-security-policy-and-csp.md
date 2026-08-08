@@ -42,6 +42,8 @@ with React rendering modes instead of being left to user middleware.
   cookie/header token names.
 - Generic HMAC webhook helper that preserves raw bodies and rejects missing or
   invalid signatures before the app handler runs.
+- `createSecurityAudit(...)` for rendered header snapshots, effective route
+  policy inspection, and structured security findings.
 
 ## Examples Required
 

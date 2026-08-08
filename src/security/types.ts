@@ -112,6 +112,30 @@ export type RouteSecurityPolicy = {
   request?: RequestSecurityPolicy;
 };
 
+export type SecurityAuditFinding = {
+  code: string;
+  message: string;
+  severity: "error" | "info" | "warning";
+};
+
+export type SecurityAuditOptions = {
+  document?: {
+    headers?: SecurityHeadersOptions;
+    policy: SecurityPolicy;
+  };
+  route?: {
+    cors?: CorsPolicy;
+    method: HttpMethod;
+    security?: RouteSecurityPolicy;
+  };
+};
+
+export type SecurityAudit = {
+  findings: SecurityAuditFinding[];
+  headers: Record<string, string>;
+  route?: SecurityAuditOptions["route"];
+};
+
 export type SecurityHeaderPolicy = {
   contentTypeOptions?: "nosniff" | false;
   crossOriginEmbedderPolicy?: "require-corp" | "credentialless" | false;

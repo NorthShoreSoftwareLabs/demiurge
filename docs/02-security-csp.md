@@ -417,6 +417,34 @@ Compatibility strategy:
 Trusted Types belongs in the same audit surface as CSP because both are
 document/runtime security contracts.
 
+## Security Audit Output
+
+Implemented security policy should be inspectable without issuing a real
+request:
+
+```ts
+import { createSecurityAudit, security } from "demiurge";
+
+const audit = createSecurityAudit({
+  document: {
+    headers: { nonce },
+    policy: security.strict(),
+  },
+  route: {
+    method: "POST",
+    security: {
+      csrf: true,
+      rateLimit: { key: "ip", limit: 60, window: "1m" },
+      request: { maxBodySize: "1mb" },
+    },
+  },
+});
+```
+
+The first audit slice returns rendered headers, the effective route security
+policy passed to the audit, and structured findings for invalid CORS, missing
+unsafe-route controls, explicit CSRF exemptions, and header rendering failures.
+
 ## Per-Route Policy
 
 Routes should be able to tighten or loosen policy intentionally:
