@@ -332,11 +332,16 @@ export const GET = react({
 The framework should expose named presets:
 
 ```ts
-security.preset("strict")
-security.preset("cross-origin-isolated")
-security.preset("api")
-security.preset("public-assets")
+import { createSecurityHeaders, security } from "demiurge";
+
+createSecurityHeaders(security.preset("strict"), { nonce });
+createSecurityHeaders(security.preset("cross-origin-isolated"), { nonce });
+createSecurityHeaders(security.preset("api"));
 ```
+
+The first implemented slice exposes strict, cross-origin-isolated, and API
+presets plus deterministic header rendering. Strict CSP uses a nonce placeholder
+and fails if headers are rendered without the per-request nonce.
 
 ## Metadata And Document Contributions
 

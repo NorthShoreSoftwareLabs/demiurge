@@ -1,6 +1,6 @@
 # Security Policy And CSP
 
-Status: planned
+Status: in progress
 
 ## Goal
 
@@ -22,6 +22,13 @@ with React rendering modes instead of being left to user middleware.
   libraries.
 - COOP/COEP/CORP cross-origin isolation preset.
 - Security audit output showing effective route policy.
+
+## Implemented Slices
+
+- Public `security` helpers for strict, API, and cross-origin-isolated presets.
+- `createSecurityHeaders(...)` for deterministic CSP, security header, HSTS,
+  and Trusted Types header rendering.
+- Strict CSP nonce substitution fails closed when the nonce is missing.
 
 ## Examples Required
 

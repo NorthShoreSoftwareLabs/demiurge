@@ -1,5 +1,6 @@
 export { createFileRouter, Link } from "./browser";
 export { href } from "./routing";
+export { createSecurityHeaders, security } from "./security";
 export { createRequestHandler, handleRequestWithManifest } from "./server";
 export {
   html,
@@ -44,4 +45,16 @@ export type {
   RouteValue,
   TextCapability,
 } from "./route";
+export type {
+  ContentSecurityPolicy,
+  CspDirectiveValue,
+  CspSource,
+  ReferrerPolicy,
+  SecurityHeadersOptions,
+  SecurityHeaderPolicy,
+  SecurityPolicy,
+  SecurityPreset,
+  StrictTransportSecurityPolicy,
+  TrustedTypesPolicy,
+} from "./security";
 export type { RequestHandler, RequestHandlerOptions } from "./server";
