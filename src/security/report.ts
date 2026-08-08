@@ -1,0 +1,115 @@
+import { parseBodySize } from "./request";
+
+type MaybePromise<T> = Promise<T> | T;
+
+export type SecurityReportPayload = unknown;
+
+export type SecurityReportHandlerOptions = {
+  maxBodySize?: number | `${number}${"b" | "gb" | "kb" | "mb"}`;
+  onReport?: (
+    report: SecurityReportPayload,
+    context: SecurityReportContext,
+  ) => MaybePromise<void>;
+};
+
+export type SecurityReportContext = {
+  index: number;
+  request: Request;
+};
+
+export function createSecurityReportHandler(
+  options: SecurityReportHandlerOptions = {},
+) {
+  return async function handleSecurityReport(request: Request) {
+    if (request.method.toUpperCase() !== "POST") {
+      return new Response(null, {
+        headers: {
+          allow: "POST",
+        },
+        status: 405,
+      });
+    }
+
+    const bodySizeResponse = enforceReportBodySize(options, request);
+
+    if (bodySizeResponse) {
+      return bodySizeResponse;
+    }
+
+    let payload: unknown;
+
+    try {
+      payload = await request.json();
+    } catch {
+      return new Response("Invalid security report JSON.", {
+        status: 400,
+      });
+    }
+
+    const reports = normalizeSecurityReports(payload);
+
+    for (let index = 0; index < reports.length; index += 1) {
+      await options.onReport?.(reports[index], {
+        index,
+        request,
+      });
+    }
+
+    return new Response(null, {
+      status: 204,
+    });
+  };
+}
+
+function enforceReportBodySize(
+  options: SecurityReportHandlerOptions,
+  request: Request,
+) {
+  if (!options.maxBodySize) {
+    return null;
+  }
+
+  const contentLength = request.headers.get("content-length");
+
+  if (!contentLength) {
+    return null;
+  }
+
+  if (!/^\d+$/.test(contentLength)) {
+    return new Response("Invalid Content-Length.", {
+      status: 400,
+    });
+  }
+
+  const declaredSize = Number(contentLength);
+
+  if (!Number.isSafeInteger(declaredSize)) {
+    return new Response("Invalid Content-Length.", {
+      status: 400,
+    });
+  }
+
+  if (declaredSize > parseBodySize(options.maxBodySize)) {
+    return new Response("Security report body too large.", {
+      status: 413,
+    });
+  }
+
+  return null;
+}
+
+function normalizeSecurityReports(payload: unknown) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (isObject(payload) && "csp-report" in payload) {
+    return [payload["csp-report"]];
+  }
+
+  return [payload];
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}

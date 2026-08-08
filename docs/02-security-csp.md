@@ -323,6 +323,29 @@ response. Exact allowlists can use normalized origins such as
 URL's own origin. Missing origins are rejected unless the policy explicitly sets
 `allowMissingOrigin: true` for trusted non-browser clients.
 
+## Security Report Endpoint
+
+Applications should be able to collect browser security reports without writing
+ad hoc JSON parsing in every route:
+
+```ts
+import { createSecurityReportHandler, response } from "demiurge";
+
+const report = createSecurityReportHandler({
+  maxBodySize: "32kb",
+  onReport(payload) {
+    securityLogger.write(payload);
+  },
+});
+
+export const POST = response(({ request }) => report(request));
+```
+
+The first report endpoint slice accepts CSP report payloads and batched
+Reporting API arrays, calls an optional `onReport` callback once per normalized
+report, rejects non-POST methods with `405`, rejects malformed JSON with `400`,
+and enforces declared `Content-Length` against an optional `maxBodySize`.
+
 The first request-limit slice supports helper-attached request body limits:
 
 ```ts

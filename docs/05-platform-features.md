@@ -37,6 +37,9 @@ Core security features:
 - Built-in security report endpoint.
 - Build/runtime audit output.
 
+The first report endpoint slice exposes `createSecurityReportHandler(...)` for
+collecting CSP and Reporting API payloads through ordinary route capabilities.
+
 ### Metadata And SEO
 
 Metadata should be structured and cascading:

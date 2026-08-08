@@ -35,6 +35,9 @@ export {
   validateRateLimitPolicy,
 } from "./rate-limit";
 export {
+  createSecurityReportHandler,
+} from "./report";
+export {
   enforceAllowedMethods,
   enforceRequestSecurity,
   parseBodySize,
@@ -78,6 +81,11 @@ export type {
   EnvVariable,
   InferEnvSchema,
 } from "./env";
+export type {
+  SecurityReportContext,
+  SecurityReportHandlerOptions,
+  SecurityReportPayload,
+} from "./report";
 export type {
   WebSocketOriginCheck,
   WebSocketOriginPolicy,

@@ -54,6 +54,9 @@ with React rendering modes instead of being left to user middleware.
   dependency checks warn about undeclared third-party script purposes, missing
   integrity when required, early third-party execution, and Google Tag Manager's
   wide runtime trust boundary.
+- `createSecurityReportHandler(...)` provides a POST-only CSP/Reporting API
+  report ingestion helper with optional body-size enforcement and per-report
+  callbacks.
 
 ## Examples Required
 

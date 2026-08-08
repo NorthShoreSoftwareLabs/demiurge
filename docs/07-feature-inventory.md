@@ -86,7 +86,7 @@ implementation.
 | CSP auto mode for static/dynamic split | designed |
 | Strict CSP for streaming SSR | designed |
 | Strict CSP for RSC | designed |
-| Security report endpoint | designed |
+| Security report endpoint | implemented |
 | Typed CORS | designed |
 | CSRF defaults for cookie-auth unsafe methods | designed |
 | Rate limiting | designed |
