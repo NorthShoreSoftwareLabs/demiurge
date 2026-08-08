@@ -3,6 +3,7 @@ import {
   createRequestHandler,
   defineRoutePolicy,
   json,
+  jsonl,
   page,
   redirect,
   response as rawResponse,
@@ -138,6 +139,45 @@ describe("request handler", () => {
     );
     expect(response.headers.get("server-timing")).toBe("events;dur=2");
     await expect(response.text()).resolves.toBe("event: ready\ndata: ok\n\n");
+  });
+
+  it("serves JSON Lines responses", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/feed.tsx": routeModule({
+          GET: jsonl(
+            async function* lines() {
+              yield { id: 1 };
+              yield { id: 2 };
+            },
+            {
+              cors: {
+                origins: ["https://app.example.com"],
+              },
+              timing: { duration: 3, name: "feed" },
+            },
+          ),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/feed", {
+        headers: {
+          origin: "https://app.example.com",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "application/x-ndjson; charset=utf-8",
+    );
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+    expect(response.headers.get("server-timing")).toBe("feed;dur=3");
+    await expect(response.text()).resolves.toBe('{"id":1}\n{"id":2}\n');
   });
 
   it("strips server-sent event bodies for HEAD requests", async () => {

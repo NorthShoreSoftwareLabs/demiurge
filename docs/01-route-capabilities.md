@@ -24,6 +24,7 @@ MVP `0.0.1` implements `page(...)` plus the first HTTP response helpers:
 json(...)
 text(...)
 html(...)
+jsonl(...)
 redirect(...)
 notFound(...)
 response(...)
@@ -407,13 +408,12 @@ status(...)
 file(...)
 download(...)
 stream(...)
-jsonl(...)
 ```
 
-`stream(...)`, `jsonl(...)`, streamed SSR, and streamed RSC are all HTTP
-results. They should not be top-level route capabilities. `sse(...)` is the
-first implemented HTTP streaming helper and returns a normal response
-capability with `text/event-stream` headers.
+`stream(...)`, streamed SSR, and streamed RSC are all HTTP results. They should
+not be top-level route capabilities. `sse(...)` and `jsonl(...)` are the first
+implemented HTTP streaming helpers and return normal response capabilities with
+streaming content headers.
 
 ## Streaming Taxonomy
 

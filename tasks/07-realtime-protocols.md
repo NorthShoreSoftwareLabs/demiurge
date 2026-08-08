@@ -34,6 +34,10 @@ page or ordinary request/response endpoint.
   structured server-sent events from sync iterables, async iterables, and
   `ReadableStream` sources with `text/event-stream`, no-cache, and buffering
   control headers through both the request handler and Vite dev handler.
+- `jsonl(...)` serializes newline-delimited JSON streams from sync iterables,
+  async iterables, and `ReadableStream` sources with `application/x-ndjson`,
+  no-cache, and buffering control headers through both the request handler and
+  Vite dev handler.
 
 ## Open Decisions
 

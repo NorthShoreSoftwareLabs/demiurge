@@ -8,6 +8,7 @@ import {
   defineMetadata,
   defineScripts,
   json,
+  jsonl,
   link,
   meta,
   modulePreload,
@@ -112,6 +113,27 @@ describe("Vite plugin dev request handling", () => {
     await expect(result.text()).resolves.toBe(
       "event: status\ndata: ready\n\n",
     );
+  });
+
+  it("serves JSON Lines responses in Vite dev", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/api/feed.tsx": routeModule({
+        GET: jsonl([{ id: 1 }, { id: 2 }]),
+      }),
+    });
+
+    const result = await unstable_handleDevRequest(
+      manifest,
+      new Request("https://example.test/api/feed"),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    if (!(result instanceof Response)) return;
+
+    expect(result.headers.get("content-type")).toBe(
+      "application/x-ndjson; charset=utf-8",
+    );
+    await expect(result.text()).resolves.toBe('{"id":1}\n{"id":2}\n');
   });
 
   it("serves CORS preflight responses in Vite dev", async () => {

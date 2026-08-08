@@ -2,6 +2,8 @@ import type {
   HtmlCapability,
   HttpRouteContext,
   JsonCapability,
+  JsonLinesCapability,
+  JsonLinesSource,
   MaybePromise,
   NotFoundCapability,
   RawResponseCapability,
@@ -30,6 +32,20 @@ export function json<T>(
     value,
     init: withoutRouteOptions(init),
   } satisfies JsonCapability<T>;
+}
+
+export function jsonl(
+  lines: RouteValue<JsonLinesSource>,
+  init?: ResponseOptions,
+) {
+  return {
+    cors: init?.cors,
+    init: withoutRouteOptions(init),
+    kind: "jsonl",
+    lines,
+    security: init?.security,
+    timing: normalizeServerTiming(init?.timing),
+  } satisfies JsonLinesCapability;
 }
 
 export function text(value: RouteValue<string>, init?: ResponseOptions) {
@@ -137,6 +153,19 @@ export async function toResponse(
         ),
       });
     }
+    case "jsonl": {
+      return new Response(
+        createJsonLinesStream(await resolveValue(capability.lines, context)),
+        {
+          ...capability.init,
+          headers: withDefaultHeaders(capability.init?.headers, {
+            "cache-control": "no-cache",
+            "content-type": "application/x-ndjson; charset=utf-8",
+            "x-accel-buffering": "no",
+          }),
+        },
+      );
+    }
     case "text": {
       return new Response(await resolveValue(capability.value, context), {
         ...capability.init,
@@ -233,7 +262,7 @@ function withDefaultHeaders(
 
 function createSseStream(events: ServerSentEventSource) {
   const encoder = new TextEncoder();
-  const iterator = toSseAsyncIterator(events);
+  const iterator = toAsyncIteratorSource(events);
 
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
@@ -252,11 +281,32 @@ function createSseStream(events: ServerSentEventSource) {
   });
 }
 
-function toSseAsyncIterator(
-  events: ServerSentEventSource,
-): AsyncIterator<ServerSentEvent | string> {
-  if (events instanceof ReadableStream) {
-    const reader = events.getReader();
+function createJsonLinesStream(lines: JsonLinesSource) {
+  const encoder = new TextEncoder();
+  const iterator = toAsyncIteratorSource(lines);
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const next = await iterator.next();
+
+      if (next.done) {
+        controller.close();
+        return;
+      }
+
+      controller.enqueue(encoder.encode(`${JSON.stringify(next.value)}\n`));
+    },
+    async cancel() {
+      await iterator.return?.();
+    },
+  });
+}
+
+function toAsyncIteratorSource<T>(
+  source: Iterable<T> | AsyncIterable<T> | ReadableStream<T>,
+): AsyncIterator<T> {
+  if (source instanceof ReadableStream) {
+    const reader = source.getReader();
 
     return {
       async next() {
@@ -269,11 +319,11 @@ function toSseAsyncIterator(
     };
   }
 
-  if (Symbol.asyncIterator in events) {
-    return events[Symbol.asyncIterator]();
+  if (Symbol.asyncIterator in source) {
+    return source[Symbol.asyncIterator]();
   }
 
-  return toAsyncIterator(events[Symbol.iterator]());
+  return toAsyncIterator(source[Symbol.iterator]());
 }
 
 function toAsyncIterator<T>(iterator: Iterator<T>): AsyncIterator<T> {

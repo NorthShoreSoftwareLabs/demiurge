@@ -2,6 +2,7 @@ export { page } from "./page";
 export {
   html,
   json,
+  jsonl,
   notFound,
   redirect,
   response,
@@ -22,6 +23,8 @@ export type {
   HttpRouteContext,
   HttpMethod,
   JsonCapability,
+  JsonLinesCapability,
+  JsonLinesSource,
   LayoutProps,
   MaybePromise,
   NotFoundCapability,

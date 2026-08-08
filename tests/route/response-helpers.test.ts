@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   html,
   json,
+  jsonl,
   notFound,
   redirect,
   response,
@@ -28,6 +29,26 @@ describe("response helpers", () => {
       "application/json; charset=utf-8",
     );
     await expect(result.json()).resolves.toEqual({ ok: true });
+  });
+
+  it("creates JSON Lines streams", async () => {
+    const result = await toResponse(
+      jsonl([
+        { id: 1, title: "First" },
+        "plain",
+        null,
+      ]),
+      context,
+    );
+
+    expect(result.headers.get("content-type")).toBe(
+      "application/x-ndjson; charset=utf-8",
+    );
+    expect(result.headers.get("cache-control")).toBe("no-cache");
+    expect(result.headers.get("x-accel-buffering")).toBe("no");
+    await expect(result.text()).resolves.toBe(
+      '{"id":1,"title":"First"}\n"plain"\nnull\n',
+    );
   });
 
   it("creates text responses", async () => {

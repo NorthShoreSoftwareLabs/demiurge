@@ -59,6 +59,7 @@ export { createRequestHandler, handleRequestWithManifest } from "./server";
 export {
   html,
   json,
+  jsonl,
   notFound,
   page,
   redirect,
@@ -128,6 +129,8 @@ export type {
   HttpMethod,
   HttpRouteContext,
   JsonCapability,
+  JsonLinesCapability,
+  JsonLinesSource,
   LayoutProps,
   MaybePromise,
   NotFoundCapability,

@@ -118,6 +118,20 @@ export type JsonCapability<T = unknown> = {
   init?: ResponseInit;
 };
 
+export type JsonLinesSource =
+  | Iterable<unknown>
+  | AsyncIterable<unknown>
+  | ReadableStream<unknown>;
+
+export type JsonLinesCapability = {
+  cors?: CorsPolicy;
+  init?: ResponseInit;
+  kind: "jsonl";
+  lines: RouteValue<JsonLinesSource>;
+  security?: RouteSecurityPolicy;
+  timing?: readonly ServerTimingMetric[];
+};
+
 export type TextCapability = {
   cors?: CorsPolicy;
   kind: "text";
@@ -186,6 +200,7 @@ export type ServerSentEventsCapability = {
 
 export type ResponseCapability =
   | JsonCapability
+  | JsonLinesCapability
   | TextCapability
   | HtmlCapability
   | RedirectCapability
