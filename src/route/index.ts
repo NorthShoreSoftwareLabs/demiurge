@@ -44,5 +44,8 @@ export type {
   RoutePolicy,
   RouteProps,
   RouteValue,
+  StaticPath,
+  StaticPathsContext,
+  StaticPathsFunction,
   TextCapability,
 } from "./types";

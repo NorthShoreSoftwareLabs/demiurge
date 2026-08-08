@@ -1,4 +1,5 @@
 export {
+  collectStaticRoutePaths as unstable_collectStaticRoutePaths,
   createRouteManifest as unstable_createRouteManifest,
   findPageMatch as unstable_findPageMatch,
   findRouteMatch as unstable_findRouteMatch,

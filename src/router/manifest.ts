@@ -77,6 +77,13 @@ export type LoadedRouteMatch = {
   scripts: ScriptTag[];
 };
 
+export type StaticRoutePath = {
+  file: string;
+  path: PathVars;
+  pattern: string;
+  pathname: string;
+};
+
 export type PendingRouteMatch =
   | {
       error: unknown;
@@ -283,6 +290,55 @@ export async function loadPageRoute(
       ),
     },
   };
+}
+
+export async function collectStaticRoutePaths(
+  manifest: RouteManifest,
+): Promise<StaticRoutePath[]> {
+  const cache = createMemoryCache();
+  const paths: StaticRoutePath[] = [];
+
+  for (const route of manifest.routes) {
+    const routeModule = await route.load();
+
+    if (!routeModule.GET || routeModule.GET.kind !== "page") {
+      continue;
+    }
+
+    const pattern = toRoutePattern(route.segments);
+    const dynamicNames = getDynamicSegmentNames(route.segments);
+
+    if (dynamicNames.length === 0) {
+      paths.push({
+        file: route.file,
+        path: {},
+        pattern,
+        pathname: pattern,
+      });
+      continue;
+    }
+
+    if (!routeModule.paths) {
+      throw new Error(
+        `Dynamic static route "${route.file}" must export paths for "${pattern}".`,
+      );
+    }
+
+    const routePaths = await routeModule.paths({ cache });
+
+    for (const path of routePaths) {
+      const normalizedPath = normalizeStaticPath(route, pattern, path);
+
+      paths.push({
+        file: route.file,
+        path: normalizedPath,
+        pattern,
+        pathname: fillStaticPathname(route.segments, normalizedPath),
+      });
+    }
+  }
+
+  return paths;
 }
 
 export async function loadLoadingFallback(
@@ -513,6 +569,97 @@ export function toRouteSegments(fileSegments: string[]) {
 
 export function isRouteGroupSegment(segment: string) {
   return segment.startsWith("(") && segment.endsWith(")");
+}
+
+function toRoutePattern(routeSegments: string[]) {
+  if (routeSegments.length === 0) {
+    return "/";
+  }
+
+  return `/${routeSegments.map(toRoutePatternSegment).join("/")}`;
+}
+
+function toRoutePatternSegment(segment: string) {
+  if (segment.startsWith("*")) {
+    return `[...${segment.slice(1)}]`;
+  }
+
+  if (segment.startsWith(":")) {
+    return `[${segment.slice(1)}]`;
+  }
+
+  return segment;
+}
+
+function getDynamicSegmentNames(routeSegments: string[]) {
+  return routeSegments.flatMap((segment) => {
+    if (segment.startsWith(":") || segment.startsWith("*")) {
+      return [segment.slice(1)];
+    }
+
+    return [];
+  });
+}
+
+function normalizeStaticPath(
+  route: RouteRecord,
+  pattern: string,
+  path: Record<string, unknown>,
+) {
+  const normalizedPath: PathVars = {};
+
+  for (const segment of route.segments) {
+    if (!segment.startsWith(":") && !segment.startsWith("*")) {
+      continue;
+    }
+
+    const name = segment.slice(1);
+    const value = path[name];
+
+    if (value === undefined) {
+      throw new Error(
+        `Static paths for "${route.file}" must include "${name}" for "${pattern}".`,
+      );
+    }
+
+    if (!isStaticPathValue(value)) {
+      throw new Error(
+        `Static path "${name}" for "${route.file}" must be a string, number, or boolean.`,
+      );
+    }
+
+    normalizedPath[name] = String(value);
+  }
+
+  return normalizedPath;
+}
+
+function isStaticPathValue(value: unknown): value is string | number | boolean {
+  return (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
+}
+
+function fillStaticPathname(routeSegments: string[], path: PathVars) {
+  const pathname = routeSegments.map((segment) => {
+    if (segment.startsWith("*")) {
+      return path[segment.slice(1)]
+        .split("/")
+        .filter(Boolean)
+        .map(encodeURIComponent)
+        .join("/");
+    }
+
+    if (segment.startsWith(":")) {
+      return encodeURIComponent(path[segment.slice(1)]);
+    }
+
+    return encodeURIComponent(segment);
+  }).filter(Boolean).join("/");
+
+  return `/${pathname}`;
 }
 
 export function scoreRoute(fileSegments: string[]) {

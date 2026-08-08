@@ -48,6 +48,8 @@ handlers and React server components without hiding when work runs.
   `parseCacheDuration(...)` cover the first cache key/tag behavior tests.
 - `page({ data, view })` resolves route-level page data with the matched
   request context and a request-scoped framework cache during route loading.
+- Route modules can export typed `paths`, and static path collection validates
+  dynamic route entries before expanding them into concrete encoded pathnames.
 
 ## Open Decisions
 

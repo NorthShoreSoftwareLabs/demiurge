@@ -113,18 +113,7 @@ to answer one question at build time:
 
 > Which concrete path variable sets should this dynamic route generate?
 
-Candidate API:
-
-```ts
-export const static = page.static({
-  paths: async ({ cache }) => {
-    const posts = await cache.get(allPostSlugsQuery());
-    return posts.map((post) => ({ slug: post.slug }));
-  },
-});
-```
-
-or a route export:
+Implemented API direction:
 
 ```ts
 export const paths = async ({ cache }) => {

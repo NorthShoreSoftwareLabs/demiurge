@@ -74,7 +74,7 @@ implementation.
 | Client router refresh/prefetch separate from server invalidation | designed |
 | Actions/mutations | designed |
 | Idempotency for retryable mutations | designed |
-| Static `paths` export for dynamic static generation | designed |
+| Static `paths` export for dynamic static generation | partially implemented |
 
 ## Security
 

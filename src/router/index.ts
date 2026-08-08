@@ -1,4 +1,5 @@
 export {
+  collectStaticRoutePaths,
   createRouteManifest,
   findPageMatch,
   findRouteMatch,
@@ -21,4 +22,5 @@ export type {
   PolicyRoute,
   RouteRecord,
   RouteManifest,
+  StaticRoutePath,
 } from "./manifest";

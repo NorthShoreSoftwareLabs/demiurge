@@ -265,6 +265,12 @@ This is more precise than `params` and more minimal than
 `defineStaticParams(...)`. Add a helper only if it unlocks better inference or
 validation.
 
+The first static paths slice exposes the typed `paths` route export and a
+validated framework collector for static adapters. The collector includes
+non-dynamic page routes automatically, requires dynamic page routes to export
+`paths`, validates every dynamic and catchall variable, and expands entries into
+encoded concrete pathnames. It does not yet emit static HTML artifacts.
+
 Use this vocabulary:
 
 - `path`: runtime variables extracted from dynamic path segments.

@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   page,
+  query,
   type LayoutProps,
   type RouteModule,
   type RoutePolicy,
   type RouteProps,
 } from "demiurge";
 import {
+  unstable_collectStaticRoutePaths,
   unstable_createRouteManifest,
   unstable_findRouteMatch,
   unstable_loadErrorFallback,
@@ -191,5 +193,100 @@ describe("file route conventions", () => {
 
     expect(match?.route.file).toBe("./routes/blog/archive.tsx");
     expect(match?.path).toEqual({});
+  });
+
+  it("collects concrete static paths for static, dynamic, and catchall page routes", async () => {
+    const loadSlugs = vi.fn(async () => ["hello world", "file-routing"]);
+    const slugsQuery = query({
+      fn: loadSlugs,
+      key: () => ["static", "slugs"],
+      scope: "build",
+    });
+    const manifest = unstable_createRouteManifest({
+      "./routes/(marketing)/about.tsx": routeModule({ GET: page(View) }),
+      "./routes/blog/[slug].tsx": routeModule({
+        GET: page(View),
+        paths: async ({ cache }) =>
+          (await cache.get(slugsQuery())).map((slug) => ({ slug })),
+      }),
+      "./routes/docs/[...path].tsx": routeModule({
+        GET: page(View),
+        paths: async () => [
+          { path: "guide/intro" },
+          { path: "api reference/routes" },
+        ],
+      }),
+      "./routes/api/[id].tsx": routeModule({}),
+    });
+
+    await expect(unstable_collectStaticRoutePaths(manifest)).resolves.toEqual([
+      {
+        file: "./routes/blog/[slug].tsx",
+        path: { slug: "hello world" },
+        pattern: "/blog/[slug]",
+        pathname: "/blog/hello%20world",
+      },
+      {
+        file: "./routes/blog/[slug].tsx",
+        path: { slug: "file-routing" },
+        pattern: "/blog/[slug]",
+        pathname: "/blog/file-routing",
+      },
+      {
+        file: "./routes/(marketing)/about.tsx",
+        path: {},
+        pattern: "/about",
+        pathname: "/about",
+      },
+      {
+        file: "./routes/docs/[...path].tsx",
+        path: { path: "guide/intro" },
+        pattern: "/docs/[...path]",
+        pathname: "/docs/guide/intro",
+      },
+      {
+        file: "./routes/docs/[...path].tsx",
+        path: { path: "api reference/routes" },
+        pattern: "/docs/[...path]",
+        pathname: "/docs/api%20reference/routes",
+      },
+    ]);
+    expect(loadSlugs).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires dynamic page routes to export static paths", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/blog/[slug].tsx": routeModule({ GET: page(View) }),
+    });
+
+    await expect(unstable_collectStaticRoutePaths(manifest)).rejects.toThrow(
+      'Dynamic static route "./routes/blog/[slug].tsx" must export paths for "/blog/[slug]".',
+    );
+  });
+
+  it("validates static path entries against route variables", async () => {
+    const missingPathManifest = unstable_createRouteManifest({
+      "./routes/blog/[slug].tsx": routeModule({
+        GET: page(View),
+        paths: async () => [{}],
+      }),
+    });
+    const invalidPathManifest = unstable_createRouteManifest({
+      "./routes/blog/[slug].tsx": routeModule({
+        GET: page(View),
+        paths: async () => [{ slug: { nested: true } as unknown as string }],
+      }),
+    });
+
+    await expect(
+      unstable_collectStaticRoutePaths(missingPathManifest),
+    ).rejects.toThrow(
+      'Static paths for "./routes/blog/[slug].tsx" must include "slug" for "/blog/[slug]".',
+    );
+    await expect(
+      unstable_collectStaticRoutePaths(invalidPathManifest),
+    ).rejects.toThrow(
+      'Static path "slug" for "./routes/blog/[slug].tsx" must be a string, number, or boolean.',
+    );
   });
 });

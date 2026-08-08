@@ -5,7 +5,12 @@ import type {
   Metadata,
   ScriptContribution,
 } from "../document";
-import type { RouteParamsFor } from "../routing/types";
+import type {
+  PathValue,
+  PathVarsFor,
+  RouteParamsFor,
+  RoutePathVars,
+} from "../routing/types";
 import type {
   CorsPolicy,
   RoutePolicy,
@@ -36,6 +41,19 @@ export type PageDataContext<TPath extends string = string> =
 export type PageDataFunction<TPath extends string = string, TData = unknown> = (
   context: PageDataContext<TPath>,
 ) => MaybePromise<TData>;
+
+export type StaticPathsContext = {
+  cache: Cache;
+};
+
+export type StaticPath<TPath extends string = string> =
+  TPath extends keyof RoutePathVars & string
+    ? PathVarsFor<TPath>
+    : Record<string, PathValue>;
+
+export type StaticPathsFunction<TPath extends string = string> = (
+  context: StaticPathsContext,
+) => MaybePromise<readonly StaticPath<TPath>[]>;
 
 export type RouteMiddlewareNext = () => MaybePromise<Response>;
 
@@ -183,6 +201,7 @@ export type RouteModule = {
   links?: LinkContribution;
   metadata?: Metadata;
   middleware?: RouteMiddleware;
+  paths?: StaticPathsFunction;
   policy?: RoutePolicy;
   scripts?: ScriptContribution;
 };
