@@ -371,6 +371,11 @@ Upload support should include:
 - Adapter capability checks.
 - Optional scanning hooks later.
 
+The first upload limits slice exposes `validateUploads(...)` for parsed
+`FormData`. It validates required file fields, per-file sizes, aggregate upload
+size, and allowed MIME types before app code persists or processes uploaded
+files.
+
 ### Headers, Redirects, And Rewrites
 
 Support app-level and route-level redirects/rewrites/headers, while steering

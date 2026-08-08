@@ -43,6 +43,9 @@ export {
   parseBodySize,
 } from "./request";
 export {
+  validateUploads,
+} from "./upload";
+export {
   checkWebSocketOrigin,
   enforceWebSocketOrigin,
 } from "./websocket";
@@ -74,6 +77,12 @@ export type {
   StrictTransportSecurityPolicy,
   TrustedTypesPolicy,
 } from "./types";
+export type {
+  UploadFilePolicy,
+  UploadPolicy,
+  UploadValidationIssue,
+  UploadValidationResult,
+} from "./upload";
 export type {
   EnvSchema,
   EnvSource,

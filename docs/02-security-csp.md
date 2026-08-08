@@ -403,6 +403,27 @@ Framework responsibilities:
 - Provide presigned upload helpers for large direct-to-storage uploads.
 - Keep upload policy visible in route audit output.
 
+The first upload limits slice validates already-parsed `FormData` uploads:
+
+```ts
+const result = validateUploads(formData, {
+  files: {
+    image: {
+      maxSize: "5mb",
+      required: true,
+      types: ["image/png", "image/jpeg", "image/webp"],
+    },
+  },
+  maxTotalSize: "20mb",
+});
+```
+
+`validateUploads(...)` returns normalized file groups, total uploaded byte size,
+and structured issues for missing required files, per-file size violations,
+MIME/type mismatches, and total upload size violations. Streaming multipart
+parsing and direct-to-storage presigned upload helpers remain future adapter
+slices.
+
 ## Webhook Verification
 
 Webhook routes should have first-class verification helpers:

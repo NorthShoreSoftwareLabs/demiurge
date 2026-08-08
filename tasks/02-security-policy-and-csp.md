@@ -57,6 +57,8 @@ with React rendering modes instead of being left to user middleware.
 - `createSecurityReportHandler(...)` provides a POST-only CSP/Reporting API
   report ingestion helper with optional body-size enforcement and per-report
   callbacks.
+- `validateUploads(...)` validates parsed `FormData` files against required
+  fields, per-file size limits, aggregate size limits, and MIME/type allowlists.
 
 ## Examples Required
 

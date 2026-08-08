@@ -70,6 +70,7 @@ export {
   validateEnv,
   validateCorsPolicy,
   validateRateLimitPolicy,
+  validateUploads,
 } from "./security";
 export { createRequestHandler, handleRequestWithManifest } from "./server";
 export {
@@ -243,6 +244,10 @@ export type {
   SecurityPreset,
   StrictTransportSecurityPolicy,
   TrustedTypesPolicy,
+  UploadFilePolicy,
+  UploadPolicy,
+  UploadValidationIssue,
+  UploadValidationResult,
   WebSocketOriginCheck,
   WebSocketOriginPolicy,
 } from "./security";

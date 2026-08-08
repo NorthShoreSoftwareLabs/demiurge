@@ -91,7 +91,7 @@ implementation.
 | CSRF defaults for cookie-auth unsafe methods | designed |
 | Rate limiting | designed |
 | Request size limits | designed |
-| Upload limits | designed |
+| Upload limits | implemented |
 | WebSocket origin checks | implemented |
 | Webhook verification helpers | designed |
 | Trusted Types report-only mode | designed |
