@@ -1,7 +1,9 @@
 import {
   createRouteManifest,
   findRouteMatch,
+  isAttachedFileForRoute,
   type RouteManifest,
+  type RouteRecord,
 } from "../router";
 import {
   toResponse,
@@ -19,6 +21,7 @@ import {
   enforceCsrfProtection,
   enforceRateLimit,
   enforceRequestSecurity,
+  mergeRoutePolicies,
   type RateLimitStore,
 } from "../security";
 
@@ -98,14 +101,22 @@ export async function handleRequestWithManifest(
     });
   }
 
-  const csrfResponse = enforceCsrfProtection(capability.security?.csrf, request);
+  const policy = await loadInheritedRoutePolicy(
+    manifest,
+    routeMatch.route,
+    routeModule,
+    capability,
+  );
+  const routeSecurity = policy.security;
+
+  const csrfResponse = enforceCsrfProtection(routeSecurity?.csrf, request);
 
   if (csrfResponse) {
     return applyCorsHeaders(csrfResponse, capability.cors, request);
   }
 
   const rateLimitResponse = enforceRateLimit(
-    capability.security?.rateLimit,
+    routeSecurity?.rateLimit,
     request,
     options.rateLimitStore,
   );
@@ -115,7 +126,7 @@ export async function handleRequestWithManifest(
   }
 
   const requestSecurityResponse = enforceRequestSecurity(
-    capability.security?.request,
+    routeSecurity?.request,
     request,
     method,
   );
@@ -142,6 +153,27 @@ export async function handleRequestWithManifest(
   }
 
   return corsResponse;
+}
+
+async function loadInheritedRoutePolicy(
+  manifest: RouteManifest,
+  route: RouteRecord,
+  routeModule: RouteModule,
+  capability: ResponseCapability,
+) {
+  const policyModules = await Promise.all(
+    manifest.policies
+      .filter((policy) =>
+        isAttachedFileForRoute(policy.fileSegments, route.fileSegments),
+      )
+      .map((policy) => policy.load()),
+  );
+
+  return mergeRoutePolicies(
+    ...policyModules.map((module) => module.policy),
+    routeModule.policy,
+    { security: capability.security },
+  );
 }
 
 function normalizeMethod(method: string): HttpMethod | null {

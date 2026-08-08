@@ -36,6 +36,8 @@ while preserving file-based routing and allowing real URL files like
   files without changing generated URLs or runtime path matching.
 - `@policy.ts` files are discovered as framework-attached policy files, while
   ordinary `policy.tsx` files remain real URL routes.
+- Inherited `@policy.ts` route security is merged root-to-leaf and enforced by
+  the HTTP request handler before route handlers run.
 
 ## Open Decisions
 

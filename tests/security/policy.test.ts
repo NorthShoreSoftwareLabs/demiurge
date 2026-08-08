@@ -5,9 +5,11 @@ import {
   createSecurityAudit,
   createSecurityHeaders,
   cspHash,
+  defineRoutePolicy,
   defineSecurityPolicy,
   enforceAllowedMethods,
   enforceRateLimit,
+  mergeRoutePolicies,
   mergeSecurityPolicies,
   parseCookieHeader,
   parseBodySize,
@@ -216,6 +218,35 @@ describe("security policy cascade", () => {
     );
 
     expect(createSecurityHeaders(policy).has("content-security-policy")).toBe(false);
+  });
+
+  it("defines and merges route policy from parent to child", () => {
+    const policy = mergeRoutePolicies(
+      defineRoutePolicy({
+        document: security.api(),
+        security: {
+          csrf: true,
+          request: {
+            allowedMethods: ["POST"],
+            maxBodySize: "1mb",
+          },
+        },
+      }),
+      {
+        security: {
+          request: {
+            maxBodySize: "16kb",
+          },
+        },
+      },
+    );
+
+    expect(policy.document?.headers?.contentTypeOptions).toBe("nosniff");
+    expect(policy.security?.csrf).toBe(true);
+    expect(policy.security?.request).toEqual({
+      allowedMethods: ["POST"],
+      maxBodySize: "16kb",
+    });
   });
 });
 

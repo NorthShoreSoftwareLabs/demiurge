@@ -2,6 +2,8 @@ import type {
   ContentSecurityPolicy,
   CspHashAlgorithm,
   CspDirectiveValue,
+  RoutePolicy,
+  RouteSecurityPolicy,
   SecurityHeadersOptions,
   SecurityHeaderPolicy,
   SecurityPolicy,
@@ -105,6 +107,10 @@ export function defineSecurityPolicy(policy: SecurityPolicy) {
   return policy;
 }
 
+export function defineRoutePolicy(policy: RoutePolicy) {
+  return policy;
+}
+
 export function mergeSecurityPolicies(
   ...policies: Array<SecurityPolicy | false | undefined>
 ) {
@@ -114,6 +120,37 @@ export function mergeSecurityPolicies(
     }
 
     return mergeSecurityPolicy(merged, policy);
+  }, {});
+}
+
+export function mergeRoutePolicies(
+  ...policies: Array<RoutePolicy | false | undefined>
+) {
+  return policies.reduce<RoutePolicy>((merged, policy) => {
+    if (!policy) {
+      return merged;
+    }
+
+    return {
+      document: mergeSecurityPolicies(merged.document, policy.document),
+      security: mergeRouteSecurityPolicies(merged.security, policy.security),
+    };
+  }, {});
+}
+
+export function mergeRouteSecurityPolicies(
+  ...policies: Array<RouteSecurityPolicy | false | undefined>
+) {
+  return policies.reduce<RouteSecurityPolicy>((merged, policy) => {
+    if (!policy) {
+      return merged;
+    }
+
+    return {
+      csrf: policy.csrf ?? merged.csrf,
+      rateLimit: policy.rateLimit ?? merged.rateLimit,
+      request: mergeObject(merged.request, policy.request),
+    };
   }, {});
 }
 

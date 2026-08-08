@@ -2,9 +2,10 @@ import type { ComponentType, ReactNode } from "react";
 import type { RouteParamsFor } from "../routing/types";
 import type {
   CorsPolicy,
+  RoutePolicy,
   RouteSecurityPolicy,
-  SecurityPolicy,
 } from "../security/types";
+export type { RoutePolicy } from "../security/types";
 
 export type MaybePromise<T> = T | Promise<T>;
 
@@ -102,11 +103,6 @@ export type HttpMethod =
   | "DELETE"
   | "OPTIONS"
   | "HEAD";
-
-export type RoutePolicy = {
-  document?: SecurityPolicy;
-  security?: RouteSecurityPolicy;
-};
 
 export type PageOptions<TPath extends string = string> = {
   view: ComponentType<RouteProps<TPath>>;

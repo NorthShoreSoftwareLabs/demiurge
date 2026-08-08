@@ -245,7 +245,9 @@ Rate limiting and request size limits should be typed policy, not scattered
 middleware snippets.
 
 ```ts
-export const policy = routePolicy({
+import { defineRoutePolicy } from "demiurge";
+
+export const policy = defineRoutePolicy({
   security: {
     rateLimit: {
       key: "ip",
@@ -486,6 +488,11 @@ The first cascade slice exposes `defineSecurityPolicy(...)` and
 de-duplication, while scalar headers and Trusted Types settings use child
 override semantics. A child policy can explicitly disable inherited CSP with
 `csp: false`.
+
+HTTP route security policies can be exported from inherited `@policy.ts` files
+with `defineRoutePolicy(...)`. The request handler merges matching policy files
+root-to-leaf, then merges any route-module policy and capability-level security
+before enforcing CSRF, rate limits, allowed methods, and body size limits.
 
 The framework should expose named presets:
 

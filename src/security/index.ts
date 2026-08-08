@@ -14,7 +14,10 @@ export {
 export {
   createSecurityHeaders,
   cspHash,
+  defineRoutePolicy,
   defineSecurityPolicy,
+  mergeRoutePolicies,
+  mergeRouteSecurityPolicies,
   mergeSecurityPolicies,
   security,
 } from "./policy";
@@ -47,6 +50,7 @@ export type {
   SecurityAuditFinding,
   SecurityAuditOptions,
   RequestSecurityPolicy,
+  RoutePolicy,
   RouteSecurityPolicy,
   SecurityHeadersOptions,
   SecurityHeaderPolicy,

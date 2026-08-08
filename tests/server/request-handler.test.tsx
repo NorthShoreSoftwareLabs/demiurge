@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createRequestHandler,
+  defineRoutePolicy,
   json,
   page,
   redirect,
@@ -513,6 +514,89 @@ describe("request handler", () => {
     expect(response.headers.get("access-control-allow-origin")).toBe(
       "https://app.example.com",
     );
+  });
+
+  it("enforces inherited @policy files before route handlers run", async () => {
+    const handlerSpy = vi.fn(({ request }: { request: Request }) => request.text());
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/@policy.ts": routeModule({
+          policy: defineRoutePolicy({
+            security: {
+              request: {
+                maxBodySize: "4b",
+              },
+            },
+          }),
+        }),
+        "./routes/api/echo.tsx": routeModule({
+          POST: text(handlerSpy),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/echo", {
+        body: "hello",
+        headers: {
+          "content-length": "5",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.text()).resolves.toBe("Request body too large.");
+    expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
+  it("scopes inherited @policy files to route group subtrees", async () => {
+    const adminSpy = vi.fn(({ request }: { request: Request }) => request.text());
+    const publicSpy = vi.fn(({ request }: { request: Request }) => request.text());
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/(admin)/@policy.ts": routeModule({
+          policy: defineRoutePolicy({
+            security: {
+              request: {
+                maxBodySize: "4b",
+              },
+            },
+          }),
+        }),
+        "./routes/(admin)/admin-echo.tsx": routeModule({
+          POST: text(adminSpy),
+        }),
+        "./routes/public-echo.tsx": routeModule({
+          POST: text(publicSpy),
+        }),
+      },
+    });
+
+    const adminResponse = await handler(
+      new Request("https://example.test/admin-echo", {
+        body: "hello",
+        headers: {
+          "content-length": "5",
+        },
+        method: "POST",
+      }),
+    );
+    const publicResponse = await handler(
+      new Request("https://example.test/public-echo", {
+        body: "hello",
+        headers: {
+          "content-length": "5",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(adminResponse.status).toBe(413);
+    expect(adminSpy).not.toHaveBeenCalled();
+    expect(publicResponse.status).toBe(200);
+    await expect(publicResponse.text()).resolves.toBe("hello");
+    expect(publicSpy).toHaveBeenCalledTimes(1);
   });
 
   it("rejects unsafe CSRF-protected requests without matching tokens", async () => {

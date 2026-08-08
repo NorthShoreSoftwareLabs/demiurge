@@ -1,10 +1,10 @@
-import type { RoutePolicy } from "demiurge";
+import { defineRoutePolicy } from "demiurge";
 
-export const policy = {
+export const policy = defineRoutePolicy({
   security: {
     request: {
       allowedMethods: ["GET"],
       maxBodySize: "32kb",
     },
   },
-} satisfies RoutePolicy;
+});

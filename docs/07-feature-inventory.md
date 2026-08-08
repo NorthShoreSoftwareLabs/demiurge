@@ -36,6 +36,7 @@ implementation.
 | Route groups such as `(admin)` | implemented |
 | Middleware with cascade | designed |
 | Framework-attached `@policy.ts` discovery | implemented |
+| HTTP route security `@policy.ts` cascade | implemented |
 | Declarative `@policy.ts` cascade | designed |
 | Generated typed URL manifest | implemented |
 | Actual URL string type-safety for `Link`/`href` | implemented |

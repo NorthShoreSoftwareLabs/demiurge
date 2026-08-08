@@ -112,6 +112,11 @@ export type RouteSecurityPolicy = {
   request?: RequestSecurityPolicy;
 };
 
+export type RoutePolicy = {
+  document?: SecurityPolicy;
+  security?: RouteSecurityPolicy;
+};
+
 export type SecurityAuditFinding = {
   code: string;
   message: string;
