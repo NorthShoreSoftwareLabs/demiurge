@@ -1,9 +1,12 @@
 export { createFileRouter, Link } from "./browser";
 export {
   defineMetadata,
+  defineScripts,
   link,
   meta,
   resolveMetadata,
+  resolveScripts,
+  script,
 } from "./document";
 export { href } from "./routing";
 export {
@@ -49,6 +52,9 @@ export type {
   OpenGraphMetadata,
   ResolvedMetadata,
   RobotsMetadata,
+  ScriptContribution,
+  ScriptStrategy,
+  ScriptTag,
 } from "./document";
 export type {
   AppHref,

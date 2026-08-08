@@ -1,4 +1,10 @@
-import { Link, defineMetadata, type LayoutProps } from "demiurge";
+import {
+  Link,
+  defineMetadata,
+  defineScripts,
+  script,
+  type LayoutProps,
+} from "demiurge";
 
 export const metadata = defineMetadata({
   description: "A small Demiurge blog example.",
@@ -7,6 +13,12 @@ export const metadata = defineMetadata({
     format: (title) => `${title} | Demiurge Basic Blog`,
   },
 });
+export const scripts = defineScripts([
+  script({
+    src: "/basic-blog-shell.js",
+    strategy: "afterInteractive",
+  }),
+]);
 
 export default function RootLayout({ children }: LayoutProps) {
   return (

@@ -600,6 +600,11 @@ export const scripts = defineScripts(({ search }) => {
 ```
 
 Static scripts can participate fully in CSP planning.
+The first static script slice exposes `script(...)`, `defineScripts(...)`, and
+`resolveScripts(...)`. Page route loading resolves inherited layout scripts
+root-to-leaf, then leaf route scripts. Scripts are deduped by source plus
+meaningful loading attributes and sorted by loading strategy before document
+rendering.
 
 ### Render-Discovered Scripts
 

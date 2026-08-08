@@ -4,6 +4,11 @@ export {
   meta,
   resolveMetadata,
 } from "./metadata";
+export {
+  defineScripts,
+  resolveScripts,
+  script,
+} from "./scripts";
 export type {
   DocumentMetadataTag,
   LinkTag,
@@ -14,3 +19,8 @@ export type {
   ResolvedMetadata,
   RobotsMetadata,
 } from "./metadata";
+export type {
+  ScriptContribution,
+  ScriptStrategy,
+  ScriptTag,
+} from "./scripts";

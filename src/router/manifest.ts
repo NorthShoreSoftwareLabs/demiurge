@@ -1,5 +1,10 @@
 import type { ComponentType } from "react";
-import { resolveMetadata, type ResolvedMetadata } from "../document";
+import {
+  resolveMetadata,
+  resolveScripts,
+  type ResolvedMetadata,
+  type ScriptTag,
+} from "../document";
 import type {
   LayoutProps,
   NotFoundProps,
@@ -64,6 +69,7 @@ export type LoadedRouteMatch = {
   metadata: ResolvedMetadata;
   path: PathVars;
   pathname: string;
+  scripts: ScriptTag[];
 };
 
 export type PendingRouteMatch =
@@ -227,6 +233,13 @@ export async function loadPageRoute(
     pageModule.GET.layout === false
       ? []
       : await Promise.all(matchingLayouts.map((layout) => layout.load()));
+  const context = {
+    path: routeMatch.path,
+    pathname,
+    request: new Request(`http://demiurge.local${pathname}`),
+    search: new URLSearchParams(),
+    url: new URL(`http://demiurge.local${pathname}`),
+  };
 
   return {
     status: "ready",
@@ -242,6 +255,13 @@ export async function loadPageRoute(
       ),
       path: routeMatch.path,
       pathname,
+      scripts: await resolveScripts(
+        [
+          ...layoutModules.map((module) => module.scripts),
+          pageModule.scripts,
+        ],
+        context,
+      ),
     },
   };
 }

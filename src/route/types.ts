@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
-import type { Metadata } from "../document";
+import type { Metadata, ScriptContribution } from "../document";
 import type { RouteParamsFor } from "../routing/types";
 import type {
   CorsPolicy,
@@ -149,6 +149,7 @@ export type RouteModule = {
   metadata?: Metadata;
   middleware?: RouteMiddleware;
   policy?: RoutePolicy;
+  scripts?: ScriptContribution;
 };
 
 export type RouteImporter = () => Promise<RouteModule>;

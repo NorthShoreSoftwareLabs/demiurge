@@ -108,7 +108,7 @@ implementation.
 | Cascading layout-to-route metadata | implemented |
 | Title defaults and `format` callback | implemented |
 | Structured custom `meta(...)` and `link(...)` | implemented |
-| `defineScripts` | designed |
+| `defineScripts` for static script contributions | implemented |
 | Managed `<Script />` | designed |
 | Static versus render-discovered script model | designed |
 | Resource hints: preload/preconnect/modulepreload | designed |

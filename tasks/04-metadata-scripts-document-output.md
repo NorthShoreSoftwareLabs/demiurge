@@ -41,6 +41,10 @@ routes, including scripts that may be statically declared or render-discovered.
 - Page route loading resolves inherited layout metadata root-to-leaf, then leaf
   route metadata, including title defaults, title formatters, structured fields,
   Open Graph defaults, and custom metadata entries.
+- `defineScripts(...)`, `script(...)`, and `resolveScripts(...)` provide typed
+  static script contributions. Page route loading resolves inherited layout
+  scripts root-to-leaf, then leaf route scripts, with dedupe and strategy
+  ordering before document rendering.
 
 ## Open Decisions
 

@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   defineMetadata,
+  defineScripts,
   json,
   page,
+  script,
   type LayoutProps,
   type RouteModule,
   type RouteProps,
@@ -52,6 +54,12 @@ describe("route loading", () => {
             format: (title) => `${title} | Demiurge`,
           },
         }),
+        scripts: defineScripts([
+          script({
+            src: "https://cdn.example.com/root.js",
+            strategy: "beforeInteractive",
+          }),
+        ]),
       }),
       "./routes/blog/@layout.tsx": routeModule({
         default: BlogLayout,
@@ -60,12 +68,26 @@ describe("route loading", () => {
             image: "/blog-og.png",
           },
         }),
+        scripts: defineScripts([
+          script({
+            src: "https://cdn.example.com/blog.js",
+          }),
+        ]),
       }),
       "./routes/blog/[slug].tsx": routeModule({
         GET: page(View),
         metadata: defineMetadata({
           title: "File based routing",
         }),
+        scripts: defineScripts([
+          script({
+            src: "https://cdn.example.com/blog.js",
+          }),
+          script({
+            src: "https://cdn.example.com/post.js",
+            strategy: "idle",
+          }),
+        ]),
       }),
     });
 
@@ -89,6 +111,23 @@ describe("route loading", () => {
       },
       title: "File based routing | Demiurge",
     });
+    expect(match.match.scripts).toEqual([
+      {
+        kind: "script",
+        src: "https://cdn.example.com/root.js",
+        strategy: "beforeInteractive",
+      },
+      {
+        kind: "script",
+        src: "https://cdn.example.com/blog.js",
+        strategy: "afterInteractive",
+      },
+      {
+        kind: "script",
+        src: "https://cdn.example.com/post.js",
+        strategy: "idle",
+      },
+    ]);
   });
 
   it("skips inherited layouts when a page declares layout false", async () => {
