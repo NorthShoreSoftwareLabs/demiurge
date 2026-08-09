@@ -9,6 +9,7 @@ import {
   defineSecurityPolicy,
   enforceAllowedMethods,
   enforceRateLimit,
+  json,
   mergeRoutePolicies,
   mergeSecurityPolicies,
   parseCookieHeader,
@@ -19,6 +20,9 @@ import {
   validateCorsPolicy,
   validateRateLimitPolicy,
 } from "demiurge";
+// createCorsPreflightResponse is an internal helper (not re-exported from the
+// package root) that backs the request handler's OPTIONS preflight handling.
+import { createCorsPreflightResponse } from "../../src/security/cors";
 
 describe("security policy headers", () => {
   it("creates strict production security headers with a CSP nonce", () => {
@@ -519,6 +523,163 @@ describe("CORS policy headers", () => {
       "Demiurge CORS policy cannot use wildcard origins with credentials.",
     );
   });
+
+  it("omits the expose-headers header when no headers are configured to expose", () => {
+    const headers = createCorsHeaders(
+      {
+        origins: ["https://app.example.com"],
+      },
+      {
+        request: new Request("https://api.example.test", {
+          headers: {
+            origin: "https://app.example.com",
+          },
+        }),
+      },
+    );
+
+    expect(headers.has("access-control-expose-headers")).toBe(false);
+  });
+
+  it("does not set a Vary header for wildcard origins", () => {
+    const headers = createCorsHeaders(
+      {
+        origins: "*",
+      },
+      {
+        request: new Request("https://api.example.test", {
+          headers: {
+            origin: "https://app.example.com",
+          },
+        }),
+      },
+    );
+
+    expect(headers.has("vary")).toBe(false);
+  });
+
+  it("declares the server's allowed preflight headers regardless of what the browser requested", () => {
+    const headers = createCorsHeaders(
+      {
+        headers: ["content-type"],
+        origins: "*",
+      },
+      {
+        request: new Request("https://api.example.test", {
+          headers: {
+            "access-control-request-headers": "x-not-configured",
+            origin: "https://app.example.com",
+          },
+        }),
+      },
+      {
+        methods: ["POST"],
+        preflight: true,
+      },
+    );
+
+    expect(headers.get("access-control-allow-headers")).toBe("content-type");
+  });
+});
+
+describe("CORS preflight requests", () => {
+  it("skips preflight handling when the Access-Control-Request-Method header is missing", () => {
+    const routeModule = {
+      GET: json({}, { cors: { origins: "*" } }),
+    };
+    const request = new Request("https://api.example.test", {
+      headers: {
+        origin: "https://app.example.com",
+      },
+      method: "OPTIONS",
+    });
+
+    expect(createCorsPreflightResponse(routeModule, request)).toBe(null);
+  });
+
+  it("rejects preflight requests for a method outside the route's explicit CORS allow-list", () => {
+    const routeModule = {
+      PUT: json({}, { cors: { methods: ["POST"], origins: "*" } }),
+    };
+    const request = new Request("https://api.example.test", {
+      headers: {
+        "access-control-request-method": "PUT",
+        origin: "https://app.example.com",
+      },
+      method: "OPTIONS",
+    });
+
+    expect(createCorsPreflightResponse(routeModule, request)).toBe(null);
+  });
+
+  it("derives allowed preflight methods from the route module when the policy omits them", () => {
+    const routeModule = {
+      GET: json({}, { cors: { origins: "*" } }),
+      POST: json({}, { cors: { origins: "*" } }),
+    };
+    const request = new Request("https://api.example.test", {
+      headers: {
+        "access-control-request-method": "POST",
+        origin: "https://app.example.com",
+      },
+      method: "OPTIONS",
+    });
+
+    const response = createCorsPreflightResponse(routeModule, request);
+
+    expect(response?.status).toBe(204);
+    // HEAD is implicitly derived alongside GET, since GET capabilities also serve HEAD.
+    expect(response?.headers.get("access-control-allow-methods")).toBe(
+      "GET, POST, HEAD",
+    );
+  });
+
+  it("falls back to the GET capability's CORS policy for HEAD preflight when HEAD is undefined", () => {
+    const routeModule = {
+      GET: json({}, { cors: { methods: ["GET", "HEAD"], origins: "*" } }),
+    };
+    const request = new Request("https://api.example.test", {
+      headers: {
+        "access-control-request-method": "HEAD",
+        origin: "https://app.example.com",
+      },
+      method: "OPTIONS",
+    });
+
+    const response = createCorsPreflightResponse(routeModule, request);
+
+    expect(response?.status).toBe(204);
+    expect(response?.headers.get("access-control-allow-methods")).toBe(
+      "GET, HEAD",
+    );
+  });
+
+  it("uses an explicit HEAD capability's CORS policy instead of falling back to GET", () => {
+    const routeModule = {
+      GET: json({}, {
+        cors: { methods: ["GET"], origins: ["https://other.example.com"] },
+      }),
+      HEAD: json({}, {
+        cors: { methods: ["HEAD"], origins: ["https://app.example.com"] },
+      }),
+    };
+    const request = new Request("https://api.example.test", {
+      headers: {
+        "access-control-request-method": "HEAD",
+        origin: "https://app.example.com",
+      },
+      method: "OPTIONS",
+    });
+
+    const response = createCorsPreflightResponse(routeModule, request);
+
+    expect(response?.status).toBe(204);
+    expect(response?.headers.get("access-control-allow-methods")).toBe("HEAD");
+    expect(response?.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+    expect(response?.headers.get("vary")).toBe("Origin");
+  });
 });
 
 describe("request security policy", () => {
@@ -552,6 +713,13 @@ describe("request security policy", () => {
 });
 
 describe("rate limit policy", () => {
+  it("does not enforce a rate limit when no policy is configured", () => {
+    const store = createMemoryRateLimitStore();
+    const request = new Request("https://example.test");
+
+    expect(enforceRateLimit(undefined, request, store, 0)).toBe(null);
+  });
+
   it("parses rate limit windows", () => {
     expect(parseRateLimitWindow(250)).toBe(250);
     expect(parseRateLimitWindow("10s")).toBe(10_000);
@@ -596,7 +764,156 @@ describe("rate limit policy", () => {
     expect(response?.headers.get("retry-after")).toBe("60");
     expect(response?.headers.get("x-ratelimit-limit")).toBe("2");
     expect(response?.headers.get("x-ratelimit-remaining")).toBe("0");
+    expect(response?.headers.get("x-ratelimit-reset")).toBe("60");
     await expect(response?.text()).resolves.toBe("Rate limit exceeded.");
+  });
+
+  it("rejects numeric rate limit windows that are not positive integers", () => {
+    expect(() => parseRateLimitWindow(0)).toThrow(
+      "Demiurge rate limit window must be a positive integer.",
+    );
+    expect(() => parseRateLimitWindow(-500)).toThrow(
+      "Demiurge rate limit window must be a positive integer.",
+    );
+    expect(() => parseRateLimitWindow(12.5)).toThrow(
+      "Demiurge rate limit window must be a positive integer.",
+    );
+  });
+
+  it("rejects rate limit windows whose computed duration overflows a safe integer", () => {
+    expect(() => parseRateLimitWindow("3000000000h")).toThrow(
+      "Demiurge rate limit window is too large.",
+    );
+  });
+
+  it("resets the counter once the fixed window boundary has passed", () => {
+    const store = createMemoryRateLimitStore();
+    const policy = {
+      key: { header: "x-user-id" },
+      limit: 1,
+      window: "1s",
+    } as const;
+    const request = new Request("https://example.test", {
+      headers: { "x-user-id": "demo" },
+    });
+
+    expect(enforceRateLimit(policy, request, store, 0)).toBe(null);
+    expect(enforceRateLimit(policy, request, store, 999)?.status).toBe(429);
+    // exactly at resetAt the window has elapsed, so the counter rolls over
+    expect(enforceRateLimit(policy, request, store, 1000)).toBe(null);
+    expect(enforceRateLimit(policy, request, store, 1000)?.status).toBe(429);
+  });
+
+  it("tracks rate limit keys independently per requester", () => {
+    const store = createMemoryRateLimitStore();
+    const policy = {
+      key: { header: "x-user-id" },
+      limit: 1,
+      window: "1m",
+    } as const;
+    const requestAlice = new Request("https://example.test", {
+      headers: { "x-user-id": "alice" },
+    });
+    const requestBob = new Request("https://example.test", {
+      headers: { "x-user-id": "bob" },
+    });
+
+    expect(enforceRateLimit(policy, requestAlice, store, 0)).toBe(null);
+    expect(enforceRateLimit(policy, requestAlice, store, 0)?.status).toBe(429);
+    // bob's key is unaffected by alice having exhausted her own limit
+    expect(enforceRateLimit(policy, requestBob, store, 0)).toBe(null);
+  });
+
+  it("counts requests arriving in the same instant toward the same limit", () => {
+    const store = createMemoryRateLimitStore();
+    const policy = {
+      key: { header: "x-user-id" },
+      limit: 3,
+      window: "1m",
+    } as const;
+    const request = new Request("https://example.test", {
+      headers: { "x-user-id": "demo" },
+    });
+    const now = 1_000;
+
+    const results = [1, 2, 3, 4].map(() =>
+      enforceRateLimit(policy, request, store, now),
+    );
+
+    expect(results.slice(0, 3)).toEqual([null, null, null]);
+    expect(results[3]?.status).toBe(429);
+  });
+
+  it("derives the rate limit key from the first address in x-forwarded-for when using the ip key", () => {
+    const store = createMemoryRateLimitStore();
+    const policy = { key: "ip", limit: 1, window: "1m" } as const;
+    const request = new Request("https://example.test", {
+      headers: { "x-forwarded-for": "203.0.113.9, 10.0.0.1" },
+    });
+
+    expect(enforceRateLimit(policy, request, store, 0)).toBe(null);
+    expect(enforceRateLimit(policy, request, store, 0)?.status).toBe(429);
+  });
+
+  it("falls back to cf-connecting-ip when x-forwarded-for is absent", () => {
+    const store = createMemoryRateLimitStore();
+    const policy = { key: "ip", limit: 1, window: "1m" } as const;
+    const request = new Request("https://example.test", {
+      headers: { "cf-connecting-ip": "198.51.100.4" },
+    });
+
+    expect(enforceRateLimit(policy, request, store, 0)).toBe(null);
+    expect(enforceRateLimit(policy, request, store, 0)?.status).toBe(429);
+  });
+
+  it("falls back to x-real-ip when neither x-forwarded-for nor cf-connecting-ip are present", () => {
+    const store = createMemoryRateLimitStore();
+    const policy = { key: "ip", limit: 1, window: "1m" } as const;
+    const request = new Request("https://example.test", {
+      headers: { "x-real-ip": "198.51.100.5" },
+    });
+
+    expect(enforceRateLimit(policy, request, store, 0)).toBe(null);
+    expect(enforceRateLimit(policy, request, store, 0)?.status).toBe(429);
+  });
+
+  it("buckets requests with no client IP headers under a shared unknown key", () => {
+    const store = createMemoryRateLimitStore();
+    const policy = { key: "ip", limit: 1, window: "1m" } as const;
+    const requestOne = new Request("https://example.test/one");
+    const requestTwo = new Request("https://example.test/two");
+
+    expect(enforceRateLimit(policy, requestOne, store, 0)).toBe(null);
+    // two unrelated requests without any IP-identifying header share the "unknown" bucket
+    expect(enforceRateLimit(policy, requestTwo, store, 0)?.status).toBe(429);
+  });
+
+  it("treats a blank x-forwarded-for entry as an unknown client", () => {
+    const store = createMemoryRateLimitStore();
+    const policy = { key: "ip", limit: 1, window: "1m" } as const;
+    const blankEntryRequest = new Request("https://example.test", {
+      headers: { "x-forwarded-for": " ,10.0.0.9" },
+    });
+    const noHeaderRequest = new Request("https://example.test");
+
+    expect(enforceRateLimit(policy, blankEntryRequest, store, 0)).toBe(null);
+    expect(enforceRateLimit(policy, noHeaderRequest, store, 0)?.status).toBe(429);
+  });
+
+  it("clamps retry-after and remaining when a custom store returns already-expired state", () => {
+    const misbehavingStore = {
+      increment: () => ({ count: 5, resetAt: -1_000 }),
+    };
+    const policy = { key: { header: "x-user-id" }, limit: 1, window: "1m" } as const;
+    const request = new Request("https://example.test", {
+      headers: { "x-user-id": "demo" },
+    });
+
+    const response = enforceRateLimit(policy, request, misbehavingStore, 0);
+
+    expect(response?.status).toBe(429);
+    expect(response?.headers.get("retry-after")).toBe("0");
+    expect(response?.headers.get("x-ratelimit-remaining")).toBe("0");
   });
 });
 

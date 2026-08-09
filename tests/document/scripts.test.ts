@@ -99,4 +99,90 @@ describe("document scripts", () => {
       },
     ]);
   });
+
+  it("orders scripts across every strategy from beforeInteractive through worker", async () => {
+    const scripts = await resolveScripts(
+      [
+        [
+          script({ src: "https://cdn.example.com/worker.js", strategy: "worker" }),
+          script({ src: "https://cdn.example.com/visible.js", strategy: "visible" }),
+          script({ src: "https://cdn.example.com/idle.js", strategy: "idle" }),
+          script({
+            src: "https://cdn.example.com/after.js",
+            strategy: "afterInteractive",
+          }),
+          script({ src: "https://cdn.example.com/module.js", strategy: "module" }),
+          script({
+            src: "https://cdn.example.com/before.js",
+            strategy: "beforeInteractive",
+          }),
+        ],
+      ],
+      context,
+    );
+
+    expect(scripts.map((scriptTag) => scriptTag.src)).toEqual([
+      "https://cdn.example.com/before.js",
+      "https://cdn.example.com/module.js",
+      "https://cdn.example.com/after.js",
+      "https://cdn.example.com/idle.js",
+      "https://cdn.example.com/visible.js",
+      "https://cdn.example.com/worker.js",
+    ]);
+  });
+
+  it("treats scripts with the same src but a different type as distinct entries", async () => {
+    const scripts = await resolveScripts(
+      [
+        [
+          script({ src: "https://cdn.example.com/app.js" }),
+          script({ src: "https://cdn.example.com/app.js", type: "module" }),
+        ],
+      ],
+      context,
+    );
+
+    expect(scripts).toHaveLength(2);
+  });
+
+  it("skips false and undefined contribution entries", async () => {
+    const scripts = await resolveScripts(
+      [
+        false,
+        undefined,
+        [script({ src: "https://cdn.example.com/app.js" })],
+      ],
+      context,
+    );
+
+    expect(scripts).toEqual([
+      {
+        kind: "script",
+        src: "https://cdn.example.com/app.js",
+        strategy: "afterInteractive",
+      },
+    ]);
+  });
+
+  it("resolves to an empty list when a contribution function returns no scripts", async () => {
+    const scripts = defineScripts(({ search }) => {
+      if (search.get("nonexistent") === "true") {
+        return [script({ src: "https://cdn.example.com/never.js" })];
+      }
+
+      return [];
+    });
+
+    await expect(resolveScripts([scripts], context)).resolves.toEqual([]);
+  });
+
+  it("propagates a rejection when a contribution function throws", async () => {
+    const scripts = defineScripts(() => {
+      throw new Error("contribution failed");
+    });
+
+    await expect(resolveScripts([scripts], context)).rejects.toThrow(
+      "contribution failed",
+    );
+  });
 });
