@@ -164,7 +164,8 @@ Static generation rules:
 
 ## Phase 9: Adapters
 
-- Node adapter.
+- Node adapter with production static assets, client manifest, and framework-
+  owned SSR server entry.
 - Edge adapter.
 - Static adapter.
 - Adapter capability checks for:

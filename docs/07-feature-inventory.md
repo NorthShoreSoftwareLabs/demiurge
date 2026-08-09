@@ -135,7 +135,7 @@ implementation.
 
 | Feature | Status |
 | --- | --- |
-| Node adapter | planned |
+| Node adapter | implemented |
 | Edge adapter | planned |
 | Static adapter | planned |
 | Adapter capability checks | implemented |

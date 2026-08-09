@@ -42,6 +42,8 @@ while preserving file-based routing and allowing real URL files like
   and can short-circuit with a platform `Response`.
 - Inherited app-owned `@loading.tsx`, `@not-found.tsx`, and `@error.tsx` files
   render browser fallbacks without framework-owned markup.
+- Vite development page requests and production request handling share the same
+  route pipeline, including inherited policy and method/security behavior.
 
 ## Open Decisions
 

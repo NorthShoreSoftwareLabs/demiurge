@@ -4,6 +4,7 @@
     "examples",
     "examples/basic-blog/.demiurge/route-manifest.d.ts",
     "examples/ssr-page/.demiurge/route-manifest.d.ts",
+    "examples/node-server/.demiurge/route-manifest.d.ts",
     "scripts"
   ],
   "exclude": ["examples/**/vite.config.ts", "examples/**/dist"]

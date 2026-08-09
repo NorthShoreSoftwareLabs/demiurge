@@ -34,6 +34,14 @@ shared caching.
 
 ## Implemented Slices
 
+- The production Node adapter converts Node HTTP requests and responses to the
+  web platform contract, serves safe static assets, preserves repeated
+  `Set-Cookie` headers, and exposes `createNodeServer(...)` from `demiurge/node`.
+- Vite production builds emit a client manifest containing the client entry and
+  hashed stylesheets. The framework-owned SSR server entry loads route modules
+  and creates a request handler that can be mounted by the Node adapter.
+- `examples/node-server` exercises the client build, SSR build, API routes,
+  dynamic pages, stylesheet assets, and the production Node server together.
 - `defineAdapter(...)`, `checkAdapterCapabilities(...)`, and
   `assertAdapterCapabilities(...)` provide the first adapter capability contract
   for nonce injection, streaming, WebSocket, WebTransport, cross-origin
@@ -41,5 +49,6 @@ shared caching.
 
 ## Open Decisions
 
-- Which adapter ships first after Vite dev: Node is probably the best next
-  runtime because it unlocks SSR, streaming, WebSocket, and Cloud Run.
+- Edge and static adapters still need platform-specific implementations.
+- Streaming, WebSocket, shared-cache, and static-output contracts need broader
+  adapter contract tests before they can be marked complete.

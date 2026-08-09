@@ -15,6 +15,8 @@ Current conventions:
 - test-only internals are exported from `demiurge/internal/testing`
 - example apps live under `examples`
 - `examples/ssr-page` demonstrates server rendering, hydration, and route data
+- `examples/node-server` demonstrates a production Node server with SSR, API
+  routes, and hashed static assets
 - `examples/basic-blog/src/routes/index.tsx` maps to `/`
 - `examples/basic-blog/src/routes/blog/index.tsx` maps to `/blog`
 - `examples/basic-blog/src/routes/blog/[slug].tsx` maps to `/blog/:slug`
@@ -64,6 +66,11 @@ terminal to rebuild on change while you work on an example.
 imports every entry point. That is the only check that sees the package the way
 a consumer does.
 
+For a production Node build, run `npm run build -w examples/node-server` and
+then `npm start -w examples/node-server`. The example reads the generated
+`demiurge-manifest.json`, mounts the framework-owned SSR server entry, and serves
+the client assets through `createNodeServer(...)`.
+
 Current source modules, all under `packages/demiurge/src`:
 
 - `document`: metadata, scripts, links, SEO, and the document renderer
@@ -71,6 +78,7 @@ Current source modules, all under `packages/demiurge/src`:
 - `router`: file-route manifest, matching, and route loading
 - `browser`: browser router and `<Link />`
 - `server`: request handling for HTTP route capabilities
+- `node`: production Node HTTP adapter and static asset handler
 - `vite`: Vite integration for development
 - `internal`: explicit test-only framework internals
 

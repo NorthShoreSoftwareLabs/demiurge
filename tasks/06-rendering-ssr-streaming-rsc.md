@@ -55,6 +55,8 @@ data loading, caching, and typing coherent.
 - `examples/ssr-page` exercises a server-only `data` loader, metadata cascading
   from layout to leaf, a `path`-based dynamic route, and client navigation
   after hydration.
+- Production Vite builds emit a client manifest and a framework-owned SSR
+  server entry, which the Node adapter can mount for HTML and API responses.
 
 ## Open Decisions
 
