@@ -31,6 +31,7 @@ import { unstable_createRouteManifest } from "demiurge/internal/testing";
 import {
   demiurge,
   unstable_createClientEntrySource,
+  unstable_createServerEntrySource,
   unstable_createDevRouteImporters,
   unstable_createDocumentHtml,
   unstable_handleDevRequest,
@@ -1083,6 +1084,23 @@ describe("Vite plugin document runtime", () => {
     });
 
     expect(source).not.toContain(".css");
+  });
+
+  it("creates a virtual server entry with normalized routes and SSR defaults", () => {
+    const source = unstable_createServerEntrySource("/tmp/app", {
+      document: {
+        lang: "en-GB",
+        title: "Server app",
+      },
+      routesDir: "src/pages",
+    });
+
+    expect(source).toContain('import.meta.glob("/src/pages/**/*.tsx")');
+    expect(source).toContain('const routePrefix = "/src/pages/";');
+    expect(source).toContain("export const routes");
+    expect(source).toContain("createRequestHandler");
+    expect(source).toContain('lang: "en-GB"');
+    expect(source).toContain('title: "Server app"');
   });
 });
 

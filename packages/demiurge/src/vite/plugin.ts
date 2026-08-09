@@ -52,6 +52,8 @@ export type DemiurgeVitePluginOptions = {
 
 const CLIENT_ENTRY_ID = "virtual:demiurge/client-entry";
 const RESOLVED_CLIENT_ENTRY_ID = `\0${CLIENT_ENTRY_ID}`;
+const SERVER_ENTRY_ID = "virtual:demiurge/server-entry";
+const RESOLVED_SERVER_ENTRY_ID = `\0${SERVER_ENTRY_ID}`;
 const DEFAULT_TYPED_ROUTES_OUTPUT = ".demiurge/route-manifest.d.ts";
 const devRateLimitStore = createMemoryRateLimitStore();
 
@@ -81,11 +83,19 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
         return RESOLVED_CLIENT_ENTRY_ID;
       }
 
+      if (id === SERVER_ENTRY_ID) {
+        return RESOLVED_SERVER_ENTRY_ID;
+      }
+
       return null;
     },
     load(id) {
       if (id === RESOLVED_CLIENT_ENTRY_ID) {
         return createClientEntrySource(root, options);
+      }
+
+      if (id === RESOLVED_SERVER_ENTRY_ID) {
+        return createServerEntrySource(root, options);
       }
 
       return null;
@@ -228,6 +238,38 @@ const routes = Object.fromEntries(
 );
 
 void hydrateFileRouter({ routes });
+`;
+}
+
+export function createServerEntrySource(
+  root: string,
+  options: DemiurgeVitePluginOptions = {},
+) {
+  const routesDir = options.routesDir ?? "src/routes";
+  const routesGlob = toRootAbsoluteGlob(routesDir);
+  const routesPrefix = toRootAbsolutePrefix(routesDir);
+
+  return `import { createRequestHandler } from "demiurge";
+
+const routeModules = import.meta.glob(${JSON.stringify(routesGlob)});
+const routePrefix = ${JSON.stringify(routesPrefix)};
+export const routes = Object.fromEntries(
+  Object.entries(routeModules).map(([file, load]) => [
+    \`./routes/\${file.slice(routePrefix.length)}\`,
+    load,
+  ]),
+);
+
+export function createHandler(options = {}) {
+  return createRequestHandler({
+    routes,
+    ssr: {
+      lang: ${JSON.stringify(options.document?.lang)},
+      title: ${JSON.stringify(options.document?.title)},
+      ...options,
+    },
+  });
+}
 `;
 }
 
