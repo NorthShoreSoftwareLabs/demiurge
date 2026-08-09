@@ -1,4 +1,10 @@
 export {
+  HYDRATION_DATA_ELEMENT_ID,
+  HYDRATION_ROOT_ATTRIBUTE,
+  readInitialRouteData,
+  serializeInitialRouteData,
+} from "./hydration";
+export {
   defineLinks,
   modulePreload,
   preconnect,
@@ -26,6 +32,7 @@ export {
   renderRobots,
   renderSitemap,
 } from "./seo";
+export type { InitialRouteData } from "./hydration";
 export type {
   LinkContribution,
   PreconnectOptions,

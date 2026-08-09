@@ -153,7 +153,7 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
 
           if (result === "next") {
             if (shouldServeDocument(webRequest)) {
-              await writeHtmlResponse(
+              writeHtmlResponse(
                 response,
                 await createDevDocument(server, options, manifest, webRequest),
               );
@@ -165,7 +165,7 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
           }
 
           if (result === "document") {
-            await writeHtmlResponse(
+            writeHtmlResponse(
               response,
               await createDevDocument(server, options, manifest, webRequest),
             );
@@ -212,12 +212,8 @@ const routes = Object.fromEntries(
     load,
   ]),
 );
-const dataElement = document.getElementById("__demiurge_data");
-const initialData = dataElement?.textContent
-  ? JSON.parse(dataElement.textContent)
-  : undefined;
 
-void hydrateFileRouter({ initialData, routes });
+void hydrateFileRouter({ routes });
 `;
 }
 
@@ -338,21 +334,21 @@ function renderHeadTags({
     `    <title>${escapeHtml(title)}</title>`,
     ...(metadata?.description
       ? [
-          renderMetaTag({
-            content: metadata.description,
-            kind: "meta",
-            name: "description",
-          }),
-        ]
+        renderMetaTag({
+          content: metadata.description,
+          kind: "meta",
+          name: "description",
+        }),
+      ]
       : []),
     ...(metadata?.canonical
       ? [
-          renderLinkTag({
-            href: metadata.canonical,
-            kind: "link",
-            rel: "canonical",
-          }),
-        ]
+        renderLinkTag({
+          href: metadata.canonical,
+          kind: "link",
+          rel: "canonical",
+        }),
+      ]
       : []),
     ...renderRobotsTags(metadata),
     ...renderOpenGraphTags(metadata),
@@ -391,24 +387,24 @@ function renderOpenGraphTags(metadata: ResolvedMetadata | undefined) {
   return [
     metadata.openGraph.title
       ? renderMetaTag({
-          content: metadata.openGraph.title,
-          kind: "meta",
-          property: "og:title",
-        })
+        content: metadata.openGraph.title,
+        kind: "meta",
+        property: "og:title",
+      })
       : null,
     metadata.openGraph.description
       ? renderMetaTag({
-          content: metadata.openGraph.description,
-          kind: "meta",
-          property: "og:description",
-        })
+        content: metadata.openGraph.description,
+        kind: "meta",
+        property: "og:description",
+      })
       : null,
     metadata.openGraph.image
       ? renderMetaTag({
-          content: metadata.openGraph.image,
-          kind: "meta",
-          property: "og:image",
-        })
+        content: metadata.openGraph.image,
+        kind: "meta",
+        property: "og:image",
+      })
       : null,
   ].filter((tag): tag is string => Boolean(tag));
 }

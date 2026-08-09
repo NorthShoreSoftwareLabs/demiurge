@@ -11,6 +11,11 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  HYDRATION_ROOT_ATTRIBUTE,
+  readInitialRouteData,
+  type InitialRouteData,
+} from "../document";
 import type { NotFoundProps, RouteErrorProps, RouteImporter } from "../route";
 import {
   createRouteManifest,
@@ -69,22 +74,27 @@ export function createFileRouter(options: FileRouterOptions) {
           setMatch({ loading: Loading, status: "loading" });
         }
       });
-      loadPageRoute(manifest, location.pathname).then((nextMatch) => {
-        if (!cancelled) {
-          setMatch(nextMatch);
-        }
-      }).catch(async (error: unknown) => {
-        const ErrorFallback = await loadErrorFallback(manifest, location.pathname);
+      loadPageRoute(manifest, location.pathname)
+        .then((nextMatch) => {
+          if (!cancelled) {
+            setMatch(nextMatch);
+          }
+        })
+        .catch(async (error: unknown) => {
+          const ErrorFallback = await loadErrorFallback(
+            manifest,
+            location.pathname,
+          );
 
-        if (!cancelled) {
-          setMatch({
-            Error: ErrorFallback,
-            error,
-            pathname: location.pathname,
-            status: "error",
-          });
-        }
-      });
+          if (!cancelled) {
+            setMatch({
+              Error: ErrorFallback,
+              error,
+              pathname: location.pathname,
+              status: "error",
+            });
+          }
+        });
 
       return () => {
         cancelled = true;
@@ -112,8 +122,11 @@ export function createFileRouter(options: FileRouterOptions) {
   };
 }
 
-export type HydrateFileRouterOptions = Omit<FileRouterOptions, "initialMatch"> & {
-  initialData?: import("../router").InitialRouteData;
+export type HydrateFileRouterOptions = Omit<
+  FileRouterOptions,
+  "initialMatch"
+> & {
+  initialData?: InitialRouteData;
   root?: Element;
 };
 
@@ -121,37 +134,42 @@ export async function hydrateFileRouter(options: HydrateFileRouterOptions) {
   const root = options.root ?? document.getElementById("root");
 
   if (!root) {
-    throw new Error("Demiurge expected a #root element in the framework document.");
+    throw new Error(
+      "Demiurge expected a #root element in the framework document.",
+    );
   }
 
   const manifest = createRouteManifest(options.routes);
-  const pathname = window.location.pathname;
   const match = await loadPageRoute(
     manifest,
-    pathname,
+    window.location.pathname,
     new Request(window.location.href),
-    options.initialData,
+    options.initialData ?? readInitialRouteData(document),
   );
+  const Router = createFileRouter(
+    match.status === "ready"
+      ? { ...options, initialMatch: match.match }
+      : options,
+  );
+  const { createRoot, hydrateRoot } = await import("react-dom/client");
 
-  if (match.status !== "ready") {
-    const Router = createFileRouter(options);
-    const { createRoot } = await import("react-dom/client");
-    createRoot(root).render(createElement(Router));
+  // Only documents rendered by the framework server carry markup to hydrate.
+  // A static shell has an empty root, so hydrating it would mismatch.
+  if (match.status === "ready" && root.hasAttribute(HYDRATION_ROOT_ATTRIBUTE)) {
+    hydrateRoot(root, createElement(Router));
     return;
   }
 
-  const Router = createFileRouter({
-    ...options,
-    initialMatch: match.match,
-  });
-  const { hydrateRoot } = await import("react-dom/client");
-  hydrateRoot(root, createElement(Router));
+  root.replaceChildren();
+  createRoot(root).render(createElement(Router));
 }
 
-export function Link<const TTo extends AppHref>(props: LinkTo<TTo> & {
-  children: ReactNode;
-  className?: string;
-}) {
+export function Link<const TTo extends AppHref>(
+  props: LinkTo<TTo> & {
+    children: ReactNode;
+    className?: string;
+  },
+) {
   const router = useRouter();
   const to = href(props as LinkTarget<TTo>);
 

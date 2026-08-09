@@ -1,23 +1,34 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createRequestHandler,
+  defineLinks,
+  defineMetadata,
   defineRoutePolicy,
+  defineScripts,
   json,
   jsonl,
   page,
+  preconnect,
+  preload,
   redirect,
   response as rawResponse,
+  script,
   serverTiming,
   sse,
   stream,
   text,
   webhook,
+  type LayoutProps,
   type RouteModule,
   type RouteProps,
 } from "demiurge";
 
 function View(_props: RouteProps) {
   return <main>Hello SSR</main>;
+}
+
+function Layout({ children }: LayoutProps) {
+  return <section>Layout: {children}</section>;
 }
 
 function DataView({ data }: RouteProps<string, { headline: string }>) {
@@ -1222,6 +1233,53 @@ describe("request handler", () => {
     expect(html).toContain('id="__demiurge_data"');
     expect(html).toContain('\\u003c/script\\u003e');
     expect(html).not.toContain("</script><script>alert(1)");
+  });
+
+  it("renders inherited layouts, metadata, resource hints, and scripts into the document", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/@layout.tsx": routeModule({
+          default: Layout,
+          links: defineLinks([preconnect("https://api.example.com")]),
+          metadata: defineMetadata({ description: "Layout & document" }),
+          scripts: defineScripts([
+            script({ src: "https://cdn.example.com/root.js", strategy: "beforeInteractive" }),
+          ]),
+        }),
+        "./routes/index.tsx": routeModule({
+          GET: page(View),
+          links: defineLinks([preload("/hero.avif", { as: "image", type: "image/avif" })]),
+          metadata: defineMetadata({ title: "Home" }),
+        }),
+      },
+      ssr: { clientEntry: "/client-entry.js", lang: "en-GB" },
+    });
+
+    const html = await (await handler(new Request("https://example.test/"))).text();
+
+    expect(html).toContain(`<html lang="en-GB">`);
+    expect(html).toContain("<title>Home</title>");
+    expect(html).toContain(`<meta name="description" content="Layout &amp; document" />`);
+    expect(html).toContain(`<link rel="preconnect" href="https://api.example.com" />`);
+    expect(html).toContain(
+      `<link rel="preload" href="/hero.avif" as="image" type="image/avif" />`,
+    );
+    expect(html).toContain(`<script src="https://cdn.example.com/root.js"></script>`);
+    expect(html).toContain(`<script type="module" src="/client-entry.js"></script>`);
+    expect(html).toContain("<section>Layout: <main>Hello SSR</main></section>");
+  });
+
+  it("marks the server-rendered root so the client hydrates instead of remounting", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(View) }),
+      },
+    });
+
+    const html = await (await handler(new Request("https://example.test/"))).text();
+
+    expect(html).toContain('<div id="root" data-demiurge-hydrate="">');
+    expect(html).toContain("Hello SSR");
   });
 });
 

@@ -3,7 +3,6 @@ export {
   createRouteManifest,
   findPageMatch,
   findRouteMatch,
-  type InitialRouteData,
   isAttachedFileForRoute,
   isLayoutForPage,
   loadErrorFallback,
@@ -15,6 +14,7 @@ export {
   splitPathname,
   toRouteSegments,
 } from "./manifest";
+export type { InitialRouteData } from "../document";
 export type {
   LayoutRoute,
   LoadedRouteMatch,

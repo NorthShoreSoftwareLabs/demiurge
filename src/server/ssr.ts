@@ -1,5 +1,10 @@
 import { createElement, type ReactNode } from "react";
 import { renderToString } from "react-dom/server";
+import {
+  HYDRATION_DATA_ELEMENT_ID,
+  HYDRATION_ROOT_ATTRIBUTE,
+  serializeInitialRouteData,
+} from "../document";
 import type { LoadedRouteMatch } from "../router";
 
 export type SsrOptions = {
@@ -87,9 +92,9 @@ function renderDocument({
   const entry = clientEntry
     ? `<script type="module" src="${escapeHtml(clientEntry)}"${attribute("nonce", nonce)}></script>`
     : "";
-  const bootstrap = `<script type="application/json" id="__demiurge_data"${attribute("nonce", nonce)}>${escapeJsonScript(JSON.stringify({ data, hasData: data !== undefined }))}</script>`;
+  const bootstrap = `<script type="application/json" id="${HYDRATION_DATA_ELEMENT_ID}"${attribute("nonce", nonce)}>${serializeInitialRouteData(data)}</script>`;
 
-  return `<!doctype html>\n<html lang="${escapeHtml(lang)}">\n  <head>\n    ${head.join("\n    ")}\n  </head>\n  <body>\n    <div id="root">${body}</div>\n    ${bootstrap}\n    ${entry}\n  </body>\n</html>\n`;
+  return `<!doctype html>\n<html lang="${escapeHtml(lang)}">\n  <head>\n    ${head.join("\n    ")}\n  </head>\n  <body>\n    <div id="root" ${HYDRATION_ROOT_ATTRIBUTE}="">${body}</div>\n    ${bootstrap}\n    ${entry}\n  </body>\n</html>\n`;
 }
 
 function attribute(name: string, value: string | undefined) {
@@ -112,13 +117,4 @@ function escapeHtml(value: string) {
 
     return entities[character];
   });
-}
-
-function escapeJsonScript(value: string) {
-  return value
-    .replace(/</g, "\\u003c")
-    .replace(/>/g, "\\u003e")
-    .replace(/&/g, "\\u0026")
-    .replace(/\u2028/g, "\\u2028")
-    .replace(/\u2029/g, "\\u2029");
 }

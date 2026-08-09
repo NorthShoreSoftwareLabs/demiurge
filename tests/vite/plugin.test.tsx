@@ -932,7 +932,7 @@ describe("Vite plugin document runtime", () => {
     expect(source).toContain('import.meta.glob("/src/routes/**/*.tsx")');
     expect(source).toContain('const routePrefix = "/src/routes/";');
     expect(source).toContain("./routes/");
-    expect(source).toContain("hydrateFileRouter({ initialData, routes })");
+    expect(source).toContain("hydrateFileRouter({ routes })");
   });
 
   it("omits the virtual style import when styles are disabled", () => {

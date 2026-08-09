@@ -4,6 +4,7 @@ import {
   resolveLinks,
   resolveMetadata,
   resolveScripts,
+  type InitialRouteData,
   type LinkTag,
   type ResolvedMetadata,
   type ScriptTag,
@@ -98,11 +99,6 @@ export type PendingRouteMatch =
       status: "not-found";
     }
   | { status: "ready"; match: LoadedRouteMatch };
-
-export type InitialRouteData = {
-  data?: unknown;
-  hasData: boolean;
-};
 
 export function createRouteManifest(routes: Record<string, RouteImporter>) {
   const manifest: RouteManifest = {
