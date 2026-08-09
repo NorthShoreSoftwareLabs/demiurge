@@ -19,6 +19,12 @@ export type {
   GoogleFontOptions,
   LocalFontOptions,
 } from "./fonts";
+export { analytics } from "./analytics";
+export type {
+  AnalyticsConsent,
+  PlausibleAnalytics,
+  PlausibleAnalyticsOptions,
+} from "./analytics";
 export { defineInstrumentation } from "./observability";
 export type {
   Instrumentation,

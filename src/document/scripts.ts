@@ -10,6 +10,8 @@ export type ScriptStrategy =
 
 export type ScriptTag = {
   async?: boolean;
+  dataApi?: string;
+  dataDomain?: string;
   defer?: boolean;
   id?: string;
   integrity?: string;

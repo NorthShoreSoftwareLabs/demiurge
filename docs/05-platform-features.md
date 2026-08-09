@@ -188,6 +188,11 @@ analytics.provider("plausible", {
 });
 ```
 
+The first analytics slice provides `analytics.plausible(...)`. It produces a
+managed script descriptor, the required `connect-src` origin, and explicit
+consent metadata. Custom endpoints must use HTTPS; event and route-transition
+delivery remains application-owned through the instrumentation API.
+
 First-class concerns:
 
 - Core Web Vitals reporting.

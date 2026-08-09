@@ -123,7 +123,7 @@ implementation.
 | Image optimization | partially implemented |
 | Remote image allowlists | implemented |
 | Font optimization and self-hosted fonts | partially implemented |
-| Analytics integrations | designed |
+| Analytics integrations | partially implemented |
 | GTM integration with trust-boundary audit | partially implemented |
 | Sentry/PostHog/Plausible integrations | planned |
 | OpenTelemetry instrumentation | partially implemented |

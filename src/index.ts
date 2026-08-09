@@ -40,6 +40,7 @@ export {
 } from "./document";
 export { href } from "./routing";
 export {
+  analytics,
   defineFonts,
   defineInstrumentation,
   defineImages,
@@ -153,6 +154,7 @@ export type {
   StructuredDataValue,
 } from "./document";
 export type {
+  AnalyticsConsent,
   FontContribution,
   FontDefinition,
   FontStyle,
@@ -167,6 +169,8 @@ export type {
   ImageTransformPlan,
   ImageVariant,
   LocalFontOptions,
+  PlausibleAnalytics,
+  PlausibleAnalyticsOptions,
   RemoteImagePattern,
   ObservabilityValue,
   RequestSignal,
