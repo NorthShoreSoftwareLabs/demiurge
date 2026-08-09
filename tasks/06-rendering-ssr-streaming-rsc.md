@@ -45,13 +45,22 @@ data loading, caching, and typing coherent.
   client hydrates only when that marker is present. A static shell without
   server markup is client-rendered instead, because hydrating an empty root
   produces a React hydration mismatch.
+- One document renderer, `renderDocument(...)` in `src/document/render.ts`,
+  now serves both the HTTP request handler and the Vite integration. It takes
+  an optional `body` and emits the hydration marker plus bootstrap script only
+  when one is present, so the same code path produces both server-rendered
+  documents and static shells.
+- `renderPageDocument(...)` returns the rendered document as a string, and
+  `renderPageResponse(...)` is a thin `Response` wrapper over it.
+- `examples/ssr-page` exercises a server-only `data` loader, metadata cascading
+  from layout to leaf, a `path`-based dynamic route, and client navigation
+  after hydration.
 
 ## Open Decisions
 
 - Whether initial RSC data is delivered through a nonce-backed script,
   non-executable JSON script, or separate fetch.
-- Whether the Vite dev server and build should render the SSR document instead
-  of the current static shell. Today `createDocumentHtml(...)` in the Vite
-  plugin and `renderDocument(...)` in `src/server/ssr.ts` are separate renderers
-  that have already drifted, and only the second one can produce markup to
-  hydrate.
+- Whether the production build should prerender documents. The build emits a
+  bodiless shell because `generateBundle` has no request to render against, so
+  built output is client-rendered while dev and the HTTP handler are not. A
+  static adapter with `paths`-driven prerendering is the way to close that gap.

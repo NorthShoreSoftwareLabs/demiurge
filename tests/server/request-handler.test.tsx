@@ -1,3 +1,4 @@
+import type { ComponentType } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
   createRequestHandler,
@@ -11,6 +12,7 @@ import {
   preconnect,
   preload,
   redirect,
+  resolveMetadata,
   response as rawResponse,
   script,
   serverTiming,
@@ -22,6 +24,7 @@ import {
   type RouteModule,
   type RouteProps,
 } from "demiurge";
+import { renderPageDocument } from "../../src/server";
 
 function View(_props: RouteProps) {
   return <main>Hello SSR</main>;
@@ -1267,6 +1270,26 @@ describe("request handler", () => {
     expect(html).toContain(`<script src="https://cdn.example.com/root.js"></script>`);
     expect(html).toContain(`<script type="module" src="/client-entry.js"></script>`);
     expect(html).toContain("<section>Layout: <main>Hello SSR</main></section>");
+  });
+
+  it("renders a document string directly with renderPageDocument", () => {
+    const html = renderPageDocument(
+      {
+        layouts: [],
+        links: [],
+        metadata: resolveMetadata(defineMetadata({ title: "Direct" })),
+        page: View as ComponentType<RouteProps<string, unknown>>,
+        path: {},
+        pathname: "/",
+        scripts: [],
+      },
+      { clientEntry: "/assets/client.js" },
+    );
+
+    expect(typeof html).toBe("string");
+    expect(html).toContain("<main>Hello SSR</main>");
+    expect(html).toContain("<title>Direct</title>");
+    expect(html).toContain('src="/assets/client.js"');
   });
 
   it("marks the server-rendered root so the client hydrates instead of remounting", async () => {

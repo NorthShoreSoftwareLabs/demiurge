@@ -5,12 +5,11 @@ import { resolve, relative, sep } from "node:path";
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import type { OutputBundle, OutputChunk } from "rollup";
 import type { Plugin, UserConfig, ViteDevServer } from "vite";
+import { renderDocument } from "../document";
 import type {
-  DocumentMetadataTag,
   LinkTag,
   ResolvedMetadata,
   ScriptTag,
-  StructuredDataTag,
 } from "../document";
 import { generateRoutes } from "../routing/generate";
 import {
@@ -19,6 +18,7 @@ import {
   loadPageRoute,
   type RouteManifest,
 } from "../router";
+import { renderPageDocument } from "../server/ssr";
 import {
   toResponse,
   type HttpMethod,
@@ -247,44 +247,39 @@ async function createDevDocument(
   manifest?: RouteManifest,
   request?: Request,
 ) {
-  const documentPlan = manifest && request
-    ? await createDevDocumentPlan(manifest, request)
-    : {};
-  const html = createDocumentHtml({
-    entrySrc: `/${CLIENT_ENTRY_ID}`,
-    lang: options.document?.lang,
-    links: documentPlan.links,
-    metadata: documentPlan.metadata,
-    scripts: documentPlan.scripts,
-    title: options.document?.title,
-  });
+  const match = manifest && request
+    ? await loadDevPageRoute(manifest, request)
+    : undefined;
+  const html = match
+    ? renderPageDocument(match, {
+      clientEntry: `/${CLIENT_ENTRY_ID}`,
+      lang: options.document?.lang,
+      title: options.document?.title,
+    })
+    : createDocumentHtml({
+      entrySrc: `/${CLIENT_ENTRY_ID}`,
+      lang: options.document?.lang,
+      title: options.document?.title,
+    });
 
   return await server.transformIndexHtml("/", html);
 }
 
-async function createDevDocumentPlan(manifest: RouteManifest, request: Request) {
+async function loadDevPageRoute(manifest: RouteManifest, request: Request) {
   const url = new URL(request.url);
-  const match = await loadPageRoute(manifest, url.pathname, request);
+  const result = await loadPageRoute(manifest, url.pathname, request);
 
-  if (match.status !== "ready") {
-    return {};
-  }
-
-  return {
-    links: match.match.links,
-    metadata: match.match.metadata,
-    scripts: match.match.scripts,
-  };
+  return result.status === "ready" ? result.match : undefined;
 }
 
 export function createDocumentHtml({
   entrySrc,
-  lang = "en",
-  links = [],
+  lang,
+  links,
   metadata,
   nonce,
-  scripts = [],
-  title = "Demiurge App",
+  scripts,
+  title,
 }: {
   entrySrc: string;
   lang?: string;
@@ -294,181 +289,7 @@ export function createDocumentHtml({
   scripts?: ScriptTag[];
   title?: string;
 }) {
-  const documentTitle = metadata?.title ?? title;
-
-  return `<!doctype html>
-<html lang="${escapeHtml(lang)}">
-  <head>
-${renderHeadTags({ links, metadata, nonce, title: documentTitle })}
-  </head>
-  <body>
-    <div id="root"></div>
-${scripts.map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`).join("\n")}${scripts.length ? "\n" : ""}    <script type="module" src="${escapeHtml(entrySrc)}"${renderAttribute("nonce", nonce)}></script>
-  </body>
-</html>
-`;
-}
-
-function renderHeadTags({
-  links,
-  metadata,
-  nonce,
-  title,
-}: {
-  links: LinkTag[];
-  metadata: ResolvedMetadata | undefined;
-  nonce: string | undefined;
-  title: string;
-}) {
-  return [
-    renderMetaTag({
-      content: metadata?.charset ?? "UTF-8",
-      kind: "meta",
-      name: "charset",
-    }),
-    renderMetaTag({
-      content: metadata?.viewport ?? "width=device-width, initial-scale=1.0",
-      kind: "meta",
-      name: "viewport",
-    }),
-    `    <title>${escapeHtml(title)}</title>`,
-    ...(metadata?.description
-      ? [
-        renderMetaTag({
-          content: metadata.description,
-          kind: "meta",
-          name: "description",
-        }),
-      ]
-      : []),
-    ...(metadata?.canonical
-      ? [
-        renderLinkTag({
-          href: metadata.canonical,
-          kind: "link",
-          rel: "canonical",
-        }),
-      ]
-      : []),
-    ...renderRobotsTags(metadata),
-    ...renderOpenGraphTags(metadata),
-    ...(metadata?.custom ?? []).map(renderDocumentMetadataTag),
-    ...(metadata?.structuredData ?? []).map((tag) =>
-      renderStructuredDataTag(tag, nonce),
-    ),
-    ...links.map(renderLinkTag),
-  ].join("\n");
-}
-
-function renderRobotsTags(metadata: ResolvedMetadata | undefined) {
-  if (!metadata?.robots) {
-    return [];
-  }
-
-  const directives = [
-    metadata.robots.index === false ? "noindex" : "index",
-    metadata.robots.follow === false ? "nofollow" : "follow",
-  ];
-
-  return [
-    renderMetaTag({
-      content: directives.join(", "),
-      kind: "meta",
-      name: "robots",
-    }),
-  ];
-}
-
-function renderOpenGraphTags(metadata: ResolvedMetadata | undefined) {
-  if (!metadata?.openGraph) {
-    return [];
-  }
-
-  return [
-    metadata.openGraph.title
-      ? renderMetaTag({
-        content: metadata.openGraph.title,
-        kind: "meta",
-        property: "og:title",
-      })
-      : null,
-    metadata.openGraph.description
-      ? renderMetaTag({
-        content: metadata.openGraph.description,
-        kind: "meta",
-        property: "og:description",
-      })
-      : null,
-    metadata.openGraph.image
-      ? renderMetaTag({
-        content: metadata.openGraph.image,
-        kind: "meta",
-        property: "og:image",
-      })
-      : null,
-  ].filter((tag): tag is string => Boolean(tag));
-}
-
-function renderDocumentMetadataTag(tag: DocumentMetadataTag) {
-  if (tag.kind === "link") {
-    return renderLinkTag(tag);
-  }
-
-  return renderMetaTag(tag);
-}
-
-function renderStructuredDataTag(
-  tag: StructuredDataTag,
-  nonce: string | undefined,
-) {
-  return `    <script type="application/ld+json"${renderAttribute("nonce", nonce)}>${escapeJsonScript(JSON.stringify(tag.value))}</script>`;
-}
-
-function renderMetaTag(tag: DocumentMetadataTag & { kind: "meta" }) {
-  if (tag.name === "charset") {
-    return `    <meta charset="${escapeHtml(tag.content)}" />`;
-  }
-
-  const name = tag.name ? ` name="${escapeHtml(tag.name)}"` : "";
-  const property = tag.property ? ` property="${escapeHtml(tag.property)}"` : "";
-
-  return `    <meta${name}${property} content="${escapeHtml(tag.content)}" />`;
-}
-
-function renderLinkTag(tag: LinkTag) {
-  return `    <link${renderAttribute("rel", tag.rel)}${renderAttribute("href", tag.href)}${renderAttribute("as", tag.as)}${renderAttribute("type", tag.type)}${renderAttribute("crossorigin", tag.crossOrigin)}${renderAttribute("hreflang", tag.hrefLang)} />`;
-}
-
-function renderScriptTag(scriptTag: ScriptTag, nonce: string | undefined) {
-  return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("src", scriptTag.src)}${renderAttribute("type", scriptTag.type ?? scriptTypeForStrategy(scriptTag.strategy))}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderAttribute("data-api", scriptTag.dataApi)}${renderAttribute("data-domain", scriptTag.dataDomain)}${renderBooleanAttribute("async", scriptTag.async)}${renderBooleanAttribute("defer", scriptTag.defer)}></script>`;
-}
-
-function scriptTypeForStrategy(strategy: ScriptTag["strategy"]) {
-  return strategy === "module" ? "module" : undefined;
-}
-
-function renderAttribute(name: string, value: string | undefined) {
-  return value ? ` ${name}="${escapeHtml(value)}"` : "";
-}
-
-function renderBooleanAttribute(name: string, value: boolean | undefined) {
-  return value ? ` ${name}` : "";
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function escapeJsonScript(value: string) {
-  return value
-    .replaceAll("<", "\\u003c")
-    .replaceAll(">", "\\u003e")
-    .replaceAll("\u2028", "\\u2028")
-    .replaceAll("\u2029", "\\u2029");
+  return renderDocument({ entrySrc, lang, links, metadata, nonce, scripts, title });
 }
 
 function findClientEntryChunk(bundle: OutputBundle) {

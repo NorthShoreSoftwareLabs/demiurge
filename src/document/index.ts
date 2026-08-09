@@ -19,6 +19,9 @@ export {
   structuredData,
 } from "./metadata";
 export {
+  renderDocument,
+} from "./render";
+export {
   defineScripts,
   resolveScripts,
   script,
@@ -50,6 +53,10 @@ export type {
   StructuredDataTag,
   StructuredDataValue,
 } from "./metadata";
+export type {
+  DocumentBody,
+  RenderDocumentOptions,
+} from "./render";
 export type {
   ScriptContribution,
   ScriptStrategy,

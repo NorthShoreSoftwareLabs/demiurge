@@ -40,10 +40,19 @@ function View(_props: RouteProps) {
   return null;
 }
 
+function DevPage({ data }: RouteProps<string, { message: string }>) {
+  return <main>{data.message}</main>;
+}
+
 type PluginHarness = {
   buildStart?: (options: unknown) => void | Promise<void>;
   configResolved?: (config: { root: string }) => void | Promise<void>;
   configureServer?: (server: unknown) => void | Promise<void>;
+  generateBundle?: (
+    this: { emitFile: (asset: { fileName: string; source: string; type: string }) => void },
+    outputOptions: unknown,
+    bundle: unknown,
+  ) => void;
 };
 
 function routeModule(module: RouteModule) {
@@ -664,6 +673,122 @@ describe("Vite plugin dev request handling", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain("virtual:demiurge/client-entry");
+    expect(response.body).toContain('<div id="root"></div>');
+    expect(response.body).not.toContain("data-demiurge-hydrate");
+    expect(response.body).not.toContain("__demiurge_data");
+  });
+
+  it("renders server markup and a hydration bootstrap for a matched page route in Vite dev", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-ssr-document-"));
+    const routesDir = join(root, "routes");
+    const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
+    const middleware = createMiddlewareHarness();
+    const server = {
+      config: { root },
+      middlewares: {
+        use: middleware.use,
+      },
+      ssrLoadModule: vi.fn(async () => ({
+        GET: page<string, { message: string }>({
+          data: async () => ({ message: "Hello from the server" }),
+          view: DevPage,
+        }),
+      })),
+      transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
+      watcher: createWatcherHarness(),
+    };
+
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(join(routesDir, "index.tsx"), "export {}");
+
+    plugin.configureServer?.(server as never);
+
+    const response = new CapturingResponse();
+    await middleware.handler(
+      requestFor("/", {
+        headers: {
+          accept: "text/html",
+          host: "example.test",
+        },
+      }) as never,
+      response as never,
+      vi.fn(),
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("Hello from the server");
+    expect(response.body).toContain('data-demiurge-hydrate=""');
+    expect(response.body).toContain('id="__demiurge_data"');
+    expect(response.body).toContain('src="/virtual:demiurge/client-entry"');
+  });
+
+  it("includes server-resolved route data in the dev document bootstrap payload", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-ssr-data-"));
+    const routesDir = join(root, "routes");
+    const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
+    const middleware = createMiddlewareHarness();
+    const server = {
+      config: { root },
+      middlewares: {
+        use: middleware.use,
+      },
+      ssrLoadModule: vi.fn(async () => ({
+        GET: page<string, { message: string }>({
+          data: async () => ({ message: "loader payload" }),
+          view: DevPage,
+        }),
+      })),
+      transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
+      watcher: createWatcherHarness(),
+    };
+
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(join(routesDir, "index.tsx"), "export {}");
+
+    plugin.configureServer?.(server as never);
+
+    const response = new CapturingResponse();
+    await middleware.handler(
+      requestFor("/", {
+        headers: {
+          accept: "text/html",
+          host: "example.test",
+        },
+      }) as never,
+      response as never,
+      vi.fn(),
+    );
+
+    expect(response.body).toContain('"data":{"message":"loader payload"}');
+    expect(response.body).toContain('"hasData":true');
+  });
+
+  it("emits a bodiless static shell during generateBundle for production builds", () => {
+    const plugin = demiurge() as PluginHarness;
+
+    if (!plugin.generateBundle) {
+      throw new Error("generateBundle was not registered.");
+    }
+
+    const emitFile = vi.fn();
+    const bundle = {
+      "assets/app.js": {
+        facadeModuleId: "\0virtual:demiurge/client-entry",
+        fileName: "assets/app.js",
+        isEntry: true,
+        type: "chunk",
+      },
+    };
+
+    plugin.generateBundle.call({ emitFile }, {} as never, bundle as never);
+
+    expect(emitFile).toHaveBeenCalledTimes(1);
+    const [[emitted]] = emitFile.mock.calls;
+    expect(emitted.fileName).toBe("index.html");
+    expect(emitted.source).toContain('<div id="root"></div>');
+    expect(emitted.source).not.toContain("data-demiurge-hydrate");
+    expect(emitted.source).not.toContain("__demiurge_data");
+    expect(emitted.source).toContain('src="/assets/app.js"');
   });
 
   it("passes POST request bodies and repeated headers to route handlers", async () => {
