@@ -87,8 +87,12 @@ export const GET = page(() => <HomePage />);
 
 ## Phase 5: React Server Rendering
 
-- Add SSR page responses.
-- Add nonce propagation into the React server renderer.
+- Add SSR page responses. The first SSR slice now renders page/layout trees,
+  route metadata, links, managed scripts, and an optional client entry through
+  `createRequestHandler({ ssr })`.
+- Add nonce propagation into the React server renderer. The first slice creates
+  a per-response nonce when a document CSP is configured and applies it to
+  rendered scripts and security headers.
 - Add safe bootstrap data serialization.
 - Add streaming SSR and verify every script/style emission has a CSP story.
 

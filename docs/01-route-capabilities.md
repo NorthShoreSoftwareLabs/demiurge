@@ -45,8 +45,9 @@ const handler = createRequestHandler({
 ```
 
 It can resolve non-page route capabilities to platform `Response` objects. Page
-routes currently return `501` through this handler until SSR/RSC renderers are
-implemented.
+routes are rendered with the built-in SSR renderer. The handler accepts an
+optional `ssr.clientEntry` path when the application also wants to load a
+client entry after the server-rendered document.
 
 The Vite plugin wires this into development:
 

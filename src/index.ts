@@ -81,7 +81,11 @@ export {
   validateRateLimitPolicy,
   validateUploads,
 } from "./security";
-export { createRequestHandler, handleRequestWithManifest } from "./server";
+export {
+  createRequestHandler,
+  handleRequestWithManifest,
+  renderPageResponse,
+} from "./server";
 export {
   action,
   actionInput,
@@ -190,6 +194,7 @@ export type {
   RouteConcretePaths,
   RoutePathVars,
 } from "./routing";
+export type { SsrOptions, SsrRenderOptions } from "./server";
 export type {
   HtmlCapability,
   HttpMethod,

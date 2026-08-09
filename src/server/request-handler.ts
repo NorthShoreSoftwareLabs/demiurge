@@ -2,6 +2,7 @@ import {
   createRouteManifest,
   findRouteMatch,
   isAttachedFileForRoute,
+  loadPageRoute,
   type RouteManifest,
   type RouteRecord,
 } from "../router";
@@ -16,10 +17,12 @@ import {
   type RouteModule,
 } from "../route";
 import { applyServerTimingHeader } from "../route/response";
+import { renderPageResponse, type SsrOptions } from "./ssr";
 import {
   applyCorsHeaders,
   createCorsPreflightResponse,
   createMemoryRateLimitStore,
+  createSecurityHeaders,
   enforceCsrfProtection,
   enforceRateLimit,
   enforceRequestSecurity,
@@ -30,10 +33,12 @@ import {
 export type RequestHandlerOptions = {
   rateLimitStore?: RateLimitStore;
   routes: Record<string, RouteImporter>;
+  ssr?: SsrOptions;
 };
 
 type RequestRuntimeOptions = {
   rateLimitStore: RateLimitStore;
+  ssr?: SsrOptions;
 };
 
 export type RequestHandler = (request: Request) => Promise<Response>;
@@ -57,6 +62,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
   return async function handleRequest(request: Request) {
     return await handleRequestWithManifest(manifest, request, {
       rateLimitStore,
+      ssr: options.ssr,
     });
   };
 }
@@ -97,12 +103,6 @@ export async function handleRequestWithManifest(
     return methodNotAllowed(routeModule);
   }
 
-  if (capability.kind === "page") {
-    return new Response("Page responses need an SSR or RSC renderer.", {
-      status: 501,
-    });
-  }
-
   const policy = await loadInheritedRoutePolicy(
     manifest,
     routeMatch.route,
@@ -114,7 +114,7 @@ export async function handleRequestWithManifest(
   const csrfResponse = enforceCsrfProtection(routeSecurity?.csrf, request);
 
   if (csrfResponse) {
-    return applyCorsHeaders(csrfResponse, capability.cors, request);
+    return applyCorsHeaders(csrfResponse, getCapabilityCors(capability), request);
   }
 
   const rateLimitResponse = enforceRateLimit(
@@ -124,7 +124,11 @@ export async function handleRequestWithManifest(
   );
 
   if (rateLimitResponse) {
-    return applyCorsHeaders(rateLimitResponse, capability.cors, request);
+    return applyCorsHeaders(
+      rateLimitResponse,
+      getCapabilityCors(capability),
+      request,
+    );
   }
 
   const requestSecurityResponse = enforceRequestSecurity(
@@ -134,7 +138,47 @@ export async function handleRequestWithManifest(
   );
 
   if (requestSecurityResponse) {
-    return applyCorsHeaders(requestSecurityResponse, capability.cors, request);
+    return applyCorsHeaders(
+      requestSecurityResponse,
+      getCapabilityCors(capability),
+      request,
+    );
+  }
+
+  if (capability.kind === "page") {
+    const context = {
+      path: routeMatch.path,
+      pathname: url.pathname,
+      request,
+      search: url.searchParams,
+      url,
+    } satisfies HttpRouteContext;
+    const middlewares = await loadInheritedRouteMiddleware(
+      manifest,
+      routeMatch.route,
+    );
+    const nonce = policy.document?.csp ? createNonce() : undefined;
+    const response = await runRouteMiddleware(middlewares, context, async () => {
+      const match = await loadPageRoute(manifest, url.pathname, request);
+
+      if (match.status !== "ready") {
+        throw new Error(`Unable to render page at ${url.pathname}.`);
+      }
+
+      return renderPageResponse(match.match, {
+        ...options.ssr,
+        nonce,
+      });
+    });
+    const headers = createSecurityHeaders(policy.document ?? {}, { nonce });
+
+    for (const [name, value] of headers) {
+      response.headers.set(name, value);
+    }
+
+    return method === "HEAD"
+      ? new Response(null, { headers: response.headers, status: response.status })
+      : response;
   }
 
   const context = {
@@ -159,7 +203,7 @@ async function loadInheritedRoutePolicy(
   manifest: RouteManifest,
   route: RouteRecord,
   routeModule: RouteModule,
-  capability: ResponseCapability,
+  capability: RouteCapability,
 ) {
   const policyModules = await Promise.all(
     manifest.policies
@@ -172,7 +216,9 @@ async function loadInheritedRoutePolicy(
   return mergeRoutePolicies(
     ...policyModules.map((module) => module.policy),
     routeModule.policy,
-    { security: capability.security },
+    {
+      security: capability.kind === "page" ? undefined : capability.security,
+    },
   );
 }
 
@@ -239,6 +285,17 @@ function finalizeRouteResponse(
   }
 
   return corsResponse;
+}
+
+function createNonce() {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function getCapabilityCors(capability: RouteCapability) {
+  return capability.kind === "page" ? undefined : capability.cors;
 }
 
 function normalizeMethod(method: string): HttpMethod | null {

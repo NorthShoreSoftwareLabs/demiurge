@@ -17,7 +17,7 @@ import {
 } from "demiurge";
 
 function View(_props: RouteProps) {
-  return null;
+  return <main>Hello SSR</main>;
 }
 
 function routeModule(module: RouteModule) {
@@ -1172,10 +1172,17 @@ describe("request handler", () => {
     expect(response.status).toBe(404);
   });
 
-  it("does not pretend page routes can render without a renderer", async () => {
+  it("renders page routes with SSR and an optional client entry", async () => {
     const handler = createRequestHandler({
+      ssr: {
+        clientEntry: "/assets/client.js",
+      },
       routes: {
         "./routes/index.tsx": routeModule({
+          metadata: {
+            description: "Server rendered home",
+            title: "Home",
+          },
           GET: page(View),
         }),
       },
@@ -1183,10 +1190,15 @@ describe("request handler", () => {
 
     const response = await handler(new Request("https://example.test/"));
 
-    expect(response.status).toBe(501);
-    await expect(response.text()).resolves.toBe(
-      "Page responses need an SSR or RSC renderer.",
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "text/html; charset=utf-8",
     );
+    const html = await response.text();
+    expect(html).toContain("<main>Hello SSR</main>");
+    expect(html).toContain("<title>Home</title>");
+    expect(html).toContain('name="description" content="Server rendered home"');
+    expect(html).toContain('src="/assets/client.js"');
   });
 });
 

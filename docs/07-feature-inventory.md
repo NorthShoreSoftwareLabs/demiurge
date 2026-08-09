@@ -52,7 +52,7 @@ implementation.
 | --- | --- |
 | Client-side page rendering | implemented |
 | SPA navigation | implemented |
-| SSR | designed |
+| SSR | partially implemented |
 | Streaming SSR | designed |
 | React Server Components | designed |
 | RSC Flight as data stream | designed |
