@@ -97,13 +97,27 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
         return;
       }
 
+      const styles = Object.values(bundle)
+        .filter(
+          (asset): asset is Extract<(typeof bundle)[string], { type: "asset" }> =>
+            asset.type === "asset" && asset.fileName.endsWith(".css"),
+        )
+        .map((asset) => `/${asset.fileName}`);
+      const clientEntry = `/${entry.fileName}`;
+
       this.emitFile({
         fileName: "index.html",
         source: createDocumentHtml({
-          entrySrc: `/${entry.fileName}`,
+          entrySrc: clientEntry,
           lang: options.document?.lang,
+          styles,
           title: options.document?.title,
         }),
+        type: "asset",
+      });
+      this.emitFile({
+        fileName: "demiurge-manifest.json",
+        source: JSON.stringify({ clientEntry, styles }, null, 2),
         type: "asset",
       });
     },
@@ -279,6 +293,7 @@ export function createDocumentHtml({
   metadata,
   nonce,
   scripts,
+  styles,
   title,
 }: {
   entrySrc: string;
@@ -287,9 +302,19 @@ export function createDocumentHtml({
   metadata?: ResolvedMetadata;
   nonce?: string;
   scripts?: ScriptTag[];
+  styles?: string[];
   title?: string;
 }) {
-  return renderDocument({ entrySrc, lang, links, metadata, nonce, scripts, title });
+  return renderDocument({
+    entrySrc,
+    lang,
+    links,
+    metadata,
+    nonce,
+    scripts,
+    styles,
+    title,
+  });
 }
 
 function findClientEntryChunk(bundle: OutputBundle) {

@@ -82,6 +82,20 @@ describe("renderDocument with a rendered body", () => {
 });
 
 describe("renderDocument head metadata", () => {
+  it("renders escaped stylesheet links before resource hints", () => {
+    const html = renderDocument({
+      links: [preconnect("https://api.example.com")],
+      styles: ["/assets/app.css?theme=light&v=1"],
+    });
+
+    expect(html).toContain(
+      '<link rel="stylesheet" href="/assets/app.css?theme=light&amp;v=1" />',
+    );
+    expect(html.indexOf('rel="stylesheet"')).toBeLessThan(
+      html.indexOf('rel="preconnect"'),
+    );
+  });
+
   it("renders title, description, canonical, robots, Open Graph, custom tags, and structured data", () => {
     const html = renderDocument({
       metadata: resolveMetadata(

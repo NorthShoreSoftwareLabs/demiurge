@@ -24,6 +24,7 @@ export type RenderDocumentOptions = {
   metadata?: ResolvedMetadata;
   nonce?: string;
   scripts?: ScriptTag[];
+  styles?: string[];
   title?: string;
 };
 
@@ -35,6 +36,7 @@ export function renderDocument({
   metadata,
   nonce,
   scripts = [],
+  styles = [],
   title = "Demiurge App",
 }: RenderDocumentOptions) {
   const documentTitle = metadata?.title ?? title;
@@ -48,7 +50,7 @@ export function renderDocument({
   return `<!doctype html>
 <html lang="${escapeHtml(lang)}">
   <head>
-${renderHeadTags({ links, metadata, nonce, title: documentTitle })}
+${renderHeadTags({ links, metadata, nonce, styles, title: documentTitle })}
   </head>
   <body>
 ${bodyContent}
@@ -77,11 +79,13 @@ function renderHeadTags({
   links,
   metadata,
   nonce,
+  styles,
   title,
 }: {
   links: LinkTag[];
   metadata: ResolvedMetadata | undefined;
   nonce: string | undefined;
+  styles: string[];
   title: string;
 }) {
   return [
@@ -119,6 +123,9 @@ function renderHeadTags({
     ...(metadata?.custom ?? []).map(renderDocumentMetadataTag),
     ...(metadata?.structuredData ?? []).map((tag) =>
       renderStructuredDataTag(tag, nonce),
+    ),
+    ...styles.map(
+      (href) => `    <link rel="stylesheet" href="${escapeHtml(href)}" />`,
     ),
     ...links.map(renderLinkTag),
   ].join("\n");

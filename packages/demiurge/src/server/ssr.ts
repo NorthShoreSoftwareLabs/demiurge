@@ -6,6 +6,7 @@ import type { LoadedRouteMatch } from "../router";
 export type SsrOptions = {
   clientEntry?: string;
   lang?: string;
+  styles?: string[];
   title?: string;
 };
 
@@ -41,6 +42,7 @@ export function renderPageDocument(
     metadata: match.metadata,
     nonce: options.nonce,
     scripts: match.scripts,
+    styles: options.styles,
     title: options.title,
   });
 }

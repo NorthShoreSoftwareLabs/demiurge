@@ -763,7 +763,7 @@ describe("Vite plugin dev request handling", () => {
     expect(response.body).toContain('"hasData":true');
   });
 
-  it("emits a bodiless static shell during generateBundle for production builds", () => {
+  it("emits a bodiless static shell, styles, and a production manifest", () => {
     const plugin = demiurge() as PluginHarness;
 
     if (!plugin.generateBundle) {
@@ -778,17 +778,34 @@ describe("Vite plugin dev request handling", () => {
         isEntry: true,
         type: "chunk",
       },
+      "assets/app.css": {
+        fileName: "assets/app.css",
+        source: "body {}",
+        type: "asset",
+      },
     };
 
     plugin.generateBundle.call({ emitFile }, {} as never, bundle as never);
 
-    expect(emitFile).toHaveBeenCalledTimes(1);
-    const [[emitted]] = emitFile.mock.calls;
-    expect(emitted.fileName).toBe("index.html");
-    expect(emitted.source).toContain('<div id="root"></div>');
-    expect(emitted.source).not.toContain("data-demiurge-hydrate");
-    expect(emitted.source).not.toContain("__demiurge_data");
-    expect(emitted.source).toContain('src="/assets/app.js"');
+    expect(emitFile).toHaveBeenCalledTimes(2);
+    const emitted = emitFile.mock.calls.map(([asset]) => asset);
+    const html = emitted.find((asset) => asset.fileName === "index.html");
+    const manifest = emitted.find(
+      (asset) => asset.fileName === "demiurge-manifest.json",
+    );
+    expect(html).toBeDefined();
+    expect(manifest).toBeDefined();
+    expect(html?.source).toContain('<div id="root"></div>');
+    expect(html?.source).not.toContain("data-demiurge-hydrate");
+    expect(html?.source).not.toContain("__demiurge_data");
+    expect(html?.source).toContain('src="/assets/app.js"');
+    expect(html?.source).toContain(
+      '<link rel="stylesheet" href="/assets/app.css" />',
+    );
+    expect(JSON.parse(manifest?.source ?? "{}")).toEqual({
+      clientEntry: "/assets/app.js",
+      styles: ["/assets/app.css"],
+    });
   });
 
   it("passes POST request bodies and repeated headers to route handlers", async () => {
