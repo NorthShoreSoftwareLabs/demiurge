@@ -11,6 +11,7 @@
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "types": ["node"],
     "baseUrl": ".",
     "paths": {
       "demiurge": ["src/index.ts"],
@@ -22,7 +23,7 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src", "tests", "examples"],
+  "include": ["src", "tests", "examples", "scripts"],
   "exclude": ["vite.config.ts", "examples/**/vite.config.ts"],
   "references": []
 }
