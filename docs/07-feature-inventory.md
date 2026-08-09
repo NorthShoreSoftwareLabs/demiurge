@@ -126,7 +126,7 @@ implementation.
 | Analytics integrations | designed |
 | GTM integration with trust-boundary audit | partially implemented |
 | Sentry/PostHog/Plausible integrations | planned |
-| OpenTelemetry instrumentation | designed |
+| OpenTelemetry instrumentation | partially implemented |
 | Core Web Vitals reporting | designed |
 | Server-Timing headers | implemented |
 | Route audit/devtools UI | designed |

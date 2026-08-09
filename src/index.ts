@@ -40,6 +40,7 @@ export {
 } from "./document";
 export { href } from "./routing";
 export {
+  defineInstrumentation,
   defineImages,
   isAllowedImageSource,
   planImageTransform,
@@ -148,12 +149,22 @@ export type {
   StructuredDataValue,
 } from "./document";
 export type {
+  Instrumentation,
+  InstrumentationEvent,
+  InstrumentationHandler,
+  InstrumentationOptions,
   ImageFormat,
   ImagePolicy,
   ImageTransformOptions,
   ImageTransformPlan,
   ImageVariant,
   RemoteImagePattern,
+  ObservabilityValue,
+  RequestSignal,
+  ServerStartSignal,
+  TraceSignal,
+  WebVitalName,
+  WebVitalSignal,
 } from "./platform";
 export type {
   AppHref,

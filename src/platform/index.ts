@@ -11,3 +11,16 @@ export type {
   ImageVariant,
   RemoteImagePattern,
 } from "./images";
+export { defineInstrumentation } from "./observability";
+export type {
+  Instrumentation,
+  InstrumentationEvent,
+  InstrumentationHandler,
+  InstrumentationOptions,
+  ObservabilityValue,
+  RequestSignal,
+  ServerStartSignal,
+  TraceSignal,
+  WebVitalName,
+  WebVitalSignal,
+} from "./observability";

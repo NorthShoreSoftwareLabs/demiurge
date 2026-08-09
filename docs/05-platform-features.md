@@ -337,6 +337,12 @@ instrumentation.trace(...)
 reportWebVitals(...)
 ```
 
+The first instrumentation slice provides `defineInstrumentation(...)`. It
+dispatches normalized request, server-start, trace, and web-vitals signals to
+application-owned handlers, including an optional catch-all event handler. The
+API has no telemetry vendor dependency, so an adapter can forward the signals
+to OpenTelemetry or another backend without changing route code.
+
 Core signals:
 
 - Request traces.
