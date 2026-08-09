@@ -11,6 +11,14 @@ export type {
   ImageVariant,
   RemoteImagePattern,
 } from "./images";
+export { defineFonts, font, fontPreloadLinks, renderFontFaceCss } from "./fonts";
+export type {
+  FontContribution,
+  FontDefinition,
+  FontStyle,
+  GoogleFontOptions,
+  LocalFontOptions,
+} from "./fonts";
 export { defineInstrumentation } from "./observability";
 export type {
   Instrumentation,

@@ -308,6 +308,12 @@ Core font features:
 - Feed `font-src` policy.
 - Avoid runtime third-party font requests unless explicitly configured.
 
+The first font slice provides `defineFonts(...)`, `font.local(...)`,
+`font.google(...)`, `fontPreloadLinks(...)`, and `renderFontFaceCss(...)`.
+Local descriptors render deterministic `@font-face` CSS and preload links.
+Google descriptors preserve self-host intent for a build adapter; they do not
+silently add runtime requests.
+
 ### Resource Hints
 
 Resource hints should be structured:

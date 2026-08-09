@@ -122,7 +122,7 @@ implementation.
 | --- | --- |
 | Image optimization | partially implemented |
 | Remote image allowlists | implemented |
-| Font optimization and self-hosted fonts | designed |
+| Font optimization and self-hosted fonts | partially implemented |
 | Analytics integrations | designed |
 | GTM integration with trust-boundary audit | partially implemented |
 | Sentry/PostHog/Plausible integrations | planned |

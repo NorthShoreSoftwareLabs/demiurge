@@ -40,10 +40,14 @@ export {
 } from "./document";
 export { href } from "./routing";
 export {
+  defineFonts,
   defineInstrumentation,
   defineImages,
+  font,
+  fontPreloadLinks,
   isAllowedImageSource,
   planImageTransform,
+  renderFontFaceCss,
 } from "./platform";
 export {
   auditScriptDependencies,
@@ -149,6 +153,10 @@ export type {
   StructuredDataValue,
 } from "./document";
 export type {
+  FontContribution,
+  FontDefinition,
+  FontStyle,
+  GoogleFontOptions,
   Instrumentation,
   InstrumentationEvent,
   InstrumentationHandler,
@@ -158,6 +166,7 @@ export type {
   ImageTransformOptions,
   ImageTransformPlan,
   ImageVariant,
+  LocalFontOptions,
   RemoteImagePattern,
   ObservabilityValue,
   RequestSignal,
