@@ -201,9 +201,7 @@ export function createClientEntrySource(
   const routesPrefix = toRootAbsolutePrefix(routesDir);
   const stylesImport = createStylesImport(root, options);
 
-  return `import { StrictMode, createElement } from "react";
-import { createRoot } from "react-dom/client";
-import { createFileRouter } from "demiurge";
+  return `import { hydrateFileRouter } from "demiurge";
 ${stylesImport}
 
 const routeModules = import.meta.glob(${JSON.stringify(routesGlob)});
@@ -214,16 +212,12 @@ const routes = Object.fromEntries(
     load,
   ]),
 );
-const Router = createFileRouter({ routes });
-const root = document.getElementById("root");
+const dataElement = document.getElementById("__demiurge_data");
+const initialData = dataElement?.textContent
+  ? JSON.parse(dataElement.textContent)
+  : undefined;
 
-if (!root) {
-  throw new Error("Demiurge expected a #root element in the framework document.");
-}
-
-createRoot(root).render(
-  createElement(StrictMode, null, createElement(Router)),
-);
+void hydrateFileRouter({ initialData, routes });
 `;
 }
 

@@ -33,6 +33,7 @@ export function renderPageResponse(
   const body = renderToString(content);
   const html = renderDocument({
     body,
+    data: match.data,
     clientEntry: options.clientEntry,
     lang: options.lang,
     links: match.links,
@@ -52,6 +53,7 @@ export function renderPageResponse(
 function renderDocument({
   body,
   clientEntry,
+  data,
   lang = "en",
   links,
   metadata,
@@ -60,6 +62,7 @@ function renderDocument({
   title = "Demiurge App",
 }: SsrRenderOptions & {
   body: string;
+  data: unknown;
   links: LoadedRouteMatch["links"];
   metadata: LoadedRouteMatch["metadata"];
   scripts: LoadedRouteMatch["scripts"];
@@ -84,8 +87,9 @@ function renderDocument({
   const entry = clientEntry
     ? `<script type="module" src="${escapeHtml(clientEntry)}"${attribute("nonce", nonce)}></script>`
     : "";
+  const bootstrap = `<script type="application/json" id="__demiurge_data"${attribute("nonce", nonce)}>${escapeJsonScript(JSON.stringify({ data, hasData: data !== undefined }))}</script>`;
 
-  return `<!doctype html>\n<html lang="${escapeHtml(lang)}">\n  <head>\n    ${head.join("\n    ")}\n  </head>\n  <body>\n    <div id="root">${body}</div>\n    ${entry}\n  </body>\n</html>\n`;
+  return `<!doctype html>\n<html lang="${escapeHtml(lang)}">\n  <head>\n    ${head.join("\n    ")}\n  </head>\n  <body>\n    <div id="root">${body}</div>\n    ${bootstrap}\n    ${entry}\n  </body>\n</html>\n`;
 }
 
 function attribute(name: string, value: string | undefined) {
@@ -108,4 +112,13 @@ function escapeHtml(value: string) {
 
     return entities[character];
   });
+}
+
+function escapeJsonScript(value: string) {
+  return value
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 }

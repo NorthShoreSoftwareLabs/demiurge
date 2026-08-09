@@ -99,6 +99,11 @@ export type PendingRouteMatch =
     }
   | { status: "ready"; match: LoadedRouteMatch };
 
+export type InitialRouteData = {
+  data?: unknown;
+  hasData: boolean;
+};
+
 export function createRouteManifest(routes: Record<string, RouteImporter>) {
   const manifest: RouteManifest = {
     fallbacks: {
@@ -217,6 +222,7 @@ export async function loadPageRoute(
   manifest: RouteManifest,
   pathname: string,
   request = new Request(`http://demiurge.local${pathname}`),
+  initialData?: InitialRouteData,
 ): Promise<PendingRouteMatch> {
   const routeMatch = findRouteMatch(manifest.routes, pathname);
 
@@ -260,9 +266,10 @@ export async function loadPageRoute(
   return {
     status: "ready",
     match: {
-      data: pageModule.GET.data
-        ? await pageModule.GET.data(context)
-        : undefined,
+      data:
+        pageModule.GET.data && !initialData?.hasData
+          ? await pageModule.GET.data(context)
+          : initialData?.data,
       error: await loadErrorFallbackForRoute(manifest, routeMatch.route),
       links: await resolveLinks(
         [

@@ -8,6 +8,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { NotFoundProps, RouteErrorProps, RouteImporter } from "../route";
@@ -16,11 +17,13 @@ import {
   loadErrorFallback,
   loadLoadingFallback,
   loadPageRoute,
+  type LoadedRouteMatch,
   type PendingRouteMatch,
 } from "../router";
 import { href, type AppHref, type LinkTarget, type LinkTo } from "../routing";
 
 type FileRouterOptions = {
+  initialMatch?: LoadedRouteMatch;
   routes: Record<string, RouteImporter>;
   loading?: ComponentType;
   notFound?: ComponentType<NotFoundProps>;
@@ -31,9 +34,12 @@ export function createFileRouter(options: FileRouterOptions) {
 
   return function FileRouter() {
     const [location, setLocation] = useState(() => getCurrentLocation());
-    const [match, setMatch] = useState<PendingRouteMatch>({
-      status: "loading",
-    });
+    const [match, setMatch] = useState<PendingRouteMatch>(() =>
+      options.initialMatch
+        ? { match: options.initialMatch, status: "ready" }
+        : { status: "loading" },
+    );
+    const initialMatchPending = useRef(Boolean(options.initialMatch));
 
     useEffect(() => {
       function onPopState() {
@@ -46,6 +52,16 @@ export function createFileRouter(options: FileRouterOptions) {
 
     useEffect(() => {
       let cancelled = false;
+
+      if (
+        initialMatchPending.current &&
+        options.initialMatch?.pathname === location.pathname
+      ) {
+        initialMatchPending.current = false;
+        return () => {
+          cancelled = true;
+        };
+      }
 
       setMatch({ status: "loading" });
       loadLoadingFallback(manifest, location.pathname).then((Loading) => {
@@ -94,6 +110,42 @@ export function createFileRouter(options: FileRouterOptions) {
       }),
     });
   };
+}
+
+export type HydrateFileRouterOptions = Omit<FileRouterOptions, "initialMatch"> & {
+  initialData?: import("../router").InitialRouteData;
+  root?: Element;
+};
+
+export async function hydrateFileRouter(options: HydrateFileRouterOptions) {
+  const root = options.root ?? document.getElementById("root");
+
+  if (!root) {
+    throw new Error("Demiurge expected a #root element in the framework document.");
+  }
+
+  const manifest = createRouteManifest(options.routes);
+  const pathname = window.location.pathname;
+  const match = await loadPageRoute(
+    manifest,
+    pathname,
+    new Request(window.location.href),
+    options.initialData,
+  );
+
+  if (match.status !== "ready") {
+    const Router = createFileRouter(options);
+    const { createRoot } = await import("react-dom/client");
+    createRoot(root).render(createElement(Router));
+    return;
+  }
+
+  const Router = createFileRouter({
+    ...options,
+    initialMatch: match.match,
+  });
+  const { hydrateRoot } = await import("react-dom/client");
+  hydrateRoot(root, createElement(Router));
 }
 
 export function Link<const TTo extends AppHref>(props: LinkTo<TTo> & {

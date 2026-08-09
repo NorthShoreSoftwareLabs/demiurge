@@ -1,4 +1,4 @@
-export { createFileRouter, Link } from "./browser";
+export { createFileRouter, hydrateFileRouter, Link } from "./browser";
 export {
   assertAdapterCapabilities,
   checkAdapterCapabilities,
@@ -183,6 +183,7 @@ export type {
   WebVitalName,
   WebVitalSignal,
 } from "./platform";
+export type { InitialRouteData } from "./router";
 export type {
   AppHref,
   AppPath,
@@ -194,6 +195,7 @@ export type {
   RouteConcretePaths,
   RoutePathVars,
 } from "./routing";
+export type { HydrateFileRouterOptions } from "./browser";
 export type { SsrOptions, SsrRenderOptions } from "./server";
 export type {
   HtmlCapability,

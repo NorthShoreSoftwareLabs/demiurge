@@ -20,6 +20,10 @@ function View(_props: RouteProps) {
   return <main>Hello SSR</main>;
 }
 
+function DataView({ data }: RouteProps<string, { headline: string }>) {
+  return <main>{data.headline}</main>;
+}
+
 function routeModule(module: RouteModule) {
   return vi.fn(async () => module);
 }
@@ -1199,6 +1203,25 @@ describe("request handler", () => {
     expect(html).toContain("<title>Home</title>");
     expect(html).toContain('name="description" content="Server rendered home"');
     expect(html).toContain('src="/assets/client.js"');
+  });
+
+  it("escapes serialized route data for the hydration payload", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page<string, { headline: string }>({
+            data: async () => ({ headline: "</script><script>alert(1)</script>" }),
+            view: DataView,
+          }),
+        }),
+      },
+    });
+
+    const html = await (await handler(new Request("https://example.test/"))).text();
+
+    expect(html).toContain('id="__demiurge_data"');
+    expect(html).toContain('\\u003c/script\\u003e');
+    expect(html).not.toContain("</script><script>alert(1)");
   });
 });
 

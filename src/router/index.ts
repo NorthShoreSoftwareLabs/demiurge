@@ -3,6 +3,7 @@ export {
   createRouteManifest,
   findPageMatch,
   findRouteMatch,
+  type InitialRouteData,
   isAttachedFileForRoute,
   isLayoutForPage,
   loadErrorFallback,
