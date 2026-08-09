@@ -1,6 +1,11 @@
-# Demiurge
+<p align="center">
+  <img src="./assets/logo.png" alt="Demiurge" width="200">
+</p>
 
-A tiny React framework built one layer at a time.
+<h1 align="center">Demiurge</h1>
+
+<p align="center">A tiny React framework built one layer at a time.</p>
+
 
 ## MVP 0.0.1
 
