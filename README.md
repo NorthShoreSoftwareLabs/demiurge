@@ -48,15 +48,31 @@ npm test
 npm run build
 ```
 
-Current source modules:
+## Repository layout
 
-- `src/document`: metadata, scripts, links, SEO, and the document renderer
-- `src/route`: route capability helpers and public route types
-- `src/router`: file-route manifest, matching, and route loading
-- `src/browser`: browser router and `<Link />`
-- `src/server`: request handling for HTTP route capabilities
-- `src/vite`: Vite integration for development
-- `src/internal`: explicit test-only framework internals
+The library lives in `packages/demiurge` and is consumed by the examples the
+same way a published install would be. Examples are npm workspaces that depend
+on `demiurge` and resolve it through `node_modules`, so the package's `exports`
+map, its emitted declarations, and its peer dependencies are all exercised by
+the normal build rather than bypassed by a path alias.
+
+Because of that, the examples read the library's `dist`, not its source. Build
+it once with `npm run build -w demiurge`, or run `npm run dev:lib` in a second
+terminal to rebuild on change while you work on an example.
+
+`npm run test:pack` packs the tarball, installs it into a scratch app, and
+imports every entry point. That is the only check that sees the package the way
+a consumer does.
+
+Current source modules, all under `packages/demiurge/src`:
+
+- `document`: metadata, scripts, links, SEO, and the document renderer
+- `route`: route capability helpers and public route types
+- `router`: file-route manifest, matching, and route loading
+- `browser`: browser router and `<Link />`
+- `server`: request handling for HTTP route capabilities
+- `vite`: Vite integration for development
+- `internal`: explicit test-only framework internals
 
 ## Design notes
 

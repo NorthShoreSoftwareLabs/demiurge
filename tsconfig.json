@@ -1,36 +1,10 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "useDefineForClassFields": true,
-    "lib": ["DOM", "DOM.Iterable", "ES2022"],
-    "allowJs": false,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "strict": true,
-    "forceConsistentCasingInFileNames": true,
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "types": ["node"],
-    "baseUrl": ".",
-    "paths": {
-      "demiurge": ["src/index.ts"],
-      "demiurge/internal/testing": ["src/internal/testing.ts"],
-      "demiurge/vite": ["src/vite/index.ts"]
-    },
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "react-jsx"
-  },
+  "extends": "./tsconfig.base.json",
   "include": [
-    "src",
-    "tests",
     "examples",
     "examples/basic-blog/.demiurge/route-manifest.d.ts",
     "examples/ssr-page/.demiurge/route-manifest.d.ts",
     "scripts"
   ],
-  "exclude": ["vite.config.ts", "examples/**/vite.config.ts"],
-  "references": []
+  "exclude": ["examples/**/vite.config.ts", "examples/**/dist"]
 }

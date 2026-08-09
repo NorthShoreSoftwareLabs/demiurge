@@ -5,11 +5,10 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   {
     ignores: [
-      "coverage/**",
-      "dist/**",
-      "examples/**/dist/**",
-      "node_modules/**",
-      "examples/**/src/route-manifest.d.ts",
+      "**/coverage/**",
+      "**/dist/**",
+      "**/node_modules/**",
+      "examples/**/.demiurge/**",
     ],
   },
   js.configs.recommended,

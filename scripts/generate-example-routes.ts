@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { generateRoutes } from "../src/routing/generate";
+import { generateRoutes } from "../packages/demiurge/src/routing/generate";
 
 const examples = ["basic-blog", "ssr-page"];
 

@@ -1,52 +1,33 @@
 {
-  "name": "demiurge",
-  "version": "0.0.1",
+  "name": "demiurge-repo",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
-    "./internal/testing": {
-      "types": "./src/internal/testing.ts",
-      "default": "./src/internal/testing.ts"
-    },
-    "./vite": {
-      "types": "./src/vite/index.ts",
-      "default": "./src/vite/index.ts"
-    }
-  },
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
   "scripts": {
-    "dev": "npm run generate:routes && vite examples/basic-blog",
-    "build": "npm run generate:routes && tsc --noEmit && npm run build:example",
-    "build:example": "vite build examples/basic-blog && vite build examples/ssr-page",
+    "dev": "npm run build -w demiurge && npm run generate:routes && npm run dev -w examples/basic-blog",
+    "dev:lib": "npm run dev -w demiurge",
+    "build": "npm run build -w demiurge && npm run generate:routes && npm run typecheck:consumers && npm run build:examples",
+    "build:examples": "npm run build -w examples/basic-blog && npm run build -w examples/ssr-page",
     "generate:routes": "tsx scripts/generate-example-routes.ts",
     "lint": "eslint .",
-    "coverage": "vitest run --coverage",
-    "typecheck": "npm run generate:routes && tsc --noEmit",
-    "test": "vitest run",
-    "verify": "npm run lint && npm run typecheck && npm run coverage && npm run build"
-  },
-  "dependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "typescript": "^5.7.2",
-    "vite": "^6.0.7"
+    "coverage": "npm run coverage -w demiurge",
+    "test": "npm run test -w demiurge",
+    "typecheck": "npm run generate:routes && npm run typecheck -w demiurge && npm run typecheck:consumers",
+    "typecheck:consumers": "tsc --noEmit -p tsconfig.json",
+    "test:pack": "tsx scripts/test-pack.ts",
+    "verify": "npm run lint && npm run build -w demiurge && npm run typecheck && npm run coverage && npm run build:examples && npm run test:pack"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@testing-library/react": "^16.3.2",
     "@types/node": "^26.1.2",
-    "@types/react": "^19.0.2",
-    "@types/react-dom": "^19.0.2",
-    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^10.8.0",
     "globals": "^17.9.0",
-    "jsdom": "^30.0.1",
     "tsx": "^4.20.6",
-    "typescript-eslint": "^8.66.0",
-    "vitest": "^4.1.10"
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.66.0"
   }
 }
