@@ -20,8 +20,8 @@
   "scripts": {
     "dev": "npm run generate:routes && vite examples/basic-blog",
     "build": "npm run generate:routes && tsc --noEmit && npm run build:example",
-    "build:example": "vite build examples/basic-blog",
-    "generate:routes": "tsx scripts/generate-basic-blog-routes.ts",
+    "build:example": "vite build examples/basic-blog && vite build examples/ssr-page",
+    "generate:routes": "tsx scripts/generate-example-routes.ts",
     "lint": "eslint .",
     "coverage": "vitest run --coverage",
     "typecheck": "npm run generate:routes && tsc --noEmit",

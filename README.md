@@ -14,6 +14,7 @@ Current conventions:
 - public API is exported from `demiurge`
 - test-only internals are exported from `demiurge/internal/testing`
 - example apps live under `examples`
+- `examples/ssr-page` demonstrates server rendering, hydration, and route data
 - `examples/basic-blog/src/routes/index.tsx` maps to `/`
 - `examples/basic-blog/src/routes/blog/index.tsx` maps to `/blog`
 - `examples/basic-blog/src/routes/blog/[slug].tsx` maps to `/blog/:slug`
@@ -49,6 +50,7 @@ npm run build
 
 Current source modules:
 
+- `src/document`: metadata, scripts, links, SEO, and the document renderer
 - `src/route`: route capability helpers and public route types
 - `src/router`: file-route manifest, matching, and route loading
 - `src/browser`: browser router and `<Link />`

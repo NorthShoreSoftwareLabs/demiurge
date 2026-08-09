@@ -23,7 +23,14 @@
     "noEmit": true,
     "jsx": "react-jsx"
   },
-  "include": ["src", "tests", "examples", "scripts"],
+  "include": [
+    "src",
+    "tests",
+    "examples",
+    "examples/basic-blog/.demiurge/route-manifest.d.ts",
+    "examples/ssr-page/.demiurge/route-manifest.d.ts",
+    "scripts"
+  ],
   "exclude": ["vite.config.ts", "examples/**/vite.config.ts"],
   "references": []
 }

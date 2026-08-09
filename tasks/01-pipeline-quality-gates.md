@@ -19,13 +19,23 @@ fail fast when lint, type safety, tests, coverage, or examples regress.
 ## Examples Required
 
 - `examples/basic-blog` must continue to build under `npm run build`.
+- `examples/ssr-page` must continue to build under `npm run build`.
 - Future fixture examples should be added to the pipeline as they are created.
+- Generated route manifests are written to a dot-directory that TypeScript's
+  wildcard include skips, so each one must be named explicitly in `tsconfig.json`
+  or the typed-route gate silently does nothing.
 
 ## Tests Required
 
 - The existing Vitest suite must pass under coverage.
 - Type assertions for generated actual URL strings must continue to run under
   `npm run typecheck`.
+
+## Known Gaps
+
+- Coverage thresholds are enforced on the aggregate only, so a single module can
+  sit well under 80% while the suite stays green. Per-file thresholds would make
+  the gate mean what it says.
 
 ## Open Decisions
 
