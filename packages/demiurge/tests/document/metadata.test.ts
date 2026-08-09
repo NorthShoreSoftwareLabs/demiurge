@@ -45,6 +45,17 @@ describe("document metadata", () => {
     });
   });
 
+  it("leaves the default title unformatted when no route supplies one", () => {
+    const metadata = resolveMetadata({
+      title: {
+        default: "Demiurge",
+        format: (title) => `${title} | Demiurge`,
+      },
+    });
+
+    expect(metadata.title).toBe("Demiurge");
+  });
+
   it("lets leaf metadata override scalar fields and merge structured fields", () => {
     const metadata = resolveMetadata(
       {

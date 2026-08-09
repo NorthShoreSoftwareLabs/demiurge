@@ -194,13 +194,14 @@ function applyTitle(state: MetadataState, title: MetadataTitle | undefined) {
 }
 
 function resolveTitle(state: MetadataState) {
-  const title = state.title ?? state.titleDefault;
-
-  if (!title) {
-    return undefined;
+  // A default title stands on its own. Only a title supplied by a route runs
+  // through the inherited formatter, otherwise a layout that declares both ends
+  // up rendering its own name twice on every route that sets no title.
+  if (state.title === undefined) {
+    return state.titleDefault;
   }
 
-  return state.titleFormat ? state.titleFormat(title) : title;
+  return state.titleFormat ? state.titleFormat(state.title) : state.title;
 }
 
 function resolveOpenGraph(
