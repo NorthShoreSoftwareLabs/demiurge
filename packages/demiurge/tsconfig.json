@@ -5,6 +5,7 @@
     "paths": {
       "demiurge": ["src/index.ts"],
       "demiurge/internal/testing": ["src/internal/testing.ts"],
+      "demiurge/node": ["src/node/index.ts"],
       "demiurge/vite": ["src/vite/index.ts"]
     }
   },

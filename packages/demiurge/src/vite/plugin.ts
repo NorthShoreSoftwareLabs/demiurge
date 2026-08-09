@@ -1,8 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { Readable } from "node:stream";
 import { resolve, relative, sep } from "node:path";
-import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
+import type { ServerResponse } from "node:http";
 import type { OutputBundle, OutputChunk } from "rollup";
 import type { Plugin, UserConfig, ViteDevServer } from "vite";
 import { renderDocument } from "../document";
@@ -29,6 +28,7 @@ import {
   type RouteModule,
 } from "../route";
 import { applyServerTimingHeader } from "../route/response";
+import { toWebRequest, writeWebResponse } from "../node/http";
 import {
   applyCorsHeaders,
   createCorsPreflightResponse,
@@ -458,64 +458,6 @@ async function findRouteFiles(directory: string) {
 function toRouteKey(routesDir: string, file: string) {
   const relativePath = relative(routesDir, file).split(sep).join("/");
   return `./routes/${relativePath}`;
-}
-
-function toWebRequest(request: IncomingMessage) {
-  const origin = `http://${request.headers.host ?? "localhost"}`;
-  const url = new URL(request.url ?? "/", origin);
-  const init: RequestInit & { duplex?: "half" } = {
-    headers: toHeaders(request.headers),
-    method: request.method,
-  };
-
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    init.body = Readable.toWeb(request) as ReadableStream;
-    init.duplex = "half";
-  }
-
-  return new Request(url, init);
-}
-
-async function writeWebResponse(
-  serverResponse: ServerResponse,
-  webResponse: Response,
-) {
-  serverResponse.statusCode = webResponse.status;
-  serverResponse.statusMessage = webResponse.statusText;
-  webResponse.headers.forEach((value, name) => {
-    serverResponse.setHeader(name, value);
-  });
-
-  if (!webResponse.body) {
-    serverResponse.end();
-    return;
-  }
-
-  await new Promise<void>((resolveWrite, rejectWrite) => {
-    Readable.fromWeb(webResponse.body as unknown as import("node:stream/web").ReadableStream)
-      .on("error", rejectWrite)
-      .on("end", resolveWrite)
-      .pipe(serverResponse);
-  });
-}
-
-function toHeaders(headers: IncomingHttpHeaders) {
-  const nextHeaders = new Headers();
-
-  for (const [name, value] of Object.entries(headers)) {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        nextHeaders.append(name, item);
-      }
-      continue;
-    }
-
-    if (value) {
-      nextHeaders.set(name, value);
-    }
-  }
-
-  return nextHeaders;
 }
 
 function normalizeMethod(method: string): HttpMethod | null {

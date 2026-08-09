@@ -16,6 +16,9 @@ export default defineConfig({
         "vite/index": fileURLToPath(
           new URL("src/vite/index.ts", import.meta.url),
         ),
+        "node/index": fileURLToPath(
+          new URL("src/node/index.ts", import.meta.url),
+        ),
       },
       formats: ["es"],
     },
