@@ -42,6 +42,10 @@ document/security systems instead of added through unsafe snippets.
   preserving app-provided timing entries.
 - Script dependency audits provide the first GTM trust-boundary diagnostic
   foundation without yet implementing full analytics integration helpers.
+- `classifyImageSource(...)` treats only single-slash paths as local. A
+  protocol-relative source such as `//host/image.png` previously matched the
+  local branch and skipped the remote allowlist entirely, so it is now rejected
+  outright rather than resolved against the page origin.
 
 ## Open Decisions
 

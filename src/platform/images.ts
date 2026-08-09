@@ -114,7 +114,7 @@ function classifyImageSource(
   src: string,
   policy: ImagePolicy,
 ): ImageTransformPlan["source"] | null {
-  if (src.startsWith("/")) {
+  if (src.startsWith("/") && !src.startsWith("//")) {
     return policy.local === false ? null : { kind: "local", src };
   }
 
