@@ -1,6 +1,6 @@
 # Rendering SSR Streaming And RSC
 
-Status: in progress
+Tracking: #8
 
 ## Goal
 
@@ -31,32 +31,6 @@ data loading, caching, and typing coherent.
 - Browser tests for hydration and navigation.
 - Security tests for nonce-backed scripts/styles.
 - Type tests for route render-mode options.
-
-## Implemented Slices
-
-- `renderPageResponse(...)` renders the page/layout tree, resolved metadata,
-  resource hints, and static scripts into the framework-owned document.
-- Route `data` is serialized into a non-executable `application/json` bootstrap
-  script, escaped against `<`, `>`, `&`, and line separators.
-- `hydrateFileRouter(...)` reads that payload, reuses it instead of re-running
-  route `data`, and seeds the browser router with the resolved match so the
-  first client paint does not flash a loading fallback.
-- The server marks its rendered root with `data-demiurge-hydrate`, and the
-  client hydrates only when that marker is present. A static shell without
-  server markup is client-rendered instead, because hydrating an empty root
-  produces a React hydration mismatch.
-- One document renderer, `renderDocument(...)` in `src/document/render.ts`,
-  now serves both the HTTP request handler and the Vite integration. It takes
-  an optional `body` and emits the hydration marker plus bootstrap script only
-  when one is present, so the same code path produces both server-rendered
-  documents and static shells.
-- `renderPageDocument(...)` returns the rendered document as a string, and
-  `renderPageResponse(...)` is a thin `Response` wrapper over it.
-- `examples/ssr-page` exercises a server-only `data` loader, metadata cascading
-  from layout to leaf, a `path`-based dynamic route, and client navigation
-  after hydration.
-- Production Vite builds emit a client manifest and a framework-owned SSR
-  server entry, which the Node adapter can mount for HTML and API responses.
 
 ## Open Decisions
 

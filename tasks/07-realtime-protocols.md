@@ -1,6 +1,6 @@
 # Realtime Protocols
 
-Status: in progress
+Tracking: #9
 
 ## Goal
 
@@ -27,24 +27,6 @@ page or ordinary request/response endpoint.
 - Server tests for stream headers and chunking.
 - Adapter tests for WebSocket capability support.
 - Security tests for WebSocket origin checks.
-
-## Implemented Slices
-
-- `sse(...)` provides the first realtime HTTP helper. It serializes string and
-  structured server-sent events from sync iterables, async iterables, and
-  `ReadableStream` sources with `text/event-stream`, no-cache, and buffering
-  control headers through both the request handler and Vite dev handler.
-- `jsonl(...)` serializes newline-delimited JSON streams from sync iterables,
-  async iterables, and `ReadableStream` sources with `application/x-ndjson`,
-  no-cache, and buffering control headers through both the request handler and
-  Vite dev handler.
-- `stream(...)` provides generic HTTP streaming for string and byte chunks from
-  sync iterables, async iterables, and `ReadableStream` sources with buffering
-  control headers through both the request handler and Vite dev handler.
-- `checkWebSocketOrigin(...)` and `enforceWebSocketOrigin(...)` provide the
-  first WebSocket security primitive with same-origin checks, exact allowlists,
-  malformed-origin rejection, and explicit trusted non-browser missing-origin
-  handling.
 
 ## Open Decisions
 

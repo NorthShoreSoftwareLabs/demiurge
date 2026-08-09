@@ -1,6 +1,6 @@
 # Data Cache And Static Generation
 
-Status: in progress
+Tracking: #7
 
 ## Goal
 
@@ -36,28 +36,6 @@ handlers and React server components without hiding when work runs.
 - Type tests for `paths`, route path values, and invalidation helpers.
 - Fixture build tests for static dynamic routes.
 - Adapter contract tests for shared cache behavior.
-
-## Implemented Slices
-
-- `query(...)` creates typed reusable cache requests with stable keys, tags,
-  scopes, TTLs, and typed return values.
-- `createMemoryCache(...)` provides a framework-owned memory cache with
-  request-scoped dedupe, shared build/public/private entries, `none` bypass,
-  TTL expiry, and key/tag invalidation.
-- `tag(...)`, `defineTags(...)`, `serializeCacheKey(...)`, and
-  `parseCacheDuration(...)` cover the first cache key/tag behavior tests.
-- `createInvalidation(...)` provides a framework-owned server-side invalidation
-  surface for cache keys and tags with deterministic deletion counts.
-- `page({ data, view })` resolves route-level page data with the matched
-  request context and a request-scoped framework cache during route loading.
-- Route modules can export typed `paths`, and static path collection validates
-  dynamic route entries before expanding them into concrete encoded pathnames.
-- `createMemoryIdempotencyStore(...)` and `runIdempotentMutation(...)` provide
-  the first retry-safe mutation primitive with in-flight dedupe, TTL-based
-  replay, and failure retry behavior.
-- `action(...)` and `actionInput` provide the first server-side mutation helper
-  with JSON/form/text input parsing, existing response-helper returns, and
-  optional idempotent response replay.
 
 ## Open Decisions
 

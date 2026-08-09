@@ -1,6 +1,6 @@
 # Pipeline Quality Gates
 
-Status: implemented
+Tracking: #1
 
 ## Goal
 
@@ -30,18 +30,6 @@ fail fast when lint, type safety, tests, coverage, or examples regress.
 - The existing Vitest suite must pass under coverage.
 - Type assertions for generated actual URL strings must continue to run under
   `npm run typecheck`.
-
-## Implemented Slices
-
-- The library lives in `packages/demiurge` as an npm workspace, and the examples
-  depend on it by name so resolution runs through `node_modules` and the
-  package `exports` map instead of a path alias.
-- The package builds to `dist` with emitted declarations, and `react`,
-  `react-dom`, and `vite` are peer dependencies rather than bundled runtime
-  dependencies.
-- `npm run test:pack` packs the tarball, installs it into a scratch app, and
-  imports every declared entry point. It is the only gate that exercises
-  packaging the way a consumer experiences it.
 
 ## Known Gaps
 

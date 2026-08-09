@@ -1,6 +1,6 @@
 # Security Policy And CSP
 
-Status: in progress
+Tracking: #4
 
 ## Goal
 
@@ -22,43 +22,6 @@ with React rendering modes instead of being left to user middleware.
   libraries.
 - COOP/COEP/CORP cross-origin isolation preset.
 - Security audit output showing effective route policy.
-
-## Implemented Slices
-
-- Public `security` helpers for strict, API, and cross-origin-isolated presets.
-- `defineSecurityPolicy(...)` and `mergeSecurityPolicies(...)` for app/layout/
-  route policy cascade.
-- `createSecurityHeaders(...)` for deterministic CSP, security header, HSTS,
-  and Trusted Types header rendering.
-- Strict CSP nonce substitution fails closed when the nonce is missing.
-- Static CSP preset and `cspHash(...)` helper for build-time hash-based CSP.
-- Helper-attached CORS policy, actual response CORS headers, generated
-  preflight responses, and wildcard-plus-credentials validation.
-- Helper-attached request body size limits enforced before route handlers read
-  oversized declared bodies.
-- Helper-attached request allowed-method policy enforced before route handlers
-  run.
-- Helper-attached fixed-window rate limits with pluggable server storage and
-  dev in-memory storage.
-- Explicit helper-attached CSRF protection for unsafe methods with configurable
-  cookie/header token names.
-- Generic HMAC webhook helper that preserves raw bodies and rejects missing or
-  invalid signatures before the app handler runs.
-- `createSecurityAudit(...)` for rendered header snapshots, effective route
-  policy inspection, and structured security findings.
-- `createSecurityAudit(...)` reports document static scripts that are missing
-  required CSP nonces or are not allowed by the effective `script-src` policy.
-- `defineEnvSchema(...)`, `env.*(...)`, and `validateEnv(...)` validate runtime
-  configuration and secrets before request handling starts.
-- `auditScriptDependencies(...)` and opt-in `createSecurityAudit(...)`
-  dependency checks warn about undeclared third-party script purposes, missing
-  integrity when required, early third-party execution, and Google Tag Manager's
-  wide runtime trust boundary.
-- `createSecurityReportHandler(...)` provides a POST-only CSP/Reporting API
-  report ingestion helper with optional body-size enforcement and per-report
-  callbacks.
-- `validateUploads(...)` validates parsed `FormData` files against required
-  fields, per-file size limits, aggregate size limits, and MIME/type allowlists.
 
 ## Examples Required
 

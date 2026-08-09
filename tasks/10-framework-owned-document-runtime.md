@@ -1,6 +1,6 @@
 # Framework-Owned Document Runtime
 
-Status: implemented
+Tracking: #2
 
 The app should not own `index.html`, a manual React root file, or the router
 mount. Those are framework responsibilities because the document is where

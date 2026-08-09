@@ -1,6 +1,6 @@
 # Metadata Scripts And Document Output
 
-Status: in progress
+Tracking: #6
 
 ## Goal
 
@@ -33,33 +33,6 @@ routes, including scripts that may be statically declared or render-discovered.
 - Type tests for required and custom metadata.
 - Browser tests for conditional script loading.
 - Security tests for CSP nonce/hash handling.
-
-## Implemented Slices
-
-- `defineMetadata(...)`, `meta(...)`, `link(...)`, and `resolveMetadata(...)`
-  provide typed app-owned metadata objects with default charset and viewport.
-- `structuredData(...)` adds typed JSON-LD entries to metadata and document
-  output renders them with escaping and the document nonce when available.
-- `defineSitemap(...)`, `renderSitemap(...)`, `defineRobots(...)`, and
-  `renderRobots(...)` provide typed standalone SEO output helpers.
-- `defineOgImage(...)`, `renderOgImageSvg(...)`, and
-  `renderOgImageResponse(...)` provide the first deterministic Open Graph image
-  output helper using escaped SVG and cacheable image responses.
-- Page route loading resolves inherited layout metadata root-to-leaf, then leaf
-  route metadata, including title defaults, title formatters, structured fields,
-  Open Graph defaults, and custom metadata entries.
-- `defineScripts(...)`, `script(...)`, and `resolveScripts(...)` provide typed
-  static script contributions. Page route loading resolves inherited layout
-  scripts root-to-leaf, then leaf route scripts, with dedupe and strategy
-  ordering before document rendering.
-- `defineLinks(...)`, `preconnect(...)`, `preload(...)`, `modulePreload(...)`,
-  and `resolveLinks(...)` provide typed resource hints. Page route loading
-  resolves inherited layout links root-to-leaf, then leaf route links, with
-  dedupe and deterministic hint ordering before document rendering.
-- The framework-owned document renderer can emit resolved metadata, custom meta
-  and link tags, resource hints, and static script tags with HTML escaping.
-- Vite dev documents for matched page routes feed route/layout metadata,
-  resource hints, and static script contributions into the document renderer.
 
 ## Open Decisions
 

@@ -1,6 +1,6 @@
 # Route Policies And Middleware
 
-Status: in progress
+Tracking: #5
 
 ## Goal
 
@@ -29,21 +29,6 @@ while preserving file-based routing and allowing real URL files like
 - Type tests for middleware-added context.
 - Fixture tests proving `policy.ts` remains a real `/policy` route and
   `@policy.ts` remains framework-attached.
-
-## Implemented Slices
-
-- Route groups such as `(admin)` organize route files and framework-attached
-  files without changing generated URLs or runtime path matching.
-- `@policy.ts` files are discovered as framework-attached policy files, while
-  ordinary `policy.tsx` files remain real URL routes.
-- Inherited `@policy.ts` route security is merged root-to-leaf and enforced by
-  the HTTP request handler before route handlers run.
-- Inherited `@middleware.ts` files run root-to-leaf around HTTP route handlers
-  and can short-circuit with a platform `Response`.
-- Inherited app-owned `@loading.tsx`, `@not-found.tsx`, and `@error.tsx` files
-  render browser fallbacks without framework-owned markup.
-- Vite development page requests and production request handling share the same
-  route pipeline, including inherited policy and method/security behavior.
 
 ## Open Decisions
 
