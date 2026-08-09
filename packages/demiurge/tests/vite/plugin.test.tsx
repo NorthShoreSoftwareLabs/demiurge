@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   defineLinks,
   defineMetadata,
+  defineRoutePolicy,
   defineScripts,
   json,
   jsonl,
@@ -17,6 +18,7 @@ import {
   preload,
   redirect,
   resolveMetadata,
+  security,
   script,
   serverTiming,
   sse,
@@ -390,19 +392,66 @@ describe("Vite plugin dev request handling", () => {
     expect(result.headers.get("location")).toBe("/blog");
   });
 
-  it("marks page routes as document requests", async () => {
+  it("renders page routes through the shared request pipeline", async () => {
     const manifest = unstable_createRouteManifest({
       "./routes/index.tsx": routeModule({
         GET: page(View),
       }),
     });
 
-    await expect(
-      unstable_handleDevRequest(
-        manifest,
-        new Request("https://example.test/"),
-      ),
-    ).resolves.toBe("document");
+    const result = await unstable_handleDevRequest(
+      manifest,
+      new Request("https://example.test/"),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    if (result instanceof Response) {
+      expect(result.headers.get("content-type")).toBe(
+        "text/html; charset=utf-8",
+      );
+    }
+  });
+
+  it("applies inherited document policies to Vite page responses", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({ document: security.strict() }),
+      }),
+      "./routes/index.tsx": routeModule({ GET: page(View) }),
+    });
+
+    const result = await unstable_handleDevRequest(
+      manifest,
+      new Request("https://example.test/"),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    if (result instanceof Response) {
+      expect(result.headers.get("content-security-policy")).toContain(
+        "script-src 'nonce-",
+      );
+    }
+  });
+
+  it("applies inherited middleware before Vite page rendering", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/@middleware.ts": routeModule({
+        middleware: async (_context, _next) =>
+          new Response("blocked by middleware", { status: 451 }),
+      }),
+      "./routes/index.tsx": routeModule({ GET: page(View) }),
+    });
+
+    const result = await unstable_handleDevRequest(
+      manifest,
+      new Request("https://example.test/"),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    if (result instanceof Response) {
+      expect(result.status).toBe(451);
+      await expect(result.text()).resolves.toBe("blocked by middleware");
+    }
   });
 
   it("falls through unmatched routes to Vite", async () => {

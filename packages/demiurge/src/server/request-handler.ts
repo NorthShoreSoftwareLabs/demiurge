@@ -3,6 +3,7 @@ import {
   findRouteMatch,
   isAttachedFileForRoute,
   loadPageRoute,
+  type LoadedRouteMatch,
   type RouteManifest,
   type RouteRecord,
 } from "../router";
@@ -17,7 +18,11 @@ import {
   type RouteModule,
 } from "../route";
 import { applyServerTimingHeader } from "../route/response";
-import { renderPageResponse, type SsrOptions } from "./ssr";
+import {
+  renderPageResponse,
+  type SsrOptions,
+  type SsrRenderOptions,
+} from "./ssr";
 import {
   applyCorsHeaders,
   createCorsPreflightResponse,
@@ -31,17 +36,24 @@ import {
 } from "../security";
 
 export type RequestHandlerOptions = {
+  renderPage?: PageRenderer;
   rateLimitStore?: RateLimitStore;
   routes: Record<string, RouteImporter>;
   ssr?: SsrOptions;
 };
 
 type RequestRuntimeOptions = {
-  rateLimitStore: RateLimitStore;
+  renderPage?: PageRenderer;
+  rateLimitStore?: RateLimitStore;
   ssr?: SsrOptions;
 };
 
 export type RequestHandler = (request: Request) => Promise<Response>;
+
+export type PageRenderer = (
+  match: LoadedRouteMatch,
+  options: SsrRenderOptions,
+) => Response | Promise<Response>;
 
 const supportedMethods = [
   "GET",
@@ -62,6 +74,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
   return async function handleRequest(request: Request) {
     return await handleRequestWithManifest(manifest, request, {
       rateLimitStore,
+      renderPage: options.renderPage,
       ssr: options.ssr,
     });
   };
@@ -120,7 +133,7 @@ export async function handleRequestWithManifest(
   const rateLimitResponse = enforceRateLimit(
     routeSecurity?.rateLimit,
     request,
-    options.rateLimitStore,
+    options.rateLimitStore ?? defaultRateLimitStore,
   );
 
   if (rateLimitResponse) {
@@ -165,7 +178,9 @@ export async function handleRequestWithManifest(
         throw new Error(`Unable to render page at ${url.pathname}.`);
       }
 
-      return renderPageResponse(match.match, {
+      const renderPage = options.renderPage ?? renderPageResponse;
+
+      return renderPage(match.match, {
         ...options.ssr,
         nonce,
       });

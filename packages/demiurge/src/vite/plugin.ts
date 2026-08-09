@@ -17,26 +17,15 @@ import {
   loadPageRoute,
   type RouteManifest,
 } from "../router";
-import { renderPageDocument } from "../server/ssr";
 import {
-  toResponse,
-  type HttpMethod,
-  type HttpRouteContext,
-  type ResponseCapability,
-  type RouteCapability,
+  handleRequestWithManifest,
+  renderPageDocument,
+} from "../server";
+import {
   type RouteImporter,
   type RouteModule,
 } from "../route";
-import { applyServerTimingHeader } from "../route/response";
 import { toWebRequest, writeWebResponse } from "../node/http";
-import {
-  applyCorsHeaders,
-  createCorsPreflightResponse,
-  createMemoryRateLimitStore,
-  enforceCsrfProtection,
-  enforceRateLimit,
-  enforceRequestSecurity,
-} from "../security";
 
 export type DemiurgeVitePluginOptions = {
   document?: {
@@ -55,18 +44,6 @@ const RESOLVED_CLIENT_ENTRY_ID = `\0${CLIENT_ENTRY_ID}`;
 const SERVER_ENTRY_ID = "virtual:demiurge/server-entry";
 const RESOLVED_SERVER_ENTRY_ID = `\0${SERVER_ENTRY_ID}`;
 const DEFAULT_TYPED_ROUTES_OUTPUT = ".demiurge/route-manifest.d.ts";
-const devRateLimitStore = createMemoryRateLimitStore();
-
-const supportedMethods = [
-  "GET",
-  "POST",
-  "PUT",
-  "PATCH",
-  "DELETE",
-  "OPTIONS",
-  "HEAD",
-] satisfies HttpMethod[];
-
 export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
   let root = process.cwd();
 
@@ -173,7 +150,21 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
           const routes = await createDevRouteImporters(server, routesDir);
           const manifest = createRouteManifest(routes);
           const webRequest = toWebRequest(request);
-          const result = await handleDevRequest(manifest, webRequest);
+          const result = await handleDevRequest(manifest, webRequest, {
+            renderPage: async (match, renderOptions) => {
+              const html = await server.transformIndexHtml(
+                "/",
+                renderPageDocument(match, {
+                  ...renderOptions,
+                  clientEntry: `/${CLIENT_ENTRY_ID}`,
+                }),
+              );
+
+              return new Response(html, {
+                headers: { "content-type": "text/html; charset=utf-8" },
+              });
+            },
+          });
 
           if (result === "next") {
             if (shouldServeDocument(webRequest)) {
@@ -185,14 +176,6 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
             }
 
             next();
-            return;
-          }
-
-          if (result === "document") {
-            writeHtmlResponse(
-              response,
-              await createDevDocument(server, options, manifest, webRequest),
-            );
             return;
           }
 
@@ -409,6 +392,9 @@ export async function createDevRouteImporters(
 export async function handleDevRequest(
   manifest: RouteManifest,
   request: Request,
+  options: {
+    renderPage?: import("../server").PageRenderer;
+  } = {},
 ) {
   const url = new URL(request.url);
   const routeMatch = findRouteMatch(manifest.routes, url.pathname);
@@ -417,79 +403,9 @@ export async function handleDevRequest(
     return "next" as const;
   }
 
-  const routeModule = await routeMatch.route.load();
-
-  if (request.method.toUpperCase() === "OPTIONS") {
-    const preflightResponse = createCorsPreflightResponse(routeModule, request);
-
-    if (preflightResponse) {
-      return preflightResponse;
-    }
-  }
-
-  const method = normalizeMethod(request.method);
-
-  if (!method) {
-    return methodNotAllowed(routeModule);
-  }
-
-  const capability = getMethodCapability(routeModule, method);
-
-  if (!capability) {
-    return methodNotAllowed(routeModule);
-  }
-
-  if (capability.kind === "page") {
-    return "document" as const;
-  }
-
-  const csrfResponse = enforceCsrfProtection(capability.security?.csrf, request);
-
-  if (csrfResponse) {
-    return applyCorsHeaders(csrfResponse, capability.cors, request);
-  }
-
-  const rateLimitResponse = enforceRateLimit(
-    capability.security?.rateLimit,
-    request,
-    devRateLimitStore,
-  );
-
-  if (rateLimitResponse) {
-    return applyCorsHeaders(rateLimitResponse, capability.cors, request);
-  }
-
-  const requestSecurityResponse = enforceRequestSecurity(
-    capability.security?.request,
-    request,
-    method,
-  );
-
-  if (requestSecurityResponse) {
-    return applyCorsHeaders(requestSecurityResponse, capability.cors, request);
-  }
-
-  const response = await toResponse(capability, {
-    path: routeMatch.path,
-    pathname: url.pathname,
-    request,
-    search: url.searchParams,
-    url,
-  } satisfies HttpRouteContext);
-  const corsResponse = applyServerTimingHeader(
-    applyCorsHeaders(response, capability.cors, request),
-    capability.timing,
-  );
-
-  if (method === "HEAD") {
-    return new Response(null, {
-      headers: corsResponse.headers,
-      status: corsResponse.status,
-      statusText: corsResponse.statusText,
-    });
-  }
-
-  return corsResponse;
+  return await handleRequestWithManifest(manifest, request, {
+    renderPage: options.renderPage,
+  });
 }
 
 function shouldServeDocument(request: Request) {
@@ -525,41 +441,4 @@ async function findRouteFiles(directory: string) {
 function toRouteKey(routesDir: string, file: string) {
   const relativePath = relative(routesDir, file).split(sep).join("/");
   return `./routes/${relativePath}`;
-}
-
-function normalizeMethod(method: string): HttpMethod | null {
-  const upperMethod = method.toUpperCase();
-  return supportedMethods.includes(upperMethod as HttpMethod)
-    ? (upperMethod as HttpMethod)
-    : null;
-}
-
-function getMethodCapability(
-  routeModule: RouteModule,
-  method: HttpMethod,
-): RouteCapability | ResponseCapability | undefined {
-  if (method === "HEAD") {
-    return routeModule.HEAD ?? routeModule.GET;
-  }
-
-  return routeModule[method];
-}
-
-function methodNotAllowed(routeModule: RouteModule) {
-  return new Response(null, {
-    headers: {
-      allow: allowedMethods(routeModule).join(", "),
-    },
-    status: 405,
-  });
-}
-
-function allowedMethods(routeModule: RouteModule) {
-  const methods = supportedMethods.filter((method) => routeModule[method]);
-
-  if (routeModule.GET && !methods.includes("HEAD")) {
-    methods.push("HEAD");
-  }
-
-  return methods;
 }

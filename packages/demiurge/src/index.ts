@@ -286,4 +286,8 @@ export type {
   WebSocketOriginCheck,
   WebSocketOriginPolicy,
 } from "./security";
-export type { RequestHandler, RequestHandlerOptions } from "./server";
+export type {
+  PageRenderer,
+  RequestHandler,
+  RequestHandlerOptions,
+} from "./server";
