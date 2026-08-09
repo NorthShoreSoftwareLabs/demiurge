@@ -16,6 +16,13 @@ beforeAll(() => {
   writeFileSync(join(root, "logo.svg"), "<svg></svg>");
   writeFileSync(join(root, "robots.txt"), "User-agent: *");
   writeFileSync(join(root, "data.bin"), "binary");
+  writeFileSync(join(root, "index.html"), "<html></html>");
+  writeFileSync(
+    join(root, "demiurge-manifest.json"),
+    JSON.stringify({ clientEntry: "/assets/app-a1b2c3d4.js", styles: [] }),
+  );
+  mkdirSync(join(root, "docs"), { recursive: true });
+  writeFileSync(join(root, "docs", "index.html"), "<html>docs</html>");
   writeFileSync(join(outside, "secret.txt"), "do not serve me");
 });
 
@@ -158,5 +165,53 @@ describe("static file handler", () => {
     const handle = createStaticFileHandler({ prefix: "/", root });
 
     expect((await handle(request("/robots.txt")))?.status).toBe(200);
+  });
+
+  it("sends nosniff and same-origin resource policy headers on every response", async () => {
+    const handle = createStaticFileHandler({ root });
+    const response = await handle(request("/robots.txt"));
+
+    expect(response?.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response?.headers.get("cross-origin-resource-policy")).toBe(
+      "same-origin",
+    );
+  });
+
+  // The SPA shell and the server's own build manifest must be reached only
+  // through the route pipeline (or, for the manifest, not publicly at all) —
+  // that is where `@policy.ts` applies CSP and the other headers a static
+  // response never gets. See node/index.ts's static-before-route precedence.
+  it("does not serve the SPA shell or the build manifest by default", async () => {
+    const handle = createStaticFileHandler({ root });
+
+    await expect(handle(request("/index.html"))).resolves.toBeNull();
+    await expect(
+      handle(request("/demiurge-manifest.json")),
+    ).resolves.toBeNull();
+  });
+
+  // Only the build's own two files at the root are the framework's to hide.
+  // A nested index.html is a page the app chose to ship.
+  it("still serves an app-owned index.html below the root", async () => {
+    const handle = createStaticFileHandler({ root });
+    const response = await handle(request("/docs/index.html"));
+
+    expect(response?.status).toBe(200);
+    await expect(response?.text()).resolves.toBe("<html>docs</html>");
+  });
+
+  it("passes the root-relative path to a custom exclude predicate", async () => {
+    const seen: string[] = [];
+    const handle = createStaticFileHandler({
+      exclude: (path) => {
+        seen.push(path);
+        return path === "docs/index.html";
+      },
+      root,
+    });
+
+    await expect(handle(request("/docs/index.html"))).resolves.toBeNull();
+    expect(seen).toContain("docs/index.html");
+    expect((await handle(request("/index.html")))?.status).toBe(200);
   });
 });

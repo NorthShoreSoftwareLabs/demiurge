@@ -1,13 +1,14 @@
-/* global console, process */
+/* global console, process, URL */
 
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createNodeServer } from "demiurge/node";
 import { createHandler } from "./dist/server/server-entry.js";
 
-const root = resolve("dist/client");
+const root = fileURLToPath(new URL("dist/client", import.meta.url));
 const manifest = JSON.parse(
-  await readFile(resolve(root, "demiurge-manifest.json"), "utf8"),
+  await readFile(join(root, "demiurge-manifest.json"), "utf8"),
 );
 const handler = createHandler({
   clientEntry: manifest.clientEntry,

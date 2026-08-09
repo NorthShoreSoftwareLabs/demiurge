@@ -1,7 +1,12 @@
 import { Readable, Writable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";
-import { toHeaders, toWebRequest, writeWebResponse } from "demiurge/node";
+import {
+  UnsupportedMethodError,
+  toHeaders,
+  toWebRequest,
+  writeWebResponse,
+} from "demiurge/node";
 
 function incoming(init: Partial<IncomingMessage> = {}) {
   return Object.assign(Readable.from([Buffer.from("hello")]), {
@@ -68,6 +73,15 @@ describe("Node HTTP bridge", () => {
     expect(headers.get("x-test")).toBe("ok");
     expect(body).toBe("hello");
   });
+
+  it.each(["TRACE", "TRACK", "CONNECT", "trace"])(
+    "rejects the forbidden %s method before constructing a Request",
+    (method) => {
+      expect(() => toWebRequest(incoming({ method }))).toThrow(
+        UnsupportedMethodError,
+      );
+    },
+  );
 
   it("supports empty responses and direct header conversion", async () => {
     const output: string[] = [];

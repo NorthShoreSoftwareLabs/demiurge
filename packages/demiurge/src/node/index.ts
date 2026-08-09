@@ -2,11 +2,21 @@ import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { defineAdapter } from "../adapter";
 import type { RequestHandler } from "../server";
-import { toWebRequest, writeWebResponse } from "./http";
+import {
+  UnsupportedMethodError,
+  toWebRequest,
+  writeNotImplemented,
+  writeWebResponse,
+} from "./http";
 import { createStaticFileHandler } from "./static";
 import type { StaticFileHandler, StaticFileHandlerOptions } from "./static";
 
-export { toHeaders, toWebRequest, writeWebResponse } from "./http";
+export {
+  UnsupportedMethodError,
+  toHeaders,
+  toWebRequest,
+  writeWebResponse,
+} from "./http";
 export { createStaticFileHandler } from "./static";
 export type { ToWebRequestOptions } from "./http";
 export type { StaticFileHandler, StaticFileHandlerOptions } from "./static";
@@ -49,7 +59,19 @@ export function createNodeRequestListener(
     request: IncomingMessage,
     response: ServerResponse,
   ) {
-    const webRequest = toWebRequest(request, { protocol: options.protocol });
+    let webRequest: Request;
+
+    try {
+      webRequest = toWebRequest(request, { protocol: options.protocol });
+    } catch (error) {
+      if (error instanceof UnsupportedMethodError) {
+        writeNotImplemented(response);
+        return;
+      }
+
+      throw error;
+    }
+
     const staticResponse = await serveStaticFile?.(webRequest);
 
     await writeWebResponse(

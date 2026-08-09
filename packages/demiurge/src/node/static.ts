@@ -6,6 +6,9 @@ import { Readable } from "node:stream";
 export type StaticFileHandler = (request: Request) => Promise<Response | null>;
 
 export type StaticFileHandlerOptions = {
+  // Receives the file's path relative to `root`, always "/"-separated, so a
+  // predicate can distinguish `index.html` from `docs/index.html`.
+  exclude?: (path: string) => boolean;
   immutable?: (fileName: string) => boolean;
   prefix?: string;
   root: string;
@@ -38,11 +41,21 @@ const contentTypes: Record<string, string> = {
 
 const hashedFileName = /-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$/;
 
+// The framework's own build output — the SPA shell and the manifest the Node
+// server reads to configure itself — must not be reachable as plain static
+// files. Both are meant to be served through the route pipeline (or, for
+// `demiurge-manifest.json`, not served publicly at all), because that is
+// where `@policy.ts` applies CSP, frame-ancestors, and the other headers a
+// raw static response never gets. Only the build's own two files at the root
+// are excluded: an app's nested `docs/index.html` is a page it chose to ship.
+const defaultExcludedPaths = new Set(["demiurge-manifest.json", "index.html"]);
+
 export function createStaticFileHandler(
   options: StaticFileHandlerOptions,
 ): StaticFileHandler {
   const root = resolve(options.root);
   const prefix = normalizePrefix(options.prefix);
+  const isExcluded = options.exclude ?? defaultExcluded;
   const isImmutable = options.immutable ?? defaultImmutable;
 
   return async function handleStaticFile(request) {
@@ -56,7 +69,7 @@ export function createStaticFileHandler(
       new URL(request.url).pathname,
     );
 
-    if (!filePath) {
+    if (!filePath || isExcluded(toRelativePath(root, filePath))) {
       return null;
     }
 
@@ -72,6 +85,8 @@ export function createStaticFileHandler(
         : "public, max-age=0, must-revalidate",
       "content-length": String(stats.size),
       "content-type": contentTypeOf(filePath),
+      "cross-origin-resource-policy": "same-origin",
+      "x-content-type-options": "nosniff",
     });
 
     if (request.method === "HEAD") {
@@ -135,6 +150,14 @@ function normalizePrefix(prefix: string | undefined) {
 
 function defaultImmutable(fileName: string) {
   return hashedFileName.test(fileName);
+}
+
+function defaultExcluded(path: string) {
+  return defaultExcludedPaths.has(path);
+}
+
+function toRelativePath(root: string, filePath: string) {
+  return filePath.slice(root.length + 1).split(sep).join("/");
 }
 
 function fileNameOf(filePath: string) {

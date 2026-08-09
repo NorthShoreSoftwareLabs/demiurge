@@ -1,10 +1,17 @@
 /// <reference types="vite/client" />
 
 declare module "virtual:demiurge/server-entry" {
-  import type { RequestHandler } from "demiurge";
+  import type {
+    RequestHandler,
+    RequestHandlerOptions,
+    SsrOptions,
+  } from "demiurge";
 
-  export const routes: unknown[];
+  export const routes: RequestHandlerOptions["routes"];
+
+  // The generated entry owns `routes` and lifts the SSR options to the top
+  // level, so the build manifest can be handed straight to it.
   export function createHandler(
-    options?: Record<string, unknown>,
+    options?: Omit<RequestHandlerOptions, "routes" | "ssr"> & SsrOptions,
   ): RequestHandler;
 }

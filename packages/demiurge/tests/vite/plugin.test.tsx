@@ -1121,7 +1121,7 @@ describe("Vite plugin document runtime", () => {
     const source = unstable_createClientEntrySource(root);
 
     expect(source).toContain('import "/src/styles.css";');
-    expect(source).toContain('import.meta.glob("/src/routes/**/*.tsx")');
+    expect(source).toContain('"/src/routes/**/*.{ts,tsx}"');
     expect(source).toContain('const routePrefix = "/src/routes/";');
     expect(source).toContain("./routes/");
     expect(source).toContain("hydrateFileRouter({ routes })");
@@ -1144,12 +1144,35 @@ describe("Vite plugin document runtime", () => {
       routesDir: "src/pages",
     });
 
-    expect(source).toContain('import.meta.glob("/src/pages/**/*.tsx")');
+    expect(source).toContain('import.meta.glob(["/src/pages/**/*.{ts,tsx}"])');
     expect(source).toContain('const routePrefix = "/src/pages/";');
     expect(source).toContain("export const routes");
     expect(source).toContain("createRequestHandler");
-    expect(source).toContain('lang: "en-GB"');
-    expect(source).toContain('title: "Server app"');
+    expect(source).toContain('lang ?? "en-GB"');
+    expect(source).toContain('title ?? "Server app"');
+  });
+
+  it("includes framework-attached .ts files in the server entry", () => {
+    // @policy.ts and @middleware.ts ship as .ts, not .tsx. A glob that only
+    // matches .tsx silently drops them from the production route map while
+    // dev (which globs both extensions) keeps enforcing them — the exact
+    // divergence this pipeline unification exists to prevent.
+    const source = unstable_createServerEntrySource("/tmp/app");
+
+    expect(source).toContain('"/src/routes/**/*.{ts,tsx}"');
+    expect(source).not.toContain("!");
+  });
+
+  it("keeps server-only route files out of the client entry", () => {
+    // The client never runs a policy or a middleware, and globbing them in
+    // emits them as fetchable chunks under dist/client — publishing whatever
+    // they close over, credentials included.
+    const source = unstable_createClientEntrySource("/tmp/app");
+
+    expect(source).toContain('"!/src/routes/@policy.ts"');
+    expect(source).toContain('"!/src/routes/**/@policy.ts"');
+    expect(source).toContain('"!/src/routes/@middleware.ts"');
+    expect(source).toContain('"!/src/routes/**/@middleware.ts"');
   });
 });
 

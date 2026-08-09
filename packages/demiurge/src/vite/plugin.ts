@@ -14,7 +14,6 @@ import { generateRoutes } from "../routing/generate";
 import {
   createRouteManifest,
   findRouteMatch,
-  loadPageRoute,
   type RouteManifest,
 } from "../router";
 import {
@@ -25,7 +24,12 @@ import {
   type RouteImporter,
   type RouteModule,
 } from "../route";
-import { toWebRequest, writeWebResponse } from "../node/http";
+import {
+  UnsupportedMethodError,
+  toWebRequest,
+  writeNotImplemented,
+  writeWebResponse,
+} from "../node/http";
 
 export type DemiurgeVitePluginOptions = {
   document?: {
@@ -143,13 +147,25 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
 
       server.middlewares.use(async (request, response, next) => {
         try {
+          let webRequest: Request;
+
+          try {
+            webRequest = toWebRequest(request);
+          } catch (error) {
+            if (error instanceof UnsupportedMethodError) {
+              writeNotImplemented(response);
+              return;
+            }
+
+            throw error;
+          }
+
           const routesDir = resolve(
             server.config.root,
             options.routesDir ?? "src/routes",
           );
           const routes = await createDevRouteImporters(server, routesDir);
           const manifest = createRouteManifest(routes);
-          const webRequest = toWebRequest(request);
           const result = await handleDevRequest(manifest, webRequest, {
             renderPage: async (match, renderOptions) => {
               const html = await server.transformIndexHtml(
@@ -170,7 +186,7 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
             if (shouldServeDocument(webRequest)) {
               writeHtmlResponse(
                 response,
-                await createDevDocument(server, options, manifest, webRequest),
+                await createDevDocument(server, options),
               );
               return;
             }
@@ -204,21 +220,15 @@ export function createClientEntrySource(
   options: DemiurgeVitePluginOptions = {},
 ) {
   const routesDir = options.routesDir ?? "src/routes";
-  const routesGlob = toRootAbsoluteGlob(routesDir);
-  const routesPrefix = toRootAbsolutePrefix(routesDir);
   const stylesImport = createStylesImport(root, options);
 
   return `import { hydrateFileRouter } from "demiurge";
 ${stylesImport}
 
-const routeModules = import.meta.glob(${JSON.stringify(routesGlob)});
-const routePrefix = ${JSON.stringify(routesPrefix)};
-const routes = Object.fromEntries(
-  Object.entries(routeModules).map(([file, load]) => [
-    \`./routes/\${file.slice(routePrefix.length)}\`,
-    load,
-  ]),
-);
+${createRouteMapSource(routesDir, {
+    exportRoutes: false,
+    includeServerOnly: false,
+  })}
 
 void hydrateFileRouter({ routes });
 `;
@@ -229,35 +239,77 @@ export function createServerEntrySource(
   options: DemiurgeVitePluginOptions = {},
 ) {
   const routesDir = options.routesDir ?? "src/routes";
-  const routesGlob = toRootAbsoluteGlob(routesDir);
-  const routesPrefix = toRootAbsolutePrefix(routesDir);
 
   return `import { createRequestHandler } from "demiurge";
 
-const routeModules = import.meta.glob(${JSON.stringify(routesGlob)});
-const routePrefix = ${JSON.stringify(routesPrefix)};
-export const routes = Object.fromEntries(
-  Object.entries(routeModules).map(([file, load]) => [
-    \`./routes/\${file.slice(routePrefix.length)}\`,
-    load,
-  ]),
-);
+${createRouteMapSource(routesDir, {
+    exportRoutes: true,
+    includeServerOnly: true,
+  })}
 
 export function createHandler(options = {}) {
+  const { clientEntry, lang, styles, title, ...handlerOptions } = options;
+
   return createRequestHandler({
+    ...handlerOptions,
     routes,
     ssr: {
-      lang: ${JSON.stringify(options.document?.lang)},
-      title: ${JSON.stringify(options.document?.title)},
-      ...options,
+      clientEntry,
+      lang: lang ?? ${JSON.stringify(options.document?.lang)},
+      styles,
+      title: title ?? ${JSON.stringify(options.document?.title)},
     },
   });
 }
 `;
 }
 
-function toRootAbsoluteGlob(routesDir: string) {
-  return `/${routesDir.replace(/^\/|\/$/g, "")}/**/*.tsx`;
+// Shared by both virtual entries so the prefix stripping and the route-key
+// shape can never drift between them the way they did before: the server
+// entry needs framework-attached `.ts` files such as `@policy.ts` and
+// `@middleware.ts`, which the old `.tsx`-only glob silently dropped from
+// production while dev's own `findRouteFiles` kept enforcing them.
+function createRouteMapSource(
+  routesDir: string,
+  {
+    exportRoutes,
+    includeServerOnly,
+  }: { exportRoutes: boolean; includeServerOnly: boolean },
+) {
+  const routesGlobs = toRootAbsoluteGlobs(routesDir, includeServerOnly);
+  const routesPrefix = toRootAbsolutePrefix(routesDir);
+
+  return `const routeModules = import.meta.glob(${JSON.stringify(routesGlobs)});
+const routePrefix = ${JSON.stringify(routesPrefix)};
+${exportRoutes ? "export " : ""}const routes = Object.fromEntries(
+  Object.entries(routeModules).map(([file, load]) => [
+    \`./routes/\${file.slice(routePrefix.length)}\`,
+    load,
+  ]),
+);`;
+}
+
+// These two run only on the server: they gate a request before the route is
+// invoked and never render. Globbing them into the client entry emits them as
+// fetchable chunks in `dist/client`, publishing whatever a middleware or
+// policy closes over — credentials, auth logic, internal hostnames — to
+// anyone who reads the asset directory.
+const serverOnlyRouteFiles = ["@middleware.ts", "@policy.ts"];
+
+function toRootAbsoluteGlobs(routesDir: string, includeServerOnly: boolean) {
+  const base = `/${routesDir.replace(/^\/|\/$/g, "")}`;
+  const globs = [`${base}/**/*.{ts,tsx}`];
+
+  if (!includeServerOnly) {
+    globs.push(
+      ...serverOnlyRouteFiles.flatMap((fileName) => [
+        `!${base}/${fileName}`,
+        `!${base}/**/${fileName}`,
+      ]),
+    );
+  }
+
+  return globs;
 }
 
 function toRootAbsolutePrefix(routesDir: string) {
@@ -280,35 +332,22 @@ function createStylesImport(
     : "";
 }
 
+// This is the fallback shell for a browser navigation that matched no route,
+// so the client router can run its own not-found handling. A matched route
+// (including a matched page) never reaches this function: `handleDevRequest`
+// only returns the "next" sentinel when `findRouteMatch` found nothing, so
+// there is no page match here to render server-side.
 async function createDevDocument(
   server: ViteDevServer,
   options: DemiurgeVitePluginOptions,
-  manifest?: RouteManifest,
-  request?: Request,
 ) {
-  const match = manifest && request
-    ? await loadDevPageRoute(manifest, request)
-    : undefined;
-  const html = match
-    ? renderPageDocument(match, {
-      clientEntry: `/${CLIENT_ENTRY_ID}`,
-      lang: options.document?.lang,
-      title: options.document?.title,
-    })
-    : createDocumentHtml({
-      entrySrc: `/${CLIENT_ENTRY_ID}`,
-      lang: options.document?.lang,
-      title: options.document?.title,
-    });
+  const html = createDocumentHtml({
+    entrySrc: `/${CLIENT_ENTRY_ID}`,
+    lang: options.document?.lang,
+    title: options.document?.title,
+  });
 
   return await server.transformIndexHtml("/", html);
-}
-
-async function loadDevPageRoute(manifest: RouteManifest, request: Request) {
-  const url = new URL(request.url);
-  const result = await loadPageRoute(manifest, url.pathname, request);
-
-  return result.status === "ready" ? result.match : undefined;
 }
 
 export function createDocumentHtml({
