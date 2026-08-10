@@ -361,13 +361,15 @@ function createStylesImport(
 }
 
 // Dev renders through the production pipeline, so the only things it adds are
-// the virtual client entry and Vite's HTML transform. Every security and
-// routing decision comes from the shared handler.
+// the virtual client entry, Vite's HTML transform, and the dev flag that turns
+// on stack traces. Every security and routing decision comes from the shared
+// handler.
 function createDevRuntimeOptions(
   server: ViteDevServer,
   options: DemiurgeVitePluginOptions,
 ) {
   return {
+    dev: true,
     ssr: createDevSsrOptions(options),
     transformDocument: (html: string) => server.transformIndexHtml("/", html),
     renderPage: async (
@@ -432,6 +434,7 @@ function createDevFallbackOptions(
 ) {
   return {
     ...createDevSsrOptions(options),
+    dev: true,
     transformDocument: (html: string) => server.transformIndexHtml("/", html),
   };
 }

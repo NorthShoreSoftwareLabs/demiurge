@@ -78,6 +78,56 @@ element. The client hydrates that document, keeping the layouts the server
 resolved, and still replaces a page document whose route it can no longer match
 — that case is a genuine desync rather than a fallback.
 
+## Errors
+
+### A 500 is not one thing
+
+Where the failure happened decides what the caller gets.
+
+| Failure site | Response |
+| --- | --- |
+| Inside a page render | App `@error.tsx` renders a document, 500 |
+| Inside an API route handler | `application/problem+json`, 500, never HTML |
+| Inside middleware or policy | Negotiated, same rule as not-found |
+| While rendering the error page | Plain text, no app code |
+
+The last row matters most. Once the error path has failed, the app path cannot
+be trusted a second time in the same request, so there is no second attempt at
+app markup.
+
+The error document renders without layouts. The error path runs the minimum
+amount of app code that can still produce a page.
+
+### Dev shows the stack, production never does
+
+Production keeps the guarantee that no stack trace, file path, or framework
+internal reaches a response body. Dev renders its own document with the
+message, the stack, and the route that failed, and puts the thrown message in
+`detail` on a problem+json response.
+
+The switch is the build mode. The Vite dev middleware sets it when it calls the
+shared handler; it is absent from the public `RequestHandlerOptions`, and it is
+gated a second time on `NODE_ENV !== "production"`. There is no user-facing
+option to misconfigure into leaking.
+
+In dev the framework document wins over the app's `@error.tsx`, because the
+stack is the point. Production renders the app's.
+
+### Observing what was swallowed
+
+The first three failure sites return a response instead of throwing, so pass
+`onError` to keep them visible:
+
+```ts
+createRequestHandler({
+  onError: (error, { pathname, site }) => reportToSentry(error, { pathname, site }),
+  routes,
+});
+```
+
+The Node adapter's own `onError` still catches anything that escapes the
+handler entirely, and answers it with plain text.
+
 ## Dev and production run the same path
 
 Route handling runs in a Vite middleware registered before Vite's own, so it

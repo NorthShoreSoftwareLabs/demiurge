@@ -973,7 +973,7 @@ describe("Vite plugin dev request handling", () => {
     await expect(readTextEventually(outputFile)).resolves.toContain('"/": {};');
   });
 
-  it("passes a failed route module load to Vite next", async () => {
+  it("renders a dev error document when a route module fails to load", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-error-"));
     const routesDir = join(root, "routes");
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
@@ -987,6 +987,7 @@ describe("Vite plugin dev request handling", () => {
       ssrLoadModule: vi.fn(async () => {
         throw error;
       }),
+      transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
       watcher: createWatcherHarness(),
     };
 
@@ -996,13 +997,22 @@ describe("Vite plugin dev request handling", () => {
     plugin.configureServer?.(server as never);
 
     const next = vi.fn();
+    const response = new CapturingResponse();
     await middleware.handler(
-      requestFor("/api") as never,
-      new CapturingResponse() as never,
+      requestFor("/api", {
+        headers: { accept: "text/html", host: "example.test" },
+      }) as never,
+      response as never,
       next,
     );
 
-    expect(next).toHaveBeenCalledWith(error);
+    expect(next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(500);
+    // Dev is the one place the stack belongs in the body.
+    expect(response.body).toContain("load failed");
+    expect(response.body).toContain("/api");
+    expect(response.body).toContain("<pre>");
+    expect(response.body).toContain("plugin.test.tsx");
   });
 });
 

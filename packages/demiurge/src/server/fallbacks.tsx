@@ -1,4 +1,4 @@
-import type { NotFoundProps } from "../route";
+import type { NotFoundProps, RouteErrorProps } from "../route";
 
 // Deliberately plain. The framework ships a working 404 so nothing is ever
 // blank, and the build gate refuses to let an app reach production still
@@ -11,4 +11,45 @@ export function BuiltInNotFound({ pathname }: NotFoundProps) {
       <p>No route matched {pathname}.</p>
     </main>
   );
+}
+
+export function BuiltInError() {
+  return (
+    <main>
+      <h1>500</h1>
+      <p>Something went wrong.</p>
+    </main>
+  );
+}
+
+// Dev only. Everything this renders is a file path or a stack frame, which is
+// exactly what must never reach a production body.
+export function DevError({ error, pathname }: RouteErrorProps) {
+  const { message, name, stack } = describeError(error);
+
+  return (
+    <main>
+      <h1>
+        {name} at {pathname}
+      </h1>
+      <p>{message}</p>
+      {stack ? <pre>{stack}</pre> : null}
+    </main>
+  );
+}
+
+export function describeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    message: typeof error === "string" ? error : String(error),
+    name: "Error",
+    stack: undefined,
+  };
 }
