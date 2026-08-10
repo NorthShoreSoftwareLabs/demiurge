@@ -1,0 +1,96 @@
+:root {
+  color: #172033;
+  background: #f4f7f5;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+.shell {
+  width: min(880px, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid #c9d4cf;
+}
+
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.brand {
+  font-weight: 750;
+  text-decoration: none;
+}
+
+main {
+  padding: 4rem 0;
+}
+
+h1 {
+  max-width: 18ch;
+  margin: 0;
+  font-size: clamp(2.25rem, 7vw, 4.75rem);
+  line-height: 1.02;
+  letter-spacing: 0;
+}
+
+.eyebrow {
+  color: #17614d;
+  font-size: 0.8rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.lede,
+main > p {
+  max-width: 62ch;
+  font-size: 1.1rem;
+}
+
+.output-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 2rem 0;
+  padding-left: 1.25rem;
+}
+
+.button {
+  display: inline-block;
+  padding: 0.7rem 1rem;
+  border: 1px solid #17614d;
+  border-radius: 4px;
+  color: #0c4a3a;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (max-width: 640px) {
+  header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  main {
+    padding: 2.75rem 0;
+  }
+}

@@ -32,5 +32,14 @@ while preserving file-based routing and allowing real URL files like
 
 ## Open Decisions
 
-- Whether middleware can short-circuit with any response capability or only a
-  platform `Response`.
+None open.
+
+## Decisions Made
+
+- Middleware short-circuits with any response capability, and `page(...)` is a
+  type error (#35). Middleware runs after matching and already holds the
+  `HttpRouteContext` that `toResponse(...)` needs, so the machinery costs
+  nothing. A page is the exception because the nonce is minted and the security
+  headers applied outside the middleware chain, and because a page returned
+  from middleware would carry no document plan. `notFound()` needs the manifest
+  threaded into the middleware runner.
