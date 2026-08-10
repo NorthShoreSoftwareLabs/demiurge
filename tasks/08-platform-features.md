@@ -33,5 +33,12 @@ document/security systems instead of added through unsafe snippets.
 
 ## Open Decisions
 
-- Whether GTM should require an explicit insecure/trust-boundary acknowledgement
-  in strict security mode.
+None open.
+
+## Decisions Made
+
+- GTM requires an explicit trust-boundary acknowledgement in strict mode (#69).
+  The script declaration is static, so the build can see it, and the enforcement
+  doctrine puts detectable mistakes at the build. The acknowledgement is a named
+  declaration rather than a blocker, so the marketing tag still ships without
+  anyone reaching for the switch that turns strict mode off entirely.

@@ -86,6 +86,39 @@ inline-script escape hatches, and produce useful security headers by default.
 Security should be configurable per app and per route, but the default preset
 should be meaningfully strict.
 
+## Enforcement Doctrine
+
+Opinionated is not the same as rigid. Rigid means you cannot do the thing.
+Opinionated means you have to say so out loud. Four rules follow from that, and
+they decide what happens whenever an app does something the framework's defaults
+disagree with:
+
+1. Defaults are the strict option.
+2. Relaxing a default is a named declaration at the route. `csrf: false` is a
+   security audit you can run with `grep`. A config file three directories away
+   is not.
+3. Mistakes fail at the earliest moment they can be detected, preferring the
+   build. The build is where the developer is present and no user is affected
+   yet. Failing the request instead punishes the wrong person, and a warning
+   that proceeds is a warning nobody reads by month three.
+4. A control that can only fail inside a user's browser never defaults to
+   breaking it. It defaults to reporting.
+
+Rule 4 is the one that keeps the other three honest. Trusted Types enforcement
+cannot be checked at build time, because a violation is a third-party library
+assigning a string to `innerHTML` in a browser we do not control. Defaulting it
+to enforce would not fail a build. It would fail a real session in production.
+So the strict preset reports it, and enforcement is a named opt-in.
+
+That is also why the strict preset is not being dishonest by declining to
+enforce something in its own name. Strict promises the strongest policy that
+cannot break a user at runtime.
+
+Development is where rule 3 lands for runtime-only controls. Nothing can be
+proven at build time about a browser sink, but a violation can be surfaced in
+dev while the developer is still writing the code, which is the same goal one
+step later.
+
 Document contributions such as metadata, scripts, links, preloads, and styles
 also belong to this pipeline. They should be collected, deduped, ordered, and
 checked against the final security policy instead of being emitted as arbitrary
