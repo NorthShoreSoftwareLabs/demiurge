@@ -62,9 +62,9 @@ server components:
 const post = await cache.get(postBySlug(path.slug));
 ```
 
-The first data slice exposes `query(...)`, `createMemoryCache(...)`, `tag(...)`,
-and `defineTags(...)`. Query objects produce typed cache requests with stable
-keys, tags, TTLs, and scopes. The memory cache supports request dedupe, shared
+The data API exposes `query(...)`, `createMemoryCache(...)`, `tag(...)`, and
+`defineTags(...)`. Query objects produce typed cache requests with stable keys,
+tags, TTLs, and scopes. The memory cache supports request dedupe, shared
 build/public/private entries, `none` bypass, TTL expiry, and key/tag
 invalidation.
 
@@ -117,19 +117,68 @@ type CacheScope =
 The framework should detect dangerous combinations, such as reading cookies or
 session data and then writing a `public` cache entry.
 
+`build`, `public`, and `private` use separate backend key spaces. A private
+query key must include the user/tenant identity it is private to; the framework
+does not guess identity from cookies. `request` remains in the request's cache
+facade and never reaches a shared backend. `none` bypasses both.
+
 ## Cache Backend
 
-The configured cache backend is for framework cache semantics, not arbitrary app
-storage.
+The configured cache backend is for framework cache semantics, not arbitrary
+app storage. Custom backends implement the published async `CacheStore`
+contract:
 
 ```ts
-export default defineConfig({
-  cache: cache.redis({
-    url: process.env.REDIS_URL,
-    namespace: "demiurge",
-  }),
+type CacheStore = {
+  get(key: string): CacheStoreEntry | undefined | Promise<CacheStoreEntry | undefined>;
+  set(key: string, entry: CacheStoreEntry): void | Promise<void>;
+  delete(key: string): boolean | Promise<boolean>;
+  invalidateTags(tags: readonly string[]): number | Promise<number>;
+};
+```
+
+`CacheStoreEntry.expiresAt` is an epoch-millisecond number or `null` for no
+expiry, so the contract remains JSON-safe instead of relying on `Infinity`.
+
+Create one shared store, then create request cache facades against it:
+
+```ts
+import { createCache } from "demiurge";
+
+const cache = createCache({
+  namespace: {
+    app: "storefront",
+    environment: process.env.NODE_ENV ?? "development",
+    schemaVersion: 1,
+  },
+  store,
 });
 ```
+
+The namespace is required for shared adapters and serializes as
+`app:environment:schemaVersion`. Demiurge adds that namespace and the cache
+scope to every key and tag before calling the store. Redis/KV adapters therefore
+cannot namespace values but accidentally leave their tag index global. Change
+`schemaVersion` when the stored value shape changes; rolling revisions then use
+independent key spaces.
+
+Adapter authors can run the same conformance checks as the framework memory
+store without depending on a test runner:
+
+```ts
+import { verifyCacheStoreContract } from "demiurge/data/testing";
+
+await verifyCacheStoreContract(() => createMyStore());
+```
+
+The verifier checks missing reads, set/get replacement, tag invalidation,
+deletion counts, preservation of entry metadata, and async implementations.
+Each invocation uses unique keys and cleans them up.
+
+Provider-specific Redis and KV constructors are not implemented yet. Today an
+adapter implements `CacheStore`, verifies it with the published contract, and
+passes it to `createCache(...)`; future provider helpers will wrap that same
+interface rather than introduce a second cache API.
 
 The app should receive a structured cache API, not the raw Redis/KV client.
 
@@ -145,15 +194,8 @@ Avoid:
 await cache.redis.set("whatever", value);
 ```
 
-If users need app-level derived caching, provide typed cache domains instead of
-raw adapter access:
-
-```ts
-export const recommendationsCache = defineCacheDomain("recommendations", {
-  scope: "private",
-  ttl: "5m",
-});
-```
+A future typed cache-domain helper may provide app-level derived caching, but it
+is not part of the current public API.
 
 ## Invalidation
 
@@ -162,13 +204,13 @@ Server-side invalidation:
 ```ts
 const invalidate = createInvalidation(cache);
 
-invalidate.tags([tags.posts()]);
-invalidate.key(["post", slug]);
+await invalidate.tags([tags.posts()]);
+await invalidate.key(["post", slug]);
 ```
 
-The first invalidation slice exposes `createInvalidation(...)` over the
-framework cache. It provides `key(...)`, `keys(...)`, `tag(...)`, and
-`tags(...)` methods that return deterministic `{ kind, deleted }` results.
+`createInvalidation(...)` exposes `key(...)`, `keys(...)`, `tag(...)`, and
+`tags(...)` methods that resolve to deterministic `{ kind, deleted }` results.
+Invalidation is async because production stores are usually network services.
 Path-level invalidation and client router refresh still remain separate future
 concerns.
 
@@ -193,7 +235,7 @@ export const create = action({
 
   async handler({ input, invalidate, routes }) {
     const post = await db.posts.create(input);
-    invalidate.tags([tags.posts()]);
+    await invalidate.tags([tags.posts()]);
     return redirect({ to: "/posts/[slug]", path: { slug: post.slug } });
   },
 });

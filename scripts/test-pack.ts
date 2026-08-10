@@ -60,12 +60,13 @@ try {
   writeFileSync(
     join(scratch, "check.js"),
     [
-      `import { page, createRequestHandler, hydrateFileRouter } from "demiurge";`,
+      `import { createMemoryCacheStore, page, createRequestHandler, hydrateFileRouter } from "demiurge";`,
       `import { createNodeServer, nodeAdapter } from "demiurge/node";`,
       `import { generateStaticOutput, staticAdapter } from "demiurge/static";`,
+      `import { verifyCacheStoreContract } from "demiurge/data/testing";`,
       `import { unstable_createRouteManifest } from "demiurge/internal/testing";`,
       `import { demiurge } from "demiurge/vite";`,
-      `for (const [name, value] of Object.entries({ createNodeServer, createRequestHandler, demiurge, generateStaticOutput, hydrateFileRouter, page, unstable_createRouteManifest })) {`,
+      `for (const [name, value] of Object.entries({ createNodeServer, createRequestHandler, demiurge, generateStaticOutput, hydrateFileRouter, page, unstable_createRouteManifest, verifyCacheStoreContract })) {`,
       `  if (typeof value !== "function") {`,
       `    throw new Error(\`Expected \${name} to be exported as a function.\`);`,
       `  }`,
@@ -76,6 +77,7 @@ try {
       `if (staticAdapter.name !== "static" || !staticAdapter.capabilities.staticOutput) {`,
       `  throw new Error("Expected the packed static adapter contract.");`,
       `}`,
+      `await verifyCacheStoreContract(createMemoryCacheStore);`,
       `console.log("pack consumer ok");`,
     ].join("\n"),
   );
@@ -90,7 +92,7 @@ try {
     "node",
     [
       "-e",
-      `import("node:fs").then(({ existsSync }) => { if (!existsSync("node_modules/demiurge/dist/index.d.ts")) { throw new Error("Packed tarball is missing dist/index.d.ts."); } console.log("types ok"); })`,
+      `import("node:fs").then(({ existsSync }) => { for (const file of ["node_modules/demiurge/dist/index.d.ts", "node_modules/demiurge/dist/data/testing.d.ts"]) { if (!existsSync(file)) { throw new Error(\`Packed tarball is missing \${file}.\`); } } console.log("types ok"); })`,
     ],
     scratch,
   );

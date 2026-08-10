@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createCache,
   createInvalidation,
   createMemoryCache,
+  createMemoryCacheStore,
   defineTags,
   parseCacheDuration,
   query,
   serializeCacheKey,
+  serializeCacheNamespace,
   tag,
 } from "demiurge";
 
@@ -123,9 +126,9 @@ describe("data cache primitives", () => {
     } as const;
 
     await expect(cache.get(request)).resolves.toBe("post-1");
-    expect(cache.invalidateTags([tag("posts")])).toBe(1);
+    await expect(cache.invalidateTags([tag("posts")])).resolves.toBe(1);
     await expect(cache.get(request)).resolves.toBe("post-2");
-    expect(cache.invalidateKey(["post", "hello"])).toBe(true);
+    await expect(cache.invalidateKey(["post", "hello"])).resolves.toBe(true);
     await expect(cache.get(request)).resolves.toBe("post-3");
   });
 
@@ -148,15 +151,17 @@ describe("data cache primitives", () => {
       tags: [tag("authors")],
     });
 
-    expect(invalidate.key(["missing"])).toEqual({
+    await expect(invalidate.key(["missing"])).resolves.toEqual({
       deleted: 0,
       kind: "key",
     });
-    expect(invalidate.tag(tag("posts"))).toEqual({
+    await expect(invalidate.tag(tag("posts"))).resolves.toEqual({
       deleted: 1,
       kind: "tag",
     });
-    expect(invalidate.keys([["author", "ada"], ["missing"]])).toEqual({
+    await expect(
+      invalidate.keys([["author", "ada"], ["missing"]]),
+    ).resolves.toEqual({
       deleted: 1,
       kind: "key",
     });
@@ -174,11 +179,159 @@ describe("data cache primitives", () => {
       tags: [tag("authors")],
     });
 
-    expect(invalidate.tags([tag("posts"), tag("authors")])).toEqual({
+    await expect(
+      invalidate.tags([tag("posts"), tag("authors")]),
+    ).resolves.toEqual({
       deleted: 2,
       kind: "tag",
     });
     expect(loadPost).toHaveBeenCalledTimes(2);
     expect(loadAuthor).toHaveBeenCalledTimes(2);
   });
+
+  it("isolates shared entries by namespace and scope", async () => {
+    const store = createMemoryCacheStore();
+    const production = createCache({
+      namespace: { app: "catalog", environment: "production", schemaVersion: 3 },
+      store,
+    });
+    const staging = createCache({
+      namespace: { app: "catalog", environment: "staging", schemaVersion: 3 },
+      store,
+    });
+    const load = vi.fn(async (value: string) => value);
+
+    for (const scope of ["build", "private", "public"] as const) {
+      await expect(
+        production.get({ fn: () => load(`production-${scope}`), key: ["same"], scope }),
+      ).resolves.toBe(`production-${scope}`);
+      await expect(
+        staging.get({ fn: () => load(`staging-${scope}`), key: ["same"], scope }),
+      ).resolves.toBe(`staging-${scope}`);
+    }
+
+    expect(load).toHaveBeenCalledTimes(6);
+    await expect(
+      production.get({ fn: () => load("miss"), key: ["same"], scope: "public" }),
+    ).resolves.toBe("production-public");
+    expect(load).toHaveBeenCalledTimes(6);
+  });
+
+  it("keeps request and none scopes out of a shared store", async () => {
+    const entries = new Map();
+    const store = createMemoryCacheStore({ entries });
+    const options = {
+      namespace: { app: "catalog", environment: "test", schemaVersion: 1 },
+      store,
+    } as const;
+    const firstRequest = createCache(options);
+    const secondRequest = createCache(options);
+    const requestLoad = vi.fn(async () => `request-${requestLoad.mock.calls.length}`);
+    const noneLoad = vi.fn(async () => `none-${noneLoad.mock.calls.length}`);
+    const request = { fn: requestLoad, key: ["item"], scope: "request" } as const;
+    const none = { fn: noneLoad, key: ["item"], scope: "none" } as const;
+
+    await expect(firstRequest.get(request)).resolves.toBe("request-1");
+    await expect(firstRequest.get(request)).resolves.toBe("request-1");
+    await expect(secondRequest.get(request)).resolves.toBe("request-2");
+    await expect(firstRequest.get(none)).resolves.toBe("none-1");
+    await expect(firstRequest.get(none)).resolves.toBe("none-2");
+
+    expect(entries.size).toBe(0);
+  });
+
+  it("sends fully namespaced keys and tags to the store", async () => {
+    const entries = new Map();
+    const cache = createCache({
+      namespace: { app: "catalog", environment: "production", schemaVersion: 2 },
+      store: createMemoryCacheStore({ entries }),
+    });
+
+    await cache.get({
+      fn: () => ({ title: "Hello" }),
+      key: ["post", { slug: "hello" }],
+      scope: "public",
+      tags: [tag("posts"), tag("post:hello")],
+    });
+
+    expect([...entries]).toEqual([
+      [
+        'catalog:production:2:public:key:["post",{"slug":"hello"}]',
+        {
+          expiresAt: null,
+          tags: [
+            "catalog:production:2:public:tag:posts",
+            "catalog:production:2:public:tag:post:hello",
+          ],
+          value: { title: "Hello" },
+        },
+      ],
+    ]);
+  });
+
+  it("does not let pending work repopulate an invalidated shared tag", async () => {
+    const entries = new Map();
+    const store = createMemoryCacheStore({ entries });
+    const cache = createCache({
+      namespace: { app: "catalog", environment: "test", schemaVersion: 1 },
+      store,
+    });
+    const result = deferred<string>();
+    const pending = cache.get({
+      fn: () => result.promise,
+      key: ["post", "hello"],
+      scope: "public",
+      tags: [tag("posts")],
+    });
+
+    await Promise.resolve();
+    await expect(cache.invalidateTags([tag("posts")])).resolves.toBe(1);
+    result.resolve("stale");
+    await expect(pending).resolves.toBe("stale");
+
+    const nextCache = createCache({
+      namespace: { app: "catalog", environment: "test", schemaVersion: 1 },
+      store,
+    });
+    await expect(
+      nextCache.get({
+        fn: () => "fresh",
+        key: ["post", "hello"],
+        scope: "public",
+      }),
+    ).resolves.toBe("fresh");
+  });
+
+  it("serializes and validates cache namespaces", () => {
+    expect(
+      serializeCacheNamespace({
+        app: "catalog",
+        environment: "production",
+        schemaVersion: "v2",
+      }),
+    ).toBe("catalog:production:v2");
+    expect(() =>
+      serializeCacheNamespace({
+        app: "catalog:other",
+        environment: "production",
+        schemaVersion: 1,
+      })
+    ).toThrow(/namespace app/);
+    expect(() =>
+      serializeCacheNamespace({
+        app: "catalog",
+        environment: "production",
+        schemaVersion: -1,
+      })
+    ).toThrow(/schemaVersion/);
+  });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+}

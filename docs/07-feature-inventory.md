@@ -77,6 +77,7 @@ implementation.
 | Explicit cache API | implemented |
 | Cache scopes: build/public/private/request/none | implemented |
 | Cache adapters: memory/Redis/KV/custom | partially implemented |
+| Public custom cache-store contract and conformance verifier | implemented |
 | Typed tags and invalidation | implemented |
 | Client router refresh/prefetch separate from server invalidation | designed |
 | Actions/mutations | partially implemented |

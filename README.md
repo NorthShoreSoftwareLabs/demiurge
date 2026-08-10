@@ -18,6 +18,7 @@ Current conventions:
 - framework source lives under `src`
 - public API is exported from `demiurge`
 - test-only internals are exported from `demiurge/internal/testing`
+- cache-adapter conformance checks are exported from `demiurge/data/testing`
 - example apps live under `examples`
 - `examples/ssr-page` demonstrates server rendering, hydration, and route data
 - `examples/node-server` demonstrates a production Node server with SSR, API

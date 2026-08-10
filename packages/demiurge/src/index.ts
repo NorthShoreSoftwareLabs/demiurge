@@ -5,14 +5,17 @@ export {
   defineAdapter,
 } from "./adapter";
 export {
+  createCache,
   createInvalidation,
   createMemoryIdempotencyStore,
   createMemoryCache,
+  createMemoryCacheStore,
   defineTags,
   parseCacheDuration,
   query,
   runIdempotentMutation,
   serializeCacheKey,
+  serializeCacheNamespace,
   serializeCacheTag,
   tag,
 } from "./data";
@@ -130,7 +133,11 @@ export type {
   CacheKeyPart,
   CacheRequest,
   CacheScope,
+  CacheNamespace,
+  CacheStore,
+  CacheStoreEntry,
   CacheTag,
+  CreateCacheOptions,
   Invalidation,
   InvalidationResult,
   IdempotencyRequest,
@@ -138,6 +145,8 @@ export type {
   IdempotencyStore,
   Query,
   QueryDefinition,
+  MemoryCacheOptions,
+  MemoryCacheStoreOptions,
 } from "./data";
 export type {
   DocumentMetadataTag,

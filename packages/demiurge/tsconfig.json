@@ -4,6 +4,7 @@
     "baseUrl": ".",
     "paths": {
       "demiurge": ["src/index.ts"],
+      "demiurge/data/testing": ["src/data/testing.ts"],
       "demiurge/internal/testing": ["src/internal/testing.ts"],
       "demiurge/node": ["src/node/index.ts"],
       "demiurge/static": ["src/static/index.ts"],

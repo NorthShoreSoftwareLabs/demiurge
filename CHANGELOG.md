@@ -130,6 +130,13 @@ Epic: #7
   `parseCacheDuration(...)` cover the first cache key/tag behavior tests.
 - `createInvalidation(...)` provides a framework-owned server-side invalidation
   surface for cache keys and tags with deterministic deletion counts.
+- `CacheStore` and `createCache(...)` publish an async-capable custom backend
+  contract. Framework-owned `app:environment:schemaVersion` and scope prefixes
+  isolate every backend key and tag while request entries remain local.
+- `createMemoryCacheStore(...)` implements that contract, and
+  `demiurge/data/testing` exports a runner-neutral conformance verifier for
+  custom Redis/KV-style adapters. Cache invalidation is async so network stores
+  do not need a fake synchronous API.
 - `page({ data, view })` resolves route-level page data with the matched
   request context and a request-scoped framework cache during route loading.
 - Route modules can export typed `paths`, and static path collection validates

@@ -1,10 +1,13 @@
 export {
+  createCache,
   createInvalidation,
   createMemoryCache,
+  createMemoryCacheStore,
   defineTags,
   parseCacheDuration,
   query,
   serializeCacheKey,
+  serializeCacheNamespace,
   serializeCacheTag,
   tag,
 } from "./cache";
@@ -19,11 +22,17 @@ export type {
   CacheKeyPart,
   CacheRequest,
   CacheScope,
+  CacheNamespace,
+  CacheStore,
+  CacheStoreEntry,
   CacheTag,
+  CreateCacheOptions,
   Invalidation,
   InvalidationResult,
   Query,
   QueryDefinition,
+  MemoryCacheOptions,
+  MemoryCacheStoreOptions,
 } from "./cache";
 export type {
   IdempotencyRequest,
