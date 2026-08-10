@@ -40,5 +40,11 @@ with React rendering modes instead of being left to user middleware.
 ## Open Decisions
 
 - Exact file name for cascading security: likely `@policy.ts`.
-- Whether Trusted Types starts report-only by default in strict mode or remains
-  explicitly opt-in.
+
+## Decisions Made
+
+- Trusted Types is report-only in the strict preset and enforcement is a named
+  opt-in (#29). Enforcement is not build-detectable, so defaulting to it would
+  fail a real session in production rather than fail a build. Strict promises
+  the strongest policy that cannot break a user at runtime, and Trusted Types
+  enforcement sits outside that promise.
