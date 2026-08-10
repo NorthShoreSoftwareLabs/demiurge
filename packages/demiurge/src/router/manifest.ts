@@ -474,6 +474,19 @@ export function findLayoutsForPath(
   );
 }
 
+export function findPoliciesForPath(
+  manifest: RouteManifest,
+  pathname: string,
+) {
+  const pathnameSegments = splitPathname(pathname);
+
+  return manifest.policies.filter(
+    (policy) =>
+      !policy.fileSegments.some(isRouteGroupSegment) &&
+      isFallbackForPath(policy.segments, pathnameSegments),
+  );
+}
+
 function findClosestAttachedFile(
   fallbacks: FallbackRoute[],
   route: RouteRecord,
@@ -513,9 +526,17 @@ function isFallbackForPath(
   fallbackSegments: string[],
   pathnameSegments: string[],
 ) {
-  return fallbackSegments.every(
-    (segment, index) => pathnameSegments[index] === segment,
-  );
+  return fallbackSegments.every((segment, index) => {
+    if (segment.startsWith("*")) {
+      return pathnameSegments.length > index;
+    }
+
+    if (segment.startsWith(":")) {
+      return Boolean(pathnameSegments[index]);
+    }
+
+    return pathnameSegments[index] === segment;
+  });
 }
 
 async function loadFallbackComponent(fallback: FallbackRoute | undefined) {

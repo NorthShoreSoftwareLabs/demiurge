@@ -2,11 +2,17 @@ import { createElement, type ComponentType, type ReactNode } from "react";
 import { renderToString } from "react-dom/server";
 import { renderDocument } from "../document";
 import {
+  findPoliciesForPath,
   loadNotFoundMatch,
   type LoadedNotFoundMatch,
   type RouteManifest,
 } from "../router";
 import type { NotFoundProps } from "../route";
+import { createSecurityHeaders, mergeRoutePolicies } from "../security";
+import {
+  createCspNonce,
+  securityPolicyRequiresNonce,
+} from "../security/policy";
 import { BuiltInNotFound } from "./fallbacks";
 import type { FailureSite } from "./failure-site";
 import { prefersHtmlDocument } from "./negotiate";
@@ -45,15 +51,32 @@ export async function renderNotFoundResponse(
   const match = await loadNotFoundMatch(manifest, url.pathname, {
     onLayoutError: (error) => options.onError?.(error, "page"),
   });
-  const html = renderNotFoundDocument(match, options);
+  const documentPolicy = await loadDocumentPolicy(manifest, url.pathname);
+  const nonce = options.nonce ?? (
+    securityPolicyRequiresNonce(documentPolicy) ? createCspNonce() : undefined
+  );
+  const html = renderNotFoundDocument(match, { ...options, nonce });
+  const headers = createSecurityHeaders(documentPolicy ?? {}, { nonce });
+  headers.set("content-type", "text/html; charset=utf-8");
 
   return new Response(
     (await options.transformDocument?.(html)) ?? html,
     {
-      headers: { "content-type": "text/html; charset=utf-8" },
+      headers,
       status: 404,
     },
   );
+}
+
+async function loadDocumentPolicy(
+  manifest: RouteManifest,
+  pathname: string,
+) {
+  const modules = await Promise.all(
+    findPoliciesForPath(manifest, pathname).map((policy) => policy.load()),
+  );
+
+  return mergeRoutePolicies(...modules.map((module) => module.policy)).document;
 }
 
 export function renderNotFoundDocument(

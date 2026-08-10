@@ -212,6 +212,13 @@ export function securityPolicyRequiresNonce(
   );
 }
 
+export function createCspNonce() {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+
+  return btoa(String.fromCharCode(...bytes));
+}
+
 function mergeSecurityPolicy(
   base: SecurityPolicy,
   override: SecurityPolicy,

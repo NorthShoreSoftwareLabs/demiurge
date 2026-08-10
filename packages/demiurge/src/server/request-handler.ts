@@ -37,7 +37,10 @@ import {
   mergeRoutePolicies,
   type RateLimitStore,
 } from "../security";
-import { securityPolicyRequiresNonce } from "../security/policy";
+import {
+  createCspNonce,
+  securityPolicyRequiresNonce,
+} from "../security/policy";
 
 export type RequestErrorReporter = (
   error: unknown,
@@ -231,7 +234,7 @@ async function handleMatchedRoute(
       routeMatch.route,
     );
     const nonce = securityPolicyRequiresNonce(policy.document)
-      ? createNonce()
+      ? createCspNonce()
       : undefined;
     const response = await runRouteMiddleware(middlewares, context, async () => {
       // A page render has already committed to a document, so a failure here
@@ -451,13 +454,6 @@ function finalizeRouteResponse(
   }
 
   return corsResponse;
-}
-
-function createNonce() {
-  const bytes = new Uint8Array(16);
-  globalThis.crypto.getRandomValues(bytes);
-
-  return btoa(String.fromCharCode(...bytes));
 }
 
 function getCapabilityCors(capability: RouteCapability) {

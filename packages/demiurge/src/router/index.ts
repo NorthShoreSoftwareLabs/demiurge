@@ -2,6 +2,7 @@ export {
   collectStaticRoutePaths,
   createRouteManifest,
   findLayoutsForPath,
+  findPoliciesForPath,
   findPageMatch,
   findRouteMatch,
   isAttachedFileForRoute,

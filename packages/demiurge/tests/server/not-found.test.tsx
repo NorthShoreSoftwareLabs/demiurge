@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createRequestHandler,
   defineMetadata,
+  defineRoutePolicy,
   json,
   notFound,
   page,
+  security,
   text,
   type LayoutProps,
   type NotFoundProps,
@@ -78,6 +80,60 @@ describe("not-found responses", () => {
     const body = await (await handler(htmlRequest("/nope"))).text();
 
     expect(body).toContain('data-demiurge-fallback="not-found"');
+  });
+
+  it("applies path-inherited document policy and nonce headers to HTML fallbacks", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/@not-found.tsx": routeModule({ default: RootNotFound }),
+        "./routes/@policy.ts": routeModule({
+          policy: defineRoutePolicy({
+            document: security.static({
+              headers: { referrerPolicy: "same-origin" },
+            }),
+          }),
+        }),
+        "./routes/admin/@policy.ts": routeModule({
+          policy: defineRoutePolicy({ document: security.strict() }),
+        }),
+        "./routes/index.tsx": routeModule({ GET: page({ view: View }) }),
+      },
+      ssr: { clientEntry: "/assets/app.js" },
+    });
+
+    const rootResponse = await handler(htmlRequest("/missing"));
+    const nestedResponse = await handler(htmlRequest("/admin/missing"));
+    const nestedHtml = await nestedResponse.text();
+
+    expect(rootResponse.headers.get("referrer-policy")).toBe("same-origin");
+    expect(rootResponse.headers.get("content-security-policy")).toContain(
+      "script-src 'self'",
+    );
+    expect(nestedResponse.headers.get("content-security-policy")).toMatch(
+      /'nonce-[A-Za-z0-9+/=]+'/,
+    );
+    expect(nestedHtml).toMatch(/nonce="[A-Za-z0-9+/=]+"/);
+  });
+
+  it("does not apply document policy to negotiated problem responses", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/@policy.ts": routeModule({
+          policy: defineRoutePolicy({ document: security.static() }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/missing", {
+        headers: { accept: "application/json" },
+      }),
+    );
+
+    expect(response.headers.has("content-security-policy")).toBe(false);
+    expect(response.headers.get("content-type")).toBe(
+      "application/problem+json; charset=utf-8",
+    );
   });
 
   it("sends problem+json to anything that did not ask for HTML", async () => {
