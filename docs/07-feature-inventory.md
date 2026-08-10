@@ -79,6 +79,9 @@ implementation.
 | Cache adapters: memory/Redis/KV/custom | partially implemented |
 | Public custom cache-store contract and conformance verifier | implemented |
 | Request-handler shared cache injection with request isolation | implemented |
+| Shared stale-while-revalidate with distributed refresh coordination | designed |
+| Origin render-artifact cache and incremental static regeneration | designed |
+| CDN/browser cache policy and adapter-aware purge | designed |
 | Typed tags and invalidation | implemented |
 | Client router refresh/prefetch separate from server invalidation | designed |
 | Actions/mutations | partially implemented |

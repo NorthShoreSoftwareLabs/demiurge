@@ -13,6 +13,11 @@ handlers and React server components without hiding when work runs.
 - Component-level server data through request context.
 - `query(...)` objects with typed return values and typed invalidation tags.
 - Cache scopes: build, public, private, request, none.
+- Stale-while-revalidate for shared data entries, with stale retention on refresh
+  failure, refresh coalescing, and adapter-managed background lifetime.
+- Origin render-artifact caching and incremental static regeneration, using the
+  same freshness, stale-window, tag, and atomic-publication semantics as data
+  caching.
 - Cache adapters: memory, Redis, KV, custom. The public custom-store contract
   and conformance verifier shipped in #47.
 - One public cache API, with the framework holding its own instances rather than
@@ -23,6 +28,9 @@ handlers and React server components without hiding when work runs.
 - Build-time validation that dynamic static routes provide `paths`.
 - Clear distinction between build-time static generation and runtime server
   rendering.
+- Explicit separation between origin/store caching, shared HTTP/CDN caching,
+  and browser caching; invalidation may cross layers only through an adapter
+  that actually supports the required purge operation.
 
 ## Examples Required
 

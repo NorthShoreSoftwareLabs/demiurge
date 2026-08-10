@@ -62,6 +62,19 @@ The framework-owned document renderer can apply a provided nonce to static
 document scripts and the framework client entry, while preserving an explicit
 nonce on a script contribution.
 
+A nonce-backed document is not a reusable HTTP-cache representation. CSP
+requires the server to generate a unique nonce each time it transmits the
+policy, so a CDN must not replay one cached nonce-bearing document to multiple
+requests and a browser must not reuse one as a fresh document response. Until
+the framework synthesizes these cache restrictions, applications and adapters
+must mark nonce-backed documents `Cache-Control: no-store`. Static or otherwise
+replayable documents need a hash/static CSP instead.
+
+This does not prevent caching work below the HTTP response. The origin may cache
+data or a nonce-free render artifact and then wrap it with a fresh nonce and CSP
+for each response. The cache-layer and rendering-mode limitations are recorded
+in `docs/04-data-and-static-generation.md`.
+
 ```ts
 export const GET = react({
   server: "ssr",
@@ -125,44 +138,36 @@ failure.
 
 ### React Server Components
 
-RSC Flight payloads should be treated as data streams, not executable inline
-scripts. The safest direction is:
-
-1. Serve Flight over a dedicated `Content-Type`.
-2. Fetch it as data from the client runtime.
-3. Keep executable bootstrap code in nonce-backed external scripts.
-4. Avoid embedding changing Flight chunks into inline scripts that would require
-   impossible CSP hashes.
-
-Open design question:
-
-- For initial document responses that include RSC data, should the framework use
-  a nonce-backed script tag, a non-executable JSON script tag, or a separate
-  fetch?
+Initial Flight chunks use escaped inline scripts that append to a
+framework-owned queue. The client consumes buffered chunks, replaces the
+queue's push handler, and feeds later chunks into a `ReadableStream`. Textual
+chunks are escaped for their JavaScript and HTML context, binary chunks are
+base64-encoded, and every queue script carries the same per-response nonce as
+React's streaming completion scripts. Separately requested Flight responses
+remain data responses under their dedicated content type and do not need a
+script nonce.
 
 ### Partial Prerendering
 
-Partial prerendering is where strict CSP can get slippery:
-
-- The static shell wants hash-based CSP.
-- The dynamic holes may need nonce-based streamed content.
-- If dynamic content is delivered as inline scripts, static hashes will not
-  match.
-
-Potential framework rule:
+Partial prerendering does not serve a build-time HTML document directly. The
+build produces an internal React prelude plus opaque postponed state. On each
+request, a runtime adapter generates the document nonce, renders the
+framework-owned prefix, writes the cached prelude, resumes the dynamic
+boundaries with the same nonce, and finishes the document suffix and client
+entry.
 
 ```ts
-react({
-  prerender: "shell",
-  dynamic: "stream",
-  csp: "nonce-at-edge",
+page({
+  render: { mode: "prerender" },
+  view: ProductPage,
 });
 ```
 
-This would require a server or edge adapter that can generate a nonce, patch the
-shell, and stream the dynamic tail. If there is no runtime that can inject a
-fresh nonce, the framework should fail the build or choose a no-inline-data
-strategy.
+The prelude is a cacheable internal artifact rather than an HTTP response, so it
+does not need a hash CSP or embedded nonce. The completed response remains
+consistently nonce-backed. A static-only adapter cannot fill request-time holes
+and must reject a partially prerendered result; it may emit a `prerender` route
+only when the build completes the whole tree.
 
 ## CORS
 

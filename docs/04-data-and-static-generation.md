@@ -122,6 +122,158 @@ query key must include the user/tenant identity it is private to; the framework
 does not guess identity from cookies. `request` remains in the request's cache
 facade and never reaches a shared backend. `none` bypasses both.
 
+### Current Cache Limitations
+
+The implemented cache stores data-query results. It does not cache rendered
+React output or complete HTTP responses. In particular:
+
+- `staleWhileRevalidate` is accepted by the public query type but is not yet
+  implemented by the cache runtime. An expired entry is deleted and recomputed
+  before the caller receives a value.
+- Omitting `ttl` currently gives a shared `build`, `public`, or `private` entry
+  an infinite lifetime. Shared caching should therefore always declare a TTL
+  and use tags for event-driven invalidation. A future API should require an
+  explicit `forever` choice instead of treating omission as that choice.
+- The built-in memory store is process-local. Sharing values between processes
+  requires a conforming shared store; provider-specific Redis and KV adapters
+  have not shipped yet.
+- Cache tags invalidate the framework data cache only. They do not purge a CDN,
+  a browser cache, a prerendered document, or a client-router cache.
+
+These are implementation limits, not a rule that only data may ever be cached.
+Rendered output and HTTP responses require different keys, security checks, and
+invalidation mechanisms and should be added as distinct cache layers.
+
+## Cache Layers
+
+Every rendering mode may use caching, but the reusable representation differs
+by layer. A cache policy must say both what is cached and where it may be
+reused; `render.mode` alone implies no cross-request caching.
+
+| Layer | Reusable unit | Key source | Lifetime and invalidation | Principal limits |
+| --- | --- | --- | --- | --- |
+| Request | Promise or query result | Explicit query key | One request/render | Dedupe only; never reaches a shared store. |
+| Origin/shared store | Data result or, in a future renderer cache, a nonce-free render artifact | Required application namespace, scope, and explicit domain key | TTL plus framework tags | Private identity must be explicit. A complete nonce-bearing document is not a reusable artifact. |
+| CDN/shared HTTP cache | Complete HTTP response | Request method and target URI, refined by `Vary` and provider configuration | `s-maxage`, shared-cache stale directives, validators, and provider purge/tags | Public representations only by default. Cookie-, session-, or authorization-dependent output must bypass shared caching unless its partition is explicit and supported. |
+| Browser/private HTTP cache | Complete HTTP response | Request method and target URI, refined by `Vary` | `max-age`, validators, and normal browser eviction | May store `private` responses, but sensitive responses and nonce-backed documents require stricter handling. Framework cache tags cannot invalidate an already stored browser response. |
+
+HTTP caches construct keys from the request target and `Vary`; they do not know
+the framework's query keys. Search parameters are already part of the target
+URI. A response that depends on a request header must emit the corresponding
+`Vary` field. Varying on an entire `Cookie` header is usually both unsafe and
+destructive to cache efficiency, so personalized shared caching should instead
+use an explicit tenant/user partition at an origin cache or bypass the CDN.
+
+An eventual render cache should default its origin key to the deployment/build
+identity, route identity, concrete pathname, and normalized search parameters.
+Additional header inputs must be declared. A private entry must also include an
+explicit user or tenant identity. Reading an undeclared request-dependent input
+must make a public entry fail closed or bypass caching rather than silently
+reuse the wrong representation.
+
+### Rendering Modes At Each Layer
+
+- `static`: the complete document may be stored at the origin, CDN, and browser
+  when its CSP and response data are themselves reusable. Fingerprinted assets
+  can use long-lived immutable caching; HTML normally needs revalidation or a
+  bounded freshness policy.
+- `ssr`: data queries may be cached while React and the security wrapper run on
+  every request. A future origin render cache may store a nonce-free body and
+  bootstrap-data artifact, then create a fresh document wrapper. A complete
+  nonce-backed response cannot be replayed as the cached representation.
+- `streaming`: query caching works normally. A live stream is one-shot; an
+  output cache can store it only after successfully materializing a complete
+  representation. A cache hit may be delivered immediately and does not
+  preserve the original boundary timing. CDN support for storing streamed
+  responses is platform-specific and must be an adapter capability.
+- `prerender`: the build prelude and postponed state are immutable artifacts for
+  that deployment, not TTL entries. Request-time holes may use the normal data
+  cache. The final nonce-backed document is still composed per request.
+- RSC: separately fetched public Flight responses may use ordinary origin and
+  HTTP caching with a key that includes the route/tree and build identity.
+  Personalized Flight responses must remain private or use an explicit origin
+  partition. Flight embedded into the initial document inherits that
+  document's cache restrictions.
+
+CDN and browser caching are HTTP behavior, expressed with `Cache-Control`,
+validators, and `Vary`; Redis-style caching is application behavior. They may
+share high-level TTL or tag intent, but a framework tag cannot pretend to purge
+all three layers. CDN tag purge is provider-specific, and browser entries can
+only expire, revalidate, or change URL.
+
+## Stale-While-Revalidate And ISR
+
+Stale-while-revalidate is required behavior for the shared origin cache, not an
+optional query hint. A shared cache record needs at least two deadlines:
+
+```ts
+type SharedCacheRecord<T> = {
+  freshUntil: number;
+  staleUntil: number;
+  tags: readonly CacheTag[];
+  value: T;
+};
+```
+
+Given `ttl: "5m"` and `staleWhileRevalidate: "1h"`:
+
+- before five minutes, return the fresh value;
+- from five through sixty-five minutes, return the stale value immediately and
+  start one background refresh;
+- after sixty-five minutes, block on a refresh because the stale window ended;
+- publish a refreshed value atomically only after its producer succeeds;
+- if a background refresh fails, retain the last good value through its stale
+  window, report the error, and permit a later refresh attempt.
+
+The one-refresh rule must hold across the shared store, not merely inside one
+Node process. The current `CacheStore` contract has no distributed lease,
+compare-and-swap, or atomic publish primitive, and `sharedPending` only
+coalesces callers using one `Cache` instance. Redis/KV implementations therefore
+need a store-level refresh lease and atomic replacement contract before the
+framework can claim distributed stale-while-revalidate without a thundering
+herd.
+
+Background refresh also needs runtime lifetime. A long-running Node adapter can
+track the refresh promise; a serverless or edge adapter needs a capability such
+as `waitUntil`. An adapter that cannot keep background work alive must report
+that limitation rather than silently dropping refreshes.
+
+Incremental static regeneration is the same state machine applied to a render
+artifact instead of a query value:
+
+1. Return the last successfully generated artifact while it is inside its stale
+   window.
+2. Regenerate at most once for that key across the deployment.
+3. Atomically replace the artifact only after rendering, serialization, and all
+   required validation succeed.
+4. Keep serving the last good artifact if regeneration fails.
+5. Generate the per-response document nonce after the artifact lookup; never
+   store it in the reusable artifact.
+
+For a fully prerendered route, the ISR value is the body/bootstrap/metadata
+artifact. For partial prerendering, the cached prelude and React postponed state
+are one indivisible value: publishing one without the other would make resume
+operate against a different tree. SSR may use the same render-artifact cache,
+although “ISR” conventionally describes regeneration of prerendered output.
+Streaming misses may be recorded only after successful completion; hits use the
+materialized artifact and no longer reproduce the original reveal timing.
+
+Time-based regeneration and event-based regeneration are separate triggers for
+the same state machine. Tag or key invalidation needs two explicit behaviors:
+
+- mark stale, so the next read may serve the last value and trigger background
+  regeneration;
+- expire now, so the next read blocks until a new value succeeds.
+
+The existing invalidation API deletes entries and therefore implements only the
+second behavior. A future revalidation API must not overload deletion and make
+the availability tradeoff implicit.
+
+Origin ISR does not automatically revalidate copies already stored at a CDN or
+browser. An adapter may connect framework tags to provider purge/surrogate-key
+APIs, but without that capability the outer cache keeps its response until its
+own TTL ends. Browser responses cannot be actively purged.
+
 ## Cache Backend
 
 The configured cache backend is for framework cache semantics, not arbitrary

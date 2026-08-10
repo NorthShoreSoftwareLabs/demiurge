@@ -39,17 +39,11 @@ data loading, caching, and typing coherent.
 
 ## Decisions Made
 
-- Initial RSC data ships as a sequence of inert `<template data-demiurge-flight>`
-  elements, one per chunk, read by a `MutationObserver` that feeds a
-  `ReadableStream` (#55). This extends the route-data mechanism at
-  `document/render.ts:128` instead of adding a second one. A template is not
-  code, so `script-src` has nothing to permit and the execution path a
-  nonce-backed data script would open does not exist. Safety comes from
-  escaping, as it did for the inline version, plus one invariant: the reader
-  only ever reads `textContent` and never clones the fragment into the document,
-  because a `<script>` inside cloned template content executes on insertion.
-  This does not remove #24. React's boundary-completion scripts move nodes, so
-  they are code and still need the nonce.
+- Initial RSC data ships as escaped, nonce-backed inline scripts that append
+  Flight chunks to a framework-owned queue (#55). The client consumes chunks
+  already buffered in the queue, then replaces its push handler so subsequent
+  chunks feed a `ReadableStream`. Binary chunks are base64-encoded. The scripts
+  use the same per-response document nonce passed to React's streaming renderer.
 - `render: { mode: "streaming" }` selects `renderToPipeableStream(...)` (#52).
   Metadata and static document contributions resolve before `onShellReady`;
   Suspense boundaries may complete later.
