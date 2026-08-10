@@ -267,9 +267,21 @@ function applyCapabilityInit(response: Response, init: ResponseInit | undefined)
   }
 
   const headers = new Headers(response.headers);
+  const capabilityHeaders = new Headers(init.headers);
 
-  for (const [name, value] of new Headers(init.headers)) {
+  for (const [name, value] of capabilityHeaders) {
+    if (name === "set-cookie") {
+      continue;
+    }
+
     headers.set(name, value);
+  }
+
+  // `set-cookie` is the one header that legitimately repeats, and iterating a
+  // `Headers` collapses it into a single comma-joined value. Appending each
+  // cookie back is the same guarantee `writeWebResponse` already makes.
+  for (const cookie of capabilityHeaders.getSetCookie()) {
+    headers.append("set-cookie", cookie);
   }
 
   return new Response(response.body, {

@@ -295,6 +295,31 @@ describe("the notFound() response capability", () => {
     await expect(response.text()).resolves.toBe("all gone");
   });
 
+  it("keeps multiple set-cookie headers from the capability", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/@not-found.tsx": routeModule({ default: RootNotFound }),
+        "./routes/gone.tsx": routeModule({
+          GET: notFound(undefined, {
+            headers: [
+              ["set-cookie", "a=1; Path=/"],
+              ["set-cookie", "b=2; Path=/"],
+            ],
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(htmlRequest("/gone"));
+
+    // Iterating a `Headers` collapses set-cookie into one comma-joined value,
+    // which is exactly how multiple cookies get silently dropped.
+    expect(response.headers.getSetCookie()).toEqual([
+      "a=1; Path=/",
+      "b=2; Path=/",
+    ]);
+  });
+
   it("keeps an explicit status and headers from the capability", async () => {
     const handler = createRequestHandler({
       routes: {
@@ -315,8 +340,8 @@ describe("the notFound() response capability", () => {
   });
 });
 
-describe("routes that cannot render a page", () => {
-  it("treats a non-page GET as not found rather than throwing", async () => {
+describe("routes whose GET is not a page", () => {
+  it("answers from the response capability and never reaches the 404 path", async () => {
     const handler = createRequestHandler({
       routes: {
         "./routes/@not-found.tsx": routeModule({ default: RootNotFound }),

@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import type { IncomingMessage } from "node:http";
 import { readdir } from "node:fs/promises";
 import { resolve, relative, sep } from "node:path";
 import type { OutputBundle, OutputChunk } from "rollup";
@@ -165,8 +166,7 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
             server.config.root,
             options.routesDir ?? "src/routes",
           );
-          const routes = await createDevRouteImporters(server, routesDir);
-          const manifest = createRouteManifest(routes);
+          const manifest = await loadDevManifest(server, request, routesDir);
           const result = await handleDevRequest(
             manifest,
             webRequest,
@@ -213,9 +213,7 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
               server.config.root,
               options.routesDir ?? "src/routes",
             );
-            const manifest = createRouteManifest(
-              await createDevRouteImporters(server, routesDir),
-            );
+            const manifest = await loadDevManifest(server, request, routesDir);
 
             await writeWebResponse(
               response,
@@ -389,6 +387,35 @@ function createDevRuntimeOptions(
       });
     },
   };
+}
+
+// Both dev middlewares need the manifest for the same request, and building
+// it walks the routes directory. The pre middleware always runs, so the post
+// middleware reuses what it already produced rather than scanning twice on
+// every unmatched request.
+const DEV_MANIFEST = Symbol.for("demiurge.devManifest");
+
+type DevManifestCarrier = { [DEV_MANIFEST]?: RouteManifest };
+
+async function loadDevManifest(
+  server: ViteDevServer,
+  request: IncomingMessage,
+  routesDir: string,
+) {
+  const carrier = request as IncomingMessage & DevManifestCarrier;
+  const cached = carrier[DEV_MANIFEST];
+
+  if (cached) {
+    return cached;
+  }
+
+  const manifest = createRouteManifest(
+    await createDevRouteImporters(server, routesDir),
+  );
+
+  carrier[DEV_MANIFEST] = manifest;
+
+  return manifest;
 }
 
 function createDevSsrOptions(options: DemiurgeVitePluginOptions) {
