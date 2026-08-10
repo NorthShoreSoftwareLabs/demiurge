@@ -17,6 +17,7 @@ export const GET = page<string, HomeData>({
       "An app-owned 404 document",
     ],
   }),
+  render: { mode: "static" },
   view: Home,
 });
 

@@ -203,14 +203,16 @@ describe("file route conventions", () => {
       scope: "build",
     });
     const manifest = unstable_createRouteManifest({
-      "./routes/(marketing)/about.tsx": routeModule({ GET: page(View) }),
+      "./routes/(marketing)/about.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: View }),
+      }),
       "./routes/blog/[slug].tsx": routeModule({
-        GET: page(View),
+        GET: page({ render: { mode: "static" }, view: View }),
         paths: async ({ cache }) =>
           (await cache.get(slugsQuery())).map((slug) => ({ slug })),
       }),
       "./routes/docs/[...path].tsx": routeModule({
-        GET: page(View),
+        GET: page({ render: { mode: "static" }, view: View }),
         paths: async () => [
           { path: "guide/intro" },
           { path: "api reference/routes" },
@@ -256,7 +258,9 @@ describe("file route conventions", () => {
 
   it("requires dynamic page routes to export static paths", async () => {
     const manifest = unstable_createRouteManifest({
-      "./routes/blog/[slug].tsx": routeModule({ GET: page(View) }),
+      "./routes/blog/[slug].tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: View }),
+      }),
     });
 
     await expect(unstable_collectStaticRoutePaths(manifest)).rejects.toThrow(
@@ -267,13 +271,13 @@ describe("file route conventions", () => {
   it("validates static path entries against route variables", async () => {
     const missingPathManifest = unstable_createRouteManifest({
       "./routes/blog/[slug].tsx": routeModule({
-        GET: page(View),
+        GET: page({ render: { mode: "static" }, view: View }),
         paths: async () => [{}],
       }),
     });
     const invalidPathManifest = unstable_createRouteManifest({
       "./routes/blog/[slug].tsx": routeModule({
-        GET: page(View),
+        GET: page({ render: { mode: "static" }, view: View }),
         paths: async () => [{ slug: { nested: true } as unknown as string }],
       }),
     });
@@ -287,6 +291,16 @@ describe("file route conventions", () => {
       unstable_collectStaticRoutePaths(invalidPathManifest),
     ).rejects.toThrow(
       'Static path "slug" for "./routes/blog/[slug].tsx" must be a string, number, or boolean.',
+    );
+  });
+
+  it("rejects runtime page routes when collecting static output", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/account.tsx": routeModule({ GET: page(View) }),
+    });
+
+    await expect(unstable_collectStaticRoutePaths(manifest)).rejects.toThrow(
+      'Page route "./routes/account.tsx" uses render mode "ssr" and cannot be emitted as static output. Set render: { mode: "static" } or deploy a runtime adapter.',
     );
   });
 });

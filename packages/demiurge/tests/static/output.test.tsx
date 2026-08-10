@@ -82,6 +82,7 @@ function appRoutes(extra: Record<string, ReturnType<typeof routeModule>> = {}) {
     "./routes/index.tsx": routeModule({
       GET: page<string, { message: string }>({
         data: async () => ({ message: "Built at export time" }),
+        render: { mode: "static" },
         view: Home,
       }),
       metadata: defineMetadata({ title: "Static home" }),
@@ -111,7 +112,7 @@ describe("static output adapter", () => {
     const routes = appRoutes({
       "./routes/api/health.ts": routeModule({}),
       "./routes/posts/[slug].tsx": routeModule({
-        GET: page(Post),
+        GET: page({ render: { mode: "static" }, view: Post }),
         paths: async () => [{ slug: "hello world" }, { slug: "second" }],
       }),
     });
@@ -176,6 +177,7 @@ describe("static output adapter", () => {
       "./routes/index.tsx": routeModule({
         GET: page<string, { message: string }>({
           data: async () => ({ message: "Secure static page" }),
+          render: { mode: "static" },
           view: Home,
         }),
         metadata: defineMetadata({
@@ -215,7 +217,9 @@ describe("static output adapter", () => {
     const { outDir } = await createOutputDirectory();
     const onError = vi.fn();
     const routes = appRoutes({
-      "./routes/index.tsx": routeModule({ GET: page(ThrowPage) }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: ThrowPage }),
+      }),
     });
 
     await expect(
@@ -251,7 +255,9 @@ describe("static output adapter", () => {
     await generateStaticOutput({
       outDir,
       routes: appRoutes({
-        "./routes/old.tsx": routeModule({ GET: page(PlainPage) }),
+        "./routes/old.tsx": routeModule({
+          GET: page({ render: { mode: "static" }, view: PlainPage }),
+        }),
       }),
     });
     expect(existsSync(join(outDir, "old", "index.html"))).toBe(true);
@@ -271,7 +277,7 @@ describe("static output adapter", () => {
         outDir: collision.outDir,
         routes: appRoutes({
           "./routes/posts/[slug].tsx": routeModule({
-            GET: page(Post),
+            GET: page({ render: { mode: "static" }, view: Post }),
             paths: async () => [{ slug: "Release" }, { slug: "release" }],
           }),
         }),
@@ -283,7 +289,7 @@ describe("static output adapter", () => {
         outDir: traversal.outDir,
         routes: appRoutes({
           "./routes/docs/[...path].tsx": routeModule({
-            GET: page(Post),
+            GET: page({ render: { mode: "static" }, view: Post }),
             paths: async () => [{ path: "../secret" }],
           }),
         }),
@@ -305,7 +311,11 @@ describe("static output adapter", () => {
     await expect(
       generateStaticOutput({
         outDir: missingNotFound.outDir,
-        routes: { "./routes/index.tsx": routeModule({ GET: page(PlainPage) }) },
+        routes: {
+          "./routes/index.tsx": routeModule({
+            GET: page({ render: { mode: "static" }, view: PlainPage }),
+          }),
+        },
       }),
     ).rejects.toThrow(/root @not-found\.tsx/);
     await expect(

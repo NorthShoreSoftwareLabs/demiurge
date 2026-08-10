@@ -23,6 +23,7 @@ export const metadata = defineMetadata({
 
 export const GET = page<"/guides/[slug]", GuideData>({
   data: async ({ path }) => guides[path.slug as GuideSlug],
+  render: { mode: "static" },
   view: Guide,
 });
 
