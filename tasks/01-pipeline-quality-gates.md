@@ -34,10 +34,16 @@ fail fast when lint, type safety, tests, coverage, or examples regress.
 
 ## Open Decisions
 
-- Whether CI should publish coverage HTML as an artifact.
+None open.
 
 ## Decisions Made
 
+- CI uploads the coverage HTML report only when the run fails (#14). The text
+  reporter already prints the per-file table into the log and per-file
+  thresholds name the file that dipped, so the report adds line-level detail
+  and nothing else. Paying for that on every push is how a pipeline gets slow
+  by accretion. Paying for it on the run that fails costs nothing the rest of
+  the time.
 - Playwright lands before the streaming work, scoped to Chromium alone (#13,
   setup in #87). `jsdom` already covers hydration and fallbacks; what it cannot
   do is enforce CSP, run Trusted Types, consume a stream progressively, or

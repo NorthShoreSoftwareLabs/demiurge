@@ -32,3 +32,16 @@ jobs:
 
       - name: Run verification
         run: npm run verify
+
+      # The text reporter already prints the per-file table into the log, and
+      # per-file thresholds name the file that dipped. What is missing on a red
+      # run is which lines, so upload the report then and not on the green runs
+      # nobody opens.
+      - name: Upload coverage report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: packages/demiurge/coverage/
+          retention-days: 7
+          if-no-files-found: ignore
