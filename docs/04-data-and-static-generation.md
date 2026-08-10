@@ -303,11 +303,24 @@ This is more precise than `params` and more minimal than
 `defineStaticParams(...)`. Add a helper only if it unlocks better inference or
 validation.
 
-The first static paths slice exposes the typed `paths` route export and a
-validated framework collector for static adapters. The collector includes
-non-dynamic page routes automatically, requires dynamic page routes to export
-`paths`, validates every dynamic and catchall variable, and expands entries into
-encoded concrete pathnames. It does not yet emit static HTML artifacts.
+The static paths collector includes non-dynamic page routes automatically,
+requires dynamic page routes to export `paths`, validates every dynamic and
+catchall variable, and expands entries into encoded concrete pathnames.
+
+The production static adapter consumes that collector through
+`generateStaticOutput(...)`. It renders every concrete pathname through the
+same request, policy, data, layout, metadata, and document pipeline used by a
+runtime server, then emits pretty-URL files such as
+`dist/blog/hello-world/index.html`. It also emits an app-owned `404.html` and a
+versioned `demiurge-static-manifest.json` containing the effective response
+headers for each artifact.
+
+Generation is staged before publication, preserves existing client assets, and
+removes only HTML files listed by the previous valid static manifest. The build
+fails on render errors, redirects, cookies, non-HTML responses, duplicate or
+non-portable paths, nonce-backed CSP, and inline scripts/styles missing their
+declared CSP hash. Hosts remain responsible for translating the manifest's
+headers into their provider-specific configuration.
 
 Use this vocabulary:
 

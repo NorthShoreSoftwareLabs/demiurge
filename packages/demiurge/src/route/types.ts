@@ -99,13 +99,21 @@ export type PageCapability<
   data?: PageDataFunction<TPath, TData>;
   kind: "page";
   layout?: false;
+  render: PageRenderOptions;
   view: ComponentType<RouteProps<TPath, TData>>;
+};
+
+export type PageRenderMode = "ssr" | "static";
+
+export type PageRenderOptions = {
+  mode: PageRenderMode;
 };
 
 export type AnyPageCapability = {
   data?: PageDataFunction<string, unknown>;
   kind: "page";
   layout?: false;
+  render: PageRenderOptions;
   view: unknown;
 };
 
@@ -242,6 +250,7 @@ export type PageOptions<
 > = {
   data?: PageDataFunction<TPath, TData>;
   layout?: false;
+  render?: PageRenderOptions;
   view: ComponentType<RouteProps<TPath, TData>>;
 };
 

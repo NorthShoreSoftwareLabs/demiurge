@@ -22,6 +22,8 @@ Current conventions:
 - `examples/ssr-page` demonstrates server rendering, hydration, and route data
 - `examples/node-server` demonstrates a production Node server with SSR, API
   routes, and hashed static assets
+- `examples/static-export` demonstrates prerendered pages, dynamic `paths`,
+  deployment headers, and an app-owned static 404
 - `examples/basic-blog/src/routes/index.tsx` maps to `/`
 - `examples/basic-blog/src/routes/blog/index.tsx` maps to `/blog`
 - `examples/basic-blog/src/routes/blog/[slug].tsx` maps to `/blog/:slug`
@@ -76,6 +78,11 @@ then `npm start -w examples/node-server`. The example reads the generated
 `demiurge-manifest.json`, mounts the framework-owned SSR server entry, and serves
 the client assets through `createNodeServer(...)`.
 
+For a static production build, run
+`npm run build -w examples/static-export`. The example writes rendered pages
+and `404.html` into `dist/`; its `demiurge-static-manifest.json` records the
+headers a static hosting provider must apply at each path.
+
 Current source modules, all under `packages/demiurge/src`:
 
 - `document`: metadata, scripts, links, SEO, and the document renderer
@@ -84,6 +91,7 @@ Current source modules, all under `packages/demiurge/src`:
 - `browser`: browser router and `<Link />`
 - `server`: request handling for HTTP route capabilities
 - `node`: production Node HTTP adapter and static asset handler
+- `static`: production prerendering and static deployment manifest generation
 - `vite`: Vite integration for development
 - `internal`: explicit test-only framework internals
 

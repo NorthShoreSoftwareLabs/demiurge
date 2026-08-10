@@ -108,7 +108,9 @@ export const GET = page(() => <HomePage />);
 
 ## Phase 7: Prerendering And Partial Prerendering
 
-- Add static prerender output.
+- Add static prerender output. `generateStaticOutput(...)` now renders every
+  collected page path, writes pretty-URL HTML plus an app-owned `404.html`, and
+  emits a deployment manifest containing each response's headers.
 - Add dynamic static route generation.
 - Use hash-based CSP for stable static assets.
 - Add an adapter contract for per-request nonce injection into prerendered
@@ -167,7 +169,8 @@ Static generation rules:
 - Node adapter with production static assets, client manifest, and framework-
   owned SSR server entry.
 - Edge adapter.
-- Static adapter.
+- Static adapter with staged artifact publication, stale-page cleanup, portable
+  path validation, CSP compatibility checks, and deployment headers.
 - Adapter capability checks for:
   - nonce injection
   - streaming

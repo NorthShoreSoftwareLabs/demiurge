@@ -315,6 +315,12 @@ export async function collectStaticRoutePaths(
       continue;
     }
 
+    if (routeModule.GET.render.mode !== "static") {
+      throw new Error(
+        `Page route "${route.file}" uses render mode "${routeModule.GET.render.mode}" and cannot be emitted as static output. Set render: { mode: "static" } or deploy a runtime adapter.`,
+      );
+    }
+
     const pattern = toRoutePattern(route.segments);
     const dynamicNames = getDynamicSegmentNames(route.segments);
 

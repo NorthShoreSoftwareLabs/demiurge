@@ -36,5 +36,16 @@ routes, including scripts that may be statically declared or render-discovered.
 
 ## Open Decisions
 
-- Whether render-discovered scripts can always hoist to the document head or
-  whether some strategies must stay near the rendered leaf.
+None open.
+
+## Decisions Made
+
+- Hoisting is a placement optimization, not a correctness mechanism (#39).
+  Discovered before the head flushes, a script hoists. Discovered after, it
+  renders where the component put it, which is correct because a browser runs a
+  script wherever it finds one and because the origin was permitted by route
+  policy before any HTML was sent. `beforeInteractive` is the exception: it
+  promises timing rather than placement, and a late discovery cannot keep that
+  promise anywhere in the document, so dev fails it and points at
+  `export const scripts`. Non-streaming renderers assemble the whole document
+  before sending, so they hoist everything and never reach the rule.

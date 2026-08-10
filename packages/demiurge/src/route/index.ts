@@ -44,6 +44,8 @@ export type {
   PageDataFunction,
   PageCapability,
   PageOptions,
+  PageRenderMode,
+  PageRenderOptions,
   PathVars,
   RawResponseCapability,
   RedirectCapability,

@@ -13,6 +13,7 @@ export function page<const TPath extends string = string, TData = undefined>(
   if (typeof options === "function") {
     return {
       kind: "page",
+      render: { mode: "ssr" },
       view: options,
     } satisfies PageCapability<TPath>;
   }
@@ -20,7 +21,8 @@ export function page<const TPath extends string = string, TData = undefined>(
   return {
     data: options.data,
     kind: "page",
-    view: options.view,
     layout: options.layout,
+    render: options.render ?? { mode: "ssr" },
+    view: options.view,
   } satisfies PageCapability<TPath, TData>;
 }

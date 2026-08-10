@@ -445,10 +445,10 @@ const adapter = defineAdapter({
 assertAdapterCapabilities(adapter, ["streaming", "nonceInjection"]);
 ```
 
-The first adapter slice exposes capability checks for nonce injection,
-streaming, WebSocket, WebTransport, cross-origin isolation headers, static
-output, and shared cache support. Concrete Node, Edge, and static adapters still
-need their own runtime implementations.
+The adapter contract exposes capability checks for nonce injection, streaming,
+WebSocket, WebTransport, cross-origin isolation headers, static output, and
+shared cache support. Concrete Node and static adapters now exercise that
+contract; an Edge adapter and shared cache implementations remain.
 
 ### Devtools And Audits
 
