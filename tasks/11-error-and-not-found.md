@@ -92,7 +92,8 @@ cannot be misconfigured into leaking.
   Shipped, #16.
 - ~~Not-found rendering inside inherited layouts, with a layout-free
   fallback.~~ Shipped, #17.
-- Build gate requiring a root `@not-found.tsx` when the app has page routes.
+- ~~Build gate requiring a root `@not-found.tsx` when the app has page
+  routes.~~ Shipped, #18.
 - ~~Error pipeline split by failure site.~~ Shipped, #19.
 - ~~Dev error document with stack, production body unchanged.~~ Shipped, #20.
 - Typed HTTP errors mapping to problem+json or the error document.
@@ -102,6 +103,10 @@ cannot be misconfigured into leaking.
 
 - `examples/app-owned-fallbacks`
 
+`examples/node-server` owns a root `@not-found.tsx` and an `@error.tsx`, which
+is what proves the build gate and the production error document. The dedicated
+example still owes the failing-layout and failure-site walkthrough.
+
 ## Tests Required
 
 - ~~Server tests for negotiation across `accept` values, including missing and
@@ -110,8 +115,8 @@ cannot be misconfigured into leaking.
   `tests/server/errors.test.tsx`.
 - ~~A test proving a layout that throws during a 404 yields the layout-free
   document rather than a 500.~~ `tests/server/not-found.test.tsx`.
-- A build test proving the gate fires for a page app and stays quiet for an
-  API-only app.
+- ~~A build test proving the gate fires for a page app and stays quiet for an
+  API-only app.~~ `tests/vite/plugin.test.tsx`.
 - ~~A test proving no production error body contains a stack trace or file
   path.~~ `tests/server/errors.test.tsx`.
 
@@ -122,6 +127,12 @@ cannot be misconfigured into leaking.
 
 ## Decisions Made While Implementing
 
+- Page detection for the build gate is a source scan keyed on the `page` import
+  from `demiurge`, not on the bare word and not on the file extension. The
+  plugin cannot execute route modules at build time. A `page(` scan fires on
+  `db.users.page(2)`, and an API-only app must never be told to write a 404
+  document it will never serve; extension misses a page route whose view is
+  imported rather than declared inline.
 - The dev error document wins over the app's `@error.tsx` in dev, matching
   Next, Remix, and SvelteKit. The stack is the reason the document exists.
 - The error document renders without layouts. The error path runs the least app

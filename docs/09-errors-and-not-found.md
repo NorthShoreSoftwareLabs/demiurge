@@ -66,10 +66,25 @@ export default function NotFound({ pathname }: NotFoundProps) {
 }
 ```
 
-### The framework built-in is a stopgap
+### The build refuses a page app with no root @not-found.tsx
 
-An app with no `@not-found.tsx` gets a deliberately plain framework 404, so
-nothing is ever blank. It is not something to ship. Own the file.
+The framework ships a working 404 so nothing is ever blank, and `vite build`
+fails until the app has decided on its own. A generic framework page in front
+of real users is a failure of the framework, not of the app that never got
+around to it.
+
+The gate only fires when the app has at least one page route. An API-only app
+never wants an HTML not-found document, builds clean, and gets problem+json for
+everything.
+
+Page detection is a source scan, because the plugin cannot execute route
+modules at build time. It keys on the import rather than the bare word: a file
+counts as a page route only if it imports `page` from `demiurge` and calls what
+it imported, aliases included. Scanning for `page(` alone would fire on
+`db.users.page(2)`, and telling an API that paginates to go write a 404
+document is exactly the failure this gate must not have.
+
+Dev serves the built-in and warns once, naming the file to create.
 
 ### The client agrees with the server
 

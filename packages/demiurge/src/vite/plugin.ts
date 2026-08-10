@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
-import { readdir } from "node:fs/promises";
-import { resolve, relative, sep } from "node:path";
+import { readFile, readdir } from "node:fs/promises";
+import { dirname, join, resolve, relative, sep } from "node:path";
 import type { OutputBundle, OutputChunk } from "rollup";
 import type { Plugin, UserConfig, ViteDevServer } from "vite";
 import { renderDocument } from "../document";
@@ -52,6 +52,7 @@ const RESOLVED_SERVER_ENTRY_ID = `\0${SERVER_ENTRY_ID}`;
 const DEFAULT_TYPED_ROUTES_OUTPUT = ".demiurge/route-manifest.d.ts";
 export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
   let root = process.cwd();
+  let isBuild = false;
 
   return {
     name: "demiurge",
@@ -60,6 +61,7 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
     },
     configResolved(config) {
       root = config.root;
+      isBuild = config.command === "build";
     },
     resolveId(id) {
       if (id === CLIENT_ENTRY_ID) {
@@ -115,6 +117,10 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       });
     },
     async buildStart() {
+      if (isBuild) {
+        await assertRootNotFoundRoute(root, options);
+      }
+
       if (!options.typedRoutes) {
         return;
       }
@@ -214,6 +220,8 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
               options.routesDir ?? "src/routes",
             );
             const manifest = await loadDevManifest(server, request, routesDir);
+
+            warnMissingRootNotFound(manifest, routesDir);
 
             await writeWebResponse(
               response,
@@ -437,6 +445,142 @@ function createDevFallbackOptions(
     dev: true,
     transformDocument: (html: string) => server.transformIndexHtml("/", html),
   };
+}
+
+const warnedRoots = new Set<string>();
+
+// The framework built-in is a stopgap, not a 404 anyone should ship. The build
+// gate is what enforces that; this is the same message arriving early enough
+// to act on.
+function warnMissingRootNotFound(manifest: RouteManifest, routesDir: string) {
+  if (
+    warnedRoots.has(routesDir) ||
+    manifest.fallbacks.notFound.some(
+      (fallback) => fallback.fileSegments.length === 0,
+    )
+  ) {
+    return;
+  }
+
+  warnedRoots.add(routesDir);
+  console.warn(missingRootNotFoundMessage(join(routesDir, "@not-found.tsx")));
+}
+
+// The framework ships a working 404 so nothing is ever blank, and refuses to
+// let an app reach production still rendering it. A generic framework page in
+// front of real users is a failure of the framework, not of the app that never
+// got around to it.
+export async function assertRootNotFoundRoute(
+  root: string,
+  options: DemiurgeVitePluginOptions = {},
+) {
+  const routesDirOption = options.routesDir ?? "src/routes";
+  const routesDir = resolve(root, routesDirOption);
+
+  if (!existsSync(routesDir)) {
+    return;
+  }
+
+  const files = await findRouteFiles(routesDir);
+  const names = files.map((file) =>
+    relative(routesDir, file).split(sep).join("/"),
+  );
+
+  if (names.some((name) => /^@not-found\.tsx?$/.test(name))) {
+    return;
+  }
+
+  const pageRoute = await findPageRouteFile(files);
+
+  // An API-only app never wants an HTML not-found document, and nagging it
+  // would be user hostile. It builds clean and gets problem+json.
+  if (!pageRoute) {
+    return;
+  }
+
+  throw new Error(
+    missingRootNotFoundBuildMessage(
+      routesDirOption,
+      relative(routesDir, pageRoute).split(sep).join("/"),
+    ),
+  );
+}
+
+// Page detection is a source scan rather than a module evaluation: the plugin
+// cannot execute route modules at build time. A page route is a file that
+// calls `page(...)`, which is the only way to declare one.
+async function findPageRouteFile(files: string[]) {
+  for (const file of files) {
+    // Framework-attached files own no address, so they are never page routes.
+    if (relative(dirname(file), file).startsWith("@")) {
+      continue;
+    }
+
+    if (declaresPageRoute(await readFile(file, "utf8"))) {
+      return file;
+    }
+  }
+
+  return undefined;
+}
+
+const DEMIURGE_NAMED_IMPORT = /import\s*\{([^}]*)\}\s*from\s*["']demiurge["']/g;
+
+// The plugin cannot evaluate route modules at build time, so page detection
+// reads the source. The signal is the import rather than the bare word: an
+// API-only app doing `db.users.page(2)` must never be told to write a 404
+// document it will never serve, and pagination is everywhere in API code.
+// Importing `page` from `demiurge` is the one thing only a page route does.
+export function declaresPageRoute(source: string) {
+  const locals = [...source.matchAll(DEMIURGE_NAMED_IMPORT)].flatMap((match) =>
+    match[1].split(",").flatMap((binding) => {
+      const [imported, local] = binding.trim().split(/\s+as\s+/);
+
+      // `import type { page }` cannot be called, and an alias renames what the
+      // call site looks like.
+      return imported.replace(/^type\s+/, "") === "page"
+        ? [local ?? imported]
+        : [];
+    }),
+  );
+
+  if (locals.length === 0) {
+    return false;
+  }
+
+  // Strip the import statements first so the binding list is not itself
+  // mistaken for a call.
+  const body = source.replace(DEMIURGE_NAMED_IMPORT, "");
+
+  return locals.some((local) => new RegExp(`\\b${local}\\s*\\(`).test(body));
+}
+
+export function missingRootNotFoundBuildMessage(
+  routesDir: string,
+  pageRoute: string,
+) {
+  return `Demiurge will not build an app with page routes and no ${routesDir}/@not-found.tsx.
+
+"${pageRoute}" declares a page, so a browser can reach a path this app does not serve. Decide what that looks like rather than shipping the framework built-in.
+
+Create ${routesDir}/@not-found.tsx:
+
+  export default function NotFound({ pathname }: { pathname: string }) {
+    return <h1>Nothing at {pathname}</h1>;
+  }
+
+It renders inside the layouts above the requested path. Opt out with "export const layout = false".`;
+}
+
+export function missingRootNotFoundMessage(notFoundFile: string) {
+  return `Demiurge is serving its built-in 404 because ${notFoundFile} does not exist.
+
+Create it before building for production:
+
+  export default function NotFound({ pathname }: { pathname: string }) {
+    return <h1>Nothing at {pathname}</h1>;
+  }
+`;
 }
 
 export function createDocumentHtml({

@@ -26,6 +26,7 @@ implementation.
 | Server-rendered not-found document inside inherited layouts | implemented |
 | Layout-free not-found fallback when a layout throws | implemented |
 | Content-negotiated not-found: document or RFC 9457 problem+json | implemented |
+| Build gate requiring a root `@not-found.tsx` for page apps | implemented |
 | Error pipeline split by failure site | implemented |
 | Dev error document with stack, opaque production body | implemented |
 | Typed HTTP errors mapping to problem+json | designed |
