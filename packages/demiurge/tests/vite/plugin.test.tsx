@@ -1377,6 +1377,22 @@ export const GET = page({ view: () => null });
     await expect(unstable_assertRootNotFoundRoute(root)).resolves.toBeUndefined();
   });
 
+  // A view can be imported rather than declared inline, which leaves a page
+  // route in a plain .ts file. Detecting on extension would miss it and let a
+  // page app build with the framework 404.
+  it("finds a page route declared in a .ts file", async () => {
+    const root = await scaffold({
+      "dashboard.ts": `import { page } from "demiurge";
+import { DashboardView } from "../views/dashboard";
+export const GET = page({ view: DashboardView });
+`,
+    });
+
+    await expect(unstable_assertRootNotFoundRoute(root)).rejects.toThrow(
+      /dashboard\.ts/,
+    );
+  });
+
   // Nagging an app that never wants an HTML document would be user hostile.
   it("stays quiet for an API-only app", async () => {
     const root = await scaffold({

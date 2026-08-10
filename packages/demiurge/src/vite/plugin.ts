@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import { readFile, readdir } from "node:fs/promises";
-import { dirname, resolve, relative, sep } from "node:path";
+import { dirname, join, resolve, relative, sep } from "node:path";
 import type { OutputBundle, OutputChunk } from "rollup";
 import type { Plugin, UserConfig, ViteDevServer } from "vite";
 import { renderDocument } from "../document";
@@ -463,7 +463,7 @@ function warnMissingRootNotFound(manifest: RouteManifest, routesDir: string) {
   }
 
   warnedRoots.add(routesDir);
-  console.warn(missingRootNotFoundMessage(routesDir));
+  console.warn(missingRootNotFoundMessage(join(routesDir, "@not-found.tsx")));
 }
 
 // The framework ships a working 404 so nothing is ever blank, and refuses to
@@ -511,9 +511,11 @@ export async function assertRootNotFoundRoute(
 // calls `page(...)`, which is the only way to declare one.
 async function findPageRouteFile(files: string[]) {
   for (const file of files) {
-    const name = relative(dirname(file), file);
-
-    if (name.startsWith("@") || !file.endsWith(".tsx")) {
+    // Framework-attached files own no address, so they are never page routes.
+    // Extension says nothing useful: a page route can live in a `.ts` file
+    // when its view is imported rather than declared inline, and an API route
+    // is often `.tsx`. The `page(` call is the only real signal.
+    if (relative(dirname(file), file).startsWith("@")) {
       continue;
     }
 
@@ -542,8 +544,8 @@ Create ${routesDir}/@not-found.tsx:
 It renders inside the layouts above the requested path. Opt out with "export const layout = false".`;
 }
 
-export function missingRootNotFoundMessage(routesDir: string) {
-  return `Demiurge is serving its built-in 404 because ${routesDir}/@not-found.tsx does not exist.
+export function missingRootNotFoundMessage(notFoundFile: string) {
+  return `Demiurge is serving its built-in 404 because ${notFoundFile} does not exist.
 
 Create it before building for production:
 
