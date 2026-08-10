@@ -381,6 +381,20 @@ describe("security audit output", () => {
     expect(audit.findings).toEqual([]);
   });
 
+  it("does not report omitted CSRF policy because cookie requests are protected by default", () => {
+    const audit = createSecurityAudit({
+      route: {
+        method: "POST",
+        security: {
+          rateLimit: { key: "ip", limit: 10, window: "1m" },
+          request: { maxBodySize: "1mb" },
+        },
+      },
+    });
+
+    expect(audit.findings).toEqual([]);
+  });
+
   it("reports static document scripts blocked by the effective CSP", () => {
     const audit = createSecurityAudit({
       document: {

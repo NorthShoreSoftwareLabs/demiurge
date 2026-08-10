@@ -65,7 +65,7 @@ export const GET = page(() => <HomePage />);
 - Add a production `strict` preset.
 - Add nonce generation for dynamic document responses.
 - Add tests for invalid CORS/CSP combinations.
-- Add CSRF defaults for cookie-authenticated unsafe methods.
+- Enforce CSRF by default for cookie-authenticated unsafe methods.
 - Add rate limit and request size policy.
 - Add upload limits.
 - Add webhook verification helpers.

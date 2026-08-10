@@ -43,6 +43,10 @@ with React rendering modes instead of being left to user middleware.
 
 ## Decisions Made
 
+- Unsafe `POST`, `PUT`, `PATCH`, and `DELETE` requests with a non-empty Cookie
+  header use double-submit CSRF validation by default (#27). Omitted policy is
+  the secure default, `true` always requires validation, and `false` is the
+  explicit route-policy exemption for independently authenticated endpoints.
 - Trusted Types is report-only in the strict preset and enforcement is a named
   opt-in (#29). Enforcement is not build-detectable, so defaulting to it would
   fail a real session in production rather than fail a build. Strict promises

@@ -268,13 +268,11 @@ function auditUnsafeMethodPolicy(
     return;
   }
 
-  if (!policy?.csrf) {
+  if (policy?.csrf === false) {
     findings.push({
-      code: policy?.csrf === false ? "csrf-disabled" : "csrf-missing",
-      message: policy?.csrf === false
-        ? "CSRF protection is explicitly disabled for this unsafe route."
-        : "Unsafe routes should declare CSRF protection or an explicit verified exemption.",
-      severity: policy?.csrf === false ? "info" : "warning",
+      code: "csrf-disabled",
+      message: "CSRF protection is explicitly disabled for this unsafe route.",
+      severity: "info",
     });
   }
 

@@ -1072,6 +1072,91 @@ describe("request handler", () => {
     expect(handlerSpy).not.toHaveBeenCalled();
   });
 
+  it("protects cookie-authenticated unsafe requests by default", async () => {
+    const handlerSpy = vi.fn(() => "updated");
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          POST: text(handlerSpy),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        headers: { cookie: "session=authenticated" },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.text()).resolves.toBe("Invalid CSRF token.");
+    expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
+  it("accepts matching default tokens on cookie-authenticated unsafe requests", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          POST: text("updated"),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        headers: {
+          cookie: "session=authenticated; csrf-token=token",
+          "x-csrf-token": "token",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe("updated");
+  });
+
+  it("allows tokenless unsafe API requests that carry no cookies", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/jobs.tsx": routeModule({
+          POST: text("queued"),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/jobs", { method: "POST" }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe("queued");
+  });
+
+  it("supports an inherited explicit CSRF exemption", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/hooks/@policy.ts": routeModule({
+          policy: defineRoutePolicy({ security: { csrf: false } }),
+        }),
+        "./routes/hooks/incoming.tsx": routeModule({
+          POST: text("accepted"),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/hooks/incoming", {
+        headers: { cookie: "delivery=context" },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe("accepted");
+  });
+
   it("allows unsafe CSRF-protected requests with matching tokens", async () => {
     const handler = createRequestHandler({
       routes: {
@@ -1201,6 +1286,7 @@ describe("request handler", () => {
       new Request("https://example.test/api/webhook", {
         body,
         headers: {
+          cookie: "delivery=context",
           "x-webhook-signature": `sha256=${signature}`,
         },
         method: "POST",

@@ -200,48 +200,74 @@ capability with CORS policy. Wildcard origins with credentials fail closed.
 
 ## CSRF
 
-Cookie-authenticated unsafe methods should get CSRF protection by default.
+Cookie-authenticated unsafe methods get CSRF protection by default.
 
 ```ts
-export const POST = action({
-  csrf: true,
-  input: formData(UpdateProfileSchema),
-  handler,
+import { text } from "demiurge";
+
+export const POST = text(({ request }) => request.text());
+```
+
+For `POST`, `PUT`, `PATCH`, and `DELETE`, the presence of a non-empty `Cookie`
+header activates double-submit validation. The default `csrf-token` cookie must
+match the `x-csrf-token` request header. The route handler does not run when the
+tokens are missing or differ.
+
+Tokenless API requests that carry no cookies are unaffected. This keeps bearer
+token, signed request, and other non-cookie authentication flows usable without
+an exemption while protecting browser credential flows by default.
+
+Routes can require validation even before another cookie is present, or replace
+the token names:
+
+```ts
+export const POST = text(handler, {
+  security: {
+    csrf: {
+      cookie: "demo-csrf",
+      header: "x-demo-csrf",
+    },
+  },
 });
 ```
 
 Framework responsibilities:
 
-- Default CSRF protection for cookie-authenticated `POST`, `PUT`, `PATCH`, and
-  `DELETE` actions.
 - Exempt verified webhooks and explicit tokenless API routes only through typed
   route policy.
 - Support progressive enhancement for forms.
 - Make same-site cookie settings visible in security audit output.
 
-The first CSRF slice supports explicit helper-attached validation:
+An endpoint that is intentionally cross-origin can opt out in its route policy:
 
 ```ts
-export const POST = text(({ request }) => request.text(), {
+import { defineRoutePolicy } from "demiurge";
+
+export const policy = defineRoutePolicy({
   security: {
-    csrf: true,
+    csrf: false,
   },
 });
 ```
 
-Unsafe methods protected with `csrf: true` require the default
-`csrf-token` cookie to match the `x-csrf-token` request header. Routes can
-override both names:
+`csrf: false` is deliberately visible and appears as an informational security
+audit finding. `webhook.hmac(...)` declares this exemption itself because its
+signature verification is the request-authentication boundary.
 
-```ts
-csrf: {
-  cookie: "demo-csrf",
-  header: "x-demo-csrf",
-}
-```
+### Migration From Opt-In CSRF
 
-CSRF failures occur before the route handler reads the body and preserve CORS
-headers when the route also has CORS policy.
+Earlier `0.0.1` builds enforced CSRF only when a route declared `csrf: true`.
+After this change, an unsafe request with any cookie is rejected unless it also
+sends matching double-submit tokens. Existing cookie-authenticated clients must
+send:
+
+- cookie: `csrf-token=<token>`
+- header: `x-csrf-token: <token>`
+
+For a route that does not use cookies as authentication and must accept requests
+that happen to carry cookies, add `security.csrf: false` at the route or an
+inherited `@policy.ts`. Do not add the exemption to cookie-authenticated routes.
+CSRF failures still preserve the capability's CORS headers.
 
 ## Rate Limits And Request Limits
 

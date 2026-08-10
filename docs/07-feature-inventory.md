@@ -95,7 +95,7 @@ implementation.
 | Strict CSP for RSC | designed |
 | Security report endpoint | implemented |
 | Typed CORS | designed |
-| CSRF defaults for cookie-auth unsafe methods | designed |
+| CSRF defaults for cookie-auth unsafe methods | implemented |
 | Rate limiting | designed |
 | Request size limits | designed |
 | Upload limits | implemented |

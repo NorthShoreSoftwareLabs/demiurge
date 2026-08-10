@@ -39,8 +39,8 @@ Epic: #4
   run.
 - Helper-attached fixed-window rate limits with pluggable server storage and
   dev in-memory storage.
-- Explicit helper-attached CSRF protection for unsafe methods with configurable
-  cookie/header token names.
+- Default double-submit CSRF protection for cookie-authenticated unsafe methods,
+  configurable cookie/header token names, and explicit route-policy exemptions.
 - Generic HMAC webhook helper that preserves raw bodies and rejects missing or
   invalid signatures before the app handler runs.
 - `createSecurityAudit(...)` for rendered header snapshots, effective route

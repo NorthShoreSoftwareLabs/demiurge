@@ -11,7 +11,7 @@ export const GET = json(({ pathname }) => ({
 
 export const POST = text(({ request }) => request.text(), {
   security: {
-    csrf: true,
+    // A Cookie header activates Demiurge's default double-submit CSRF check.
     rateLimit: {
       key: "ip",
       limit: 60,

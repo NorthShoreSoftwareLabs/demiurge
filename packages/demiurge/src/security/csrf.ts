@@ -6,12 +6,21 @@ export function enforceCsrfProtection(
   policy: CsrfPolicy | undefined,
   request: Request,
 ) {
-  if (!policy || !unsafeMethods.has(request.method.toUpperCase())) {
+  if (!unsafeMethods.has(request.method.toUpperCase()) || policy === false) {
     return null;
   }
 
-  const options = normalizeCsrfPolicy(policy);
-  const cookies = parseCookieHeader(request.headers.get("cookie"));
+  const cookieHeader = request.headers.get("cookie");
+
+  // An omitted policy uses the secure default only when browser credentials
+  // are present. Explicit `true` remains useful for routes that require a
+  // double-submit token regardless of whether another cookie was sent.
+  if (policy === undefined && !cookieHeader?.trim()) {
+    return null;
+  }
+
+  const options = normalizeCsrfPolicy(policy ?? true);
+  const cookies = parseCookieHeader(cookieHeader);
   const cookieToken = cookies.get(options.cookie);
   const headerToken = request.headers.get(options.header);
 
