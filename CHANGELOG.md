@@ -105,6 +105,18 @@ Epic: #6
 - Vite dev documents for matched page routes feed route/layout metadata,
   resource hints, and static script contributions into the document renderer.
 
+## Error And Not-Found Handling
+
+Epic: #3
+
+- `httpError(...)` creates a typed standard 4xx/5xx failure with deliberate
+  RFC 9457 details, extension members, response headers, and an optional cause.
+- API failures become `application/problem+json`; page failures render the
+  app-owned error document with the same status, and middleware failures retain
+  the existing content negotiation rule.
+- Unexpected errors remain redacted in production, while intentional typed
+  problem details remain public and `RouteErrorProps` exposes the HTTP status.
+
 ## Data Cache And Static Generation
 
 Epic: #7

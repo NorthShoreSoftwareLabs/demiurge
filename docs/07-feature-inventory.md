@@ -29,7 +29,7 @@ implementation.
 | Build gate requiring a root `@not-found.tsx` for page apps | implemented |
 | Error pipeline split by failure site | implemented |
 | Dev error document with stack, opaque production body | implemented |
-| Typed HTTP errors mapping to problem+json | designed |
+| Typed HTTP errors mapping to problem+json or error documents | implemented |
 | Dynamic path variables with `[slug]` | implemented |
 | Catchall path variables with `[...path]` | implemented |
 | `path` instead of public `params` vocabulary | implemented |

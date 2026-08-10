@@ -6,6 +6,7 @@ export type ProblemDetails = {
   status: number;
   title: string;
   type?: string;
+  [extension: string]: unknown;
 };
 
 // RFC 9457, which obsoleted RFC 7807. Shipping this as the framework default
@@ -17,6 +18,7 @@ export function createProblemDetails({
   status,
   title,
   type = "about:blank",
+  ...extensions
 }: ProblemDetails) {
   return {
     type,
@@ -24,6 +26,7 @@ export function createProblemDetails({
     status,
     ...(detail === undefined ? {} : { detail }),
     ...(instance === undefined ? {} : { instance }),
+    ...extensions,
   };
 }
 

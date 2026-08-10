@@ -3,6 +3,7 @@ import { renderToString } from "react-dom/server";
 import { renderDocument } from "../document";
 import { loadErrorFallback, type RouteManifest } from "../router";
 import type { RouteErrorProps } from "../route";
+import { isHttpError, type HttpErrorStatus } from "../route/http-error";
 import { BuiltInError, DevError, describeError } from "./fallbacks";
 import type { FailureSite } from "./failure-site";
 import { prefersHtmlDocument } from "./negotiate";
@@ -53,6 +54,20 @@ export function createErrorProblemResponse(
   error: unknown,
   options: ErrorRenderOptions = {},
 ) {
+  if (isHttpError(error)) {
+    return createProblemResponse(
+      {
+        ...error.extensions,
+        detail: error.detail,
+        instance: `${url.pathname}${url.search}`,
+        status: error.status,
+        title: error.title,
+        type: error.type,
+      },
+      { headers: error.headers },
+    );
+  }
+
   const { message } = describeError(error);
 
   return createProblemResponse({
@@ -71,6 +86,8 @@ async function renderErrorDocumentResponse(
   error: unknown,
   options: ErrorRenderOptions,
 ) {
+  const status = errorStatus(error);
+
   try {
     const html = await renderErrorDocument(
       manifest,
@@ -79,9 +96,14 @@ async function renderErrorDocumentResponse(
       options,
     );
 
+    const headers = isHttpError(error)
+      ? new Headers(error.headers)
+      : new Headers();
+    headers.set("content-type", "text/html; charset=utf-8");
+
     return new Response((await options.transformDocument?.(html)) ?? html, {
-      headers: { "content-type": "text/html; charset=utf-8" },
-      status: 500,
+      headers,
+      status,
     });
   } catch (renderError) {
     // Rendering the error page is the last row of the table: once the error
@@ -108,7 +130,7 @@ async function renderErrorDocument(
 ) {
   const Error = await resolveErrorComponent(manifest, pathname, options);
   const html = renderToString(
-    createElement(Error, { error, pathname }),
+    createElement(Error, { error, pathname, status: errorStatus(error) }),
   );
 
   return renderDocument({
@@ -119,6 +141,10 @@ async function renderErrorDocument(
     styles: options.styles,
     title: options.title,
   });
+}
+
+function errorStatus(error: unknown): HttpErrorStatus {
+  return isHttpError(error) ? error.status : 500;
 }
 
 async function resolveErrorComponent(

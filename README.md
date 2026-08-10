@@ -33,6 +33,8 @@ Current conventions:
 - `examples/basic-blog/src/routes/blog/@layout.tsx` wraps every page-compatible route below `/blog`
 - route files export `GET = page(...)`
 - dynamic path values are exposed as `path`, not `params`
+- `throw httpError(403, "Not your widget")` maps an intentional failure to an
+  error document or RFC 9457 problem response without losing its status
 
 Example route:
 

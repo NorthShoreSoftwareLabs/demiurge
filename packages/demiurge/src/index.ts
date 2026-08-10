@@ -90,6 +90,10 @@ export {
   action,
   actionInput,
   html,
+  httpError,
+  HttpError,
+  HTTP_ERROR_STATUSES,
+  isHttpError,
   json,
   jsonl,
   notFound,
@@ -115,6 +119,9 @@ export type {
   ActionIdempotency,
   ActionInput,
   ActionOptions,
+  HttpErrorDetails,
+  HttpErrorInit,
+  HttpErrorStatus,
 } from "./route";
 export type {
   Cache,

@@ -4,6 +4,12 @@ export {
 } from "./action";
 export { page } from "./page";
 export {
+  HTTP_ERROR_STATUSES,
+  HttpError,
+  httpError,
+  isHttpError,
+} from "./http-error";
+export {
   html,
   json,
   jsonl,
@@ -23,6 +29,11 @@ export type {
   ActionInput,
   ActionOptions,
 } from "./action";
+export type {
+  HttpErrorDetails,
+  HttpErrorInit,
+  HttpErrorStatus,
+} from "./http-error";
 export type {
   WebhookHmacAlgorithm,
   WebhookHmacContext,

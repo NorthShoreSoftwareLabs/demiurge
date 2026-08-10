@@ -17,7 +17,12 @@ import {
   readInitialRouteData,
   type InitialRouteData,
 } from "../document";
-import type { NotFoundProps, RouteErrorProps, RouteImporter } from "../route";
+import {
+  isHttpError,
+  type NotFoundProps,
+  type RouteErrorProps,
+  type RouteImporter,
+} from "../route";
 import {
   createRouteManifest,
   loadErrorFallback,
@@ -247,6 +252,7 @@ function RouteRenderer({
       ? createElement(match.Error, {
           error: match.error,
           pathname: match.pathname,
+          status: errorStatus(match.error),
         })
       : null;
   }
@@ -298,12 +304,17 @@ class RouteErrorBoundary extends Component<
         ? createElement(this.props.Error, {
             error: this.state.error,
             pathname: this.props.pathname,
+            status: errorStatus(this.state.error),
           })
         : null;
     }
 
     return this.props.children;
   }
+}
+
+function errorStatus(error: unknown) {
+  return isHttpError(error) ? error.status : 500;
 }
 
 function getCurrentLocation() {

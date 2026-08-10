@@ -96,7 +96,8 @@ cannot be misconfigured into leaking.
   routes.~~ Shipped, #18.
 - ~~Error pipeline split by failure site.~~ Shipped, #19.
 - ~~Dev error document with stack, production body unchanged.~~ Shipped, #20.
-- Typed HTTP errors mapping to problem+json or the error document.
+- ~~Typed HTTP errors mapping to problem+json or the error document.~~ Shipped,
+  #21.
 - `create-demiurge-app` scaffolding the fallbacks it expects apps to own.
 
 ## Examples Required
@@ -120,12 +121,15 @@ example still owes the failing-layout and failure-site walkthrough.
 - ~~A test proving no production error body contains a stack trace or file
   path.~~ `tests/server/errors.test.tsx`.
 
-## Open Decisions
-
-- Whether typed HTTP errors compose with the existing response capabilities or
-  stay a throw-only path.
-
 ## Decisions Made While Implementing
+
+- Typed HTTP errors stay a throw-only path. A thrown failure and a normal
+  response capability have different control flow and observability; combining
+  them would make a handler that appears to return JSON conditionally throw at
+  serialization time. `HttpErrorStatus` admits standard 4xx/5xx statuses,
+  intentional problem details remain public in production, arbitrary errors
+  stay redacted, and required protocol headers survive either negotiated
+  response shape (#21).
 
 - Page detection for the build gate is a source scan keyed on the `page` import
   from `demiurge`, not on the bare word and not on the file extension. The

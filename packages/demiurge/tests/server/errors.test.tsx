@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createRequestHandler,
+  httpError,
   json,
   page,
   text,
@@ -21,10 +22,10 @@ function StringErrorView(_props: RouteProps): never {
   throw "plain failure";
 }
 
-function AppError({ error, pathname }: RouteErrorProps) {
+function AppError({ error, pathname, status }: RouteErrorProps) {
   return (
     <p data-error="app">
-      {pathname} failed: {error instanceof Error ? error.name : "unknown"}
+      {status} {pathname} failed: {error instanceof Error ? error.name : "unknown"}
     </p>
   );
 }
@@ -142,6 +143,128 @@ describe("a failure inside an API route handler", () => {
       site: "route",
     });
   });
+
+  it("maps a typed error to public problem details, extensions, and headers", async () => {
+    const onError = vi.fn();
+    const handler = createRequestHandler({
+      onError,
+      routes: {
+        "./routes/api/widgets.tsx": routeModule({
+          POST: json(() => {
+            throw httpError(
+              422,
+              {
+                detail: "slug already taken",
+                errors: { slug: ["Choose another slug."] },
+                title: "Widget validation failed",
+                type: "https://example.test/problems/widget-validation",
+              },
+              { headers: { "retry-after": "5" } },
+            );
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/widgets?draft=1", {
+        headers: { accept: "text/html" },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(response.headers.get("content-type")).toBe(
+      "application/problem+json; charset=utf-8",
+    );
+    expect(response.headers.get("retry-after")).toBe("5");
+    await expect(response.json()).resolves.toEqual({
+      detail: "slug already taken",
+      errors: { slug: ["Choose another slug."] },
+      instance: "/api/widgets?draft=1",
+      status: 422,
+      title: "Widget validation failed",
+      type: "https://example.test/problems/widget-validation",
+    });
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), {
+      pathname: "/api/widgets",
+      site: "route",
+    });
+  });
+
+  it("uses the standard title and preserves authentication challenges", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/private.tsx": routeModule({
+          GET: json(() => {
+            throw httpError(401, undefined, {
+              headers: { "www-authenticate": 'Bearer realm="widgets"' },
+            });
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(jsonRequest("/api/private"));
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toBe(
+      'Bearer realm="widgets"',
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      status: 401,
+      title: "Unauthorized",
+    });
+  });
+});
+
+describe("a typed failure inside a page render", () => {
+  it("renders the app error document with the explicit status and headers", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/@error.tsx": routeModule({ default: AppError }),
+        "./routes/index.tsx": routeModule({
+          GET: page({
+            data: () => {
+              throw httpError(410, "This page has been removed.", {
+                headers: { "cache-control": "public, max-age=60" },
+              });
+            },
+            view: () => null,
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(htmlRequest("/"));
+    const body = await response.text();
+
+    expect(response.status).toBe(410);
+    expect(response.headers.get("cache-control")).toBe("public, max-age=60");
+    expect(body).toContain('data-error="app">410');
+    expect(body).toContain("HttpError</p>");
+    expect(body).not.toContain("This page has been removed");
+  });
+
+  it("uses the typed status in the built-in production document", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page({
+            data: () => {
+              throw httpError(403, "Not your widget");
+            },
+            view: () => null,
+          }),
+        }),
+      },
+    });
+
+    const body = await (await handler(htmlRequest("/"))).text();
+
+    expect(body).toContain("403");
+    expect(body).not.toContain("Not your widget");
+  });
 });
 
 describe("a failure inside middleware or policy", () => {
@@ -190,6 +313,36 @@ describe("a failure inside middleware or policy", () => {
     expect(response.headers.get("content-type")).toBe(
       "text/html; charset=utf-8",
     );
+  });
+
+  it("negotiates a typed middleware error without losing its status", async () => {
+    const routes = {
+      "./routes/@error.tsx": routeModule({ default: AppError }),
+      "./routes/@middleware.ts": routeModule({
+        middleware: () => {
+          throw httpError(429, "Request budget exhausted.", {
+            headers: { "retry-after": "60" },
+          });
+        },
+      }),
+      "./routes/api/widgets.tsx": routeModule({ GET: json({ ok: true }) }),
+      "./routes/index.tsx": routeModule({ GET: page({ view: () => null }) }),
+    };
+    const handler = createRequestHandler({ routes });
+
+    const document = await handler(htmlRequest("/"));
+    const problem = await handler(jsonRequest("/api/widgets"));
+
+    expect(document.status).toBe(429);
+    expect(document.headers.get("retry-after")).toBe("60");
+    expect(await document.text()).toContain('data-error="app">429');
+    expect(problem.status).toBe(429);
+    expect(problem.headers.get("retry-after")).toBe("60");
+    await expect(problem.json()).resolves.toMatchObject({
+      detail: "Request budget exhausted.",
+      status: 429,
+      title: "Too Many Requests",
+    });
   });
 });
 

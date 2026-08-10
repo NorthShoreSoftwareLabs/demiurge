@@ -16,6 +16,7 @@ import type {
   RoutePolicy,
   RouteSecurityPolicy,
 } from "../security/types";
+import type { HttpErrorStatus } from "./http-error";
 export type { RoutePolicy } from "../security/types";
 
 export type MaybePromise<T> = T | Promise<T>;
@@ -84,6 +85,7 @@ export type NotFoundProps = {
 export type RouteErrorProps = {
   error: unknown;
   pathname: string;
+  status: HttpErrorStatus;
 };
 
 export type RouteDefaultComponent =

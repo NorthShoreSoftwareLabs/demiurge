@@ -13,10 +13,10 @@ export function BuiltInNotFound({ pathname }: NotFoundProps) {
   );
 }
 
-export function BuiltInError() {
+export function BuiltInError({ status }: RouteErrorProps) {
   return (
     <main>
-      <h1>500</h1>
+      <h1>{status}</h1>
       <p>Something went wrong.</p>
     </main>
   );
@@ -24,13 +24,13 @@ export function BuiltInError() {
 
 // Dev only. Everything this renders is a file path or a stack frame, which is
 // exactly what must never reach a production body.
-export function DevError({ error, pathname }: RouteErrorProps) {
+export function DevError({ error, pathname, status }: RouteErrorProps) {
   const { message, name, stack } = describeError(error);
 
   return (
     <main>
       <h1>
-        {name} at {pathname}
+        {status} {name} at {pathname}
       </h1>
       <p>{message}</p>
       {stack ? <pre>{stack}</pre> : null}

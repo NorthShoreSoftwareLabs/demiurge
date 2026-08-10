@@ -95,14 +95,56 @@ resolved, and still replaces a page document whose route it can no longer match
 
 ## Errors
 
-### A 500 is not one thing
+### Typed HTTP errors keep status explicit
+
+Throw `httpError(...)` when a route, loader, middleware, or policy needs to
+return an intentional HTTP failure:
+
+```ts
+import { httpError, json } from "demiurge";
+
+export const POST = json(async () => {
+  throw httpError(422, {
+    detail: "slug already taken",
+    errors: { slug: ["Choose another slug."] },
+    type: "https://example.com/problems/widget-validation",
+  });
+});
+```
+
+The status argument is the `HttpErrorStatus` union of standard 4xx and 5xx
+codes. JavaScript callers receive the same runtime validation, so an accidental
+`httpError(200, ...)` fails where it is created instead of producing a success
+response with an error body.
+
+For an API route, the framework returns RFC 9457 `application/problem+json`.
+The request pathname and query become `instance`; `detail`, `type`, a custom
+`title`, and extension members such as `errors` are preserved. A string second
+argument is shorthand for `detail`. Standard status titles are defaults.
+
+For a page route, the same error renders the app's `@error.tsx` document and
+sets its HTTP status. `RouteErrorProps` includes `status`, `pathname`, and the
+original `error`. The built-in fallback displays the real status rather than
+claiming every failure is 500.
+
+Typed details are deliberate public output and remain visible in production
+problem responses. Messages and stacks from arbitrary thrown values remain
+redacted exactly as before. The optional third argument carries `headers` and
+`cause`; headers support protocol requirements such as `WWW-Authenticate` and
+`Retry-After` on both problem responses and error documents.
+
+`httpError(...)` is a throw-only signal. Normal successful and redirecting
+responses continue to use `json(...)`, `text(...)`, `redirect(...)`, and the
+other response capabilities.
+
+### A failure response is not one thing
 
 Where the failure happened decides what the caller gets.
 
 | Failure site | Response |
 | --- | --- |
-| Inside a page render | App `@error.tsx` renders a document, 500 |
-| Inside an API route handler | `application/problem+json`, 500, never HTML |
+| Inside a page render | App `@error.tsx` renders a document, typed status or 500 |
+| Inside an API route handler | `application/problem+json`, typed status or 500, never HTML |
 | Inside middleware or policy | Negotiated, same rule as not-found |
 | While rendering the error page | Plain text, no app code |
 
@@ -119,6 +161,10 @@ Production keeps the guarantee that no stack trace, file path, or framework
 internal reaches a response body. Dev renders its own document with the
 message, the stack, and the route that failed, and puts the thrown message in
 `detail` on a problem+json response.
+
+That redaction applies to unexpected values. An `HttpError` is the explicit
+boundary where an app author chooses public `detail` and extension members, so
+those fields are stable in development and production.
 
 The switch is the build mode. The Vite dev middleware sets it when it calls the
 shared handler; it is absent from the public `RequestHandlerOptions`, and it is

@@ -4,9 +4,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createFileRouter,
+  httpError,
   Link,
   page,
   type LayoutProps,
+  type RouteErrorProps,
   type RouteProps,
 } from "demiurge";
 
@@ -132,6 +134,24 @@ describe("browser router fallbacks", () => {
     });
   });
 
+  it("passes a typed status to the client error boundary", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    window.history.replaceState(null, "", "/private");
+
+    const Router = createFileRouter({
+      routes: {
+        "./routes/@error.tsx": routeModule({ default: StatusError }),
+        "./routes/private.tsx": routeModule({ GET: page(ForbiddenPage) }),
+      },
+    });
+
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Route status: 403")).toBeTruthy();
+    });
+  });
+
   it("renders matched pages inside inherited layouts", async () => {
     const Router = createFileRouter({
       routes: {
@@ -230,6 +250,10 @@ function RouteError({ error, pathname }: { error: unknown; pathname: string }) {
   );
 }
 
+function StatusError({ status }: RouteErrorProps) {
+  return <p>Route status: {status}</p>;
+}
+
 function RootLayout({ children }: LayoutProps) {
   return (
     <section>
@@ -254,6 +278,10 @@ function BlogPage({ pathname }: RouteProps) {
 
 function BrokenPage(_props: RouteProps): never {
   throw new Error("render failed");
+}
+
+function ForbiddenPage(_props: RouteProps): never {
+  throw httpError(403, "Private page");
 }
 
 function SelfLinkPage(_props: RouteProps) {
