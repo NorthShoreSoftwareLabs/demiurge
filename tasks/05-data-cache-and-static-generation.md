@@ -14,8 +14,8 @@ handlers and React server components without hiding when work runs.
 - `query(...)` objects with typed return values and typed invalidation tags.
 - Cache scopes: build, public, private, request, none.
 - Cache adapters: memory, Redis, KV, custom.
-- Framework-owned internal cache namespace with a separate optional user cache
-  API later if it earns its keep.
+- One public cache API, with the framework holding its own instances rather than
+  a reserved namespace inside the app's.
 - Typed invalidation from server actions, route handlers, and React server code.
 - Static `paths` export for dynamic static generation using `path` vocabulary,
   not public `params`.
@@ -39,5 +39,23 @@ handlers and React server components without hiding when work runs.
 
 ## Open Decisions
 
-- Whether a public user cache API ships separately from the internal framework
-  cache adapter.
+None open.
+
+## Decisions Made
+
+- The cache API is public and already shipped (#48). The framework keeps its own
+  cache instances rather than a reserved namespace inside the app's, so there is
+  no shared key space to police.
+- Isolation is per instance, and every shared-store adapter has to build it
+  (#47). The memory adapter gets it free by closing over a `Map`; two Redis
+  adapters against one Redis do not. So the framework builds every key and
+  adapters receive strings, which removes the code path where an author
+  namespaces values and forgets the tag index.
+- Namespaces are `app:environment:schemaVersion` and required, never defaulted.
+  `app:environment` is developer-supplied because it is the only identity that
+  separates another instance of this app from someone else's app. The schema
+  version sits in the prefix rather than behind a compatibility check, because
+  rolling deploys run two revisions at once and versioned prefixes make them
+  invisible to each other instead of corrupting each other.
+- No mutual-exclusion lock on a namespace. Many instances of one revision need
+  it simultaneously, and a lock cannot tell autoscaling from a collision.
