@@ -137,6 +137,10 @@ Epic: #7
   `demiurge/data/testing` exports a runner-neutral conformance verifier for
   custom Redis/KV-style adapters. Cache invalidation is async so network stores
   do not need a fake synchronous API.
+- `createRequestHandler({ cacheStore })` creates a new facade per request while
+  sharing build/public/private entries through the configured backend. Request
+  entries stay request-local, none bypasses caching, and omitting the option
+  preserves the isolated default.
 - `page({ data, view })` resolves route-level page data with the matched
   request context and a request-scoped framework cache during route loading.
 - Route modules can export typed `paths`, and static path collection validates

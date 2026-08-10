@@ -140,20 +140,36 @@ type CacheStore = {
 `CacheStoreEntry.expiresAt` is an epoch-millisecond number or `null` for no
 expiry, so the contract remains JSON-safe instead of relying on `Infinity`.
 
-Create one shared store, then create request cache facades against it:
+Create one shared store and inject it into the request handler. The handler
+creates a fresh cache facade for every request:
 
 ```ts
-import { createCache } from "demiurge";
+import { createMemoryCacheStore, createRequestHandler } from "demiurge";
 
-const cache = createCache({
-  namespace: {
-    app: "storefront",
-    environment: process.env.NODE_ENV ?? "development",
-    schemaVersion: 1,
+const store = createMemoryCacheStore();
+const handler = createRequestHandler({
+  cacheStore: {
+    namespace: {
+      app: "storefront",
+      environment: process.env.NODE_ENV ?? "development",
+      schemaVersion: 1,
+    },
+    store,
   },
-  store,
+  routes,
 });
 ```
+
+With `cacheStore` configured, `build`, `public`, and `private` entries can
+outlive a request and can be shared by multiple handler instances using the
+same backend and namespace. `request` remains local to each handler invocation,
+and `none` always executes the source. Omitting `cacheStore` preserves the safe
+default: every request receives a new memory cache, so even a `public` query
+does not silently create process-global state.
+
+The built-in memory store is useful for one Node process and tests. It is not a
+distributed cache: multiple replicas need a Redis/KV-style implementation of
+the same `CacheStore` contract.
 
 The namespace is required for shared adapters and serializes as
 `app:environment:schemaVersion`. Demiurge adds that namespace and the cache
@@ -162,7 +178,9 @@ cannot namespace values but accidentally leave their tag index global. Change
 `schemaVersion` when the stored value shape changes; rolling revisions then use
 independent key spaces.
 
-Adapter authors can run the same conformance checks as the framework memory
+Lower-level integrations can construct a facade directly with
+`createCache({ namespace, store })`. Adapter authors can run the same
+conformance checks as the framework memory
 store without depending on a test runner:
 
 ```ts

@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
+  createMemoryCacheStore,
   createRequestHandler,
   defineLinks,
   defineMetadata,
@@ -22,6 +23,7 @@ import {
   text,
   webhook,
   type LayoutProps,
+  type CacheScope,
   type RouteModule,
   type RouteProps,
 } from "demiurge";
@@ -37,6 +39,12 @@ function Layout({ children }: LayoutProps) {
 
 function DataView({ data }: RouteProps<string, { headline: string }>) {
   return <main>{data.headline}</main>;
+}
+
+function CacheScopeView({
+  data,
+}: RouteProps<string, { scope: CacheScope; value: string }>) {
+  return <main data-scope={data.scope}>{data.value}</main>;
 }
 
 function routeModule(module: RouteModule) {
@@ -1391,6 +1399,136 @@ describe("request handler", () => {
     expect(html).toContain('id="__demiurge_data"');
     expect(html).toContain('\\u003c/script\\u003e');
     expect(html).not.toContain("</script><script>alert(1)");
+  });
+
+  it("shares store-backed scopes across handlers but isolates request and none", async () => {
+    const store = createMemoryCacheStore();
+    const namespace = {
+      app: "request-handler-test",
+      environment: "test",
+      schemaVersion: 1,
+    } as const;
+    const loads = new Map<CacheScope, number>();
+    const routes = {
+      "./routes/index.tsx": routeModule({
+        GET: page<string, { scope: CacheScope; value: string }>({
+          async data({ cache, search }) {
+            const scope = search.get("scope") as CacheScope;
+
+            return await cache.get({
+              fn: () => {
+                const sequence = (loads.get(scope) ?? 0) + 1;
+                loads.set(scope, sequence);
+                return { scope, value: `${scope}-${sequence}` };
+              },
+              key: ["scope", scope],
+              scope,
+            });
+          },
+          view: CacheScopeView,
+        }),
+      }),
+    };
+    const firstHandler = createRequestHandler({
+      cacheStore: { namespace, store },
+      routes,
+    });
+    const secondHandler = createRequestHandler({
+      cacheStore: { namespace, store },
+      routes,
+    });
+
+    for (const scope of ["build", "public", "private", "request", "none"] as const) {
+      const first = await (
+        await firstHandler(new Request(`https://example.test/?scope=${scope}`))
+      ).text();
+      const second = await (
+        await secondHandler(new Request(`https://example.test/?scope=${scope}`))
+      ).text();
+      const expectedSecond = scope === "request" || scope === "none" ? 2 : 1;
+
+      expect(first).toContain(`${scope}-1`);
+      expect(second).toContain(`${scope}-${expectedSecond}`);
+      expect(loads.get(scope)).toBe(expectedSecond);
+    }
+  });
+
+  it("keeps public data request-local when no shared store is configured", async () => {
+    const load = vi.fn(async () => `load-${load.mock.calls.length}`);
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page<string, { headline: string }>({
+            data: async ({ cache }) => ({
+              headline: await cache.get({
+                fn: load,
+                key: ["home"],
+                scope: "public",
+              }),
+            }),
+            view: DataView,
+          }),
+        }),
+      },
+    });
+
+    const first = await (await handler(new Request("https://example.test/"))).text();
+    const second = await (await handler(new Request("https://example.test/"))).text();
+
+    expect(first).toContain("load-1");
+    expect(second).toContain("load-2");
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it("validates shared cache namespaces when the handler is created", () => {
+    expect(() =>
+      createRequestHandler({
+        cacheStore: {
+          namespace: {
+            app: "bad:app",
+            environment: "test",
+            schemaVersion: 1,
+          },
+          store: createMemoryCacheStore(),
+        },
+        routes: {},
+      })
+    ).toThrow(/cache namespace app/);
+  });
+
+  it("reports shared store failures through the page error path", async () => {
+    const onError = vi.fn();
+    const store = createMemoryCacheStore();
+    store.get = () => {
+      throw new Error("cache unavailable");
+    };
+    const handler = createRequestHandler({
+      cacheStore: {
+        namespace: { app: "catalog", environment: "test", schemaVersion: 1 },
+        store,
+      },
+      onError,
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page({
+            data: ({ cache }) => cache.get({
+              fn: () => "unreachable",
+              key: ["home"],
+              scope: "public",
+            }),
+            view: () => null,
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(new Request("https://example.test/"));
+
+    expect(response.status).toBe(500);
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "cache unavailable" }),
+      { pathname: "/", site: "page" },
+    );
   });
 
   it("renders inherited layouts, metadata, resource hints, and scripts into the document", async () => {

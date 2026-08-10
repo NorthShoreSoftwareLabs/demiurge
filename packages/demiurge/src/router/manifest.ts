@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { createMemoryCache } from "../data";
+import { createMemoryCache, type Cache } from "../data";
 import {
   resolveLinks,
   resolveMetadata,
@@ -224,6 +224,7 @@ export async function loadPageRoute(
   pathname: string,
   request = new Request(`http://demiurge.local${pathname}`),
   initialData?: InitialRouteData,
+  cache: Cache = createMemoryCache(),
 ): Promise<PendingRouteMatch> {
   const routeMatch = findRouteMatch(manifest.routes, pathname);
 
@@ -258,7 +259,6 @@ export async function loadPageRoute(
       ? []
       : await Promise.all(matchingLayouts.map((layout) => layout.load()));
   const url = new URL(request.url);
-  const cache = createMemoryCache();
   const context = {
     cache,
     path: routeMatch.path,

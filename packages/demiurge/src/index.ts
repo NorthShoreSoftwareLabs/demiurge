@@ -126,6 +126,7 @@ export type {
   HttpErrorInit,
   HttpErrorStatus,
 } from "./route";
+export type { RequestCacheStoreOptions } from "./server";
 export type {
   Cache,
   CacheDuration,

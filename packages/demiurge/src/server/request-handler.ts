@@ -8,6 +8,13 @@ import {
   type RouteRecord,
 } from "../router";
 import {
+  createCache,
+  createMemoryCache,
+  serializeCacheNamespace,
+  type CacheNamespace,
+  type CacheStore,
+} from "../data";
+import {
   toResponse,
   type HttpMethod,
   type HttpRouteContext,
@@ -48,6 +55,7 @@ export type RequestErrorReporter = (
 ) => void;
 
 export type RequestHandlerOptions = {
+  cacheStore?: RequestCacheStoreOptions;
   onError?: RequestErrorReporter;
   renderPage?: PageRenderer;
   rateLimitStore?: RateLimitStore;
@@ -55,11 +63,17 @@ export type RequestHandlerOptions = {
   ssr?: SsrOptions;
 };
 
+export type RequestCacheStoreOptions = {
+  namespace: CacheNamespace;
+  store: CacheStore;
+};
+
 // `dev` and `transformDocument` are deliberately absent from the public
 // `RequestHandlerOptions`. Dev is a build mode the Vite plugin sets when it
 // calls `handleRequestWithManifest` directly, not something an app can switch
 // on in production and leak a stack trace with.
 type RequestRuntimeOptions = {
+  cacheStore?: RequestCacheStoreOptions;
   dev?: boolean;
   onError?: RequestErrorReporter;
   renderPage?: PageRenderer;
@@ -91,8 +105,13 @@ export function createRequestHandler(options: RequestHandlerOptions) {
   const manifest = createRouteManifest(options.routes);
   const rateLimitStore = options.rateLimitStore ?? createMemoryRateLimitStore();
 
+  if (options.cacheStore) {
+    serializeCacheNamespace(options.cacheStore.namespace);
+  }
+
   return async function handleRequest(request: Request) {
     return await handleRequestWithManifest(manifest, request, {
+      cacheStore: options.cacheStore,
       onError: options.onError,
       rateLimitStore,
       renderPage: options.renderPage,
@@ -242,7 +261,13 @@ async function handleMatchedRoute(
       // response instead of throwing keeps the failure site distinguishable
       // from a middleware failure further out.
       try {
-        const match = await loadPageRoute(manifest, url.pathname, request);
+        const match = await loadPageRoute(
+          manifest,
+          url.pathname,
+          request,
+          undefined,
+          createRequestCache(options.cacheStore),
+        );
 
         if (match.status !== "ready") {
           return await renderNotFoundResponse(manifest, request, {
@@ -342,6 +367,12 @@ async function handleMatchedRoute(
       fallbackOptions,
     );
   }
+}
+
+function createRequestCache(options: RequestCacheStoreOptions | undefined) {
+  return options
+    ? createCache({ namespace: options.namespace, store: options.store })
+    : createMemoryCache();
 }
 
 function createFallbackOptions(url: URL, options: RequestRuntimeOptions) {

@@ -65,3 +65,8 @@ None open.
   scope-qualified keys and tags. Request entries never reach the store. Cache
   invalidation is consequently async, and `demiurge/data/testing` publishes a
   runner-neutral verifier custom adapters can execute (#47).
+- `createRequestHandler({ cacheStore: { namespace, store } })` creates one
+  cache facade per request. Shared scopes use the injected backend across
+  requests and handler instances; `request` and `none` never leak into it. With
+  no store configured, each request keeps the previous isolated memory-cache
+  behavior (#88).

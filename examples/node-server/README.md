@@ -16,6 +16,12 @@ RFC 9457 problem response with a `WWW-Authenticate` challenge. `/stream` opts
 into `render.mode: "streaming"`; its Suspense fallback arrives in the shell
 before the lazy component resolves.
 
+`server.js` also injects a process-shared memory `CacheStore`. The root page's
+public data query runs once and is reused by later requests, while every request
+still gets its own cache facade. The memory store is intentionally limited to
+one Node process; a deployment with multiple replicas should inject a shared
+Redis/KV implementation that passes `demiurge/data/testing`'s contract.
+
 The client build emits `dist/client/demiurge-manifest.json`; `server.js` reads
 its hashed entry and stylesheet paths and passes them to the generated
 `createHandler(...)`. The SSR build compiles `src/server-entry.ts` to

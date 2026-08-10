@@ -28,6 +28,7 @@ export type { NotFoundRenderOptions } from "./not-found";
 export type { ProblemDetails } from "./problem";
 export type {
   PageRenderer,
+  RequestCacheStoreOptions,
   RequestErrorReporter,
   RequestHandler,
   RequestHandlerOptions,
