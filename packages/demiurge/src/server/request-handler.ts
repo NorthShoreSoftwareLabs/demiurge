@@ -131,9 +131,10 @@ export async function handleRequestWithManifest(
       fallbackOptions,
     );
   } catch (error) {
-    // Anything escaping here failed before a route body ran: policy
-    // resolution, middleware, or the plumbing between them. That is the one
-    // failure site with no committed response shape, so it negotiates.
+    // Anything escaping here failed before a route body ran: loading the route
+    // module, resolving its capability or inherited policy, or a middleware
+    // throwing. That is the one failure site with no committed response shape,
+    // so it negotiates on `accept` the way an unmatched path does.
     return await renderFailureResponse(
       manifest,
       request,
