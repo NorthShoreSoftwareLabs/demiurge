@@ -14,11 +14,12 @@ const handler = createHandler({
   clientEntry: manifest.clientEntry,
   styles: manifest.styles,
 });
+const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 4173);
 
 createNodeServer({
   handler,
   static: { root },
-}).listen(port, "127.0.0.1", () => {
-  console.log(`Demiurge Node server listening on http://127.0.0.1:${port}`);
+}).listen(port, host, () => {
+  console.log(`Demiurge Node server listening on http://${host}:${port}`);
 });

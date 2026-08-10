@@ -57,6 +57,68 @@ npm test
 npm run build
 ```
 
+## Production Node quickstart
+
+A production app builds two bundles. The browser bundle contains route chunks,
+styles, and `demiurge-manifest.json`; the SSR bundle contains a generated route
+map and request-handler factory.
+
+Expose the framework-owned SSR entry from an application file:
+
+```ts
+// src/server-entry.ts
+export { createHandler, routes } from "virtual:demiurge/server-entry";
+```
+
+Build the browser and server entries separately:
+
+```json
+{
+  "scripts": {
+    "build": "vite build --outDir dist/client && vite build --ssr src/server-entry.ts --outDir dist/server",
+    "start": "node server.js"
+  }
+}
+```
+
+Then create the Node process that reads the browser manifest, configures SSR,
+and serves hashed client assets before route requests:
+
+```js
+// server.js
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { createNodeServer } from "demiurge/node";
+import { createHandler } from "./dist/server/server-entry.js";
+
+const root = fileURLToPath(new URL("dist/client", import.meta.url));
+const manifest = JSON.parse(
+  await readFile(join(root, "demiurge-manifest.json"), "utf8"),
+);
+const handler = createHandler({
+  clientEntry: manifest.clientEntry,
+  styles: manifest.styles,
+});
+const host = process.env.HOST ?? "127.0.0.1";
+const port = Number(process.env.PORT ?? 4173);
+
+createNodeServer({
+  handler,
+  static: { root },
+}).listen(port, host);
+```
+
+Run `npm run build`, then start the built application with
+`NODE_ENV=production npm start`. Deploy `dist/client`, `dist/server`,
+`server.js`, `package.json`, and installed production dependencies together.
+Set `HOST=0.0.0.0` when the process must accept traffic directly from a
+container or network interface.
+
+[`examples/node-server`](./examples/node-server) is the complete working
+version, including Vite configuration, typed virtual-module declarations, SSR
+and API routes, app-owned fallbacks, and inherited security policy.
+
 ## Repository layout
 
 The library lives in `packages/demiurge` and is consumed by the examples the
@@ -72,11 +134,6 @@ terminal to rebuild on change while you work on an example.
 `npm run test:pack` packs the tarball, installs it into a scratch app, and
 imports every entry point. That is the only check that sees the package the way
 a consumer does.
-
-For a production Node build, run `npm run build -w examples/node-server` and
-then `npm start -w examples/node-server`. The example reads the generated
-`demiurge-manifest.json`, mounts the framework-owned SSR server entry, and serves
-the client assets through `createNodeServer(...)`.
 
 For a static production build, run
 `npm run build -w examples/static-export`. The example writes rendered pages
