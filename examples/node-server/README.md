@@ -4,8 +4,8 @@ This example builds a client bundle and an SSR server bundle, then serves both
 through the production Node adapter.
 
 ```sh
-npm run build
-NODE_ENV=production npm start
+pnpm build
+NODE_ENV=production pnpm start
 ```
 
 The server serves hashed client assets and the emitted stylesheet from

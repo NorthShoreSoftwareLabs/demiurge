@@ -57,7 +57,7 @@ waiting on another issue to land.
 Every change keeps this green:
 
 ```sh
-npm run verify
+pnpm verify
 ```
 
 `verify` enforces ESLint across source, tests, scripts, and examples; generated
@@ -72,7 +72,7 @@ An issue closes when all of these are true:
 - There is a test at the layer where the feature can actually fail.
 - An example under `examples/` covers it when developer-facing behavior changed.
 - Docs moved with the code.
-- `npm run verify` is green.
+- `pnpm verify` is green.
 
 Filing a follow-up issue is a legitimate way to keep scope honest. Closing
 something that only half works is not.

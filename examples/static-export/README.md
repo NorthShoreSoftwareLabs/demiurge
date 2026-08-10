@@ -4,8 +4,8 @@ This example builds the browser assets and an SSR route bundle, then runs the
 production static adapter to generate concrete HTML files.
 
 ```sh
-npm run build
-npm run preview
+pnpm build
+pnpm preview
 ```
 
 The output includes `index.html`, `about/index.html`, both concrete dynamic

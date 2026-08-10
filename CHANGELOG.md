@@ -10,13 +10,13 @@ are development milestones rather than versioned releases.
 
 Epic: #1
 
-- The library lives in `packages/demiurge` as an npm workspace, and the examples
+- The library lives in `packages/demiurge` as a pnpm workspace, and the examples
   depend on it by name so resolution runs through `node_modules` and the
   package `exports` map instead of a path alias.
 - The package builds to `dist` with emitted declarations, and `react`,
   `react-dom`, and `vite` are peer dependencies rather than bundled runtime
   dependencies.
-- `npm run test:pack` packs the tarball, installs it into a scratch app, and
+- `pnpm test:pack` packs the tarball, installs it into a scratch app, and
   imports every declared entry point. It is the only gate that exercises
   packaging the way a consumer experiences it.
 

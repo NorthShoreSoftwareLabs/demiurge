@@ -8,8 +8,8 @@ deferred panel later and applies the same nonce to its inline completion script.
 Node-only pipeable renderer never enters the client bundle.
 
 ```sh
-npm run build
-NODE_ENV=production npm start
+pnpm build
+NODE_ENV=production pnpm start
 ```
 
 The server defaults to `127.0.0.1:4190`. Set `HOST` and `PORT` for the target

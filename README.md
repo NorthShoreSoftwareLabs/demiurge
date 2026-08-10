@@ -52,16 +52,16 @@ export const GET = page({
 Run it with:
 
 ```sh
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 Run the checks with:
 
 ```sh
-npm run typecheck
-npm test
-npm run build
+pnpm typecheck
+pnpm test
+pnpm build
 ```
 
 ## Production Node quickstart
@@ -117,8 +117,8 @@ createNodeServer({
 }).listen(port, host);
 ```
 
-Run `npm run build`, then start the built application with
-`NODE_ENV=production npm start`. Deploy `dist/client`, `dist/server`,
+Run `pnpm build`, then start the built application with
+`NODE_ENV=production pnpm start`. Deploy `dist/client`, `dist/server`,
 `server.js`, `package.json`, and installed production dependencies together.
 Set `HOST=0.0.0.0` when the process must accept traffic directly from a
 container or network interface.
@@ -130,21 +130,21 @@ and API routes, app-owned fallbacks, and inherited security policy.
 ## Repository layout
 
 The library lives in `packages/demiurge` and is consumed by the examples the
-same way a published install would be. Examples are npm workspaces that depend
+same way a published install would be. Examples are pnpm workspaces that depend
 on `demiurge` and resolve it through `node_modules`, so the package's `exports`
 map, its emitted declarations, and its peer dependencies are all exercised by
 the normal build rather than bypassed by a path alias.
 
 Because of that, the examples read the library's `dist`, not its source. Build
-it once with `npm run build -w demiurge`, or run `npm run dev:lib` in a second
+it once with `pnpm --filter demiurge build`, or run `pnpm dev:lib` in a second
 terminal to rebuild on change while you work on an example.
 
-`npm run test:pack` packs the tarball, installs it into a scratch app, and
+`pnpm test:pack` packs the tarball, installs it into a scratch app, and
 imports every entry point. That is the only check that sees the package the way
 a consumer does.
 
 For a static production build, run
-`npm run build -w examples/static-export`. The example writes rendered pages
+`pnpm --filter @demiurge-examples/static-export build`. The example writes rendered pages
 and `404.html` into `dist/`; its `demiurge-static-manifest.json` records the
 headers a static hosting provider must apply at each path.
 

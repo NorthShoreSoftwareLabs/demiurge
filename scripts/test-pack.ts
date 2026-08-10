@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-// Packs the library the way npm would publish it, installs the tarball into a
+// Packs the library the way pnpm would publish it, installs the tarball into a
 // throwaway app, and imports every declared entry point. Nothing else in the
 // repo resolves `demiurge` through node_modules, so this is the only check that
 // exercises the package's `exports` map, its `files` list, and its emitted
@@ -21,12 +21,12 @@ function run(command: string, args: string[], cwd: string) {
 }
 
 try {
-  run("npm", ["pack", "--pack-destination", scratch], packageDir);
+  run("pnpm", ["pack", "--pack-destination", scratch], packageDir);
 
   const tarball = readdirSync(scratch).find((file) => file.endsWith(".tgz"));
 
   if (!tarball) {
-    throw new Error("npm pack produced no tarball.");
+    throw new Error("pnpm pack produced no tarball.");
   }
 
   writeFileSync(
@@ -44,11 +44,9 @@ try {
   );
 
   run(
-    "npm",
+    "pnpm",
     [
-      "install",
-      "--no-audit",
-      "--no-fund",
+      "add",
       join(scratch, tarball),
       "react@^19.0.0",
       "react-dom@^19.0.0",

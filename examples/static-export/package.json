@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "demiurge": "*",
+    "demiurge": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

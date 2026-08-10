@@ -9,21 +9,21 @@ fail fast when lint, type safety, tests, coverage, or examples regress.
 
 ## Features To Implement
 
-- `npm run lint` using ESLint.
-- `npm run coverage` using Vitest coverage.
+- `pnpm lint` using ESLint.
+- `pnpm coverage` using Vitest coverage.
 - 80% per-file coverage threshold for statements, branches, functions, and
   lines.
-- `npm run verify` as the local and CI entry point.
-- CI workflow running `npm run verify`.
+- `pnpm verify` as the local and CI entry point.
+- CI workflow running `pnpm verify`.
 - Coverage should count framework source under `src/`, not examples or tests.
 
 ## Examples Required
 
-- `examples/basic-blog` must continue to build under `npm run build`.
-- `examples/ssr-page` must continue to build under `npm run build`.
-- `examples/streaming-page` must continue to build under `npm run build`.
+- `examples/basic-blog` must continue to build under `pnpm build`.
+- `examples/ssr-page` must continue to build under `pnpm build`.
+- `examples/streaming-page` must continue to build under `pnpm build`.
 - `examples/runtime-server-data` must build and its production probe must verify
-  cache scopes and TTL expiry under `npm run verify`.
+  cache scopes and TTL expiry under `pnpm verify`.
 - Future fixture examples should be added to the pipeline as they are created.
 - Generated route manifests are written to a dot-directory that TypeScript's
   wildcard include skips, so each one must be named explicitly in `tsconfig.json`
@@ -33,7 +33,7 @@ fail fast when lint, type safety, tests, coverage, or examples regress.
 
 - The existing Vitest suite must pass under coverage.
 - Type assertions for generated actual URL strings must continue to run under
-  `npm run typecheck`.
+  `pnpm typecheck`.
 
 ## Open Decisions
 

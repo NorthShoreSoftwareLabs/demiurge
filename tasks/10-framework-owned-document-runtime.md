@@ -50,4 +50,4 @@ rendering mode coordination all meet.
 - Page routes receive a framework document in dev.
 - API/redirect/text/json routes continue to return HTTP responses directly.
 - Generated route types still update from route files.
-- `npm run verify` stays green with at least 80% coverage.
+- `pnpm verify` stays green with at least 80% coverage.

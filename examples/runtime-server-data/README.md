@@ -11,8 +11,8 @@ document. It demonstrates:
 - a shared store injected into a fresh cache facade for every request.
 
 ```sh
-npm run build
-NODE_ENV=production npm start
+pnpm build
+NODE_ENV=production pnpm start
 ```
 
 The server defaults to `127.0.0.1:4192`. Reload `/` quickly to see public and

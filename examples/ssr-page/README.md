@@ -67,6 +67,6 @@ updates the URL and swaps the rendered route without a full page reload.
 ## Dev-mode SSR
 
 The Vite plugin sends page requests through the same route and rendering
-pipeline as the production request handler. Running `npm run dev` therefore
+pipeline as the production request handler. Running `pnpm dev` therefore
 shows the server-rendered body and `__demiurge_data` payload in view source,
 while Vite still adds its development client and transforms.

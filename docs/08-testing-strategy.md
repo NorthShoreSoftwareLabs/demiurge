@@ -130,25 +130,25 @@ header strings can look correct while runtime behavior still fails.
 Current commands:
 
 ```sh
-npm run lint
-npm run typecheck
-npm test
-npm run coverage
-npm run build
-npm run verify
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm coverage
+pnpm build
+pnpm verify
 ```
 
-`npm run verify` is the pipeline command. It runs lint, generated route
+`pnpm verify` is the pipeline command. It runs lint, generated route
 typechecking, Vitest coverage with 80% thresholds, and the example build.
 
 Future commands:
 
 ```sh
-npm run test:types
-npm run test:browser
-npm run test:fixtures
-npm run test:adapters
-npm run audit
+pnpm test:types
+pnpm test:browser
+pnpm test:fixtures
+pnpm test:adapters
+pnpm audit
 ```
 
 ## 0.0.1 Coverage
