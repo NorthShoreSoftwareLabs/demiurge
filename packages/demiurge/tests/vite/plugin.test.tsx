@@ -729,6 +729,49 @@ describe("Vite plugin dev request handling", () => {
     expect(response.body).toContain("/@vite/client");
   });
 
+  it("streams page routes through Vite's transformed dev shell", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-streaming-"));
+    const routesDir = join(root, "routes");
+    const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
+    const middleware = createMiddlewareHarness();
+    const transformIndexHtml = vi.fn(async (_url: string, html: string) =>
+      html.replace(
+        "</head>",
+        '<script type="module" src="/@vite/client"></script></head>',
+      )
+    );
+    const server = {
+      config: { root },
+      middlewares: { use: middleware.use },
+      ssrLoadModule: vi.fn(async () => ({
+        GET: page({
+          render: { mode: "streaming" },
+          view: () => <main>Streaming dev</main>,
+        }),
+      })),
+      transformIndexHtml,
+      watcher: createWatcherHarness(),
+    };
+
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(join(routesDir, "index.tsx"), "export {}");
+    plugin.configureServer?.(server as never);
+
+    const response = new CapturingResponse();
+    await middleware.handler(
+      requestFor("/", { headers: { accept: "text/html", host: "example.test" } }) as never,
+      response as never,
+      vi.fn(),
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("/@vite/client");
+    expect(response.body).toContain("virtual:demiurge/client-entry");
+    expect(response.body).toContain("Streaming dev");
+    expect(response.body).toContain("</html>");
+    expect(transformIndexHtml).toHaveBeenCalledOnce();
+  });
+
   it("renders the built-in not-found document for HTML navigation misses", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-missing-document-"));
     const routesDir = join(root, "routes");

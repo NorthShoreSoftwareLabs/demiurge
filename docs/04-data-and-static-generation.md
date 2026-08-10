@@ -37,8 +37,9 @@ The first route-level slice supports `page({ data, view })` during route
 loading. `data` receives the matched request context, including `path`,
 `pathname`, `request`, `search`, `url`, and a request-scoped framework `cache`.
 Loaded route matches carry the resolved `data` value for the page renderer.
-SSR payloads, static generation, and hydration variants still need dedicated
-wiring.
+Buffered SSR, streaming SSR, static generation, and hydration all consume this
+resolved value. Route-level `data` finishes before rendering begins; streaming
+inside the component tree uses React Suspense boundaries.
 
 ## Query Objects
 

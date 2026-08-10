@@ -16,11 +16,8 @@ const handler = createHandler({
   styles: manifest.styles,
 });
 const host = process.env.HOST ?? "127.0.0.1";
-const port = Number(process.env.PORT ?? 4173);
+const port = Number(process.env.PORT ?? 4190);
 
-createNodeServer({
-  handler,
-  static: { root },
-}).listen(port, host, () => {
-  console.log(`Demiurge Node server listening on http://${host}:${port}`);
+createNodeServer({ handler, static: { root } }).listen(port, host, () => {
+  console.log(`Demiurge streaming server listening on http://${host}:${port}`);
 });

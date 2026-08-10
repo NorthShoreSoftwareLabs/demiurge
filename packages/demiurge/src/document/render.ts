@@ -30,8 +30,56 @@ export type RenderDocumentOptions = {
   title?: string;
 };
 
-export function renderDocument({
+export type RenderDocumentShellOptions = Omit<RenderDocumentOptions, "body"> & {
+  body: Omit<DocumentBody, "html">;
+};
+
+export function renderDocument(options: RenderDocumentOptions) {
+  if (options.body) {
+    const { html, ...body } = options.body;
+    const { prefix, suffix } = renderDocumentShell({ ...options, body });
+
+    return `${prefix}${html}${suffix}`;
+  }
+
+  return renderDocumentWithoutBody(options);
+}
+
+export function renderDocumentShell({
   body,
+  entrySrc,
+  lang = "en",
+  links = [],
+  metadata,
+  nonce,
+  scripts = [],
+  styles = [],
+  title = "Demiurge App",
+}: RenderDocumentShellOptions) {
+  const documentTitle = metadata?.title ?? title;
+  const trailingBodyContent = [
+    ...scripts.map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`),
+    renderBootstrapData(body.data),
+    ...(entrySrc ? [renderEntryScript(entrySrc, nonce)] : []),
+  ].join("\n");
+
+  return {
+    prefix: `<!doctype html>
+<html lang="${escapeHtml(lang)}">
+  <head>
+${renderHeadTags({ links, metadata, nonce, styles, title: documentTitle })}
+  </head>
+  <body>
+${renderRootStart(body)}`,
+    suffix: `</div>
+${trailingBodyContent}
+  </body>
+</html>
+`,
+  };
+}
+
+function renderDocumentWithoutBody({
   entrySrc,
   lang = "en",
   links = [],
@@ -43,9 +91,8 @@ export function renderDocument({
 }: RenderDocumentOptions) {
   const documentTitle = metadata?.title ?? title;
   const bodyContent = [
-    renderRootElement(body),
+    renderRootElement(),
     ...scripts.map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`),
-    ...(body ? [renderBootstrapData(body.data)] : []),
     ...(entrySrc ? [renderEntryScript(entrySrc, nonce)] : []),
   ].join("\n");
 
@@ -61,16 +108,20 @@ ${bodyContent}
 `;
 }
 
-function renderRootElement(body: DocumentBody | undefined) {
+function renderRootElement(body?: DocumentBody) {
   if (!body) {
     return `    <div id="root"></div>`;
   }
 
+  return `${renderRootStart(body)}${body.html}</div>`;
+}
+
+function renderRootStart(body: Omit<DocumentBody, "html">) {
   const fallback = body.fallback
     ? ` ${HYDRATION_FALLBACK_ATTRIBUTE}="${escapeHtml(body.fallback)}"`
     : "";
 
-  return `    <div id="root" ${HYDRATION_ROOT_ATTRIBUTE}=""${fallback}>${body.html}</div>`;
+  return `    <div id="root" ${HYDRATION_ROOT_ATTRIBUTE}=""${fallback}>`;
 }
 
 function renderBootstrapData(data: unknown) {

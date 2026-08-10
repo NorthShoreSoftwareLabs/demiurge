@@ -150,7 +150,13 @@ Epic: #8
   when one is present, so the same code path produces both server-rendered
   documents and static shells.
 - `renderPageDocument(...)` returns the rendered document as a string, and
-  `renderPageResponse(...)` is a thin `Response` wrapper over it.
+  `renderPageResponse(...)` returns buffered SSR by default.
+- `render: { mode: "streaming" }` uses React's pipeable renderer, flushes the
+  document shell before Suspense boundaries resolve, propagates strict CSP
+  nonces to React completion scripts, reports errors according to shell commit
+  state, and aborts when the response body is cancelled.
+- `examples/streaming-page` exercises the production Node stream with an
+  app-owned layout, strict policy, Suspense fallback, and deferred boundary.
 - `examples/ssr-page` exercises a server-only `data` loader, metadata cascading
   from layout to leaf, a `path`-based dynamic route, and client navigation
   after hydration.

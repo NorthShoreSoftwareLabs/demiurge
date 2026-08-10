@@ -18,6 +18,10 @@ export {
   writeWebResponse,
 } from "./http";
 export { createStaticFileHandler } from "./static";
+export {
+  renderNodePageResponse,
+  renderStreamingPageResponse,
+} from "./streaming";
 export type { ToWebRequestOptions } from "./http";
 export type { StaticFileHandler, StaticFileHandlerOptions } from "./static";
 

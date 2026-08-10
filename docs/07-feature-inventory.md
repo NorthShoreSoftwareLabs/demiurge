@@ -59,8 +59,8 @@ implementation.
 | --- | --- |
 | Client-side page rendering | implemented |
 | SPA navigation | implemented |
-| SSR | partially implemented |
-| Streaming SSR | designed |
+| SSR | implemented |
+| Streaming SSR | implemented |
 | React Server Components | designed |
 | RSC Flight as data stream | designed |
 | Static prerendering | implemented |
@@ -88,10 +88,10 @@ implementation.
 | Feature | Status |
 | --- | --- |
 | Strict security preset | designed |
-| CSP nonce mode | designed |
+| CSP nonce mode | implemented |
 | CSP hash mode for static output | partially implemented |
 | CSP auto mode for static/dynamic split | designed |
-| Strict CSP for streaming SSR | designed |
+| Strict CSP for streaming SSR | implemented |
 | Strict CSP for RSC | designed |
 | Security report endpoint | implemented |
 | Typed CORS | designed |

@@ -33,6 +33,7 @@ import {
   writeNotImplemented,
   writeWebResponse,
 } from "../node/http";
+import { renderStreamingPageResponse } from "../node/streaming";
 
 export type DemiurgeVitePluginOptions = {
   document?: {
@@ -385,6 +386,14 @@ function createDevRuntimeOptions(
       match: Parameters<PageRenderer>[0],
       renderOptions: Parameters<PageRenderer>[1],
     ) => {
+      if (match.render.mode === "streaming") {
+        return await renderStreamingPageResponse(match, {
+          ...renderOptions,
+          clientEntry: `/${CLIENT_ENTRY_ID}`,
+          transformDocument: (html) => server.transformIndexHtml("/", html),
+        });
+      }
+
       const html = await server.transformIndexHtml(
         "/",
         renderPageDocument(match, {

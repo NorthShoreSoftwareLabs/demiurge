@@ -11,7 +11,7 @@
     "dev": "npm run build -w demiurge && npm run generate:routes && npm run dev -w examples/basic-blog",
     "dev:lib": "npm run dev -w demiurge",
     "build": "npm run build -w demiurge && npm run generate:routes && npm run typecheck:consumers && npm run build:examples",
-    "build:examples": "npm run build -w examples/basic-blog && npm run build -w examples/ssr-page && npm run build -w examples/node-server && npm run build -w examples/static-export",
+    "build:examples": "npm run build -w examples/basic-blog && npm run build -w examples/ssr-page && npm run build -w examples/node-server && npm run build -w examples/streaming-page && npm run build -w examples/static-export",
     "generate:routes": "tsx scripts/generate-example-routes.ts",
     "lint": "eslint .",
     "coverage": "npm run coverage -w demiurge",

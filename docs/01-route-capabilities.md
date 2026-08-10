@@ -49,6 +49,36 @@ routes are rendered with the built-in SSR renderer. The handler accepts an
 optional `ssr.clientEntry` path when the application also wants to load a
 client entry after the server-rendered document.
 
+Page rendering is explicit when it differs from buffered SSR:
+
+```tsx
+export const GET = page({
+  render: { mode: "streaming" },
+  view: StreamingPage,
+});
+```
+
+- `ssr` is the default and buffers the React tree before returning a response.
+- `streaming` returns after React's shell is ready and streams Suspense boundary
+  completions through the response body.
+- `static` declares that the route is eligible for the static output adapter.
+
+The static adapter rejects both runtime modes. Streaming requires an adapter
+with streaming response support; the production Node adapter pipes the Web
+response body with backpressure and aborts its source when the client closes.
+The production server injects that adapter renderer explicitly:
+
+```ts
+import { renderNodePageResponse } from "demiurge/node";
+
+const handler = createHandler({
+  renderPage: renderNodePageResponse,
+});
+```
+
+This keeps Node stream primitives out of browser bundles and makes an
+unsupported runtime fail with a direct configuration error.
+
 The Vite plugin wires this into development:
 
 ```ts
@@ -59,8 +89,9 @@ export default defineConfig({
 });
 ```
 
-In development, non-page route capabilities are served as HTTP responses. Page
-routes fall through to Vite so the browser app can handle client navigation.
+In development, HTTP and page capabilities run through the shared request
+pipeline. Vite transforms both buffered and streaming document shells before
+the response is written, while the browser router owns later client navigation.
 
 ## Generated Typed URLs
 

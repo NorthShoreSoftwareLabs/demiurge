@@ -98,6 +98,8 @@ export const GET = page(() => <HomePage />);
   re-running the loader on the client. The server marks its rendered root so a
   static shell is client-rendered rather than hydrated.
 - Add streaming SSR and verify every script/style emission has a CSP story.
+  `render.mode: "streaming"` now flushes Suspense shells through the Node
+  adapter and propagates the document nonce into React's completion scripts.
 
 ## Phase 6: RSC
 

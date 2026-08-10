@@ -295,12 +295,22 @@ describe("file route conventions", () => {
   });
 
   it("rejects runtime page routes when collecting static output", async () => {
-    const manifest = unstable_createRouteManifest({
+    const ssrManifest = unstable_createRouteManifest({
       "./routes/account.tsx": routeModule({ GET: page(View) }),
     });
+    const streamingManifest = unstable_createRouteManifest({
+      "./routes/feed.tsx": routeModule({
+        GET: page({ render: { mode: "streaming" }, view: View }),
+      }),
+    });
 
-    await expect(unstable_collectStaticRoutePaths(manifest)).rejects.toThrow(
+    await expect(unstable_collectStaticRoutePaths(ssrManifest)).rejects.toThrow(
       'Page route "./routes/account.tsx" uses render mode "ssr" and cannot be emitted as static output. Set render: { mode: "static" } or deploy a runtime adapter.',
+    );
+    await expect(
+      unstable_collectStaticRoutePaths(streamingManifest),
+    ).rejects.toThrow(
+      'Page route "./routes/feed.tsx" uses render mode "streaming" and cannot be emitted as static output. Set render: { mode: "static" } or deploy a runtime adapter.',
     );
   });
 });

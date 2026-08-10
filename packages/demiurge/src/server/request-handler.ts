@@ -251,11 +251,24 @@ async function handleMatchedRoute(
           });
         }
 
+        if (match.match.render.mode === "streaming" && !options.renderPage) {
+          throw new Error(
+            "Streaming page routes require an adapter renderer. Pass renderNodePageResponse from demiurge/node as createRequestHandler({ renderPage }).",
+          );
+        }
+
         const renderPage = options.renderPage ?? renderPageResponse;
 
         return await renderPage(match.match, {
           ...options.ssr,
           nonce,
+          onStreamError: (error) => {
+            options.onError?.(error, {
+              pathname: url.pathname,
+              site: "page",
+            });
+          },
+          signal: request.signal,
         });
       } catch (error) {
         return await renderFailureResponse(manifest, request, error, "page", {
@@ -270,9 +283,16 @@ async function handleMatchedRoute(
       response.headers.set(name, value);
     }
 
-    return method === "HEAD"
-      ? new Response(null, { headers: response.headers, status: response.status })
-      : response;
+    if (method === "HEAD") {
+      await response.body?.cancel();
+
+      return new Response(null, {
+        headers: response.headers,
+        status: response.status,
+      });
+    }
+
+    return response;
   }
 
   const context = {

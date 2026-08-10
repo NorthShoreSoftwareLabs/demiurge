@@ -1,7 +1,13 @@
 import { resolve } from "node:path";
 import { generateRoutes } from "../packages/demiurge/src/routing/generate";
 
-const examples = ["basic-blog", "ssr-page", "node-server", "static-export"];
+const examples = [
+  "basic-blog",
+  "ssr-page",
+  "node-server",
+  "streaming-page",
+  "static-export",
+];
 
 for (const example of examples) {
   await generateRoutes({

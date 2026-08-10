@@ -1,7 +1,7 @@
-import { createElement, type ReactNode } from "react";
 import { renderToString } from "react-dom/server";
 import { renderDocument } from "../document";
 import type { LoadedRouteMatch } from "../router";
+import { createPageRenderTree } from "./render-tree";
 
 export type SsrOptions = {
   clientEntry?: string;
@@ -12,27 +12,16 @@ export type SsrOptions = {
 
 export type SsrRenderOptions = SsrOptions & {
   nonce?: string;
+  onStreamError?: (error: unknown) => void;
+  signal?: AbortSignal;
+  transformDocument?: (html: string) => string | Promise<string>;
 };
 
 export function renderPageDocument(
   match: LoadedRouteMatch,
   options: SsrRenderOptions = {},
 ) {
-  const page = createElement(match.page, {
-    data: match.data,
-    path: match.path,
-    pathname: match.pathname,
-  });
-  const content = match.layouts.reduceRight<ReactNode>(
-    (children, Layout) =>
-      createElement(Layout, {
-        children,
-        path: match.path,
-        pathname: match.pathname,
-      }),
-    page,
-  );
-  const html = renderToString(content);
+  const html = renderToString(createPageRenderTree(match));
 
   return renderDocument({
     body: { data: match.data, html },

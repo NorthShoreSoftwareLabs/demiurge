@@ -22,6 +22,8 @@ Current conventions:
 - `examples/ssr-page` demonstrates server rendering, hydration, and route data
 - `examples/node-server` demonstrates a production Node server with SSR, API
   routes, and hashed static assets
+- `examples/streaming-page` demonstrates Suspense streaming with strict CSP
+  nonce propagation
 - `examples/static-export` demonstrates prerendered pages, dynamic `paths`,
   deployment headers, and an app-owned static 404
 - `examples/basic-blog/src/routes/index.tsx` maps to `/`
@@ -89,7 +91,7 @@ and serves hashed client assets before route requests:
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createNodeServer } from "demiurge/node";
+import { createNodeServer, renderNodePageResponse } from "demiurge/node";
 import { createHandler } from "./dist/server/server-entry.js";
 
 const root = fileURLToPath(new URL("dist/client", import.meta.url));
@@ -98,6 +100,7 @@ const manifest = JSON.parse(
 );
 const handler = createHandler({
   clientEntry: manifest.clientEntry,
+  renderPage: renderNodePageResponse,
   styles: manifest.styles,
 });
 const host = process.env.HOST ?? "127.0.0.1";

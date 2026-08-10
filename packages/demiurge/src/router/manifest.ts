@@ -12,6 +12,7 @@ import {
 import type {
   LayoutProps,
   NotFoundProps,
+  PageRenderOptions,
   PathVars,
   RouteErrorProps,
   RouteImporter,
@@ -75,6 +76,7 @@ export type LoadedRouteMatch = {
   metadata: ResolvedMetadata;
   path: PathVars;
   pathname: string;
+  render: PageRenderOptions;
   scripts: ScriptTag[];
 };
 
@@ -291,6 +293,7 @@ export async function loadPageRoute(
       ),
       path: routeMatch.path,
       pathname,
+      render: pageModule.GET.render,
       scripts: await resolveScripts(
         [
           ...layoutModules.map((module) => module.scripts),

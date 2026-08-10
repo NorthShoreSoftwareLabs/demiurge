@@ -1436,6 +1436,7 @@ describe("request handler", () => {
         page: View as ComponentType<RouteProps<string, unknown>>,
         path: {},
         pathname: "/",
+        render: { mode: "ssr" },
         scripts: [],
       },
       { clientEntry: "/assets/client.js" },

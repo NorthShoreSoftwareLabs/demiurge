@@ -105,16 +105,23 @@ nonce and is suitable for build-time CSP composition.
 
 ### React Streaming SSR
 
-Streaming SSR needs nonce support for every framework-emitted script chunk.
-React's renderer supports nonce-style script emission in modern server rendering
-APIs, but the framework needs to own the nonce and pass it into the renderer
-instead of relying on user components to remember it.
+Routes opt into React streaming with `render: { mode: "streaming" }`. Demiurge
+creates the document nonce before rendering, applies it to static managed
+scripts and the client entry, and passes the same value to
+`renderToPipeableStream(...)`. React's inline Suspense completion scripts
+therefore satisfy the response's nonce-backed `script-src` policy.
 
-Open design question:
+Metadata, resource hints, and static script contributions resolve before the
+shell is committed. A script discovered while a component renders cannot hoist
+into an already-sent head; render-discovered scripts remain unsupported until
+that ordering has an explicit API and CSP diagnostic.
 
-- Can we avoid inline streaming scripts entirely for some modes?
-- If not, can every emitted script be nonce-backed?
-- How do third-party scripts join the policy without weakening it?
+An exception before `onShellReady` still enters the normal page error pipeline
+and can return status 500. Once the shell is returned, headers are committed: a
+later boundary failure is reported through the request handler but the status
+remains 200 while React emits its client-recovery instructions. Cancelling the
+response body aborts the React render and is not reported as an application
+failure.
 
 ### React Server Components
 

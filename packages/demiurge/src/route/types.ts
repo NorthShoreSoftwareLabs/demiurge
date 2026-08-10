@@ -103,7 +103,7 @@ export type PageCapability<
   view: ComponentType<RouteProps<TPath, TData>>;
 };
 
-export type PageRenderMode = "ssr" | "static";
+export type PageRenderMode = "ssr" | "static" | "streaming";
 
 export type PageRenderOptions = {
   mode: PageRenderMode;

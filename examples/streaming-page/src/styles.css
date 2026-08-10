@@ -1,0 +1,35 @@
+:root {
+  color: #18202a;
+  background: #f5f7fa;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.site-shell {
+  width: min(44rem, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+header {
+  padding: 1.25rem 0;
+  border-bottom: 1px solid #ccd3dc;
+  color: #315b48;
+  font-weight: 700;
+}
+
+main {
+  padding: 3rem 0;
+}
+
+[data-fallback] {
+  color: #725b18;
+}
+
+[data-streamed] {
+  padding: 1rem;
+  border-left: 4px solid #287a5b;
+  background: #ffffff;
+}
