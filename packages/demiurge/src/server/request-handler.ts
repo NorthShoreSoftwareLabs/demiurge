@@ -23,6 +23,7 @@ import {
   type SsrOptions,
   type SsrRenderOptions,
 } from "./ssr";
+import { renderFailureResponse } from "./errors";
 import type { FailureSite } from "./failure-site";
 import { renderNotFoundResponse } from "./not-found";
 import {
@@ -50,10 +51,12 @@ export type RequestHandlerOptions = {
   ssr?: SsrOptions;
 };
 
-// `transformDocument` is deliberately absent from the public options. Dev
-// passes Vite's HTML transform when it calls `handleRequestWithManifest`
-// directly; an app has no reason to reach it.
+// `dev` and `transformDocument` are deliberately absent from the public
+// `RequestHandlerOptions`. Dev is a build mode the Vite plugin sets when it
+// calls `handleRequestWithManifest` directly, not something an app can switch
+// on in production and leak a stack trace with.
 type RequestRuntimeOptions = {
+  dev?: boolean;
   onError?: RequestErrorReporter;
   renderPage?: PageRenderer;
   rateLimitStore?: RateLimitStore;
@@ -118,6 +121,37 @@ export async function handleRequestWithManifest(
     }
   }
 
+  try {
+    return await handleMatchedRoute(
+      manifest,
+      request,
+      url,
+      routeMatch,
+      options,
+      fallbackOptions,
+    );
+  } catch (error) {
+    // Anything escaping here failed before a route body ran: policy
+    // resolution, middleware, or the plumbing between them. That is the one
+    // failure site with no committed response shape, so it negotiates.
+    return await renderFailureResponse(
+      manifest,
+      request,
+      error,
+      "middleware",
+      fallbackOptions,
+    );
+  }
+}
+
+async function handleMatchedRoute(
+  manifest: RouteManifest,
+  request: Request,
+  url: URL,
+  routeMatch: NonNullable<ReturnType<typeof findRouteMatch>>,
+  options: RequestRuntimeOptions,
+  fallbackOptions: ReturnType<typeof createFallbackOptions>,
+) {
   const routeModule = await routeMatch.route.load();
 
   if (request.method.toUpperCase() === "OPTIONS") {
@@ -196,21 +230,32 @@ export async function handleRequestWithManifest(
     );
     const nonce = policy.document?.csp ? createNonce() : undefined;
     const response = await runRouteMiddleware(middlewares, context, async () => {
-      const match = await loadPageRoute(manifest, url.pathname, request);
+      // A page render has already committed to a document, so a failure here
+      // renders the error document rather than negotiating. Returning the
+      // response instead of throwing keeps the failure site distinguishable
+      // from a middleware failure further out.
+      try {
+        const match = await loadPageRoute(manifest, url.pathname, request);
 
-      if (match.status !== "ready") {
-        return await renderNotFoundResponse(manifest, request, {
+        if (match.status !== "ready") {
+          return await renderNotFoundResponse(manifest, request, {
+            ...fallbackOptions,
+            nonce,
+          });
+        }
+
+        const renderPage = options.renderPage ?? renderPageResponse;
+
+        return await renderPage(match.match, {
+          ...options.ssr,
+          nonce,
+        });
+      } catch (error) {
+        return await renderFailureResponse(manifest, request, error, "page", {
           ...fallbackOptions,
           nonce,
         });
       }
-
-      const renderPage = options.renderPage ?? renderPageResponse;
-
-      return renderPage(match.match, {
-        ...options.ssr,
-        nonce,
-      });
     });
     const headers = createSecurityHeaders(policy.document ?? {}, { nonce });
 
@@ -235,22 +280,47 @@ export async function handleRequestWithManifest(
     routeMatch.route,
   );
   const response = await runRouteMiddleware(middlewares, context, async () => {
-    if (capability.kind === "not-found" && capability.body === undefined) {
-      return applyCapabilityInit(
-        await renderNotFoundResponse(manifest, request, fallbackOptions),
-        capability.init,
+    // An API route never gets HTML, whatever the caller asked for.
+    try {
+      if (capability.kind === "not-found" && capability.body === undefined) {
+        return applyCapabilityInit(
+          await renderNotFoundResponse(manifest, request, fallbackOptions),
+          capability.init,
+        );
+      }
+
+      return await toResponse(capability, context);
+    } catch (error) {
+      return await renderFailureResponse(
+        manifest,
+        request,
+        error,
+        "route",
+        fallbackOptions,
       );
     }
-
-    return await toResponse(capability, context);
   });
 
-  return finalizeRouteResponse(response, capability, request, method);
+  // Finalization is still the route's own failure site, so a bad `timing` or
+  // `cors` value on an API route yields problem+json rather than falling out
+  // to the negotiated path and risking HTML.
+  try {
+    return finalizeRouteResponse(response, capability, request, method);
+  } catch (error) {
+    return await renderFailureResponse(
+      manifest,
+      request,
+      error,
+      "route",
+      fallbackOptions,
+    );
+  }
 }
 
 function createFallbackOptions(url: URL, options: RequestRuntimeOptions) {
   return {
     ...options.ssr,
+    dev: options.dev,
     onError: (error: unknown, site: FailureSite) => {
       options.onError?.(error, { pathname: url.pathname, site });
     },

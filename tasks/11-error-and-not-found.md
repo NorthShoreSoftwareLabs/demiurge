@@ -93,8 +93,8 @@ cannot be misconfigured into leaking.
 - ~~Not-found rendering inside inherited layouts, with a layout-free
   fallback.~~ Shipped, #17.
 - Build gate requiring a root `@not-found.tsx` when the app has page routes.
-- Error pipeline split by failure site.
-- Dev error document with stack, production body unchanged.
+- ~~Error pipeline split by failure site.~~ Shipped, #19.
+- ~~Dev error document with stack, production body unchanged.~~ Shipped, #20.
 - Typed HTTP errors mapping to problem+json or the error document.
 - `create-demiurge-app` scaffolding the fallbacks it expects apps to own.
 
@@ -106,12 +106,14 @@ cannot be misconfigured into leaking.
 
 - ~~Server tests for negotiation across `accept` values, including missing and
   malformed headers.~~ `tests/server/negotiate.test.ts`.
-- Server tests for each failure site in the 500 table.
+- ~~Server tests for each failure site in the 500 table.~~
+  `tests/server/errors.test.tsx`.
 - ~~A test proving a layout that throws during a 404 yields the layout-free
   document rather than a 500.~~ `tests/server/not-found.test.tsx`.
 - A build test proving the gate fires for a page app and stays quiet for an
   API-only app.
-- A test proving no production error body contains a stack trace or file path.
+- ~~A test proving no production error body contains a stack trace or file
+  path.~~ `tests/server/errors.test.tsx`.
 
 ## Open Decisions
 
@@ -120,6 +122,12 @@ cannot be misconfigured into leaking.
 
 ## Decisions Made While Implementing
 
+- The dev error document wins over the app's `@error.tsx` in dev, matching
+  Next, Remix, and SvelteKit. The stack is the reason the document exists.
+- The error document renders without layouts. The error path runs the least app
+  code that can still produce a page.
+- The first three failure sites return a response rather than throwing, so
+  `createRequestHandler` gained an `onError` reporter to keep them observable.
 - Dev registers a second middleware after Vite's own to terminate unmatched
   requests. Vite keeps serving its asset URLs, and everything else gets the
   production not-found.

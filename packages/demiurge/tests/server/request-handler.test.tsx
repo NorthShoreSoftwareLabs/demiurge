@@ -317,8 +317,11 @@ describe("request handler", () => {
     );
   });
 
-  it("rejects invalid Server-Timing metrics before sending responses", async () => {
+  it("reports invalid Server-Timing metrics as a route failure", async () => {
+    const nameError = vi.fn();
+    const durationError = vi.fn();
     const invalidNameHandler = createRequestHandler({
+      onError: nameError,
       routes: {
         "./routes/api/health.tsx": routeModule({
           GET: json({ ok: true }, { timing: { name: "bad name" } }),
@@ -326,6 +329,7 @@ describe("request handler", () => {
       },
     });
     const invalidDurationHandler = createRequestHandler({
+      onError: durationError,
       routes: {
         "./routes/api/health.tsx": routeModule({
           GET: json({ ok: true }, { timing: { duration: -1, name: "db" } }),
@@ -333,15 +337,36 @@ describe("request handler", () => {
       },
     });
 
-    await expect(
-      invalidNameHandler(new Request("https://example.test/api/health")),
-    ).rejects.toThrow(
-      'Server-Timing metric name "bad name" is not a valid token.',
+    const invalidNameResponse = await invalidNameHandler(
+      new Request("https://example.test/api/health"),
     );
-    await expect(
-      invalidDurationHandler(new Request("https://example.test/api/health")),
-    ).rejects.toThrow(
-      "Server-Timing metric duration must be a non-negative finite number.",
+    const invalidDurationResponse = await invalidDurationHandler(
+      new Request("https://example.test/api/health"),
+    );
+
+    expect(invalidNameResponse.status).toBe(500);
+    expect(invalidNameResponse.headers.get("content-type")).toContain(
+      "application/problem+json",
+    );
+    await expect(invalidNameResponse.json()).resolves.toEqual({
+      instance: "/api/health",
+      status: 500,
+      title: "Internal Server Error",
+      type: "about:blank",
+    });
+    expect(invalidDurationResponse.status).toBe(500);
+    expect(nameError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Server-Timing metric name "bad name" is not a valid token.',
+      }),
+      { pathname: "/api/health", site: "route" },
+    );
+    expect(durationError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message:
+          "Server-Timing metric duration must be a non-negative finite number.",
+      }),
+      { pathname: "/api/health", site: "route" },
     );
   });
 
@@ -954,7 +979,9 @@ describe("request handler", () => {
   });
 
   it("rejects middleware that calls next more than once", async () => {
+    const onError = vi.fn();
     const handler = createRequestHandler({
+      onError,
       routes: {
         "./routes/@middleware.ts": routeModule({
           middleware: async (_context, next) => {
@@ -968,9 +995,20 @@ describe("request handler", () => {
       },
     });
 
-    await expect(
-      handler(new Request("https://example.test/api/health")),
-    ).rejects.toThrow("Demiurge route middleware next() called multiple times.");
+    const response = await handler(
+      new Request("https://example.test/api/health"),
+    );
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("content-type")).toContain(
+      "application/problem+json",
+    );
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Demiurge route middleware next() called multiple times.",
+      }),
+      { pathname: "/api/health", site: "middleware" },
+    );
   });
 
   it("rejects unsafe CSRF-protected requests without matching tokens", async () => {
