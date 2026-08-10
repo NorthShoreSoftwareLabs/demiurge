@@ -10,6 +10,7 @@ import {
   preload,
   script,
   query,
+  resolveMetadata,
   type LayoutProps,
   type RouteModule,
   type RouteProps,
@@ -332,9 +333,11 @@ describe("route loading", () => {
     await expect(
       unstable_loadPageRoute(manifest, "/api/health"),
     ).resolves.toEqual({
-      status: "not-found",
-      pathname: "/api/health",
+      layouts: [],
+      metadata: resolveMetadata(),
       notFound: RootNotFound,
+      pathname: "/api/health",
+      status: "not-found",
     });
   });
 
@@ -345,11 +348,15 @@ describe("route loading", () => {
     });
 
     await expect(unstable_loadPageRoute(manifest, "/blog/missing")).resolves.toEqual({
+      layouts: [],
+      metadata: resolveMetadata(),
       notFound: BlogNotFound,
       pathname: "/blog/missing",
       status: "not-found",
     });
     await expect(unstable_loadPageRoute(manifest, "/missing")).resolves.toEqual({
+      layouts: [],
+      metadata: resolveMetadata(),
       notFound: RootNotFound,
       pathname: "/missing",
       status: "not-found",

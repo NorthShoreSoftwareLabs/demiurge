@@ -48,9 +48,12 @@ function DevPage({ data }: RouteProps<string, { message: string }>) {
 }
 
 type PluginHarness = {
-  buildStart?: (options: unknown) => void | Promise<void>;
-  configResolved?: (config: { root: string }) => void | Promise<void>;
-  configureServer?: (server: unknown) => void | Promise<void>;
+  buildStart?: (options?: unknown) => void | Promise<void>;
+  configResolved?: (config: {
+    command?: string;
+    root: string;
+  }) => void | Promise<void>;
+  configureServer?: (server: unknown) => (() => void) | void;
   generateBundle?: (
     this: { emitFile: (asset: { fileName: string; source: string; type: string }) => void },
     outputOptions: unknown,
@@ -690,7 +693,7 @@ describe("Vite plugin dev request handling", () => {
     expect(response.body).toContain("/@vite/client");
   });
 
-  it("serves the framework document for HTML navigation misses", async () => {
+  it("renders the built-in not-found document for HTML navigation misses", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-missing-document-"));
     const routesDir = join(root, "routes");
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
@@ -707,25 +710,36 @@ describe("Vite plugin dev request handling", () => {
 
     await mkdir(routesDir, { recursive: true });
 
-    plugin.configureServer?.(server as never);
+    plugin.configureServer?.(server as never)?.();
 
-    const response = new CapturingResponse();
+    const next = vi.fn();
+    const routeResponse = new CapturingResponse();
     await middleware.handler(
       requestFor("/missing", {
-        headers: {
-          accept: "text/html",
-          host: "example.test",
-        },
+        headers: { accept: "text/html", host: "example.test" },
+      }) as never,
+      routeResponse as never,
+      next,
+    );
+
+    // Nothing matched, so Vite gets its chance before the terminator runs.
+    expect(next).toHaveBeenCalledWith();
+
+    const response = new CapturingResponse();
+    await middleware.notFoundHandler(
+      requestFor("/missing", {
+        headers: { accept: "text/html", host: "example.test" },
       }) as never,
       response as never,
       vi.fn(),
     );
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(404);
     expect(response.body).toContain("virtual:demiurge/client-entry");
-    expect(response.body).toContain('<div id="root"></div>');
-    expect(response.body).not.toContain("data-demiurge-hydrate");
-    expect(response.body).not.toContain("__demiurge_data");
+    expect(response.body).toContain('data-demiurge-fallback="not-found"');
+    expect(response.body).toContain("404");
+    expect(response.body).toContain("No route matched");
+    expect(response.body).toContain("/missing");
   });
 
   it("renders server markup and a hydration bootstrap for a matched page route in Vite dev", async () => {
@@ -959,7 +973,7 @@ describe("Vite plugin dev request handling", () => {
     await expect(readTextEventually(outputFile)).resolves.toContain('"/": {};');
   });
 
-  it("passes middleware errors to Vite next", async () => {
+  it("passes a failed route module load to Vite next", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-error-"));
     const routesDir = join(root, "routes");
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
@@ -982,7 +996,11 @@ describe("Vite plugin dev request handling", () => {
     plugin.configureServer?.(server as never);
 
     const next = vi.fn();
-    await middleware.handler(requestFor("/api") as never, new CapturingResponse() as never, next);
+    await middleware.handler(
+      requestFor("/api") as never,
+      new CapturingResponse() as never,
+      next,
+    );
 
     expect(next).toHaveBeenCalledWith(error);
   });
@@ -1195,26 +1213,39 @@ async function readTextEventually(file: string) {
   throw lastError;
 }
 
+type DevMiddleware = (
+  request: unknown,
+  response: unknown,
+  next: (error?: unknown) => void,
+) => Promise<void>;
+
 function createMiddlewareHarness() {
-  let handler:
-    | ((request: unknown, response: unknown, next: (error?: unknown) => void) => Promise<void>)
-    | undefined;
+  const handlers: DevMiddleware[] = [];
 
   return {
+    // The route handler runs before Vite's own middlewares; the not-found
+    // terminator runs after them, registered from the hook `configureServer`
+    // returns.
     get handler() {
-      if (!handler) {
+      const [first] = handlers;
+
+      if (!first) {
         throw new Error("Middleware was not registered.");
       }
-      return handler;
+
+      return first;
     },
-    use(
-      nextHandler: (
-        request: unknown,
-        response: unknown,
-        next: (error?: unknown) => void,
-      ) => Promise<void>,
-    ) {
-      handler = nextHandler;
+    get notFoundHandler() {
+      const last = handlers.at(-1);
+
+      if (!last || handlers.length < 2) {
+        throw new Error("Not-found middleware was not registered.");
+      }
+
+      return last;
+    },
+    use(nextHandler: DevMiddleware) {
+      handlers.push(nextHandler);
     },
   };
 }

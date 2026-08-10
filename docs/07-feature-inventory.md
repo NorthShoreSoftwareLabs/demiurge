@@ -23,6 +23,9 @@ implementation.
 | `@layout.tsx` nested layouts | implemented |
 | App-provided loading/not-found browser fallback options | implemented |
 | Inherited `@loading.tsx`, `@not-found.tsx`, and `@error.tsx` | implemented |
+| Server-rendered not-found document inside inherited layouts | implemented |
+| Layout-free not-found fallback when a layout throws | implemented |
+| Content-negotiated not-found: document or RFC 9457 problem+json | implemented |
 | Dynamic path variables with `[slug]` | implemented |
 | Catchall path variables with `[...path]` | implemented |
 | `path` instead of public `params` vocabulary | implemented |

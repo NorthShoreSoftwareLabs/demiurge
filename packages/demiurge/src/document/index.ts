@@ -1,5 +1,6 @@
 export {
   HYDRATION_DATA_ELEMENT_ID,
+  HYDRATION_FALLBACK_ATTRIBUTE,
   HYDRATION_ROOT_ATTRIBUTE,
   readInitialRouteData,
   serializeInitialRouteData,

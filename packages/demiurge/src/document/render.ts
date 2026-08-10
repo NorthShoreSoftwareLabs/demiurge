@@ -1,5 +1,6 @@
 import {
   HYDRATION_DATA_ELEMENT_ID,
+  HYDRATION_FALLBACK_ATTRIBUTE,
   HYDRATION_ROOT_ATTRIBUTE,
   serializeInitialRouteData,
 } from "./hydration";
@@ -13,6 +14,7 @@ import type { ScriptTag } from "./scripts";
 
 export type DocumentBody = {
   data: unknown;
+  fallback?: "not-found";
   html: string;
 };
 
@@ -64,7 +66,11 @@ function renderRootElement(body: DocumentBody | undefined) {
     return `    <div id="root"></div>`;
   }
 
-  return `    <div id="root" ${HYDRATION_ROOT_ATTRIBUTE}="">${body.html}</div>`;
+  const fallback = body.fallback
+    ? ` ${HYDRATION_FALLBACK_ATTRIBUTE}="${escapeHtml(body.fallback)}"`
+    : "";
+
+  return `    <div id="root" ${HYDRATION_ROOT_ATTRIBUTE}=""${fallback}>${body.html}</div>`;
 }
 
 function renderBootstrapScript(data: unknown, nonce: string | undefined) {

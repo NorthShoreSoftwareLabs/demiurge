@@ -85,6 +85,13 @@ export type StaticRoutePath = {
   pathname: string;
 };
 
+export type LoadedNotFoundMatch = {
+  layouts: ComponentType<LayoutProps>[];
+  metadata: ResolvedMetadata;
+  notFound?: ComponentType<NotFoundProps>;
+  pathname: string;
+};
+
 export type PendingRouteMatch =
   | {
       error: unknown;
@@ -93,11 +100,7 @@ export type PendingRouteMatch =
       status: "error";
     }
   | { loading?: ComponentType; status: "loading" }
-  | {
-      notFound?: ComponentType<NotFoundProps>;
-      pathname: string;
-      status: "not-found";
-    }
+  | (LoadedNotFoundMatch & { status: "not-found" })
   | { status: "ready"; match: LoadedRouteMatch };
 
 export function createRouteManifest(routes: Record<string, RouteImporter>) {
@@ -224,8 +227,7 @@ export async function loadPageRoute(
 
   if (!routeMatch) {
     return {
-      notFound: await loadNotFoundFallbackForPath(manifest, pathname),
-      pathname,
+      ...(await loadNotFoundMatch(manifest, pathname)),
       status: "not-found",
     };
   }
@@ -238,8 +240,13 @@ export async function loadPageRoute(
 
   if (!pageModule.GET || pageModule.GET.kind !== "page") {
     return {
-      notFound: await loadNotFoundFallbackForRoute(manifest, routeMatch.route),
-      pathname,
+      ...(await loadNotFoundMatch(manifest, pathname, {
+        fallback: findClosestAttachedFile(
+          manifest.fallbacks.notFound,
+          routeMatch.route,
+        ),
+        layouts: matchingLayouts,
+      })),
       status: "not-found",
     };
   }
@@ -390,21 +397,80 @@ async function loadErrorFallbackForPath(
   );
 }
 
-async function loadNotFoundFallbackForRoute(
+// A not-found render has no matched route, so layouts resolve from the
+// requested pathname instead. Loading is deliberately fault tolerant: a layout
+// above `/admin/nope` is exactly the one likely to expect a session, and a
+// throw here must degrade to the layout-free document rather than escalate to
+// a 500. The blank page is the outcome this whole path exists to prevent.
+export async function loadNotFoundMatch(
   manifest: RouteManifest,
-  route: RouteRecord,
-) {
-  return await loadNotFoundFallbackComponent(
-    findClosestAttachedFile(manifest.fallbacks.notFound, route),
-  );
+  pathname: string,
+  options: {
+    fallback?: FallbackRoute;
+    layouts?: LayoutRoute[];
+    onLayoutError?: (error: unknown) => void;
+  } = {},
+): Promise<LoadedNotFoundMatch> {
+  const fallback =
+    options.fallback ??
+    findClosestFallbackForPath(manifest.fallbacks.notFound, pathname);
+  const fallbackModule = await fallback?.load();
+  const notFound = fallbackModule?.default as
+    | ComponentType<NotFoundProps>
+    | undefined;
+
+  if (fallbackModule?.layout === false) {
+    return {
+      layouts: [],
+      metadata: resolveMetadata(fallbackModule.metadata),
+      notFound,
+      pathname,
+    };
+  }
+
+  const layoutRoutes = options.layouts ?? findLayoutsForPath(manifest, pathname);
+
+  try {
+    const layoutModules = await Promise.all(
+      layoutRoutes.map((layout) => layout.load()),
+    );
+
+    return {
+      layouts: layoutModules.map(
+        (module) => module.default as ComponentType<LayoutProps>,
+      ),
+      metadata: resolveMetadata(
+        ...layoutModules.map((module) => module.metadata),
+        fallbackModule?.metadata,
+      ),
+      notFound,
+      pathname,
+    };
+  } catch (error) {
+    options.onLayoutError?.(error);
+
+    return {
+      layouts: [],
+      metadata: resolveMetadata(fallbackModule?.metadata),
+      notFound,
+      pathname,
+    };
+  }
 }
 
-async function loadNotFoundFallbackForPath(
+export function findLayoutsForPath(
   manifest: RouteManifest,
   pathname: string,
 ) {
-  return await loadNotFoundFallbackComponent(
-    findClosestFallbackForPath(manifest.fallbacks.notFound, pathname),
+  const pathnameSegments = splitPathname(pathname);
+
+  // A route group contributes no URL segment, so a layout inside one cannot be
+  // resolved from a pathname alone. Skipping them keeps an unmatched path from
+  // picking up a layout it would never have inherited.
+  return manifest.layouts.filter(
+    (layout) =>
+      !layout.fileSegments.some(isRouteGroupSegment) &&
+      isFallbackForPath(layout.segments, pathnameSegments),
   );
 }
 
@@ -460,18 +526,6 @@ async function loadFallbackComponent(fallback: FallbackRoute | undefined) {
   const module = await fallback.load();
 
   return module.default as ComponentType | undefined;
-}
-
-async function loadNotFoundFallbackComponent(
-  fallback: FallbackRoute | undefined,
-) {
-  if (!fallback) {
-    return undefined;
-  }
-
-  const module = await fallback.load();
-
-  return module.default as ComponentType<NotFoundProps> | undefined;
 }
 
 async function loadErrorFallbackComponent(fallback: FallbackRoute | undefined) {
