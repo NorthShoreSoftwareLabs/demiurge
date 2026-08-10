@@ -73,6 +73,27 @@ describe("Node adapter", () => {
     }
   });
 
+  it("accepts a custom static file handler", async () => {
+    const handler = vi.fn(async () => new Response("route"));
+    const staticHandler = vi.fn(async () => new Response("custom asset"));
+    const server = createNodeServer({ handler, static: staticHandler });
+
+    try {
+      server.listen(0, "127.0.0.1");
+      await once(server, "listening");
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      const response = await fetch(`http://127.0.0.1:${port}/app.js`);
+
+      await expect(response.text()).resolves.toBe("custom asset");
+      expect(staticHandler).toHaveBeenCalledOnce();
+      expect(handler).not.toHaveBeenCalled();
+    } finally {
+      server.close();
+      await once(server, "close").catch(() => undefined);
+    }
+  });
+
   it("falls through to the Web Request handler and exposes capabilities", async () => {
     const server = createNodeServer({
       handler: async (request) =>

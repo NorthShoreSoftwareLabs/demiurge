@@ -51,6 +51,7 @@ function DevPage({ data }: RouteProps<string, { message: string }>) {
 
 type PluginHarness = {
   buildStart?: (options?: unknown) => void | Promise<void>;
+  config?: (config: Record<string, unknown>) => Record<string, unknown>;
   configResolved?: (config: {
     command?: string;
     root: string;
@@ -61,6 +62,8 @@ type PluginHarness = {
     outputOptions: unknown,
     bundle: unknown,
   ) => void;
+  load?: (id: string) => string | null;
+  resolveId?: (id: string) => string | null;
 };
 
 function routeModule(module: RouteModule) {
@@ -68,6 +71,37 @@ function routeModule(module: RouteModule) {
 }
 
 describe("Vite plugin dev request handling", () => {
+  it("configures and loads both framework virtual entries", () => {
+    const plugin = demiurge({ styles: false }) as PluginHarness;
+
+    expect(plugin.config?.({})).toMatchObject({
+      appType: "custom",
+      build: { rollupOptions: { input: "virtual:demiurge/client-entry" } },
+    });
+    expect(
+      plugin.config?.({
+        build: { rollupOptions: { input: "src/custom-entry.ts" } },
+      }),
+    ).toMatchObject({
+      build: { rollupOptions: { input: "src/custom-entry.ts" } },
+    });
+
+    expect(plugin.resolveId?.("virtual:demiurge/client-entry")).toBe(
+      "\0virtual:demiurge/client-entry",
+    );
+    expect(plugin.resolveId?.("virtual:demiurge/server-entry")).toBe(
+      "\0virtual:demiurge/server-entry",
+    );
+    expect(plugin.resolveId?.("unrelated")).toBeNull();
+    expect(plugin.load?.("\0virtual:demiurge/client-entry")).toContain(
+      "hydrateFileRouter",
+    );
+    expect(plugin.load?.("\0virtual:demiurge/server-entry")).toContain(
+      "createRequestHandler",
+    );
+    expect(plugin.load?.("unrelated")).toBeNull();
+  });
+
   it("serves HTTP response capabilities", async () => {
     const manifest = unstable_createRouteManifest({
       "./routes/api/health.tsx": routeModule({
@@ -973,6 +1007,48 @@ describe("Vite plugin dev request handling", () => {
     watcher.emit("unlink", join(root, "outside.tsx"));
 
     await expect(readTextEventually(outputFile)).resolves.toContain('"/": {};');
+  });
+
+  it("uses default route and typed-output directories in dev", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-defaults-"));
+    const routesDir = join(root, "src", "routes");
+    const outputFile = join(root, ".demiurge", "route-manifest.d.ts");
+    const plugin = demiurge({ typedRoutes: {} }) as PluginHarness;
+    const watcher = createWatcherHarness();
+    const middleware = createMiddlewareHarness();
+    const server = {
+      config: { root },
+      middlewares: { use: middleware.use },
+      ssrLoadModule: vi.fn(),
+      transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
+      watcher,
+    };
+
+    await mkdir(routesDir, { recursive: true });
+    plugin.configureServer?.(server as never)?.();
+
+    expect(watcher.add).toHaveBeenCalledWith(routesDir);
+    await expect(readTextEventually(outputFile)).resolves.toContain(
+      "interface RoutePathVars",
+    );
+
+    const request = requestFor("/missing", {
+      headers: { accept: "text/html", host: "example.test" },
+    });
+    await middleware.handler(
+      request as never,
+      new CapturingResponse() as never,
+      vi.fn(),
+    );
+
+    const response = new CapturingResponse();
+    await middleware.notFoundHandler(
+      request as never,
+      response as never,
+      vi.fn(),
+    );
+
+    expect(response.statusCode).toBe(404);
   });
 
   it("renders a dev error document when a route module fails to load", async () => {

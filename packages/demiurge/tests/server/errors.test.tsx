@@ -17,6 +17,10 @@ function BrokenView(_props: RouteProps): never {
   throw new Error("Loader blew up in /srv/app/routes/index.tsx");
 }
 
+function StringErrorView(_props: RouteProps): never {
+  throw "plain failure";
+}
+
 function AppError({ error, pathname }: RouteErrorProps) {
   return (
     <p data-error="app">
@@ -254,6 +258,23 @@ describe("stack traces", () => {
     expect(body).toContain("Loader blew up");
     expect(body).toContain("/srv/app/routes/index.tsx");
     expect(body).toContain("<pre>");
+  });
+
+  it("renders non-Error failures without inventing a stack", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/index.tsx": routeModule({
+        GET: page({ view: StringErrorView }),
+      }),
+    });
+    const response = await handleRequestWithManifest(
+      manifest,
+      htmlRequest("/"),
+      { dev: true, onError: vi.fn() },
+    );
+    const body = await response.text();
+
+    expect(body).toContain("plain failure");
+    expect(body).not.toContain("<pre>");
   });
 
   it("reach a dev problem+json as detail", async () => {

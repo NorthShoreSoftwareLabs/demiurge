@@ -11,7 +11,8 @@ fail fast when lint, type safety, tests, coverage, or examples regress.
 
 - `npm run lint` using ESLint.
 - `npm run coverage` using Vitest coverage.
-- 80% coverage threshold for statements, branches, functions, and lines.
+- 80% per-file coverage threshold for statements, branches, functions, and
+  lines.
 - `npm run verify` as the local and CI entry point.
 - CI workflow running `npm run verify`.
 - Coverage should count framework source under `src/`, not examples or tests.
@@ -30,12 +31,6 @@ fail fast when lint, type safety, tests, coverage, or examples regress.
 - The existing Vitest suite must pass under coverage.
 - Type assertions for generated actual URL strings must continue to run under
   `npm run typecheck`.
-
-## Known Gaps
-
-- Coverage thresholds are enforced on the aggregate only, so a single module can
-  sit well under 80% while the suite stays green. Per-file thresholds would make
-  the gate mean what it says.
 
 ## Open Decisions
 

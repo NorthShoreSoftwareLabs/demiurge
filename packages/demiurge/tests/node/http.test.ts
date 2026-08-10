@@ -34,6 +34,15 @@ describe("Node HTTP bridge", () => {
     expect(request.method).toBe("GET");
   });
 
+  it("uses HTTP request defaults when Node omits optional metadata", () => {
+    const request = toWebRequest(
+      incoming({ headers: {}, method: undefined, url: undefined }),
+    );
+
+    expect(request.method).toBe("GET");
+    expect(request.url).toBe("http://localhost/");
+  });
+
   it("preserves request bodies for non-GET methods", async () => {
     const request = toWebRequest(
       incoming({
