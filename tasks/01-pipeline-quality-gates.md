@@ -34,5 +34,14 @@ fail fast when lint, type safety, tests, coverage, or examples regress.
 
 ## Open Decisions
 
-- Whether to add Playwright before or after SSR/metadata work.
 - Whether CI should publish coverage HTML as an artifact.
+
+## Decisions Made
+
+- Playwright lands before the streaming work, scoped to Chromium alone (#13,
+  setup in #87). `jsdom` already covers hydration and fallbacks; what it cannot
+  do is enforce CSP, run Trusted Types, consume a stream progressively, or
+  provide a real `IntersectionObserver`. The first of those needs no streaming
+  to test, so the harness is not waiting on #52. Its first assertion is the
+  claim the framework rests on and nothing currently verifies: the strict preset
+  renders a working page with no `unsafe-inline`.
