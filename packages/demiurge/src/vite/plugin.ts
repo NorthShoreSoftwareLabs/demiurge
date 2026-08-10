@@ -2,7 +2,6 @@ import { existsSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join, resolve, relative, sep } from "node:path";
-import type { OutputBundle, OutputChunk } from "rollup";
 import type { Plugin, UserConfig, ViteDevServer } from "vite";
 import { renderDocument } from "../document";
 import type {
@@ -88,7 +87,12 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       return null;
     },
     generateBundle(_outputOptions, bundle) {
-      const entry = findClientEntryChunk(bundle);
+      const entry = Object.values(bundle).find(
+        (item) =>
+          item.type === "chunk" &&
+          item.isEntry &&
+          item.facadeModuleId === RESOLVED_CLIENT_ENTRY_ID,
+      );
 
       if (!entry) {
         return;
@@ -629,15 +633,6 @@ export function createDocumentHtml({
     styles,
     title,
   });
-}
-
-function findClientEntryChunk(bundle: OutputBundle) {
-  return Object.values(bundle).find(
-    (item): item is OutputChunk =>
-      item.type === "chunk" &&
-      item.isEntry &&
-      item.facadeModuleId === RESOLVED_CLIENT_ENTRY_ID,
-  );
 }
 
 async function generateTypedRoutes(
