@@ -29,8 +29,8 @@ places where the loader's output appears:
 
 1. Rendered directly into the HTML body, inside the `<dl class="stamp">`
    block, because the server already ran the loader before sending markup.
-2. Serialized into a `<script type="application/json" id="__demiurge_data">`
-   tag near the end of `<body>`. This is the bootstrap payload that
+2. Serialized into an inert `<template id="__demiurge_data">` near the end of
+   `<body>`. This is the bootstrap payload that
    `hydrateFileRouter` reads on the client instead of calling `data` again,
    so hydration does not re-fetch anything the server already computed.
 
@@ -64,12 +64,9 @@ a `<Link path={{ id }} />` call.
 `<Link />` for internal navigation. After hydration, clicking these links
 updates the URL and swaps the rendered route without a full page reload.
 
-## Caveat: dev-mode SSR
+## Dev-mode SSR
 
-`createRequestHandler({ ssr })` in the framework's `src/server` can already
-render this app's routes to full HTML, bootstrap script and all. The Vite
-dev server does not call that path yet; today it serves a static shell, so
-`npm run dev` against this example will not show server-rendered markup or
-the `__demiurge_data` script until that wiring lands. The routes and loaders
-here are written against the framework's public API and need no changes
-once dev-mode SSR is connected.
+The Vite plugin sends page requests through the same route and rendering
+pipeline as the production request handler. Running `npm run dev` therefore
+shows the server-rendered body and `__demiurge_data` payload in view source,
+while Vite still adds its development client and transforms.
