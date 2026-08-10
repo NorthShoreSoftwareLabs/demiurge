@@ -171,13 +171,31 @@ export function createSecurityHeaders(
   options: SecurityHeadersOptions = {},
 ) {
   const headers = new Headers();
+  const csp = policy.csp !== false && policy.csp
+    ? renderCsp(policy.csp, options)
+    : undefined;
+  const trustedTypes = renderTrustedTypes(policy.trustedTypes);
 
-  if (policy.csp !== false && policy.csp) {
-    headers.set("content-security-policy", renderCsp(policy.csp, options));
-  }
+  // Trusted Types is carried by CSP directives, so report-only means moving
+  // those directives to the report-only header rather than enforcing them. The
+  // report-only header deliberately carries nothing else: repeating the base
+  // policy there would report every ordinary CSP violation a second time.
+  const reportsTrustedTypes = policy.trustedTypes
+    ? policy.trustedTypes.mode === "report-only"
+    : false;
+
+  setHeader(
+    headers,
+    "content-security-policy",
+    joinCspDirectives(csp, reportsTrustedTypes ? undefined : trustedTypes),
+  );
+  setHeader(
+    headers,
+    "content-security-policy-report-only",
+    reportsTrustedTypes ? trustedTypes : undefined,
+  );
 
   applySecurityHeaders(headers, policy.headers);
-  applyTrustedTypesHeaders(headers, policy.trustedTypes);
 
   return headers;
 }
@@ -290,24 +308,32 @@ function applySecurityHeaders(
   }
 }
 
-function applyTrustedTypesHeaders(
-  headers: Headers,
-  policy: TrustedTypesPolicy | false | undefined,
-) {
+// `trusted-types` and `require-trusted-types-for` are CSP directives. There is
+// no `trusted-types:` HTTP header, and a browser drops an unknown header
+// without complaining, so emitting them standalone reads as configured and
+// protects nothing.
+function renderTrustedTypes(policy: TrustedTypesPolicy | false | undefined) {
   if (!policy) {
-    return;
+    return undefined;
   }
 
-  const trustedTypesValue = policy.policies.join(" ");
-  const trustedTypesHeader = policy.mode === "report-only"
-    ? "trusted-types-report-only"
-    : "trusted-types";
-
-  headers.set(trustedTypesHeader, trustedTypesValue);
+  const directives: string[] = [];
 
   if (policy.requireFor?.includes("script")) {
-    headers.set("require-trusted-types-for", "'script'");
+    directives.push("require-trusted-types-for 'script'");
   }
+
+  if (policy.policies.length > 0) {
+    directives.push(`trusted-types ${policy.policies.join(" ")}`);
+  }
+
+  return joinCspDirectives(...directives);
+}
+
+function joinCspDirectives(...parts: Array<string | undefined>) {
+  const present = parts.filter((part) => part);
+
+  return present.length > 0 ? present.join("; ") : undefined;
 }
 
 function setHeader(

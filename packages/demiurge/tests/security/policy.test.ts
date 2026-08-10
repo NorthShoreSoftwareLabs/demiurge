@@ -119,25 +119,68 @@ describe("security policy headers", () => {
     );
   });
 
-  it("renders Trusted Types headers in report-only and enforce modes", () => {
-    const reportOnly = createSecurityHeaders({
-      trustedTypes: {
-        mode: "report-only",
-        policies: ["demiurge", "dompurify"],
-      },
-    });
-    const enforce = createSecurityHeaders({
+  it("renders Trusted Types as CSP directives, not as headers of its own", () => {
+    const headers = createSecurityHeaders({
       trustedTypes: {
         mode: "enforce",
-        policies: ["demiurge"],
+        policies: ["demiurge", "dompurify"],
         requireFor: ["script"],
       },
     });
 
-    expect(reportOnly.get("trusted-types-report-only")).toBe("demiurge dompurify");
-    expect(reportOnly.has("trusted-types")).toBe(false);
-    expect(enforce.get("trusted-types")).toBe("demiurge");
-    expect(enforce.get("require-trusted-types-for")).toBe("'script'");
+    expect(headers.get("content-security-policy")).toBe(
+      "require-trusted-types-for 'script'; trusted-types demiurge dompurify",
+    );
+    expect(headers.has("trusted-types")).toBe(false);
+    expect(headers.has("trusted-types-report-only")).toBe(false);
+    expect(headers.has("require-trusted-types-for")).toBe(false);
+  });
+
+  it("appends enforced Trusted Types directives to the document policy", () => {
+    const headers = createSecurityHeaders(
+      security.static({
+        trustedTypes: {
+          mode: "enforce",
+          policies: ["demiurge"],
+          requireFor: ["script"],
+        },
+      }),
+    );
+    const csp = headers.get("content-security-policy") ?? "";
+
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("require-trusted-types-for 'script'");
+    expect(csp).toContain("trusted-types demiurge");
+    expect(headers.has("content-security-policy-report-only")).toBe(false);
+  });
+
+  // The doctrine this framework follows: a control that can only fail inside a
+  // user's browser reports rather than breaking it. That means an enforcing CSP
+  // and a reporting Trusted Types policy on the same response, which is only
+  // expressible across two headers.
+  it("reports Trusted Types separately while the rest of the policy enforces", () => {
+    const headers = createSecurityHeaders(
+      security.static({
+        trustedTypes: {
+          mode: "report-only",
+          policies: ["demiurge", "dompurify"],
+          requireFor: ["script"],
+        },
+      }),
+    );
+
+    expect(headers.get("content-security-policy")).toContain("default-src 'self'");
+    expect(headers.get("content-security-policy")).not.toContain("trusted-types");
+    expect(headers.get("content-security-policy-report-only")).toBe(
+      "require-trusted-types-for 'script'; trusted-types demiurge dompurify",
+    );
+  });
+
+  it("omits the Trusted Types directives when no policy is configured", () => {
+    const headers = createSecurityHeaders(security.static());
+
+    expect(headers.get("content-security-policy")).not.toContain("trusted-types");
+    expect(headers.has("content-security-policy-report-only")).toBe(false);
   });
 
   it("renders optional strict transport security directives", () => {

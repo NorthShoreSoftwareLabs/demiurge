@@ -19,13 +19,16 @@ export function serializeInitialRouteData(data: unknown) {
 
 export function readInitialRouteData(source: Document) {
   const element = source.getElementById(HYDRATION_DATA_ELEMENT_ID);
+  const serialized = element?.tagName === "TEMPLATE"
+    ? (element as HTMLTemplateElement).content.textContent
+    : element?.textContent;
 
-  if (!element?.textContent) {
+  if (!serialized) {
     return undefined;
   }
 
   try {
-    return JSON.parse(element.textContent) as InitialRouteData;
+    return JSON.parse(serialized) as InitialRouteData;
   } catch (error) {
     throw new Error(
       "Demiurge could not parse the initial route data payload.",

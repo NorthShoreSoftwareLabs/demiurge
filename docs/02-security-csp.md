@@ -491,9 +491,24 @@ security.strict({
 });
 ```
 
+Trusted Types travels as CSP directives rather than headers of its own. There is
+no `trusted-types:` header, so `trusted-types` and `require-trusted-types-for`
+are appended to the document policy:
+
+```http
+Content-Security-Policy: default-src 'self'; require-trusted-types-for 'script'; trusted-types demiurge dompurify
+```
+
+Report-only mode moves those two directives to
+`Content-Security-Policy-Report-Only` and leaves the rest of the policy
+enforcing, which is why a response can carry both headers at once. The
+report-only header carries only the Trusted Types directives, because repeating
+the base policy there would report every ordinary CSP violation twice.
+
 Framework responsibilities:
 
-- Generate `Trusted-Types` and `require-trusted-types-for` headers.
+- Append the `trusted-types` and `require-trusted-types-for` directives to the
+  effective policy, in the enforced or the report-only header as the mode says.
 - Provide a framework-owned policy for internal sinks.
 - Integrate with safe HTML helpers instead of raw string injection.
 - Report incompatible third-party scripts and client libraries.

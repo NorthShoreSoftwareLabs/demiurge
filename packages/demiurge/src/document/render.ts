@@ -45,7 +45,7 @@ export function renderDocument({
   const bodyContent = [
     renderRootElement(body),
     ...scripts.map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`),
-    ...(body ? [renderBootstrapScript(body.data, nonce)] : []),
+    ...(body ? [renderBootstrapData(body.data)] : []),
     ...(entrySrc ? [renderEntryScript(entrySrc, nonce)] : []),
   ].join("\n");
 
@@ -73,8 +73,8 @@ function renderRootElement(body: DocumentBody | undefined) {
   return `    <div id="root" ${HYDRATION_ROOT_ATTRIBUTE}=""${fallback}>${body.html}</div>`;
 }
 
-function renderBootstrapScript(data: unknown, nonce: string | undefined) {
-  return `    <script type="application/json" id="${HYDRATION_DATA_ELEMENT_ID}"${renderAttribute("nonce", nonce)}>${serializeInitialRouteData(data)}</script>`;
+function renderBootstrapData(data: unknown) {
+  return `    <template id="${HYDRATION_DATA_ELEMENT_ID}">${serializeInitialRouteData(data)}</template>`;
 }
 
 function renderEntryScript(entrySrc: string, nonce: string | undefined) {

@@ -93,8 +93,8 @@ export const GET = page(() => <HomePage />);
 - Add nonce propagation into the React server renderer. The first slice creates
   a per-response nonce when a document CSP is configured and applies it to
   rendered scripts and security headers.
-- Add safe bootstrap data serialization. Route `data` now ships in an escaped,
-  non-executable JSON script that `hydrateFileRouter(...)` reads instead of
+- Add safe bootstrap data serialization. Route `data` now ships as escaped JSON
+  in an inert `<template>` that `hydrateFileRouter(...)` reads instead of
   re-running the loader on the client. The server marks its rendered root so a
   static shell is client-rendered rather than hydrated.
 - Add streaming SSR and verify every script/style emission has a CSP story.

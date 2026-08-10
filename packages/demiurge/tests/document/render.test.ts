@@ -17,7 +17,7 @@ import {
 } from "../../src/document";
 
 describe("renderDocument static shell", () => {
-  it("renders an empty root with no bootstrap script when no body is given", () => {
+  it("renders an empty root with no bootstrap data when no body is given", () => {
     const html = renderDocument({
       entrySrc: "/assets/app.js",
     });
@@ -60,7 +60,7 @@ describe("renderDocument with a rendered body", () => {
     );
   });
 
-  it("emits a bootstrap script carrying the resolved route data", () => {
+  it("emits inert bootstrap data carrying the resolved route data", () => {
     const html = renderDocument({
       body: {
         data: { greeting: "hello" },
@@ -69,12 +69,13 @@ describe("renderDocument with a rendered body", () => {
     });
 
     expect(html).toContain(`id="${HYDRATION_DATA_ELEMENT_ID}"`);
-    expect(html).toContain('type="application/json"');
+    expect(html).toContain(`<template id="${HYDRATION_DATA_ELEMENT_ID}">`);
+    expect(html).not.toContain('type="application/json"');
     expect(html).toContain('"data":{"greeting":"hello"}');
     expect(html).toContain('"hasData":true');
   });
 
-  it("omits the bootstrap script when no body is given", () => {
+  it("omits the bootstrap data when no body is given", () => {
     const html = renderDocument({});
 
     expect(html).not.toContain(HYDRATION_DATA_ELEMENT_ID);
@@ -264,7 +265,7 @@ describe("renderDocument HTML escaping", () => {
 });
 
 describe("renderDocument nonce propagation", () => {
-  it("applies the document nonce to structured data, static scripts, the bootstrap script, and the client entry", () => {
+  it("applies the document nonce to scripts but not inert bootstrap data", () => {
     const html = renderDocument({
       body: {
         data: { ok: true },
@@ -296,8 +297,9 @@ describe("renderDocument nonce propagation", () => {
     expect(html).toContain(
       '<script src="https://cdn.example.com/app.js" nonce="doc-nonce"></script>',
     );
-    expect(html).toContain(
-      `<script type="application/json" id="${HYDRATION_DATA_ELEMENT_ID}" nonce="doc-nonce">`,
+    expect(html).toContain(`<template id="${HYDRATION_DATA_ELEMENT_ID}">`);
+    expect(html).not.toContain(
+      `<template id="${HYDRATION_DATA_ELEMENT_ID}" nonce=`,
     );
     expect(html).toContain(
       '<script type="module" src="/assets/app.js" nonce="doc-nonce"></script>',
