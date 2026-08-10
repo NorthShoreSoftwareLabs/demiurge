@@ -63,7 +63,7 @@ implementation.
 | Streaming SSR | designed |
 | React Server Components | designed |
 | RSC Flight as data stream | designed |
-| Static prerendering | designed |
+| Static prerendering | implemented |
 | Partial prerendering with strict CSP compatibility checks | designed |
 | Hydration modes: none/page/islands | designed |
 
@@ -81,7 +81,7 @@ implementation.
 | Client router refresh/prefetch separate from server invalidation | designed |
 | Actions/mutations | partially implemented |
 | Idempotency for retryable mutations | implemented |
-| Static `paths` export for dynamic static generation | partially implemented |
+| Static `paths` export for dynamic static generation | implemented |
 
 ## Security
 
@@ -89,7 +89,7 @@ implementation.
 | --- | --- |
 | Strict security preset | designed |
 | CSP nonce mode | designed |
-| CSP hash mode for static output | designed |
+| CSP hash mode for static output | partially implemented |
 | CSP auto mode for static/dynamic split | designed |
 | Strict CSP for streaming SSR | designed |
 | Strict CSP for RSC | designed |
@@ -144,7 +144,7 @@ implementation.
 | --- | --- |
 | Node adapter | implemented |
 | Edge adapter | planned |
-| Static adapter | planned |
+| Static adapter | implemented |
 | Adapter capability checks | implemented |
 | Cloud Run deployment guidance | planned |
 | Shared cache adapters such as Redis | designed |

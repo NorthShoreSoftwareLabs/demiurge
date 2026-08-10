@@ -36,7 +36,5 @@ data loading, caching, and typing coherent.
 
 - Whether initial RSC data is delivered through a nonce-backed script,
   non-executable JSON script, or separate fetch.
-- Whether the production build should prerender documents. The build emits a
-  bodiless shell because `generateBundle` has no request to render against, so
-  built output is client-rendered while dev and the HTTP handler are not. A
-  static adapter with `paths`-driven prerendering is the way to close that gap.
+- How partial prerendering should combine a static shell with runtime holes
+  without weakening CSP or requiring a specific deployment adapter.

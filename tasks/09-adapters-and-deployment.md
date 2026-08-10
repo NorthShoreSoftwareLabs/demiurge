@@ -34,6 +34,19 @@ shared caching.
 
 ## Open Decisions
 
-- Edge and static adapters still need platform-specific implementations.
-- Streaming, WebSocket, shared-cache, and static-output contracts need broader
-  adapter contract tests before they can be marked complete.
+- Which Edge runtime should pressure-test the next adapter contract.
+- Whether provider-specific static header translators belong in the framework
+  or in small deployment packages maintained alongside it.
+- Streaming, WebSocket, and shared-cache contracts need broader adapter tests.
+
+## Decisions Made
+
+- The static adapter is provider-independent. It emits versioned HTML artifacts
+  and a deployment manifest with per-path headers rather than silently choosing
+  one host's configuration format.
+- Static publication stages all rendered HTML before touching the output tree,
+  preserves client assets, and removes stale HTML only when a previous valid
+  Demiurge manifest proves ownership.
+- Static output rejects runtime page modes, per-request nonces, response
+  cookies, redirects, rendering failures, unsafe paths, and inline CSP content
+  without a matching stable hash.
