@@ -12,6 +12,9 @@ export default defineConfig({
       "demiurge/node": fileURLToPath(
         new URL("./src/node/index.ts", import.meta.url),
       ),
+      "demiurge/static": fileURLToPath(
+        new URL("./src/static/index.ts", import.meta.url),
+      ),
       "demiurge/vite": fileURLToPath(
         new URL("./src/vite/index.ts", import.meta.url),
       ),

@@ -2,9 +2,9 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// The library ships three entries. Everything that is not a relative import
-// stays external so consumers resolve React, Vite, and Node builtins from their
-// own tree rather than getting a second copy bundled in.
+// Everything that is not a relative import stays external so consumers resolve
+// React, Vite, and Node builtins from their own tree rather than getting a
+// second copy bundled in.
 export default defineConfig({
   build: {
     lib: {
@@ -18,6 +18,9 @@ export default defineConfig({
         ),
         "node/index": fileURLToPath(
           new URL("src/node/index.ts", import.meta.url),
+        ),
+        "static/index": fileURLToPath(
+          new URL("src/static/index.ts", import.meta.url),
         ),
       },
       formats: ["es"],

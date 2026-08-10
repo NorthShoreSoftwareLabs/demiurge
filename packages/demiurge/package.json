@@ -21,6 +21,10 @@
     "./node": {
       "types": "./dist/node/index.d.ts",
       "default": "./dist/node/index.js"
+    },
+    "./static": {
+      "types": "./dist/static/index.d.ts",
+      "default": "./dist/static/index.js"
     }
   },
   "scripts": {
