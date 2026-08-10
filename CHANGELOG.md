@@ -116,6 +116,9 @@ Epic: #3
   the existing content negotiation rule.
 - Unexpected errors remain redacted in production, while intentional typed
   problem details remain public and `RouteErrorProps` exposes the HTTP status.
+- `examples/app-owned-fallbacks` exercises root and nested loading, not-found,
+  and error ownership. Its production probe verifies inherited 404 layouts,
+  layout-free error documents, typed statuses, problem responses, and redaction.
 
 ## Data Cache And Static Generation
 

@@ -1,0 +1,79 @@
+:root {
+  color: #20252b;
+  background: #f4f6f7;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  width: min(66rem, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3.75rem;
+  border-bottom: 1px solid #c8d0d5;
+}
+
+header > a {
+  color: #175d4b;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+nav,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+}
+
+nav a,
+.actions a {
+  color: #185f8a;
+}
+
+main {
+  max-width: 46rem;
+  padding: 3rem 0 4rem;
+}
+
+h1 {
+  margin: 0.35rem 0 0.9rem;
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  letter-spacing: 0;
+}
+
+p {
+  line-height: 1.55;
+}
+
+.eyebrow,
+.section-label,
+.status {
+  color: #175d4b;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.project-shell {
+  margin-top: 1.5rem;
+  padding-left: 1.25rem;
+  border-left: 3px solid #e0a629;
+}
+
+@media (max-width: 36rem) {
+  header {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.35rem;
+  }
+}

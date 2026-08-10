@@ -8,7 +8,7 @@
     "dev": "pnpm --filter demiurge build && pnpm generate:routes && pnpm --filter @demiurge-examples/basic-blog dev",
     "dev:lib": "pnpm --filter demiurge dev",
     "build": "pnpm --filter demiurge build && pnpm generate:routes && pnpm typecheck:consumers && pnpm build:examples",
-    "build:examples": "pnpm --filter @demiurge-examples/basic-blog build && pnpm --filter @demiurge-examples/ssr-page build && pnpm --filter @demiurge-examples/node-server build && pnpm --filter @demiurge-examples/streaming-page build && pnpm --filter @demiurge-examples/runtime-server-data build && pnpm --filter @demiurge-examples/static-export build",
+    "build:examples": "pnpm --filter @demiurge-examples/basic-blog build && pnpm --filter @demiurge-examples/ssr-page build && pnpm --filter @demiurge-examples/node-server build && pnpm --filter @demiurge-examples/streaming-page build && pnpm --filter @demiurge-examples/runtime-server-data build && pnpm --filter @demiurge-examples/app-owned-fallbacks build && pnpm --filter @demiurge-examples/static-export build",
     "generate:routes": "tsx scripts/generate-example-routes.ts",
     "lint": "eslint .",
     "coverage": "pnpm --filter demiurge coverage",
@@ -16,7 +16,7 @@
     "typecheck": "pnpm generate:routes && pnpm --filter demiurge typecheck && pnpm typecheck:consumers",
     "typecheck:consumers": "tsc --noEmit -p tsconfig.json",
     "test:pack": "tsx scripts/test-pack.ts",
-    "test:examples": "tsx scripts/test-runtime-server-data.ts",
+    "test:examples": "tsx scripts/test-runtime-server-data.ts && tsx scripts/test-app-owned-fallbacks.ts",
     "verify": "pnpm lint && pnpm --filter demiurge build && pnpm typecheck && pnpm coverage && pnpm build:examples && pnpm test:examples && pnpm test:pack"
   },
   "devDependencies": {

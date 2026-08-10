@@ -27,6 +27,8 @@ Current conventions:
   nonce propagation
 - `examples/runtime-server-data` demonstrates public, private, request, and
   uncached data against a live HTTP source across repeated production requests
+- `examples/app-owned-fallbacks` demonstrates nested loading, not-found, and
+  error ownership plus HTML/problem response negotiation
 - `examples/static-export` demonstrates prerendered pages, dynamic `paths`,
   deployment headers, and an app-owned static 404
 - `examples/basic-blog/src/routes/index.tsx` maps to `/`

@@ -7,6 +7,7 @@ const examples = [
   "node-server",
   "streaming-page",
   "runtime-server-data",
+  "app-owned-fallbacks",
   "static-export",
 ];
 

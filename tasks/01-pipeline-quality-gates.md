@@ -24,6 +24,9 @@ fail fast when lint, type safety, tests, coverage, or examples regress.
 - `examples/streaming-page` must continue to build under `pnpm build`.
 - `examples/runtime-server-data` must build and its production probe must verify
   cache scopes and TTL expiry under `pnpm verify`.
+- `examples/app-owned-fallbacks` must build and its production probe must verify
+  fallback selection, response negotiation, and error redaction under
+  `pnpm verify`.
 - Future fixture examples should be added to the pipeline as they are created.
 - Generated route manifests are written to a dot-directory that TypeScript's
   wildcard include skips, so each one must be named explicitly in `tsconfig.json`

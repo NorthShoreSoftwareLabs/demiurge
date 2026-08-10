@@ -189,6 +189,14 @@ createRequestHandler({
 The Node adapter's own `onError` still catches anything that escapes the
 handler entirely, and answers it with plain text.
 
+## Working Example
+
+[`examples/app-owned-fallbacks`](../examples/app-owned-fallbacks) owns root and
+nested loading, not-found, and error components. Its built-server probe verifies
+the nearest fallback selection, inherited layouts around 404 documents,
+layout-free error rendering, API problem details, typed statuses, and
+production redaction.
+
 ## Dev and production run the same path
 
 Route handling runs in a Vite middleware registered before Vite's own, so it

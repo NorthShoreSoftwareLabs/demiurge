@@ -102,11 +102,12 @@ cannot be misconfigured into leaking.
 
 ## Examples Required
 
-- `examples/app-owned-fallbacks`
+- ~~`examples/app-owned-fallbacks`~~ Shipped in #23 with nested fallback owners,
+  deliberate page/API failures, and a production behavior probe.
 
 `examples/node-server` owns a root `@not-found.tsx` and an `@error.tsx`, which
 is what proves the build gate and the production error document. The dedicated
-example still owes the failing-layout and failure-site walkthrough.
+example provides the nested ownership and failure-site walkthrough.
 
 ## Tests Required
 
