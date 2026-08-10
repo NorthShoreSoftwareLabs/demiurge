@@ -6,6 +6,7 @@ const examples = [
   "ssr-page",
   "node-server",
   "streaming-page",
+  "runtime-server-data",
   "static-export",
 ];
 

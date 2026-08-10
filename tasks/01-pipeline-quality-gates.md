@@ -22,6 +22,8 @@ fail fast when lint, type safety, tests, coverage, or examples regress.
 - `examples/basic-blog` must continue to build under `npm run build`.
 - `examples/ssr-page` must continue to build under `npm run build`.
 - `examples/streaming-page` must continue to build under `npm run build`.
+- `examples/runtime-server-data` must build and its production probe must verify
+  cache scopes and TTL expiry under `npm run verify`.
 - Future fixture examples should be added to the pipeline as they are created.
 - Generated route manifests are written to a dot-directory that TypeScript's
   wildcard include skips, so each one must be named explicitly in `tsconfig.json`

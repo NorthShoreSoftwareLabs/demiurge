@@ -141,6 +141,9 @@ Epic: #7
   sharing build/public/private entries through the configured backend. Request
   entries stay request-local, none bypasses caching, and omitting the option
   preserves the isolated default.
+- `examples/runtime-server-data` exercises public TTL expiry, explicit private
+  cache partitioning, request-local dedupe, and uncached reads against a live
+  HTTP source. Its production probe verifies those contracts across requests.
 - `page({ data, view })` resolves route-level page data with the matched
   request context and a request-scoped framework cache during route loading.
 - Route modules can export typed `paths`, and static path collection validates

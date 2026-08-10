@@ -25,6 +25,8 @@ Current conventions:
   routes, and hashed static assets
 - `examples/streaming-page` demonstrates Suspense streaming with strict CSP
   nonce propagation
+- `examples/runtime-server-data` demonstrates public, private, request, and
+  uncached data against a live HTTP source across repeated production requests
 - `examples/static-export` demonstrates prerendered pages, dynamic `paths`,
   deployment headers, and an app-owned static 404
 - `examples/basic-blog/src/routes/index.tsx` maps to `/`

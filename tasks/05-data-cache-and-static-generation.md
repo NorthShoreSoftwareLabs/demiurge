@@ -35,7 +35,8 @@ handlers and React server components without hiding when work runs.
 ## Examples Required
 
 - `examples/static-blog`
-- `examples/runtime-server-data`
+- ~~`examples/runtime-server-data`~~ Shipped in #49 with a production probe for
+  cache scopes, account partitioning, and TTL expiry.
 - `examples/cache-invalidation`
 - `examples/redis-cache-adapter`
 

@@ -6,6 +6,7 @@
     "examples/ssr-page/.demiurge/route-manifest.d.ts",
     "examples/node-server/.demiurge/route-manifest.d.ts",
     "examples/streaming-page/.demiurge/route-manifest.d.ts",
+    "examples/runtime-server-data/.demiurge/route-manifest.d.ts",
     "examples/static-export/.demiurge/route-manifest.d.ts",
     "scripts"
   ],

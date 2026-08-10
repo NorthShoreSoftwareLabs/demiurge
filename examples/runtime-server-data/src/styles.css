@@ -1,0 +1,92 @@
+:root {
+  color: #20242a;
+  background: #f4f6f8;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  width: min(68rem, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3.5rem;
+  border-bottom: 1px solid #cbd2d9;
+}
+
+header span {
+  color: #24624d;
+  font-weight: 800;
+}
+
+main {
+  padding: 2.5rem 0 4rem;
+}
+
+.summary {
+  max-width: 43rem;
+  margin-bottom: 2rem;
+}
+
+.eyebrow {
+  color: #24624d;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0.35rem 0 0.75rem;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  letter-spacing: 0;
+}
+
+.scope-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+
+.scope-result {
+  padding: 1.1rem;
+  border: 1px solid #cbd2d9;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.scope-result dt {
+  margin-bottom: 0.7rem;
+  font-weight: 800;
+}
+
+.scope-result dd {
+  margin: 0;
+}
+
+.scope-result span {
+  display: block;
+  margin-top: 0.35rem;
+}
+
+.scope-result .description {
+  margin-top: 1rem;
+  color: #5c6570;
+  line-height: 1.45;
+}
+
+@media (max-width: 34rem) {
+  header {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.2rem;
+  }
+}
