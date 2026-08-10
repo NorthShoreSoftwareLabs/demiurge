@@ -66,10 +66,19 @@ export default function NotFound({ pathname }: NotFoundProps) {
 }
 ```
 
-### The framework built-in is a stopgap
+### The build refuses a page app with no root @not-found.tsx
 
-An app with no `@not-found.tsx` gets a deliberately plain framework 404, so
-nothing is ever blank. It is not something to ship. Own the file.
+The framework ships a working 404 so nothing is ever blank, and `vite build`
+fails until the app has decided on its own. A generic framework page in front
+of real users is a failure of the framework, not of the app that never got
+around to it.
+
+The gate only fires when the app has at least one page route. Page detection is
+a source scan for a `page(` call, because the plugin cannot execute route
+modules at build time. An API-only app builds clean and gets problem+json for
+everything.
+
+Dev serves the built-in and warns once, naming the file to create.
 
 ### The client agrees with the server
 

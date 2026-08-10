@@ -1,5 +1,6 @@
 export { demiurge } from "./plugin";
 export {
+  assertRootNotFoundRoute as unstable_assertRootNotFoundRoute,
   createClientEntrySource as unstable_createClientEntrySource,
   createServerEntrySource as unstable_createServerEntrySource,
   createDocumentHtml as unstable_createDocumentHtml,

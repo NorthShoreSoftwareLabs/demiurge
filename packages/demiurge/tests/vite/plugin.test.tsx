@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Readable, Writable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -32,6 +32,7 @@ import {
 import { unstable_createRouteManifest } from "demiurge/internal/testing";
 import {
   demiurge,
+  unstable_assertRootNotFoundRoute,
   unstable_createClientEntrySource,
   unstable_createServerEntrySource,
   unstable_createDevRouteImporters,
@@ -1335,3 +1336,95 @@ async function hmacSignature(body: string, secret: string) {
     byte.toString(16).padStart(2, "0"),
   ).join("");
 }
+
+describe("the root not-found build gate", () => {
+  async function scaffold(files: Record<string, string>) {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-not-found-gate-"));
+
+    for (const [name, source] of Object.entries(files)) {
+      const file = join(root, "src", "routes", name);
+
+      await mkdir(dirname(file), { recursive: true });
+      await writeFile(file, source);
+    }
+
+    return root;
+  }
+
+  const pageRoute = `import { page } from "demiurge";
+export const GET = page({ view: () => null });
+`;
+
+  it("fails a build when the app has page routes and no root @not-found", async () => {
+    const root = await scaffold({ "index.tsx": pageRoute });
+
+    await expect(unstable_assertRootNotFoundRoute(root)).rejects.toThrow(
+      /src\/routes\/@not-found\.tsx/,
+    );
+    // The message has to name the file to create and the route that triggered
+    // the gate, or it is just a build that stopped.
+    await expect(unstable_assertRootNotFoundRoute(root)).rejects.toThrow(
+      /"index\.tsx" declares a page/,
+    );
+  });
+
+  it("passes once the app owns a root @not-found", async () => {
+    const root = await scaffold({
+      "@not-found.tsx": "export default function NotFound() { return null; }\n",
+      "index.tsx": pageRoute,
+    });
+
+    await expect(unstable_assertRootNotFoundRoute(root)).resolves.toBeUndefined();
+  });
+
+  // Nagging an app that never wants an HTML document would be user hostile.
+  it("stays quiet for an API-only app", async () => {
+    const root = await scaffold({
+      "api/health.ts": `import { json } from "demiurge";
+export const GET = json({ ok: true });
+`,
+      "api/widgets.tsx": `import { json } from "demiurge";
+export const GET = json([]);
+`,
+    });
+
+    await expect(unstable_assertRootNotFoundRoute(root)).resolves.toBeUndefined();
+  });
+
+  it("finds a page route nested below the routes root", async () => {
+    const root = await scaffold({ "blog/[slug].tsx": pageRoute });
+
+    await expect(unstable_assertRootNotFoundRoute(root)).rejects.toThrow(
+      /blog\/\[slug\]\.tsx/,
+    );
+  });
+
+  it("stays quiet when the app has no routes directory at all", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-not-found-empty-"));
+
+    await expect(unstable_assertRootNotFoundRoute(root)).resolves.toBeUndefined();
+  });
+
+  it("honours a custom routesDir", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-not-found-custom-"));
+    const routesDir = join(root, "app", "pages");
+
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(join(routesDir, "index.tsx"), pageRoute);
+
+    await expect(
+      unstable_assertRootNotFoundRoute(root, { routesDir: "app/pages" }),
+    ).rejects.toThrow(/app\/pages\/@not-found\.tsx/);
+  });
+
+  it("runs from buildStart only for a build", async () => {
+    const root = await scaffold({ "index.tsx": pageRoute });
+    const plugin = demiurge() as PluginHarness;
+
+    plugin.configResolved?.({ command: "serve", root } as never);
+    await expect(plugin.buildStart?.()).resolves.toBeUndefined();
+
+    plugin.configResolved?.({ command: "build", root } as never);
+    await expect(plugin.buildStart?.()).rejects.toThrow(/@not-found\.tsx/);
+  });
+});
