@@ -37,6 +37,7 @@ import {
   mergeRoutePolicies,
   type RateLimitStore,
 } from "../security";
+import { securityPolicyRequiresNonce } from "../security/policy";
 
 export type RequestErrorReporter = (
   error: unknown,
@@ -229,7 +230,9 @@ async function handleMatchedRoute(
       manifest,
       routeMatch.route,
     );
-    const nonce = policy.document?.csp ? createNonce() : undefined;
+    const nonce = securityPolicyRequiresNonce(policy.document)
+      ? createNonce()
+      : undefined;
     const response = await runRouteMiddleware(middlewares, context, async () => {
       // A page render has already committed to a document, so a failure here
       // renders the error document rather than negotiating. Returning the

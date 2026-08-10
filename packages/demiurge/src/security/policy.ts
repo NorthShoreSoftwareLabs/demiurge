@@ -182,6 +182,18 @@ export function createSecurityHeaders(
   return headers;
 }
 
+export function securityPolicyRequiresNonce(
+  policy: SecurityPolicy | false | undefined,
+) {
+  if (!policy || !policy.csp) {
+    return false;
+  }
+
+  return cspDirectiveEntries(policy.csp).some(([, value]) =>
+    Array.isArray(value) && value.some((source) => source.includes(nonceToken))
+  );
+}
+
 function mergeSecurityPolicy(
   base: SecurityPolicy,
   override: SecurityPolicy,

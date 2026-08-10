@@ -14,6 +14,7 @@ import {
   redirect,
   resolveMetadata,
   response as rawResponse,
+  security,
   script,
   serverTiming,
   sse,
@@ -819,6 +820,36 @@ describe("request handler", () => {
     expect(response.status).toBe(413);
     await expect(response.text()).resolves.toBe("Request body too large.");
     expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
+  it("generates document nonces only for CSP policies that require them", async () => {
+    const createHandler = (document: ReturnType<typeof security.strict>) =>
+      createRequestHandler({
+        routes: {
+          "./routes/@policy.ts": routeModule({
+            policy: defineRoutePolicy({ document }),
+          }),
+          "./routes/index.tsx": routeModule({ GET: page(View) }),
+        },
+        ssr: { clientEntry: "/assets/app.js" },
+      });
+    const request = () => new Request("https://example.test/");
+    const strictResponse = await createHandler(security.strict())(request());
+    const staticResponse = await createHandler(security.static())(request());
+    const strictHtml = await strictResponse.text();
+    const staticHtml = await staticResponse.text();
+
+    expect(strictResponse.headers.get("content-security-policy")).toMatch(
+      /'nonce-[A-Za-z0-9+/=]+'/,
+    );
+    expect(strictHtml).toMatch(/nonce="[A-Za-z0-9+/=]+"/);
+    expect(staticResponse.headers.get("content-security-policy")).toContain(
+      "script-src 'self'",
+    );
+    expect(staticResponse.headers.get("content-security-policy")).not.toContain(
+      "nonce-",
+    );
+    expect(staticHtml).not.toContain(" nonce=");
   });
 
   it("scopes inherited @policy files to route group subtrees", async () => {
