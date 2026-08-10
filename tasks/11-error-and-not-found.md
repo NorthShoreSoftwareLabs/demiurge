@@ -88,8 +88,10 @@ cannot be misconfigured into leaking.
 
 ## Features To Implement
 
-- Content-negotiated not-found: document for HTML, problem+json otherwise.
-- Not-found rendering inside inherited layouts, with a layout-free fallback.
+- ~~Content-negotiated not-found: document for HTML, problem+json otherwise.~~
+  Shipped, #16.
+- ~~Not-found rendering inside inherited layouts, with a layout-free
+  fallback.~~ Shipped, #17.
 - Build gate requiring a root `@not-found.tsx` when the app has page routes.
 - Error pipeline split by failure site.
 - Dev error document with stack, production body unchanged.
@@ -102,11 +104,11 @@ cannot be misconfigured into leaking.
 
 ## Tests Required
 
-- Server tests for negotiation across `accept` values, including missing and
-  malformed headers.
+- ~~Server tests for negotiation across `accept` values, including missing and
+  malformed headers.~~ `tests/server/negotiate.test.ts`.
 - Server tests for each failure site in the 500 table.
-- A test proving a layout that throws during a 404 yields the layout-free
-  document rather than a 500.
+- ~~A test proving a layout that throws during a 404 yields the layout-free
+  document rather than a 500.~~ `tests/server/not-found.test.tsx`.
 - A build test proving the gate fires for a page app and stays quiet for an
   API-only app.
 - A test proving no production error body contains a stack trace or file path.
@@ -115,3 +117,11 @@ cannot be misconfigured into leaking.
 
 - Whether typed HTTP errors compose with the existing response capabilities or
   stay a throw-only path.
+
+## Decisions Made While Implementing
+
+- Dev registers a second middleware after Vite's own to terminate unmatched
+  requests. Vite keeps serving its asset URLs, and everything else gets the
+  production not-found.
+
+Reference: `docs/09-errors-and-not-found.md`.

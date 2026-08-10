@@ -1,12 +1,14 @@
 export {
   collectStaticRoutePaths,
   createRouteManifest,
+  findLayoutsForPath,
   findPageMatch,
   findRouteMatch,
   isAttachedFileForRoute,
   isLayoutForPage,
   loadErrorFallback,
   loadLoadingFallback,
+  loadNotFoundMatch,
   loadPageRoute,
   loadRoute,
   matchSegments,
@@ -16,7 +18,9 @@ export {
 } from "./manifest";
 export type { InitialRouteData } from "../document";
 export type {
+  FallbackRoute,
   LayoutRoute,
+  LoadedNotFoundMatch,
   LoadedRouteMatch,
   MiddlewareRoute,
   PendingRouteMatch,

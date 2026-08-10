@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
+import type { IncomingMessage } from "node:http";
 import { readdir } from "node:fs/promises";
 import { resolve, relative, sep } from "node:path";
-import type { ServerResponse } from "node:http";
 import type { OutputBundle, OutputChunk } from "rollup";
 import type { Plugin, UserConfig, ViteDevServer } from "vite";
 import { renderDocument } from "../document";
@@ -18,7 +18,9 @@ import {
 } from "../router";
 import {
   handleRequestWithManifest,
+  renderNotFoundResponse,
   renderPageDocument,
+  type PageRenderer,
 } from "../server";
 import {
   type RouteImporter,
@@ -164,33 +166,18 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
             server.config.root,
             options.routesDir ?? "src/routes",
           );
-          const routes = await createDevRouteImporters(server, routesDir);
-          const manifest = createRouteManifest(routes);
-          const result = await handleDevRequest(manifest, webRequest, {
-            renderPage: async (match, renderOptions) => {
-              const html = await server.transformIndexHtml(
-                "/",
-                renderPageDocument(match, {
-                  ...renderOptions,
-                  clientEntry: `/${CLIENT_ENTRY_ID}`,
-                }),
-              );
-
-              return new Response(html, {
-                headers: { "content-type": "text/html; charset=utf-8" },
-              });
-            },
-          });
+          const manifest = await loadDevManifest(server, request, routesDir);
+          const result = await handleDevRequest(
+            manifest,
+            webRequest,
+            createDevRuntimeOptions(server, options),
+          );
 
           if (result === "next") {
-            if (shouldServeDocument(webRequest)) {
-              writeHtmlResponse(
-                response,
-                await createDevDocument(server, options),
-              );
-              return;
-            }
-
+            // Vite owns its own asset URLs, so an unmatched request still
+            // falls through. The post middleware below is what turns whatever
+            // Vite could not serve into the same negotiated not-found
+            // production returns.
             next();
             return;
           }
@@ -200,6 +187,47 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
           next(error);
         }
       });
+
+      // Returning a hook registers this after Vite's own middlewares, so it
+      // only sees requests Vite could not serve either. `appType` is
+      // "custom", so no SPA fallback intercepts them first. This is what makes
+      // dev and production agree on an unmatched path: both render the same
+      // negotiated not-found instead of dev handing back a bodiless shell.
+      return () => {
+        server.middlewares.use(async (request, response, next) => {
+          try {
+            let webRequest: Request;
+
+            try {
+              webRequest = toWebRequest(request);
+            } catch (error) {
+              if (error instanceof UnsupportedMethodError) {
+                writeNotImplemented(response);
+                return;
+              }
+
+              throw error;
+            }
+
+            const routesDir = resolve(
+              server.config.root,
+              options.routesDir ?? "src/routes",
+            );
+            const manifest = await loadDevManifest(server, request, routesDir);
+
+            await writeWebResponse(
+              response,
+              await renderNotFoundResponse(
+                manifest,
+                webRequest,
+                createDevFallbackOptions(server, options),
+              ),
+            );
+          } catch (error) {
+            next(error);
+          }
+        });
+      };
     },
   };
 }
@@ -332,22 +360,80 @@ function createStylesImport(
     : "";
 }
 
-// This is the fallback shell for a browser navigation that matched no route,
-// so the client router can run its own not-found handling. A matched route
-// (including a matched page) never reaches this function: `handleDevRequest`
-// only returns the "next" sentinel when `findRouteMatch` found nothing, so
-// there is no page match here to render server-side.
-async function createDevDocument(
+// Dev renders through the production pipeline, so the only things it adds are
+// the virtual client entry and Vite's HTML transform. Every security and
+// routing decision comes from the shared handler.
+function createDevRuntimeOptions(
   server: ViteDevServer,
   options: DemiurgeVitePluginOptions,
 ) {
-  const html = createDocumentHtml({
-    entrySrc: `/${CLIENT_ENTRY_ID}`,
+  return {
+    ssr: createDevSsrOptions(options),
+    transformDocument: (html: string) => server.transformIndexHtml("/", html),
+    renderPage: async (
+      match: Parameters<PageRenderer>[0],
+      renderOptions: Parameters<PageRenderer>[1],
+    ) => {
+      const html = await server.transformIndexHtml(
+        "/",
+        renderPageDocument(match, {
+          ...renderOptions,
+          clientEntry: `/${CLIENT_ENTRY_ID}`,
+        }),
+      );
+
+      return new Response(html, {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    },
+  };
+}
+
+// Both dev middlewares need the manifest for the same request, and building
+// it walks the routes directory. The pre middleware always runs, so the post
+// middleware reuses what it already produced rather than scanning twice on
+// every unmatched request.
+const DEV_MANIFEST = Symbol.for("demiurge.devManifest");
+
+type DevManifestCarrier = { [DEV_MANIFEST]?: RouteManifest };
+
+async function loadDevManifest(
+  server: ViteDevServer,
+  request: IncomingMessage,
+  routesDir: string,
+) {
+  const carrier = request as IncomingMessage & DevManifestCarrier;
+  const cached = carrier[DEV_MANIFEST];
+
+  if (cached) {
+    return cached;
+  }
+
+  const manifest = createRouteManifest(
+    await createDevRouteImporters(server, routesDir),
+  );
+
+  carrier[DEV_MANIFEST] = manifest;
+
+  return manifest;
+}
+
+function createDevSsrOptions(options: DemiurgeVitePluginOptions) {
+  return {
+    clientEntry: `/${CLIENT_ENTRY_ID}`,
     lang: options.document?.lang,
     title: options.document?.title,
-  });
+  };
+}
 
-  return await server.transformIndexHtml("/", html);
+function createDevFallbackOptions(
+  server: ViteDevServer,
+  options: DemiurgeVitePluginOptions,
+) {
+  return {
+    ...createDevSsrOptions(options),
+    transformDocument: (html: string) => server.transformIndexHtml("/", html),
+  };
 }
 
 export function createDocumentHtml({
@@ -431,9 +517,7 @@ export async function createDevRouteImporters(
 export async function handleDevRequest(
   manifest: RouteManifest,
   request: Request,
-  options: {
-    renderPage?: import("../server").PageRenderer;
-  } = {},
+  options: Parameters<typeof handleRequestWithManifest>[2] = {},
 ) {
   const url = new URL(request.url);
   const routeMatch = findRouteMatch(manifest.routes, url.pathname);
@@ -442,28 +526,7 @@ export async function handleDevRequest(
     return "next" as const;
   }
 
-  return await handleRequestWithManifest(manifest, request, {
-    renderPage: options.renderPage,
-  });
-}
-
-function shouldServeDocument(request: Request) {
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    return false;
-  }
-
-  const accept = request.headers.get("accept");
-
-  return !accept || accept.includes("text/html");
-}
-
-function writeHtmlResponse(
-  serverResponse: ServerResponse,
-  html: string,
-) {
-  serverResponse.statusCode = 200;
-  serverResponse.setHeader("content-type", "text/html; charset=utf-8");
-  serverResponse.end(html);
+  return await handleRequestWithManifest(manifest, request, options);
 }
 
 async function findRouteFiles(directory: string) {

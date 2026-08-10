@@ -270,6 +270,9 @@ export type RouteModule = {
   OPTIONS?: ResponseCapability;
   HEAD?: ResponseCapability;
   default?: RouteDefaultComponent;
+  // `@not-found.tsx` opts out of inherited layouts with `export const layout =
+  // false`, mirroring the escape hatch a page capability already has.
+  layout?: false;
   links?: LinkContribution;
   metadata?: Metadata;
   middleware?: RouteMiddleware;

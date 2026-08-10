@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import {
+  HYDRATION_FALLBACK_ATTRIBUTE,
   HYDRATION_ROOT_ATTRIBUTE,
   readInitialRouteData,
   type InitialRouteData,
@@ -22,13 +23,13 @@ import {
   loadErrorFallback,
   loadLoadingFallback,
   loadPageRoute,
-  type LoadedRouteMatch,
   type PendingRouteMatch,
 } from "../router";
+import { BuiltInNotFound } from "../server/fallbacks";
 import { href, type AppHref, type LinkTarget, type LinkTo } from "../routing";
 
 type FileRouterOptions = {
-  initialMatch?: LoadedRouteMatch;
+  initialMatch?: PendingRouteMatch;
   routes: Record<string, RouteImporter>;
   loading?: ComponentType;
   notFound?: ComponentType<NotFoundProps>;
@@ -39,10 +40,8 @@ export function createFileRouter(options: FileRouterOptions) {
 
   return function FileRouter() {
     const [location, setLocation] = useState(() => getCurrentLocation());
-    const [match, setMatch] = useState<PendingRouteMatch>(() =>
-      options.initialMatch
-        ? { match: options.initialMatch, status: "ready" }
-        : { status: "loading" },
+    const [match, setMatch] = useState<PendingRouteMatch>(
+      () => options.initialMatch ?? { status: "loading" },
     );
     const initialMatchPending = useRef(Boolean(options.initialMatch));
 
@@ -60,7 +59,7 @@ export function createFileRouter(options: FileRouterOptions) {
 
       if (
         initialMatchPending.current &&
-        options.initialMatch?.pathname === location.pathname
+        getMatchPathname(options.initialMatch) === location.pathname
       ) {
         initialMatchPending.current = false;
         return () => {
@@ -122,6 +121,30 @@ export function createFileRouter(options: FileRouterOptions) {
   };
 }
 
+// Hydration is only safe when the client reproduces what the server sent. A
+// page document whose route the client can no longer match is a genuine
+// desync, so it keeps getting replaced; a document the server marked as a 404
+// hydrates, which is what keeps the layouts it resolved from being torn down.
+function isHydratableMatch(match: PendingRouteMatch, root: Element) {
+  const fallback = root.getAttribute(HYDRATION_FALLBACK_ATTRIBUTE);
+
+  return match.status === "not-found"
+    ? fallback === "not-found"
+    : match.status === "ready" && fallback === null;
+}
+
+function getMatchPathname(match: PendingRouteMatch | undefined) {
+  if (!match) {
+    return undefined;
+  }
+
+  if (match.status === "ready") {
+    return match.match.pathname;
+  }
+
+  return match.status === "loading" ? undefined : match.pathname;
+}
+
 export type HydrateFileRouterOptions = Omit<
   FileRouterOptions,
   "initialMatch"
@@ -146,16 +169,17 @@ export async function hydrateFileRouter(options: HydrateFileRouterOptions) {
     new Request(window.location.href),
     options.initialData ?? readInitialRouteData(document),
   );
+  const hydratable = isHydratableMatch(match, root);
   const Router = createFileRouter(
-    match.status === "ready"
-      ? { ...options, initialMatch: match.match }
-      : options,
+    hydratable ? { ...options, initialMatch: match } : options,
   );
   const { createRoot, hydrateRoot } = await import("react-dom/client");
 
   // Only documents rendered by the framework server carry markup to hydrate.
-  // A static shell has an empty root, so hydrating it would mismatch.
-  if (match.status === "ready" && root.hasAttribute(HYDRATION_ROOT_ATTRIBUTE)) {
+  // A static shell has an empty root, so hydrating it would mismatch. A
+  // server-rendered 404 carries markup too, and hydrating it is what keeps the
+  // layouts the server resolved from being torn down on the client.
+  if (hydratable && root.hasAttribute(HYDRATION_ROOT_ATTRIBUTE)) {
     hydrateRoot(root, createElement(Router));
     return;
   }
@@ -205,11 +229,17 @@ function RouteRenderer({
   }
 
   if (match.status === "not-found") {
-    const AppNotFound = match.notFound ?? NotFound;
+    const AppNotFound = match.notFound ?? NotFound ?? BuiltInNotFound;
 
-    return AppNotFound
-      ? createElement(AppNotFound, { pathname: match.pathname })
-      : null;
+    return match.layouts.reduceRight<ReactNode>(
+      (children, Layout) =>
+        createElement(Layout, {
+          children,
+          path: {},
+          pathname: match.pathname,
+        }),
+      createElement(AppNotFound, { pathname: match.pathname }),
+    );
   }
 
   if (match.status === "error") {

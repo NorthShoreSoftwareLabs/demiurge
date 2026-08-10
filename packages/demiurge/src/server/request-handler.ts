@@ -23,6 +23,8 @@ import {
   type SsrOptions,
   type SsrRenderOptions,
 } from "./ssr";
+import type { FailureSite } from "./failure-site";
+import { renderNotFoundResponse } from "./not-found";
 import {
   applyCorsHeaders,
   createCorsPreflightResponse,
@@ -35,17 +37,28 @@ import {
   type RateLimitStore,
 } from "../security";
 
+export type RequestErrorReporter = (
+  error: unknown,
+  context: { pathname: string; site: FailureSite },
+) => void;
+
 export type RequestHandlerOptions = {
+  onError?: RequestErrorReporter;
   renderPage?: PageRenderer;
   rateLimitStore?: RateLimitStore;
   routes: Record<string, RouteImporter>;
   ssr?: SsrOptions;
 };
 
+// `transformDocument` is deliberately absent from the public options. Dev
+// passes Vite's HTML transform when it calls `handleRequestWithManifest`
+// directly; an app has no reason to reach it.
 type RequestRuntimeOptions = {
+  onError?: RequestErrorReporter;
   renderPage?: PageRenderer;
   rateLimitStore?: RateLimitStore;
   ssr?: SsrOptions;
+  transformDocument?: (html: string) => string | Promise<string>;
 };
 
 export type RequestHandler = (request: Request) => Promise<Response>;
@@ -73,6 +86,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
 
   return async function handleRequest(request: Request) {
     return await handleRequestWithManifest(manifest, request, {
+      onError: options.onError,
       rateLimitStore,
       renderPage: options.renderPage,
       ssr: options.ssr,
@@ -88,10 +102,20 @@ export async function handleRequestWithManifest(
   },
 ) {
   const url = new URL(request.url);
+  const fallbackOptions = createFallbackOptions(url, options);
   const routeMatch = findRouteMatch(manifest.routes, url.pathname);
 
   if (!routeMatch) {
-    return new Response(null, { status: 404 });
+    try {
+      return await renderNotFoundResponse(manifest, request, fallbackOptions);
+    } catch (error) {
+      fallbackOptions.onError(error, "page");
+
+      return new Response("Not Found", {
+        headers: { "content-type": "text/plain; charset=utf-8" },
+        status: 404,
+      });
+    }
   }
 
   const routeModule = await routeMatch.route.load();
@@ -175,7 +199,10 @@ export async function handleRequestWithManifest(
       const match = await loadPageRoute(manifest, url.pathname, request);
 
       if (match.status !== "ready") {
-        throw new Error(`Unable to render page at ${url.pathname}.`);
+        return await renderNotFoundResponse(manifest, request, {
+          ...fallbackOptions,
+          nonce,
+        });
       }
 
       const renderPage = options.renderPage ?? renderPageResponse;
@@ -207,11 +234,61 @@ export async function handleRequestWithManifest(
     manifest,
     routeMatch.route,
   );
-  const response = await runRouteMiddleware(middlewares, context, () =>
-    toResponse(capability, context),
-  );
+  const response = await runRouteMiddleware(middlewares, context, async () => {
+    if (capability.kind === "not-found" && capability.body === undefined) {
+      return applyCapabilityInit(
+        await renderNotFoundResponse(manifest, request, fallbackOptions),
+        capability.init,
+      );
+    }
+
+    return await toResponse(capability, context);
+  });
 
   return finalizeRouteResponse(response, capability, request, method);
+}
+
+function createFallbackOptions(url: URL, options: RequestRuntimeOptions) {
+  return {
+    ...options.ssr,
+    onError: (error: unknown, site: FailureSite) => {
+      options.onError?.(error, { pathname: url.pathname, site });
+    },
+    transformDocument: options.transformDocument,
+  };
+}
+
+// `notFound()` without a body routes through the negotiated path so an app
+// cannot end up shipping two different 404 shapes, while an explicit status or
+// header on the capability still wins.
+function applyCapabilityInit(response: Response, init: ResponseInit | undefined) {
+  if (!init) {
+    return response;
+  }
+
+  const headers = new Headers(response.headers);
+  const capabilityHeaders = new Headers(init.headers);
+
+  for (const [name, value] of capabilityHeaders) {
+    if (name === "set-cookie") {
+      continue;
+    }
+
+    headers.set(name, value);
+  }
+
+  // `set-cookie` is the one header that legitimately repeats, and iterating a
+  // `Headers` collapses it into a single comma-joined value. Appending each
+  // cookie back is the same guarantee `writeWebResponse` already makes.
+  for (const cookie of capabilityHeaders.getSetCookie()) {
+    headers.append("set-cookie", cookie);
+  }
+
+  return new Response(response.body, {
+    headers,
+    status: init.status ?? response.status,
+    statusText: init.statusText ?? response.statusText,
+  });
 }
 
 async function loadInheritedRoutePolicy(
