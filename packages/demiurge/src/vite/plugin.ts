@@ -10,6 +10,7 @@ import type {
   ResolvedMetadata,
   ScriptTag,
 } from "../document";
+import { PACKAGE_NAME } from "../package-name";
 import { generateRoutes } from "../routing/generate";
 import {
   createRouteManifest,
@@ -258,7 +259,7 @@ export function createClientEntrySource(
   const routesDir = options.routesDir ?? "src/routes";
   const stylesImport = createStylesImport(root, options);
 
-  return `import { hydrateFileRouter } from "demiurge";
+  return `import { hydrateFileRouter } from "${PACKAGE_NAME}";
 ${stylesImport}
 
 ${createRouteMapSource(routesDir, {
@@ -276,7 +277,7 @@ export function createServerEntrySource(
 ) {
   const routesDir = options.routesDir ?? "src/routes";
 
-  return `import { createRequestHandler } from "demiurge";
+  return `import { createRequestHandler } from "${PACKAGE_NAME}";
 
 ${createRouteMapSource(routesDir, {
     exportRoutes: true,
@@ -524,13 +525,20 @@ async function findPageRouteFile(files: string[]) {
   return undefined;
 }
 
-const DEMIURGE_NAMED_IMPORT = /import\s*\{([^}]*)\}\s*from\s*["']demiurge["']/g;
+// Escaped because a package name may contain `.`, which the regex would
+// otherwise read as a wildcard.
+const PACKAGE_NAME_PATTERN = PACKAGE_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const DEMIURGE_NAMED_IMPORT = new RegExp(
+  `import\\s*\\{([^}]*)\\}\\s*from\\s*["']${PACKAGE_NAME_PATTERN}["']`,
+  "g",
+);
 
 // The plugin cannot evaluate route modules at build time, so page detection
 // reads the source. The signal is the import rather than the bare word: an
 // API-only app doing `db.users.page(2)` must never be told to write a 404
 // document it will never serve, and pagination is everywhere in API code.
-// Importing `page` from `demiurge` is the one thing only a page route does.
+// Importing `page` from the framework package is the one thing only a page
+// route does.
 export function declaresPageRoute(source: string) {
   const locals = [...source.matchAll(DEMIURGE_NAMED_IMPORT)].flatMap((match) =>
     match[1].split(",").flatMap((binding) => {
