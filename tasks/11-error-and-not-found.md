@@ -127,9 +127,12 @@ example still owes the failing-layout and failure-site walkthrough.
 
 ## Decisions Made While Implementing
 
-- Page detection for the build gate is a source scan for a `page(` call. The
-  plugin cannot execute route modules at build time, and the file extension
-  alone is too blunt.
+- Page detection for the build gate is a source scan keyed on the `page` import
+  from `demiurge`, not on the bare word and not on the file extension. The
+  plugin cannot execute route modules at build time. A `page(` scan fires on
+  `db.users.page(2)`, and an API-only app must never be told to write a 404
+  document it will never serve; extension misses a page route whose view is
+  imported rather than declared inline.
 - The dev error document wins over the app's `@error.tsx` in dev, matching
   Next, Remix, and SvelteKit. The stack is the reason the document exists.
 - The error document renders without layouts. The error path runs the least app

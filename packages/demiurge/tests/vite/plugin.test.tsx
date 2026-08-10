@@ -33,6 +33,7 @@ import { unstable_createRouteManifest } from "demiurge/internal/testing";
 import {
   demiurge,
   unstable_assertRootNotFoundRoute,
+  unstable_declaresPageRoute,
   unstable_createClientEntrySource,
   unstable_createServerEntrySource,
   unstable_createDevRouteImporters,
@@ -1377,6 +1378,27 @@ export const GET = page({ view: () => null });
     await expect(unstable_assertRootNotFoundRoute(root)).resolves.toBeUndefined();
   });
 
+  // Pagination is everywhere in API code, and an API-only app must never be
+  // told to write a 404 document it will never serve. The gate keys on the
+  // demiurge import, so none of these count as page routes.
+  it.each([
+    ["a pagination call", 'import { json } from "demiurge";\nexport const GET = json(db.users.page(2));'],
+    ["a page helper from elsewhere", 'import { page } from "./paginate";\nexport const GET = json(page(req));'],
+    ["the word in a comment", '// backs the page(1) endpoint\nexport const GET = json([]);'],
+    ["the word in a string", 'export const GET = json({ hint: "call page(n)" });'],
+    ["a type-only import", 'import type { page } from "demiurge";\nexport const GET = json([]);'],
+  ])("does not read %s as a page route", (_label, source) => {
+    expect(unstable_declaresPageRoute(source)).toBe(false);
+  });
+
+  it.each([
+    ["a plain call", 'import { page } from "demiurge";\nexport const GET = page({ view: Home });'],
+    ["an aliased import", 'import { page as definePage } from "demiurge";\nexport const GET = definePage({ view: Home });'],
+    ["a mixed import", 'import { json, page, text } from "demiurge";\nexport const GET = page({ view: Home });'],
+  ])("reads %s as a page route", (_label, source) => {
+    expect(unstable_declaresPageRoute(source)).toBe(true);
+  });
+
   // A view can be imported rather than declared inline, which leaves a page
   // route in a plain .ts file. Detecting on extension would miss it and let a
   // page app build with the framework 404.
@@ -1400,7 +1422,8 @@ export const GET = page({ view: DashboardView });
 export const GET = json({ ok: true });
 `,
       "api/widgets.tsx": `import { json } from "demiurge";
-export const GET = json([]);
+import { db } from "../db";
+export const GET = json(() => db.widgets.page(2));
 `,
     });
 

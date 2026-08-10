@@ -512,19 +512,47 @@ export async function assertRootNotFoundRoute(
 async function findPageRouteFile(files: string[]) {
   for (const file of files) {
     // Framework-attached files own no address, so they are never page routes.
-    // Extension says nothing useful: a page route can live in a `.ts` file
-    // when its view is imported rather than declared inline, and an API route
-    // is often `.tsx`. The `page(` call is the only real signal.
     if (relative(dirname(file), file).startsWith("@")) {
       continue;
     }
 
-    if (/\bpage\s*\(/.test(await readFile(file, "utf8"))) {
+    if (declaresPageRoute(await readFile(file, "utf8"))) {
       return file;
     }
   }
 
   return undefined;
+}
+
+const DEMIURGE_NAMED_IMPORT = /import\s*\{([^}]*)\}\s*from\s*["']demiurge["']/g;
+
+// The plugin cannot evaluate route modules at build time, so page detection
+// reads the source. The signal is the import rather than the bare word: an
+// API-only app doing `db.users.page(2)` must never be told to write a 404
+// document it will never serve, and pagination is everywhere in API code.
+// Importing `page` from `demiurge` is the one thing only a page route does.
+export function declaresPageRoute(source: string) {
+  const locals = [...source.matchAll(DEMIURGE_NAMED_IMPORT)].flatMap((match) =>
+    match[1].split(",").flatMap((binding) => {
+      const [imported, local] = binding.trim().split(/\s+as\s+/);
+
+      // `import type { page }` cannot be called, and an alias renames what the
+      // call site looks like.
+      return imported.replace(/^type\s+/, "") === "page"
+        ? [local ?? imported]
+        : [];
+    }),
+  );
+
+  if (locals.length === 0) {
+    return false;
+  }
+
+  // Strip the import statements first so the binding list is not itself
+  // mistaken for a call.
+  const body = source.replace(DEMIURGE_NAMED_IMPORT, "");
+
+  return locals.some((local) => new RegExp(`\\b${local}\\s*\\(`).test(body));
 }
 
 export function missingRootNotFoundBuildMessage(
