@@ -31,10 +31,9 @@ const forwardedHeaders = {
 } as const satisfies Record<"for" | "host" | "protocol", string>;
 const defaultTrustProxy = false satisfies TrustProxy;
 
-// The Fetch spec forbids these on the `Request` constructor, so `new
-// Request(...)` throws for them. Left unguarded, every one of these requests
-// reached the generic 500 path: an unauthenticated client could throw at
-// will and fill the server log with a stack trace per request.
+// The Fetch specification prohibits these methods in the `Request` constructor.
+// `new Request(...)` throws for them. Without this guard, an unauthenticated
+// client can make a generic 500 response and add stack traces to the server log.
 const forbiddenMethods = new Set(["CONNECT", "TRACE", "TRACK"]);
 
 export class UnsupportedMethodError extends Error {
@@ -399,9 +398,9 @@ export async function writeWebResponse(
   }
 
   // `Readable.pipe()` does not destroy its source when the destination closes
-  // or errors, so an aborted client leaves the source stream — and any file
-  // descriptor behind it, such as the static handler's `createReadStream` —
-  // open indefinitely. `pipeline` destroys the source on either side closing.
+  // or has an error. An aborted client can leave the source stream open. It can
+  // also leave an associated file descriptor open. `pipeline` destroys the
+  // source when either side closes.
   try {
     await pipeline(
       Readable.fromWeb(
@@ -416,10 +415,10 @@ export async function writeWebResponse(
   }
 }
 
-// A client that hangs up part-way through a response is ordinary traffic, not
-// a server fault. Rethrowing here would run the caller's error path — a logged
-// stack trace and a 500 nobody is left to read — for every cancelled image or
-// abandoned download, which any unauthenticated client can trigger at will.
+// A client disconnect during a response is ordinary traffic, not a server
+// fault. A new throw would run the caller error path for each canceled download.
+// This path records a stack trace and creates an unused 500 response. An
+// unauthenticated client can cause this condition.
 const clientDisconnectCodes = new Set([
   "ECONNRESET",
   "EPIPE",

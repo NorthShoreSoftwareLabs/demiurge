@@ -1,4 +1,4 @@
-import { Link, type RouteErrorProps } from "@demiurge-js/core";
+import { Link, type RouteErrorProps } from "@demiurgejs/core";
 
 export default function RootError({ pathname, status }: RouteErrorProps) {
   return (

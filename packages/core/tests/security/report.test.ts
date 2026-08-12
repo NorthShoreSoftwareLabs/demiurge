@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSecurityReportHandler } from "@demiurge-js/core";
+import { createSecurityReportHandler } from "@demiurgejs/core";
 
 describe("security report endpoint handler", () => {
   it("accepts CSP report payloads and calls the report callback", async () => {

@@ -1,14 +1,14 @@
 import { Readable, Writable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";
-import { createMemoryRateLimitStore, enforceRateLimit } from "@demiurge-js/core";
+import { createMemoryRateLimitStore, enforceRateLimit } from "@demiurgejs/core";
 import {
   UntrustedHostError,
   UnsupportedMethodError,
   toHeaders,
   toWebRequest,
   writeWebResponse,
-} from "@demiurge-js/core/node";
+} from "@demiurgejs/core/node";
 
 function incoming(init: Partial<IncomingMessage> = {}) {
   return Object.assign(Readable.from([Buffer.from("hello")]), {

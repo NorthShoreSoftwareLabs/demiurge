@@ -12,7 +12,7 @@ import {
   text,
   toResponse,
   type HttpRouteContext,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 
 const context: HttpRouteContext = {
   path: {},

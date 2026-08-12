@@ -513,11 +513,10 @@ async function loadErrorFallbackForPath(
   );
 }
 
-// A not-found render has no matched route, so layouts resolve from the
-// requested pathname instead. Loading is deliberately fault tolerant: a layout
-// above `/admin/nope` is exactly the one likely to expect a session, and a
-// throw here must degrade to the layout-free document rather than escalate to
-// a 500. The blank page is the outcome this whole path exists to prevent.
+// A not-found render has no matched route. Therefore, layouts resolve from the
+// requested pathname. Layout loading tolerates errors. A layout above
+// `/admin/nope` can require a session and throw. This error must select the
+// layout-free document, not a 500 response. This path prevents a blank page.
 export async function loadNotFoundMatch(
   manifest: RouteManifest,
   pathname: string,

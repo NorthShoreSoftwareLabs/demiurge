@@ -6,7 +6,7 @@ import {
   type RouteModule,
   type RoutePolicy,
   type RouteProps,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 import {
   unstable_collectStaticRoutePaths,
   unstable_createRouteManifest,
@@ -16,7 +16,7 @@ import {
   unstable_matchSegments,
   unstable_splitPathname,
   unstable_toRouteSegments,
-} from "@demiurge-js/core/internal/testing";
+} from "@demiurgejs/core/internal/testing";
 
 function View(_props: RouteProps) {
   return null;

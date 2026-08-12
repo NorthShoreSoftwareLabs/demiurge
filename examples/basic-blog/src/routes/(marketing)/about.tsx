@@ -1,4 +1,4 @@
-import { page } from "@demiurge-js/core";
+import { page } from "@demiurgejs/core";
 
 export const GET = page(AboutPage);
 

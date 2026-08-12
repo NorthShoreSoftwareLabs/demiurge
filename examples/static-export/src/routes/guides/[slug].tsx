@@ -1,4 +1,4 @@
-import { defineMetadata, page, type RouteProps } from "@demiurge-js/core";
+import { defineMetadata, page, type RouteProps } from "@demiurgejs/core";
 
 const guides = {
   deployment: {

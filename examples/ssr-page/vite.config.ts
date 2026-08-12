@@ -1,6 +1,6 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { demiurge } from "@demiurge-js/core/vite";
+import { demiurge } from "@demiurgejs/core/vite";
 
 export default defineConfig({
   plugins: [

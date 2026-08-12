@@ -18,9 +18,8 @@ export type ErrorRenderOptions = SsrRenderOptions & {
 
 const PLAIN_TEXT_ERROR = "Internal Server Error";
 
-// The dev switch is the build mode rather than an option an app can set, and
-// this second gate means even a caller that reaches the internal flag cannot
-// turn stack traces on in a production process.
+// The build mode controls development output. An application option cannot
+// control it. This second control prevents stack traces in a production process.
 export function isDevErrorRendering(dev: boolean | undefined) {
   return dev === true && process.env.NODE_ENV !== "production";
 }
@@ -106,9 +105,9 @@ async function renderErrorDocumentResponse(
       status,
     });
   } catch (renderError) {
-    // Rendering the error page is the last row of the table: once the error
-    // path has failed, the app path cannot be trusted a second time in the
-    // same request. Plain text, no app code, no third attempt.
+    // Error page rendering is the final attempt. After the error path fails, the
+    // framework cannot trust the application path again in the same request.
+    // The response uses plain text and does not run application code again.
     options.onError?.(renderError, "page");
 
     return createPlainTextErrorResponse();

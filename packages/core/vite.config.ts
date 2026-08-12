@@ -2,9 +2,9 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// Everything that is not a relative import stays external so consumers resolve
-// React, Vite, and Node builtins from their own tree rather than getting a
-// second copy bundled in.
+// All nonrelative imports stay external. Consumers resolve React, Vite, and
+// Node built-ins from their own dependency tree. The bundle does not contain a
+// second copy.
 export default defineConfig({
   build: {
     lib: {

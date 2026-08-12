@@ -1,13 +1,12 @@
 # Runtime Server Data
 
-This production Node example fetches an ordinary JSON route over HTTP from a
-page `data` loader, then makes the source counters visible in the rendered
-document. It demonstrates:
+This production Node example uses a page `data` loader to fetch a JSON route
+over HTTP. The rendered document shows the source counters. It demonstrates:
 
-- `public` data reused across requests until a two-second TTL expires;
-- `private` data partitioned by the `x-demo-account` value in its cache key;
-- two `request` reads deduped inside one request but reloaded next request;
-- two `none` reads both reaching the source;
+- `public` data reused across requests until a two-second TTL expires
+- `private` data partitioned by the `x-demo-account` value in its cache key
+- two `request` reads deduped inside one request but reloaded next request
+- two `none` reads both reaching the source
 - a shared store injected into a fresh cache facade for every request.
 
 ```sh
@@ -23,4 +22,4 @@ more than two seconds and reload to see public data refresh. Send
 The example uses `createMemoryCacheStore()`, which shares data only inside one
 Node process. Multi-replica production deployments should inject a distributed
 store that passes `verifyCacheStoreContract(...)` from
-`@demiurge-js/core/data/testing`.
+`@demiurgejs/core/data/testing`.

@@ -11,11 +11,11 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-// Packs the library the way pnpm would publish it, installs the tarball into a
-// throwaway app, and imports every declared entry point. Nothing else in the
-// repo resolves `@demiurge-js/core` through node_modules, so this is the only check that
-// exercises the package's `exports` map, its `files` list, and its emitted
-// declarations the way a consumer would.
+// Packs the library with the pnpm publication process. It installs the tarball
+// in a temporary application and imports each declared entry point. No other
+// repository check resolves `@demiurgejs/core` through node_modules. Therefore,
+// only this check verifies package exports, files, and declarations from the
+// consumer environment.
 
 const packageDir = resolve("packages/core");
 const scratch = mkdtempSync(join(tmpdir(), "demiurge-pack-"));
@@ -23,7 +23,7 @@ const expectedPackage = {
   author: "North Shore Software Labs",
   homepage: "https://github.com/NorthShoreSoftwareLabs/demiurge#readme",
   license: "MIT",
-  name: "@demiurge-js/core",
+  name: "@demiurgejs/core",
   repository: "git+https://github.com/NorthShoreSoftwareLabs/demiurge.git",
   version: "0.1.0",
 } as const;
@@ -133,17 +133,17 @@ try {
   const repositoryLicense = readFileSync(resolve("LICENSE"), "utf8");
 
   assert(installedReadme.includes("## Install"), "Packed README is missing installation documentation.");
-  assert(installedReadme.includes("@demiurge-js/core/node"), "Packed README is missing the Node entry point.");
+  assert(installedReadme.includes("@demiurgejs/core/node"), "Packed README is missing the Node entry point.");
   assert(installedLicense === repositoryLicense, "Packed license differs from the repository license.");
   writeFileSync(
     join(scratch, "check.js"),
     [
-      `import { createMemoryCacheStore, page, createRequestHandler, hydrateFileRouter } from "@demiurge-js/core";`,
-      `import { createNodeServer, nodeAdapter } from "@demiurge-js/core/node";`,
-      `import { generateStaticOutput, staticAdapter } from "@demiurge-js/core/static";`,
-      `import { verifyCacheStoreContract, verifyCacheStoreRefreshContract } from "@demiurge-js/core/data/testing";`,
-      `import { unstable_createRouteManifest } from "@demiurge-js/core/internal/testing";`,
-      `import { demiurge } from "@demiurge-js/core/vite";`,
+      `import { createMemoryCacheStore, page, createRequestHandler, hydrateFileRouter } from "@demiurgejs/core";`,
+      `import { createNodeServer, nodeAdapter } from "@demiurgejs/core/node";`,
+      `import { generateStaticOutput, staticAdapter } from "@demiurgejs/core/static";`,
+      `import { verifyCacheStoreContract, verifyCacheStoreRefreshContract } from "@demiurgejs/core/data/testing";`,
+      `import { unstable_createRouteManifest } from "@demiurgejs/core/internal/testing";`,
+      `import { demiurge } from "@demiurgejs/core/vite";`,
       `for (const [name, value] of Object.entries({ createNodeServer, createRequestHandler, demiurge, generateStaticOutput, hydrateFileRouter, page, unstable_createRouteManifest, verifyCacheStoreContract })) {`,
       `  if (typeof value !== "function") {`,
       `    throw new Error(\`Expected \${name} to be exported as a function.\`);`,
@@ -181,7 +181,7 @@ try {
   writeFileSync(
     join(scratch, "src", "routes", "index.tsx"),
     [
-      `import { page, type RouteProps } from "@demiurge-js/core";`,
+      `import { page, type RouteProps } from "@demiurgejs/core";`,
       `export const GET = page({`,
       `  view: (_props: RouteProps) => <main>packed app</main>,`,
       `});`,
@@ -200,7 +200,7 @@ try {
     [
       `import react from "@vitejs/plugin-react";`,
       `import { defineConfig } from "vite";`,
-      `import { demiurge } from "@demiurge-js/core/vite";`,
+      `import { demiurge } from "@demiurgejs/core/vite";`,
       `export default defineConfig({ plugins: [demiurge(), react()] });`,
     ].join("\n"),
   );

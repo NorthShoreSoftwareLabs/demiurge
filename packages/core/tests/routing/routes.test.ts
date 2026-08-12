@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { href, Link, page, type PathValue, type RouteProps } from "@demiurge-js/core";
+import { href, Link, page, type PathValue, type RouteProps } from "@demiurgejs/core";
 
-declare module "@demiurge-js/core" {
+declare module "@demiurgejs/core" {
   interface RoutePathVars {
     "/": {};
     "/blog": {};

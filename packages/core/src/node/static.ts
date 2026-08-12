@@ -14,11 +14,9 @@ export type StaticFileHandlerOptions = {
   root: string;
 };
 
-// Returning null rather than a 404 keeps the handler composable: it answers
-// "is this request a file I own?" and lets the route pipeline own everything
-// else, including the 404 body and the security headers that go with it.
-// Traversal attempts answer the same way, because a path outside the root is
-// not a file this handler owns.
+// A null result keeps the handler composable. It means that the request does not
+// identify an owned file. The route pipeline owns all other responses, including
+// the 404 body and security headers. A traversal attempt gives the same result.
 const contentTypes: Record<string, string> = {
   ".avif": "image/avif",
   ".css": "text/css; charset=utf-8",
@@ -41,13 +39,11 @@ const contentTypes: Record<string, string> = {
 
 const hashedFileName = /-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$/;
 
-// The framework's own build output — the SPA shell and the manifest the Node
-// server reads to configure itself — must not be reachable as plain static
-// files. Both are meant to be served through the route pipeline (or, for
-// `demiurge-manifest.json`, not served publicly at all), because that is
-// where `@policy.ts` applies CSP, frame-ancestors, and the other headers a
-// raw static response never gets. Only the build's own two files at the root
-// are excluded: an app's nested `docs/index.html` is a page it chose to ship.
+// Plain static requests must not access the framework build output. The output
+// includes the SPA shell and the Node configuration manifest. The route pipeline
+// serves the shell and applies the `@policy.ts` headers. The server never serves
+// `demiurge-manifest.json` publicly. This exclusion applies only to the two root
+// files. An application can serve a nested file such as `docs/index.html`.
 const defaultExcludedPaths = new Set(["demiurge-manifest.json", "index.html"]);
 
 export function createStaticFileHandler(
@@ -171,7 +167,7 @@ function isNotModified(request: Request, etag: string, mtimeMs: number) {
 
   const since = Date.parse(ifModifiedSince);
 
-  // HTTP dates have one-second precision; compare the file timestamp at the
+  // HTTP dates have one-second precision. Compare the file timestamp at the
   // same precision rather than making a freshly-written file look newer.
   return Number.isFinite(since) && Math.floor(mtimeMs / 1000) * 1000 <= since;
 }
@@ -258,8 +254,8 @@ function resolveFilePath(root: string, prefix: string, pathname: string) {
     return null;
   }
 
-  // A null byte truncates the path for some syscalls, so a name like
-  // "app.js\0.txt" could read a different file than the one that was checked.
+  // A null byte truncates the path for some system calls. A name such as
+  // "app.js\0.txt" could read a file that differs from the checked file.
   if (decoded.includes("\0")) {
     return null;
   }

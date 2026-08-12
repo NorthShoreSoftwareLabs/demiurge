@@ -10,7 +10,7 @@ import {
   serializeCacheKey,
   serializeCacheNamespace,
   tag,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 
 describe("data cache primitives", () => {
   it("creates typed query requests with stable keys and tags", async () => {

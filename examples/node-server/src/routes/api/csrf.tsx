@@ -1,4 +1,4 @@
-import { issueCsrfToken, response } from "@demiurge-js/core";
+import { issueCsrfToken, response } from "@demiurgejs/core";
 
 export const GET = response(() => {
   const issued = issueCsrfToken();

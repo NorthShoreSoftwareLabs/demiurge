@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateUploads } from "@demiurge-js/core";
+import { validateUploads } from "@demiurgejs/core";
 
 describe("upload validation", () => {
   it("accepts required uploads within size and MIME limits", () => {

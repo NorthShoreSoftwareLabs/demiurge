@@ -3,7 +3,7 @@ import {
   assertAdapterCapabilities,
   checkAdapterCapabilities,
   defineAdapter,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 
 describe("adapter capability checks", () => {
   it("defaults unsupported adapter capabilities to false", () => {

@@ -23,7 +23,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      "pnpm --filter @demiurge-js/core build && pnpm --filter @demiurge-examples/node-server build && pnpm --filter @demiurge-examples/node-server start",
+      "pnpm --filter @demiurgejs/core build && pnpm --filter @demiurge-examples/node-server build && pnpm --filter @demiurge-examples/node-server start",
     env: {
       HOST: "localhost",
       NODE_ENV: "production",

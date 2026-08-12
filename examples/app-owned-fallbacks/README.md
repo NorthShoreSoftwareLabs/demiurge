@@ -4,12 +4,12 @@ This production Node example shows that failure UI belongs to the application
 and follows the route tree:
 
 - root and `projects/` directories own separate `@loading.tsx`,
-  `@not-found.tsx`, and `@error.tsx` files;
-- `/missing` uses the root not-found component and root layout;
+  `@not-found.tsx`, and `@error.tsx` files
+- `/missing` uses the root not-found component and root layout
 - `/projects/missing` uses the nearest project not-found component inside both
-  inherited layouts;
+  inherited layouts
 - `/broken` and `/projects/broken` render the closest error component without
-  running application layouts again;
+  running application layouts again
 - `/api/broken` returns a typed RFC 9457 `application/problem+json` response,
   never an HTML error page.
 
@@ -23,5 +23,5 @@ each state. Client navigation selects the nearest loading component while the
 next route module is resolving.
 
 From the repository root, `pnpm test:examples` starts the built server on an
-ephemeral port and verifies status codes, content negotiation, nested fallback
-selection, layout behavior, and production error redaction.
+ephemeral port. It verifies status codes, content negotiation, nested fallbacks,
+layout behavior, and production error redaction.

@@ -1,4 +1,4 @@
-import { Link, defineMetadata, page, type RouteProps } from "@demiurge-js/core";
+import { Link, defineMetadata, page, type RouteProps } from "@demiurgejs/core";
 
 export const metadata = defineMetadata({
   description: "A single widget, addressed by its path variable.",

@@ -9,7 +9,7 @@ runtime data.
 Page routes may resolve data before rendering:
 
 ```tsx
-import { page, tag } from "@demiurge-js/core";
+import { page, tag } from "@demiurgejs/core";
 
 export const GET = page({
   data: ({ cache, path }) =>
@@ -25,9 +25,9 @@ export const GET = page({
 });
 ```
 
-The result is passed to the page view and serialized into the initial document.
-Browser navigation fetches it from the server; the data function is not shipped
-or rerun in the browser.
+The framework passes the result to the page view. It also serializes the result
+in the initial document. Browser navigation gets the result from the server.
+The browser does not receive or run the data function.
 
 ## Cache scopes
 
@@ -55,7 +55,7 @@ or build entries across requests and replicas, provide a `CacheStore` to
 `createRequestHandler(...)` or construct a cache with `createCache(...)`.
 
 Custom stores can run the conformance verifier exported from
-`@demiurge-js/core/data/testing`. Store keys include the application, environment,
+`@demiurgejs/core/data/testing`. Store keys include the application, environment,
 schema version, and scope so unrelated deployments do not collide.
 
 TTL establishes the fresh lifetime. `staleWhileRevalidate` may serve a stale
@@ -98,7 +98,7 @@ Keep query functions server-only when they access secrets or private services.
 
 `createMemoryIdempotencyStore(...)` and `runIdempotentMutation(...)` coordinate
 duplicate mutations. `action(...)` can combine input parsing with an idempotency
-policy. Completed results have a finite lifetime; in-flight mutations are not
+policy. Completed results have a finite lifetime. In-flight mutations are not
 expired or evicted while work is running.
 
 The application must choose an idempotency key tied to the intended operation

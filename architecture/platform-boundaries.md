@@ -1,8 +1,8 @@
 # Platform Boundaries
 
-This record defines how Demiurge decides whether a capability belongs in core,
-an integration package, or application code. It is not a feature inventory;
-GitHub issues are the delivery-status source.
+This record defines where a Demiurge capability belongs. The locations are core,
+an integration package, or application code. This record is not a feature
+inventory. GitHub issues are the delivery-status source.
 
 ## Inclusion rule
 

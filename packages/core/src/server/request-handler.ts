@@ -85,10 +85,10 @@ export type RequestCacheStoreOptions = {
   waitUntil?: (promise: Promise<void>) => void;
 };
 
-// `dev` and `transformDocument` are deliberately absent from the public
-// `RequestHandlerOptions`. Dev is a build mode the Vite plugin sets when it
-// calls `handleRequestWithManifest` directly, not something an app can switch
-// on in production and leak a stack trace with.
+// Public `RequestHandlerOptions` deliberately excludes `dev` and
+// `transformDocument`. The Vite plugin sets development mode when it calls
+// `handleRequestWithManifest` directly. An application cannot enable this mode
+// in production and expose a stack trace.
 type RequestRuntimeOptions = {
   cacheStore?: RequestCacheStoreOptions;
   dev?: boolean;
@@ -348,7 +348,7 @@ async function handleMatchedRoute(
 
           if (match.match.render.mode === "streaming" && !options.renderPage) {
             throw new Error(
-              "Streaming page routes require an adapter renderer. Pass renderNodePageResponse from @demiurge-js/core/node as createRequestHandler({ renderPage }).",
+              "Streaming page routes require an adapter renderer. Pass renderNodePageResponse from @demiurgejs/core/node as createRequestHandler({ renderPage }).",
             );
           }
 
@@ -396,7 +396,7 @@ async function handleMatchedRoute(
     // browser or shared HTTP cache replaying this document would also replay
     // its nonce, so nonce-backed documents are never reusable HTTP cache
     // representations. This intentionally overrides app-provided public cache
-    // directives; cache data or a nonce-free render artifact below this layer
+    // directives. Cache data or a nonce-free render artifact below this layer
     // instead.
     if (nonce) {
       response.headers.set("cache-control", "private, no-store");
@@ -461,9 +461,9 @@ async function handleMatchedRoute(
     response = requestBodyTooLargeResponse();
   }
 
-  // Finalization is still the route's own failure site, so a bad `timing` or
-  // `cors` value on an API route yields problem+json rather than falling out
-  // to the negotiated path and risking HTML.
+  // Finalization is part of the route failure site. Therefore, an invalid
+  // `timing` or `cors` value on an API route gives a problem+json response. It
+  // cannot enter the negotiated path and produce HTML.
   try {
     return finalizeRouteResponse(response, capability, request, method);
   } catch (error) {
@@ -494,9 +494,9 @@ function createFallbackOptions(url: URL, options: RequestRuntimeOptions) {
   };
 }
 
-// `notFound()` without a body routes through the negotiated path so an app
-// cannot end up shipping two different 404 shapes, while an explicit status or
-// header on the capability still wins.
+// `notFound()` without a body uses the negotiated path. Thus, an application
+// cannot publish two different 404 formats. An explicit capability status or
+// header still has priority.
 function applyCapabilityInit(response: Response, init: ResponseInit | undefined) {
   if (!init) {
     return response;

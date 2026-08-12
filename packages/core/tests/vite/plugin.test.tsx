@@ -28,8 +28,8 @@ import {
   webhook,
   type RouteModule,
   type RouteProps,
-} from "@demiurge-js/core";
-import { unstable_createRouteManifest } from "@demiurge-js/core/internal/testing";
+} from "@demiurgejs/core";
+import { unstable_createRouteManifest } from "@demiurgejs/core/internal/testing";
 import {
   demiurge,
   unstable_assertRootNotFoundRoute,
@@ -40,7 +40,7 @@ import {
   unstable_createDocumentHtml,
   unstable_handleDevRequest,
   unstable_stripClientPageData,
-} from "@demiurge-js/core/vite";
+} from "@demiurgejs/core/vite";
 
 function View(_props: RouteProps) {
   return null;
@@ -75,7 +75,7 @@ describe("Vite plugin dev request handling", () => {
   it("strips page data and data-only server imports from client route modules", () => {
     const source = `
 import { readSecret } from "./secrets.server.js";
-import { page } from "@demiurge-js/core";
+import { page } from "@demiurgejs/core";
 const View = () => null;
 export const GET = page({
   data: async () => ({ secret: await readSecret() }),
@@ -92,7 +92,7 @@ export const GET = page({
   it("strips document contributions and their server-only imports from client routes", () => {
     const source = `
 import { privateCdn } from "./document.server.js";
-import { defineLinks, defineMetadata, defineScripts, page } from "@demiurge-js/core";
+import { defineLinks, defineMetadata, defineScripts, page } from "@demiurgejs/core";
 export const links = defineLinks(() => [privateCdn.link()]);
 export const metadata = defineMetadata({ title: privateCdn.title });
 const routeScripts = defineScripts(() => [privateCdn.script()]);
@@ -111,7 +111,7 @@ export const GET = page({ view: () => null });`;
   it("rejects server-only imports used by client route code", () => {
     const source = `
 import { secret } from "./secrets.server.js";
-import { page } from "@demiurge-js/core";
+import { page } from "@demiurgejs/core";
 export const GET = page({ data: () => secret, view: () => secret });`;
 
     expect(() => unstable_stripClientPageData(source)).toThrow(
@@ -1350,10 +1350,10 @@ describe("Vite plugin document runtime", () => {
   });
 
   it("includes framework-attached .ts files in the server entry", () => {
-    // @policy.ts and @middleware.ts ship as .ts, not .tsx. A glob that only
-    // matches .tsx silently drops them from the production route map while
-    // dev (which globs both extensions) keeps enforcing them — the exact
-    // divergence this pipeline unification exists to prevent.
+    // @policy.ts and @middleware.ts use the .ts extension. A .tsx-only glob
+    // omits them from the production route map. Development finds both
+    // extensions and still applies the files. Pipeline unification prevents
+    // this difference.
     const source = unstable_createServerEntrySource("/tmp/app");
 
     expect(source).toContain('"/src/routes/**/*.{ts,tsx}"');
@@ -1361,9 +1361,9 @@ describe("Vite plugin document runtime", () => {
   });
 
   it("keeps server-only route files out of the client entry", () => {
-    // The client never runs a policy or a middleware, and globbing them in
-    // emits them as fetchable chunks under dist/client — publishing whatever
-    // they close over, credentials included.
+    // The client never runs a policy or middleware. A client glob would create
+    // public chunks under dist/client. These chunks could expose values from
+    // closures, including credentials.
     const source = unstable_createClientEntrySource("/tmp/app");
 
     expect(source).toContain('"!/src/routes/@policy.ts"');
@@ -1402,7 +1402,7 @@ function createMiddlewareHarness() {
   const handlers: DevMiddleware[] = [];
 
   return {
-    // The route handler runs before Vite's own middlewares; the not-found
+    // The route handler runs before the Vite middleware. The not-found
     // terminator runs after them, registered from the hook `configureServer`
     // returns.
     get handler() {
@@ -1519,7 +1519,7 @@ describe("the root not-found build gate", () => {
     return root;
   }
 
-  const pageRoute = `import { page } from "@demiurge-js/core";
+  const pageRoute = `import { page } from "@demiurgejs/core";
 export const GET = page({ view: () => null });
 `;
 
@@ -1549,19 +1549,19 @@ export const GET = page({ view: () => null });
   // told to write a 404 document it will never serve. The gate keys on the
   // demiurge import, so none of these count as page routes.
   it.each([
-    ["a pagination call", 'import { json } from "@demiurge-js/core";\nexport const GET = json(db.users.page(2));'],
+    ["a pagination call", 'import { json } from "@demiurgejs/core";\nexport const GET = json(db.users.page(2));'],
     ["a page helper from elsewhere", 'import { page } from "./paginate";\nexport const GET = json(page(req));'],
     ["the word in a comment", '// backs the page(1) endpoint\nexport const GET = json([]);'],
     ["the word in a string", 'export const GET = json({ hint: "call page(n)" });'],
-    ["a type-only import", 'import type { page } from "@demiurge-js/core";\nexport const GET = json([]);'],
+    ["a type-only import", 'import type { page } from "@demiurgejs/core";\nexport const GET = json([]);'],
   ])("does not read %s as a page route", (_label, source) => {
     expect(unstable_declaresPageRoute(source)).toBe(false);
   });
 
   it.each([
-    ["a plain call", 'import { page } from "@demiurge-js/core";\nexport const GET = page({ view: Home });'],
-    ["an aliased import", 'import { page as definePage } from "@demiurge-js/core";\nexport const GET = definePage({ view: Home });'],
-    ["a mixed import", 'import { json, page, text } from "@demiurge-js/core";\nexport const GET = page({ view: Home });'],
+    ["a plain call", 'import { page } from "@demiurgejs/core";\nexport const GET = page({ view: Home });'],
+    ["an aliased import", 'import { page as definePage } from "@demiurgejs/core";\nexport const GET = definePage({ view: Home });'],
+    ["a mixed import", 'import { json, page, text } from "@demiurgejs/core";\nexport const GET = page({ view: Home });'],
   ])("reads %s as a page route", (_label, source) => {
     expect(unstable_declaresPageRoute(source)).toBe(true);
   });
@@ -1571,7 +1571,7 @@ export const GET = page({ view: () => null });
   // page app build with the framework 404.
   it("finds a page route declared in a .ts file", async () => {
     const root = await scaffold({
-      "dashboard.ts": `import { page } from "@demiurge-js/core";
+      "dashboard.ts": `import { page } from "@demiurgejs/core";
 import { DashboardView } from "../views/dashboard";
 export const GET = page({ view: DashboardView });
 `,
@@ -1585,10 +1585,10 @@ export const GET = page({ view: DashboardView });
   // Nagging an app that never wants an HTML document would be user hostile.
   it("stays quiet for an API-only app", async () => {
     const root = await scaffold({
-      "api/health.ts": `import { json } from "@demiurge-js/core";
+      "api/health.ts": `import { json } from "@demiurgejs/core";
 export const GET = json({ ok: true });
 `,
-      "api/widgets.tsx": `import { json } from "@demiurge-js/core";
+      "api/widgets.tsx": `import { json } from "@demiurgejs/core";
 import { db } from "../db";
 export const GET = json(() => db.widgets.page(2));
 `,

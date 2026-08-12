@@ -181,10 +181,10 @@ export function createFileRouter(options: FileRouterOptions) {
   };
 }
 
-// Hydration is only safe when the client reproduces what the server sent. A
-// page document whose route the client can no longer match is a genuine
-// desync, so it keeps getting replaced; a document the server marked as a 404
-// hydrates, which is what keeps the layouts it resolved from being torn down.
+// Hydration is safe only when the client reproduces the server output. The
+// client replaces a page document when its route no longer matches. The client
+// hydrates a document that the server marked as a 404. This action preserves
+// the layouts that the server resolved.
 function isHydratableMatch(match: PendingRouteMatch, root: Element) {
   const fallback = root.getAttribute(HYDRATION_FALLBACK_ATTRIBUTE);
 

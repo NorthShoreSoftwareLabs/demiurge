@@ -1,8 +1,8 @@
 # ssr-page
 
-A minimal Demiurge app that demonstrates server rendering with client
-hydration, a route `data` loader that runs only on the server, and metadata
-that cascades from a layout down into the document head.
+This minimal Demiurge application demonstrates server rendering and client
+hydration. A route `data` loader runs only on the server. Layout metadata flows
+into the document head.
 
 ## Routes
 
@@ -23,42 +23,41 @@ that cascades from a layout down into the document head.
 
 **The server-only data loader.** `src/routes/index.tsx` exports
 `GET = page({ data, view })`. The `data` function runs on the server as part
-of handling the request; it never runs again in the browser. Once dev-mode
+of handling the request. It never runs again in the browser. When development
 SSR is wired up (see the caveat below), viewing source on `/` will show two
 places where the loader's output appears:
 
 1. Rendered directly into the HTML body, inside the `<dl class="stamp">`
    block, because the server already ran the loader before sending markup.
 2. Serialized into an inert `<template id="__demiurge_data">` near the end of
-   `<body>`. This is the bootstrap payload that
-   `hydrateFileRouter` reads on the client instead of calling `data` again,
-   so hydration does not re-fetch anything the server already computed.
+   `<body>`. `hydrateFileRouter` reads this bootstrap payload on the client.
+   It does not call `data` again. Hydration does not fetch data that the server
+   already computed.
 
-Reload the page and the timestamp and checksum change, because that is a new
-server request. Click a `<Link />` to navigate away and back within the
-running app and they do not change, because that is a client-side
-transition that reuses the already-hydrated router state.
+Reload the page. The new server request changes the timestamp and checksum.
+Use a `<Link />` to navigate away and back in the running application. The
+values do not change because the client transition reuses the hydrated router
+state.
 
 **Hydration markers.** The server-rendered root element carries a
 `data-demiurge-hydrate` attribute (visible on `<div id="root">` in
 view-source). The client only hydrates when it finds that attribute and
-matching body markup; this is how it tells a real server render apart from
-an empty shell.
+matching body markup. These values identify a real server render and distinguish
+it from an empty shell.
 
 **Metadata cascade.** `src/routes/@layout.tsx` defines a default title
 format, a description, and an Open Graph image through `defineMetadata`.
 `src/routes/widgets/index.tsx` and `src/routes/widgets/[id].tsx` each supply
-their own `title` and `description`, which override the layout's defaults
-for just that route while still inheriting anything they do not set (the
-Open Graph image, for instance). View source on any route to see the
+their own `title` and `description`. These values override the layout defaults
+for that route. Each route still inherits unset values, such as the Open Graph
+image. View source on any route to see the
 resolved `<title>`, `<meta name="description">`, and Open Graph tags in the
 document `<head>`.
 
 **Dynamic routes without `params`.** `src/routes/widgets/[id].tsx` reads
 `path.id` from its `RouteProps`. The framework calls this `path`
-deliberately, to keep one vocabulary for "the values this route's own
-address contains," whether you are inside a `data` loader, a route view, or
-a `<Link path={{ id }} />` call.
+to use one term for values in a route address. Code uses this term in a `data`
+loader, a route view, and a `<Link path={{ id }} />` call.
 
 **Client navigation.** `src/routes/@layout.tsx` and every route use
 `<Link />` for internal navigation. After hydration, clicking these links

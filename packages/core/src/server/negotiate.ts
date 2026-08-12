@@ -10,10 +10,9 @@ type MediaRange = {
 // range counts. A missing header, a malformed one, or a bare `*/*` gets
 // problem+json.
 //
-// Failing toward the machine format is the safe direction. A browser always
-// sends an explicit `text/html`, so it keeps getting the document, while an
-// API client that sends `*/*` or nothing never receives a page of markup it
-// has no way to parse.
+// The machine format is the safe default. A browser sends an explicit
+// `text/html` value and receives the document. An API client that sends `*/*`
+// or nothing receives a machine-readable response.
 export function prefersHtmlDocument(request: Request) {
   return acceptsHtmlDocument(request.headers.get("accept"));
 }
@@ -58,8 +57,8 @@ function parseQuality(parameters: string[]) {
 
     const quality = Number.parseFloat(value ?? "");
 
-    // A `q` that does not parse is a malformed header rather than a request to
-    // exclude the type, so it falls back to the default weight.
+    // A `q` that does not parse is a malformed header. It is not a request to
+    // exclude the type. Therefore, the function uses the default weight.
     return Number.isNaN(quality) ? 1 : quality;
   }
 

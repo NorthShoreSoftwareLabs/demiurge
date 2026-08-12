@@ -1,14 +1,14 @@
 # Release process
 
 Demiurge releases are built from a signed version tag in a clean checkout. The
-tag workflow reruns the complete verification suite, checks the packed artifact
-through an external consumer, publishes with npm provenance, and creates the
+tag workflow runs the complete verification suite. It tests the packed artifact
+with an external consumer. It then publishes with npm provenance and creates the
 matching GitHub release. A local build is never uploaded directly.
 
 ## Release model
 
 `main` is the protected integration branch and the source of releases. Work
-lands through short-lived branches and reviewed pull requests; there is no
+lands through short-lived branches and reviewed pull requests. There is no
 permanent `develop` branch. Every merge to `main` must keep the complete
 verification gate green and leave the repository in a releasable state.
 
@@ -33,23 +33,23 @@ fixes while `main` contains incompatible later work. A temporary
 `release/0.2` branch is justified only when an extended stabilization period
 must proceed while `main` advances toward the next version.
 
-For an isolated patch, branch from the released tag, apply and verify the fix,
-publish the new patch tag, and bring the fix back to `main`. Do not retain a
-permanent maintenance branch unless more fixes on that line are expected.
+For an isolated patch, create a branch from the released tag. Apply and verify
+the fix. Publish the new patch tag. Then, apply the fix to `main`. Retain a
+maintenance branch only when that line requires more fixes.
 
 ## Nightly channel
 
 Nightlies are planned in [GitHub issue #117](https://github.com/NorthShoreSoftwareLabs/demiurge/issues/117)
-and are not published until that workflow lands. The workflow will run on a
-daily schedule only when `main` has advanced, run `pnpm verify`, assign a unique
-version such as `0.2.0-nightly.20260812.a1b2c3d` in its temporary checkout, and
-publish with provenance under `nightly`.
+and are not published until that workflow is available. The workflow will use a
+daily schedule. It will run only when `main` has advanced. It will run
+`pnpm verify` and assign a unique temporary version. An example version is
+`0.2.0-nightly.20260812.a1b2c3d`. It will publish with provenance under `nightly`.
 
 Nightly publication does not commit a version, create a Git tag, or create a
 GitHub release. Consumers will opt in explicitly:
 
 ```sh
-pnpm add @demiurge-js/core@nightly
+pnpm add @demiurgejs/core@nightly
 ```
 
 Publishing each individual commit is intentionally avoided because registry
@@ -70,20 +70,19 @@ to the `next` dist-tag. Prereleases run the same verification, packed-consumer,
 provenance, and GitHub Release steps as stable versions. Consumers opt in with:
 
 ```sh
-pnpm add @demiurge-js/core@next
+pnpm add @demiurgejs/core@next
 ```
 
 ## One-time registry setup
 
-Demiurge publishes from the `@demiurge-js` npm scope. The first package is
-`@demiurge-js/core`; the scope leaves room for independently versioned adapters or
-tooling later without forcing the 0.1 package's existing subpath exports into
-separate packages now.
+Demiurge publishes from the `@demiurgejs` npm scope. The first package is
+`@demiurgejs/core`. The scope permits independently versioned adapters or tools
+in the future. Version 0.1 keeps its current subpath exports in one package.
 
 Before the first public release:
 
-1. Create or claim the `@demiurge-js` npm organization and grant the maintainers
-   publish access to `@demiurge-js/core`.
+1. Create or claim the `@demiurgejs` npm organization and grant the maintainers
+   publish access to `@demiurgejs/core`.
 2. Configure npm trusted publishing for this repository and
    `.github/workflows/release.yml`.
 3. Create a protected GitHub environment named `npm`, require maintainer
@@ -100,7 +99,7 @@ metadata points somewhere other than this repository.
 1. Close every `p1` issue in the target milestone. The workflow checks this
    again from GitHub before publishing.
 2. Choose the version using semantic versioning. Stable releases use npm's
-   `latest` dist-tag; prerelease versions containing `-` use `next`.
+   `latest` dist-tag. Prerelease versions containing `-` use `next`.
 3. Set `packages/core/package.json` to that exact version and turn the
    matching changelog heading from `Unreleased` into the release date. Commit
    those changes through the normal reviewed branch.

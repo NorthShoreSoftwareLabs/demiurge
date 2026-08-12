@@ -8,7 +8,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createStaticFileHandler } from "@demiurge-js/core/node";
+import { createStaticFileHandler } from "@demiurgejs/core/node";
 
 let root = "";
 let outside = "";
@@ -330,10 +330,10 @@ describe("static file handler", () => {
     );
   });
 
-  // The SPA shell and the server's own build manifest must be reached only
-  // through the route pipeline (or, for the manifest, not publicly at all) —
-  // that is where `@policy.ts` applies CSP and the other headers a static
-  // response never gets. See node/index.ts's static-before-route precedence.
+  // Only the route pipeline can serve the SPA shell. The server must not serve
+  // its build manifest publicly. The route pipeline applies CSP and other
+  // `@policy.ts` headers that a static response does not receive. See the
+  // static-before-route precedence in node/index.ts.
   it("does not serve the SPA shell or the build manifest by default", async () => {
     const handle = createStaticFileHandler({ root });
 

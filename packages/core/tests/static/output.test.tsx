@@ -21,11 +21,11 @@ import {
   type RouteMiddleware,
   type RouteModule,
   type RouteProps,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 import {
   generateStaticOutput,
   staticAdapter,
-} from "@demiurge-js/core/static";
+} from "@demiurgejs/core/static";
 
 const temporaryRoots: string[] = [];
 

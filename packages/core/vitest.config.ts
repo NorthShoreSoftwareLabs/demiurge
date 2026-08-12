@@ -6,19 +6,19 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@demiurge-js/core/internal/testing": fileURLToPath(
+      "@demiurgejs/core/internal/testing": fileURLToPath(
         new URL("./src/internal/testing.ts", import.meta.url),
       ),
-      "@demiurge-js/core/node": fileURLToPath(
+      "@demiurgejs/core/node": fileURLToPath(
         new URL("./src/node/index.ts", import.meta.url),
       ),
-      "@demiurge-js/core/static": fileURLToPath(
+      "@demiurgejs/core/static": fileURLToPath(
         new URL("./src/static/index.ts", import.meta.url),
       ),
-      "@demiurge-js/core/vite": fileURLToPath(
+      "@demiurgejs/core/vite": fileURLToPath(
         new URL("./src/vite/index.ts", import.meta.url),
       ),
-      "@demiurge-js/core": fileURLToPath(new URL("./src/index.ts", import.meta.url)),
+      "@demiurgejs/core": fileURLToPath(new URL("./src/index.ts", import.meta.url)),
     },
   },
   test: {

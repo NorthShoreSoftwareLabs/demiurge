@@ -1,27 +1,26 @@
 # Demiurge
 
-Demiurge is a React framework where the document, security policy, route
-pipeline, and deployment boundary are framework concerns. Applications can run
-as one production Node process while retaining explicit adapter boundaries for
-other deployment shapes.
+Demiurge is a React framework for secure routing, server rendering, and
+framework-managed HTML documents. An application can run in one production
+Node process. Adapter boundaries support other deployment configurations.
 
 ## Requirements
 
 - Node.js 22.13 or newer
 - React and React DOM 19
-- Vite 6 when using the `@demiurge-js/core/vite` build integration
+- Vite 6 when using the `@demiurgejs/core/vite` build integration
 
 ## Install
 
 ```sh
-pnpm add @demiurge-js/core react react-dom
+pnpm add @demiurgejs/core react react-dom
 pnpm add -D vite @vitejs/plugin-react typescript @types/node @types/react @types/react-dom
 ```
 
 Define a route under `src/routes`:
 
 ```tsx
-import { page } from "@demiurge-js/core";
+import { page } from "@demiurgejs/core";
 
 export const GET = page({
   view: () => <main>Hello from Demiurge</main>,
@@ -42,7 +41,7 @@ Add the framework to Vite:
 ```ts
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { demiurge } from "@demiurge-js/core/vite";
+import { demiurge } from "@demiurgejs/core/vite";
 
 export default defineConfig({
   plugins: [demiurge({ typedRoutes: true }), react()],
@@ -61,15 +60,15 @@ covers host allowlists, proxy trust, timeouts, and graceful shutdown.
 
 ## Package entry points
 
-- `@demiurge-js/core` — routes, document APIs, security, caching, and browser runtime
-- `@demiurge-js/core/node` — production Node HTTP, SSR, and static-file adapter
-- `@demiurge-js/core/static` — static-output adapter
-- `@demiurge-js/core/vite` — Vite framework plugin
-- `@demiurge-js/core/data/testing` — cache-store conformance contract
-- `@demiurge-js/core/internal/testing` — explicitly unstable test helpers
+- `@demiurgejs/core` — routes, document APIs, security, caching, and browser runtime
+- `@demiurgejs/core/node` — production Node HTTP, SSR, and static-file adapter
+- `@demiurgejs/core/static` — static-output adapter
+- `@demiurgejs/core/vite` — Vite framework plugin
+- `@demiurgejs/core/data/testing` — cache-store conformance contract
+- `@demiurgejs/core/internal/testing` — explicitly unstable test helpers
 
 The Vite entry point is optional. Core, Node, and static consumers do not need
-to install Vite unless their own build imports `@demiurge-js/core/vite`.
+to install Vite unless their own build imports `@demiurgejs/core/vite`.
 
 ## Support and license
 

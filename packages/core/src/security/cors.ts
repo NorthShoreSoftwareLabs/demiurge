@@ -15,11 +15,10 @@ export function createCorsHeaders(
   const origin = context.request.headers.get("origin");
   const headers = new Headers();
 
-  // An allowlist makes the representation origin-dependent even when this
-  // particular request has no Origin header or supplies a denied origin. The
-  // Vary field therefore has to be present on every branch; adding it only to
-  // allowed responses lets a shared cache reuse a denied response for an
-  // allowed origin (or the reverse).
+  // An allowlist makes the representation depend on the origin. This rule also
+  // applies when the request has no Origin header or has a denied origin. Each
+  // branch must contain the Vary field. Otherwise, a shared cache can reuse a
+  // response for the wrong origin.
   if (policy.origins !== "*") {
     appendVary(headers, "Origin");
   }

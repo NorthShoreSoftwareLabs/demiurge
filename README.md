@@ -5,16 +5,15 @@
 <h1 align="center">Demiurge</h1>
 
 <p align="center">
-  A React framework where the document, security policy, and route pipeline are the framework's job.
+  A React framework for secure routing, server rendering, and framework-managed HTML documents.
 </p>
 
 ---
 
-A route file owns an address, not a page. Its exports declare what can happen at
-that address: a rendered page, a JSON endpoint, a redirect, a stream. The
-framework owns the HTML document, so metadata, scripts, preloads, and a strict
-Content-Security-Policy are generated as one pipeline instead of assembled by
-hand in a template.
+A route file owns an address, not a page. Its exports declare the available
+operations. These operations include a rendered page, JSON endpoint, redirect,
+or stream. The framework owns the HTML document. One pipeline generates its
+metadata, scripts, preloads, and strict Content-Security-Policy.
 
 Defaults are the strict option, and relaxing one is a named declaration at the
 route. `csrf: false` is a security audit you can run with `grep`. A config file
@@ -22,7 +21,7 @@ three directories away is not.
 
 ```tsx
 // src/routes/blog/[slug].tsx
-import { page } from "@demiurge-js/core";
+import { page } from "@demiurgejs/core";
 
 export const GET = page({
   data: ({ cache, path }) =>
@@ -36,7 +35,7 @@ export const GET = page({
 Demiurge needs Node 22.13 or newer, React 19, and Vite 6.
 
 ```sh
-pnpm add @demiurge-js/core react react-dom
+pnpm add @demiurgejs/core react react-dom
 pnpm add -D vite @vitejs/plugin-react typescript @types/react @types/react-dom
 ```
 
@@ -44,7 +43,7 @@ pnpm add -D vite @vitejs/plugin-react typescript @types/react @types/react-dom
 // vite.config.ts
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { demiurge } from "@demiurge-js/core/vite";
+import { demiurge } from "@demiurgejs/core/vite";
 
 export default defineConfig({
   plugins: [demiurge({ typedRoutes: true }), react()],
@@ -53,7 +52,7 @@ export default defineConfig({
 
 ```tsx
 // src/routes/index.tsx
-import { page } from "@demiurge-js/core";
+import { page } from "@demiurgejs/core";
 
 export const GET = page({
   view: () => <main>Hello from Demiurge</main>,
@@ -62,7 +61,7 @@ export const GET = page({
 
 ```tsx
 // src/routes/@not-found.tsx
-import type { NotFoundProps } from "@demiurge-js/core";
+import type { NotFoundProps } from "@demiurgejs/core";
 
 export default function NotFound({ pathname }: NotFoundProps) {
   return <main>Nothing at {pathname}</main>;
@@ -107,7 +106,7 @@ helpers. `throw httpError(403, "Not your widget")` maps an intentional failure
 to an error document or an RFC 9457 problem response without losing its status.
 
 Framework-attached files use `@` so ordinary names stay available to the app.
-`@policy.ts` is inherited policy; `policy.ts` is the real `/policy` route.
+`@policy.ts` is inherited policy. `policy.ts` is the real `/policy` route.
 
 | File | Role |
 | --- | --- |
@@ -118,8 +117,8 @@ Framework-attached files use `@` so ordinary names stay available to the app.
 | `@middleware.ts` | HTTP middleware cascade |
 | `@policy.ts` | Security policy cascade |
 
-With `typedRoutes: true`, the plugin generates a URL manifest, so `Link` and
-`href` reject addresses that do not exist and require the path variables a
+With `typedRoutes: true`, the plugin generates a URL manifest. `Link` and `href`
+then reject unknown addresses. They also require the path variables that a
 dynamic route declares.
 
 ## Security
@@ -127,7 +126,7 @@ dynamic route declares.
 Policy is inherited down the route tree from `@policy.ts` files:
 
 ```ts
-import { security } from "@demiurge-js/core";
+import { security } from "@demiurgejs/core";
 
 export const policy = {
   document: security.strict(),
@@ -140,16 +139,15 @@ and same-origin COOP and CORP. Cookie-authenticated unsafe methods get CSRF
 protection whether or not a route asks for it, and `csrf: false` shows up in
 the security audit.
 
-Strict means the strongest policy that cannot break a user at runtime. Trusted
-Types is a named opt-in for that reason: a violation is a third-party library
-assigning a string to `innerHTML` in a browser you do not control, so enforcing
-it by default would fail real sessions rather than a build. Report-only mode
-moves the directives to `Content-Security-Policy-Report-Only`.
+Strict means the strongest policy that cannot break a user at runtime. A build
+cannot detect a third-party library that assigns a string to `innerHTML` in a
+user browser. Default Trusted Types enforcement could therefore fail production
+sessions. Trusted Types enforcement is a named option. Report-only mode moves
+the directives to `Content-Security-Policy-Report-Only`.
 
-Also available: typed CORS, rate limiting, request and upload size limits,
-webhook signature verification, WebSocket origin checks, a
-cross-origin-isolated preset, a CSP reporting endpoint that parses both report
-formats, and environment schema validation.
+Other security features include typed CORS, rate limits, and request size limits.
+They also include webhook verification, WebSocket origin checks, CSP reports,
+cross-origin isolation, and environment schema validation.
 
 Streaming SSR keeps the strict policy. React's flush payloads carry the request
 nonce rather than escaping through an inline-script exception.
@@ -177,7 +175,7 @@ export const GET = page({
 Scopes are `build`, `public`, `private`, `request`, and `none`. Stale-while-
 revalidate coordinates one refresh across replicas rather than letting every
 request start its own. Custom stores implement a published contract, and
-`@demiurge-js/core/data/testing` verifies an implementation against it.
+`@demiurgejs/core/data/testing` verifies an implementation against it.
 
 ## Documents
 
@@ -208,7 +206,7 @@ process that serves both:
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createNodeServer, renderNodePageResponse } from "@demiurge-js/core/node";
+import { createNodeServer, renderNodePageResponse } from "@demiurgejs/core/node";
 import { createHandler } from "./dist/server/server-entry.js";
 
 const root = fileURLToPath(new URL("dist/client", import.meta.url));
@@ -235,7 +233,7 @@ graceful shutdown, and shared cache stores.
 
 ### Static
 
-`@demiurge-js/core/static` prerenders pages, resolves `paths` exports for dynamic routes,
+`@demiurgejs/core/static` prerenders pages, resolves `paths` exports for dynamic routes,
 and writes an app-owned `404.html`. It emits `demiurge-static-manifest.json`
 recording the response headers a host must apply at each path, which keeps the
 adapter independent of any one provider's configuration format. The build fails
@@ -247,7 +245,7 @@ already let a build reject a target that cannot provide something the app uses.
 
 ## Examples
 
-Each example is a workspace that installs `@demiurge-js/core` the way a published
+Each example is a workspace that installs `@demiurgejs/core` the way a published
 consumer would.
 
 | Example | Shows |
@@ -284,10 +282,9 @@ GitHub issues and milestones are the source of truth for delivery status.
 
 ## Working on the framework
 
-The library lives in `packages/core` and the examples consume it through
-`node_modules`, so the package's `exports` map, its emitted declarations, and
-its peer dependencies are exercised by the normal build rather than bypassed by
-a path alias. Examples read the library's `dist`, not its source.
+The library lives in `packages/core`. The examples consume it through
+`node_modules`. The normal build tests package exports, emitted declarations,
+and peer dependencies. Examples read the library's `dist`, not its source.
 
 ```sh
 pnpm install
@@ -298,9 +295,9 @@ pnpm test
 pnpm verify                   # everything the CI pipeline runs
 ```
 
-`pnpm test:browser` builds the production Node example and runs Chromium
-conformance checks for SSR hydration, client navigation, CSP enforcement,
-security headers, repeated secure cookies, Fetch Metadata, and app-owned 404s.
+`pnpm test:browser` builds the production Node example. Chromium checks SSR
+hydration, client navigation, CSP, security headers, cookies, Fetch Metadata,
+and application-owned 404 responses.
 Install the browser once with `pnpm exec playwright install chromium`.
 
 `pnpm test:pack` packs the tarball, installs it into a scratch app, and imports

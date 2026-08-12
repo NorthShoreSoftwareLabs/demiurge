@@ -1,7 +1,7 @@
 {
-  "name": "@demiurge-js/core",
+  "name": "@demiurgejs/core",
   "version": "0.1.0",
-  "description": "A React framework where the document, security policy, and route pipeline are the framework's job.",
+  "description": "A React framework for secure routing, server rendering, and framework-managed HTML documents.",
   "license": "MIT",
   "author": "North Shore Software Labs",
   "repository": {

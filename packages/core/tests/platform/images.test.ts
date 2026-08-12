@@ -3,7 +3,7 @@ import {
   defineImages,
   isAllowedImageSource,
   planImageTransform,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 
 describe("image transform planning", () => {
   it("allows local absolute image paths by default", () => {

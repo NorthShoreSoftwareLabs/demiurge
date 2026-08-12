@@ -16,7 +16,7 @@ Files under `src/routes` map to URLs:
 | `(marketing)/about.tsx` | `/about` |
 
 Parenthesized route groups organize files without adding a URL segment. Dynamic
-segments use `[name]`; a terminal catchall uses `[...name]`. Ambiguous route
+segments use `[name]`. A terminal catchall uses `[...name]`. Ambiguous route
 shapes and non-terminal catchalls fail manifest generation.
 
 ## Method exports
@@ -24,7 +24,7 @@ shapes and non-terminal catchalls fail manifest generation.
 A route exports standard HTTP methods. Helpers describe the result:
 
 ```tsx
-import { json, page } from "@demiurge-js/core";
+import { json, page } from "@demiurgejs/core";
 
 export const GET = page({
   view: () => <main>Widget</main>,
@@ -59,7 +59,7 @@ pages.
 `page(...)` accepts a view and optional server data:
 
 ```tsx
-import { page } from "@demiurge-js/core";
+import { page } from "@demiurgejs/core";
 
 export const GET = page({
   data: async ({ cache, path }) =>
@@ -132,7 +132,7 @@ demiurge({ typedRoutes: true })
 and require the variables declared by dynamic routes:
 
 ```tsx
-import { href, Link } from "@demiurge-js/core";
+import { href, Link } from "@demiurgejs/core";
 
 href({ to: "/blog/[slug]", path: { slug: "hello" } });
 
@@ -148,6 +148,6 @@ directory and should not be edited by hand.
 
 Unmatched browser requests that explicitly accept HTML receive the app-owned
 not-found document. API-style callers receive `application/problem+json`.
-Intentional `httpError(...)` failures preserve their status and public details;
-unexpected production errors are redacted. See
+Intentional `httpError(...)` failures preserve their status and public details.
+Unexpected production errors are redacted. See
 [Errors and not-found](../guides/errors-and-not-found.md).

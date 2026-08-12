@@ -4,7 +4,7 @@ import {
   Link,
   page,
   type RouteProps,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 import { recordServerNavigationContribution } from "../server/navigation.server";
 
 export const links = defineLinks(() => {

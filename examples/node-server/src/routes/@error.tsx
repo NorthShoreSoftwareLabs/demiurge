@@ -1,8 +1,8 @@
-import { Link, type RouteErrorProps } from "@demiurge-js/core";
+import { Link, type RouteErrorProps } from "@demiurgejs/core";
 
-// Production renders this for a failure inside a page render. It never
-// receives anything it could leak: the message and stack stay on the server,
-// and dev shows its own document with both instead of this one.
+// Production renders this for a failure inside a page render. The error message
+// and stack stay on the server. Development shows a separate document that
+// contains both items.
 export default function RouteError({ pathname, status }: RouteErrorProps) {
   return (
     <main>

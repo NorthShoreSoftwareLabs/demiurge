@@ -1,8 +1,8 @@
 # Contributing
 
-Demiurge uses pnpm workspaces. Framework source is in `packages/core`; examples
-consume the built package through `node_modules` so they exercise the same
-exports and declarations as external users.
+Demiurge uses pnpm workspaces. Framework source is in `packages/core`.
+Examples consume the built package through `node_modules`. This configuration
+tests the same exports and declarations that external users receive.
 
 ## Setup
 
@@ -22,7 +22,7 @@ user documentation agree. Developer-facing changes should also update or add an
 example. `pnpm verify` must pass before review.
 
 Use GitHub Issues and milestones for work and status. Record an enduring
-architectural choice in `architecture/decisions`; put a substantial unsettled
+architectural choice in `architecture/decisions`. Put a substantial unsettled
 proposal in `rfcs`. Do not add repository-local task lists or status documents.
 
 See [testing](./docs/maintainers/testing.md) for the verification layers and

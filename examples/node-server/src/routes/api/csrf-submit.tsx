@@ -1,4 +1,4 @@
-import { json } from "@demiurge-js/core";
+import { json } from "@demiurgejs/core";
 
 export const POST = json(
   async ({ request }) => ({

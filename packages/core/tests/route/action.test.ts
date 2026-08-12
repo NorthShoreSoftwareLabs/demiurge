@@ -7,7 +7,7 @@ import {
   redirect,
   toResponse,
   type HttpRouteContext,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 
 function createContext(request: Request): HttpRouteContext {
   const url = new URL(request.url);

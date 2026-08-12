@@ -1,4 +1,4 @@
-import { Link, defineMetadata, type LayoutProps } from "@demiurge-js/core";
+import { Link, defineMetadata, type LayoutProps } from "@demiurgejs/core";
 
 export const metadata = defineMetadata({
   description: "A production static export built with Demiurge.",

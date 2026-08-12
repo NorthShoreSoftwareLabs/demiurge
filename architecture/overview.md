@@ -1,10 +1,9 @@
 # Framework Vision
 
 Demiurge is a React framework built from first principles. The goal is not to
-clone an existing framework feature-for-feature. The goal is to make the
-framework's primitives honest enough that pages, APIs, redirects, realtime
-connections, streams, server rendering, and strict security policies all fit the
-same mental model.
+copy all features of an existing framework. Its primitives give one model for
+pages, APIs, redirects, realtime connections, streams, server rendering, and
+strict security policies.
 
 ## Core Principles
 
@@ -78,10 +77,11 @@ This matters because real apps combine concerns:
 
 ## Security Philosophy
 
-Strict CSP should not be an afterthought. The framework should own enough of the
-document pipeline to generate nonces, attach them to framework-managed scripts
-and styles, serialize bootstrap data safely, stream React payloads without
-inline-script escape hatches, and produce useful security headers by default.
+Strict CSP must be part of the design. The framework owns the document pipeline
+that generates nonces and applies them to framework-managed scripts and styles.
+This pipeline safely serializes bootstrap data and streams React payloads without
+inline-script escape mechanisms. It also produces useful security headers by
+default.
 
 Security should be configurable per app and per route, but the default preset
 should be meaningfully strict.
@@ -104,20 +104,19 @@ disagree with:
 4. A control that can only fail inside a user's browser never defaults to
    breaking it. It defaults to reporting.
 
-Rule 4 is the one that keeps the other three honest. Trusted Types enforcement
-cannot be checked at build time, because a violation is a third-party library
-assigning a string to `innerHTML` in a browser we do not control. Defaulting it
-to enforce would not fail a build. It would fail a real session in production.
-So the strict preset reports it, and enforcement is a named opt-in.
+Rule 4 keeps the other three rules correct. A build cannot check Trusted Types
+enforcement. A third-party library can assign a string to `innerHTML` in a user
+browser. Default enforcement would not fail a build. It would fail a production
+session. Thus, the strict preset reports violations. Enforcement is a named
+option.
 
 That is also why the strict preset is not being dishonest by declining to
 enforce something in its own name. Strict promises the strongest policy that
 cannot break a user at runtime.
 
-Development is where rule 3 lands for runtime-only controls. Nothing can be
-proven at build time about a browser sink, but a violation can be surfaced in
-dev while the developer is still writing the code, which is the same goal one
-step later.
+Development applies rule 3 to runtime-only controls. A build cannot verify a
+browser sink. Development can show a violation while the developer writes the
+code. This result meets the same goal at a later stage.
 
 Document contributions such as metadata, scripts, links, preloads, and styles
 also belong to this pipeline. They should be collected, deduped, ordered, and

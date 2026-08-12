@@ -5,8 +5,8 @@ import {
   preconnect,
   preload,
   resolveLinks,
-} from "@demiurge-js/core";
-import type { HttpRouteContext } from "@demiurge-js/core";
+} from "@demiurgejs/core";
+import type { HttpRouteContext } from "@demiurgejs/core";
 
 const context = {
   path: {},

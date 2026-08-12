@@ -1,4 +1,4 @@
-import type { RouteMiddleware } from "@demiurge-js/core";
+import type { RouteMiddleware } from "@demiurgejs/core";
 
 export const middleware: RouteMiddleware = async (_context, next) => {
   const response = await next();

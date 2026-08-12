@@ -5,7 +5,7 @@ declare module "virtual:demiurge/server-entry" {
     RequestHandler,
     RequestHandlerOptions,
     SsrOptions,
-  } from "@demiurge-js/core";
+  } from "@demiurgejs/core";
 
   export const routes: RequestHandlerOptions["routes"];
 

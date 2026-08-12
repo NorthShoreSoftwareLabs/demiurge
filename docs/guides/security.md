@@ -8,7 +8,7 @@ Node production, and static output use the same declarations.
 Add `@policy.ts` at any route-tree level:
 
 ```ts
-import { security } from "@demiurge-js/core";
+import { security } from "@demiurgejs/core";
 
 export const policy = {
   document: security.strict(),
@@ -21,9 +21,9 @@ route instead of hiding in unrelated global middleware.
 
 ## Strict documents
 
-`security.strict()` provides a nonce-based Content Security Policy together
-with HSTS on HTTPS, `frame-ancestors 'none'`, `nosniff`, a referrer policy, a
-permissions policy, and same-origin COOP and CORP defaults.
+`security.strict()` provides a nonce-based Content Security Policy and HSTS on
+HTTPS. It also provides `frame-ancestors 'none'`, `nosniff`, a referrer policy,
+a permissions policy, and same-origin COOP and CORP defaults.
 
 The framework-owned document attaches the request nonce to managed scripts,
 JSON-LD, hydration data, and React streaming payloads. A dynamic policy that
@@ -72,8 +72,8 @@ and named Reporting API endpoints.
 
 `createSecurityAudit(...)` inspects effective route policy, rendered security
 headers, static scripts, reporting configuration, and declared third-party
-script dependencies. Audit findings explain policy conflicts; they do not
-replace runtime browser reports for conditions only a browser can observe.
+script dependencies. Audit findings explain policy conflicts. They do not
+replace runtime reports for conditions that only a browser can observe.
 
 Build-time policy verification beyond static output is proposed in
 [RFC 0001](../../rfcs/0001-static-policy-verification.md).

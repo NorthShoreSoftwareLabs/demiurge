@@ -1,4 +1,4 @@
-import { Link, type NotFoundProps } from "@demiurge-js/core";
+import { Link, type NotFoundProps } from "@demiurgejs/core";
 
 export default function ProjectNotFound({ pathname }: NotFoundProps) {
   return (

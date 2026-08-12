@@ -2,7 +2,7 @@
 
 The Node adapter runs a built Demiurge app as one production HTTP process. It
 owns the request boundary, the static file boundary, and the process lifecycle.
-This document covers the operational settings; the
+This document covers the operational settings. The
 [README quickstart](../../README.md#deploy) covers the minimum working setup, and
 [`examples/node-server`](../../examples/node-server) is the complete version.
 
@@ -43,7 +43,7 @@ or absolute-URL generation.
 
 List the public hostnames the app answers to, including ports when a port must
 be exact. This is not the bind address. `HOST` decides which interface the
-process listens on; set `HOST=0.0.0.0` when a container or platform connects to
+process listens on. Set `HOST=0.0.0.0` when a container or platform connects to
 the process directly.
 
 ## Trusted proxies
@@ -94,9 +94,9 @@ conditional requests with `304`, and support one byte range per request with
 ## Request cancellation
 
 Route handlers, middleware, and data loaders receive the request's
-`AbortSignal`. Pass it to `fetch(...)`, database drivers, and SDKs that accept
-one, so a browser disconnect stops upstream work instead of paying for a render
-nobody will read.
+`AbortSignal`. Pass it to `fetch(...)` and database drivers that accept it.
+Also pass it to applicable SDKs. A browser disconnect can then stop upstream
+work and an unnecessary render.
 
 ## Shared cache and background work
 
@@ -105,7 +105,7 @@ cache facade, so one request cannot read another's private entries.
 
 The in-memory store is limited to one Node process. A deployment with multiple
 replicas should inject a shared Redis or KV implementation that passes the
-conformance contract in `@demiurge-js/core/data/testing`.
+conformance contract in `@demiurgejs/core/data/testing`.
 
 Stale-while-revalidate refreshes are handed to `server.waitUntil(...)`, so
 shutdown drains them within the grace period rather than abandoning a
@@ -114,5 +114,5 @@ publication mid-write.
 ## What to deploy
 
 Ship `dist/client`, `dist/server`, `server.js`, `package.json`, and installed
-production dependencies together. The server defaults to `127.0.0.1:4173`;
-override `PORT` and `HOST` for the target environment.
+production dependencies together. The server defaults to `127.0.0.1:4173`.
+Override `PORT` and `HOST` for the target environment.

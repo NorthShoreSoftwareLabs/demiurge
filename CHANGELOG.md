@@ -9,9 +9,8 @@ status live in GitHub issues and milestones.
 
 Epic: #1
 
-- The library lives in `packages/core` as a pnpm workspace, and the examples
-  depend on it by name so resolution runs through `node_modules` and the
-  package `exports` map instead of a path alias.
+- The library lives in `packages/core` as a pnpm workspace. The examples depend
+  on it by name. Resolution uses `node_modules` and the package `exports` map.
 - The package builds to `dist` with emitted declarations, and `react`,
   `react-dom`, and `vite` are peer dependencies rather than bundled runtime
   dependencies.
@@ -41,9 +40,9 @@ Epic: #4
   run.
 - Helper-attached fixed-window rate limits with pluggable server storage and
   bounded, expiration-aware in-memory storage.
-- The Node adapter requires an allowed-host policy, ignores forwarded headers by
-  default, and resolves client IP, scheme, and host through one typed hop-count
-  or CIDR proxy-trust policy. IP rate limits consume the resolved peer identity.
+- The Node adapter requires an allowed-host policy and ignores forwarded headers
+  by default. One typed proxy-trust policy resolves the client connection data.
+  The policy accepts a hop count or CIDR. IP rate limits use the resolved peer.
 - The Node server exposes typed timeout configuration, readiness state, and a
   bounded graceful `shutdown()` with optional SIGINT/SIGTERM registration.
   `waitUntil(...)` keeps cache refreshes and other tracked background work alive
@@ -52,39 +51,38 @@ Epic: #4
 - Default double-submit CSRF protection for cookie-authenticated unsafe methods,
   configurable cookie/header token names, explicit route-policy exemptions,
   and secure token/cookie issuance helpers with browser round-trip coverage.
-- Generic HMAC webhook helper that verifies exact request bytes with Web Crypto,
-  supports padded base64 and explicit prefixes, and rejects missing, malformed,
-  or invalid signatures before the app handler runs.
+- Generic HMAC webhook helper that uses Web Crypto to verify exact request bytes.
+  It supports padded base64 and explicit prefixes. It rejects invalid signatures
+  before the application handler runs.
 - `createSecurityAudit(...)` for rendered header snapshots, effective route
   policy inspection, and structured security findings.
 - `createSecurityAudit(...)` reports document static scripts that are missing
   required CSP nonces or are not allowed by the effective `script-src` policy.
 - `defineEnvSchema(...)`, `env.*(...)`, and `validateEnv(...)` validate runtime
   configuration and secrets before request handling starts.
-- `auditScriptDependencies(...)` and opt-in `createSecurityAudit(...)`
-  dependency checks warn about undeclared third-party script purposes, missing
-  integrity when required, early third-party execution, and Google Tag Manager's
-  wide runtime trust boundary.
+- `auditScriptDependencies(...)` and opt-in `createSecurityAudit(...)` checks
+  warn about undeclared third-party script purposes and missing integrity. They
+  also warn about early execution and the wide Google Tag Manager trust boundary.
 - `createSecurityReportHandler(...)` provides a POST-only CSP/Reporting API
   report ingestion helper for `application/csp-report` and
   `application/reports+json`, with media-type validation, optional body-size
   enforcement, and per-report callbacks.
-- Typed `Reporting-Endpoints`, CSP `report-to`, and compatibility `report-uri`
-  configuration validates names and targets, emits deterministic headers,
-  carries reporting directives into Trusted Types report-only CSP, and warns
-  when report-only mode has no deliverable target (#113).
+- Typed reporting configuration validates endpoint names and targets. It emits
+  deterministic headers for `Reporting-Endpoints`, `report-to`, and `report-uri`.
+  It adds reporting directives to Trusted Types report-only CSP. It also warns
+  when report-only mode has no target (#113).
 - `validateUploads(...)` validates parsed `FormData` files against required
   fields, per-file size limits, aggregate size limits, and MIME/type allowlists.
 - Cache and idempotency keys reject non-finite numbers, negative zero, and
   unsupported runtime values instead of allowing JSON serialization collisions.
 - In-memory cache and idempotency stores sweep expired entries, have configurable
   finite entry ceilings, and deterministically evict the oldest completed value.
-  Idempotency defaults to a 24-hour result TTL that begins after completion;
+  Idempotency defaults to a 24-hour result TTL that begins after completion.
   in-flight mutations never expire or get evicted.
-- Shared data caches implement `staleWhileRevalidate` with distinct fresh and
-  stale deadlines, store-coordinated refresh leases, atomic owner-only
-  publication, invalidation-safe cancellation, background lifetime hooks, and
-  stale retention when refresh fails (#112).
+- Shared data caches implement `staleWhileRevalidate` with separate fresh and
+  stale deadlines. Stores coordinate refresh leases and permit only the owner to
+  publish. Invalidation safely cancels refresh work. Failed refreshes retain
+  stale data (#112).
 
 ## Route Policies And Middleware
 
@@ -92,9 +90,9 @@ Epic: #5
 
 - Route groups such as `(admin)` organize route files and framework-attached
   files without changing generated URLs or runtime path matching.
-- Route manifests use positional static/dynamic/catchall specificity, require
-  terminal catchalls, and reject canonical runtime-shape collisions with both
-  source files and a witness URL instead of silently shadowing by filename.
+- Route manifests use positional static, dynamic, and catchall specificity. They
+  require terminal catchalls. They report both source files and a witness URL
+  when canonical runtime shapes conflict.
 - `@policy.ts` files are discovered as framework-attached policy files, while
   ordinary `policy.tsx` files remain real URL routes.
 - Inherited `@policy.ts` route security is merged root-to-leaf and enforced by
@@ -119,9 +117,9 @@ Epic: #6
 - `defineOgImage(...)`, `renderOgImageSvg(...)`, and
   `renderOgImageResponse(...)` provide the first deterministic Open Graph image
   output helper using escaped SVG and cacheable image responses.
-- Page route loading resolves inherited layout metadata root-to-leaf, then leaf
-  route metadata, including title defaults, title formatters, structured fields,
-  Open Graph defaults, and custom metadata entries.
+- Page route loading resolves inherited layout metadata from root to leaf. It
+  then resolves leaf route metadata. The metadata includes titles, structured
+  fields, Open Graph defaults, and custom entries.
 - `defineScripts(...)`, `script(...)`, and `resolveScripts(...)` provide typed
   static script contributions. Page route loading resolves inherited layout
   scripts root-to-leaf, then leaf route scripts, with dedupe and strategy
@@ -141,7 +139,7 @@ Epic: #3
 
 - `httpError(...)` creates a typed standard 4xx/5xx failure with deliberate
   RFC 9457 details, extension members, response headers, and an optional cause.
-- API failures become `application/problem+json`; page failures render the
+- API failures become `application/problem+json`. Page failures render the
   app-owned error document with the same status, and middleware failures retain
   the existing content negotiation rule.
 - Unexpected errors remain redacted in production, while intentional typed
@@ -167,7 +165,7 @@ Epic: #7
   contract. Framework-owned `app:environment:schemaVersion` and scope prefixes
   isolate every backend key and tag while request entries remain local.
 - `createMemoryCacheStore(...)` implements that contract, and
-  `@demiurge-js/core/data/testing` exports a runner-neutral conformance verifier for
+  `@demiurgejs/core/data/testing` exports a runner-neutral conformance verifier for
   custom Redis/KV-style adapters. Cache invalidation is async so network stores
   do not need a fake synchronous API.
 - `createRequestHandler({ cacheStore })` creates a new facade per request while
@@ -196,24 +194,23 @@ Epic: #8
   resource hints, and static scripts into the framework-owned document.
 - Route `data` is serialized into a non-executable `application/json` bootstrap
   script, escaped against `<`, `>`, `&`, and line separators.
-- `hydrateFileRouter(...)` reads that payload, reuses it instead of re-running
-  route `data`, and seeds the browser router with the resolved match so the
-  first client paint does not flash a loading fallback.
+- `hydrateFileRouter(...)` reads and reuses that payload. It does not run route
+  `data` again. It gives the resolved match to the browser router. Thus, the
+  first client paint does not show a loading fallback.
 - The server marks its rendered root with `data-demiurge-hydrate`, and the
   client hydrates only when that marker is present. A static shell without
   server markup is client-rendered instead, because hydrating an empty root
   produces a React hydration mismatch.
-- One document renderer, `renderDocument(...)` in `src/document/render.ts`,
-  now serves both the HTTP request handler and the Vite integration. It takes
-  an optional `body` and emits the hydration marker plus bootstrap script only
-  when one is present, so the same code path produces both server-rendered
-  documents and static shells.
+- One document renderer serves the HTTP request handler and Vite integration.
+  `renderDocument(...)` is in `src/document/render.ts`. An optional `body`
+  controls the hydration marker and bootstrap script. Thus, one code path makes
+  server-rendered documents and static shells.
 - `renderPageDocument(...)` returns the rendered document as a string, and
   `renderPageResponse(...)` returns buffered SSR by default.
-- `render: { mode: "streaming" }` uses React's pipeable renderer, flushes the
-  document shell before Suspense boundaries resolve, propagates strict CSP
-  nonces to React completion scripts, reports errors according to shell commit
-  state, and aborts when the response body is cancelled.
+- `render: { mode: "streaming" }` uses the React pipeable renderer. It flushes
+  the document shell before Suspense boundaries resolve. It applies CSP nonces
+  to React completion scripts. It reports errors from the shell commit state.
+  It stops when the response body is canceled.
 - `examples/streaming-page` exercises the production Node stream with an
   app-owned layout, strict policy, Suspense fallback, and deferred boundary.
 - `examples/ssr-page` exercises a server-only `data` loader, metadata cascading
@@ -226,17 +223,16 @@ Epic: #8
 
 Epic: #9
 
-- `sse(...)` provides the first realtime HTTP helper. It serializes string and
-  structured server-sent events from sync iterables, async iterables, and
-  `ReadableStream` sources with `text/event-stream`, no-cache, and buffering
-  control headers through both the request handler and Vite dev handler.
-- `jsonl(...)` serializes newline-delimited JSON streams from sync iterables,
-  async iterables, and `ReadableStream` sources with `application/x-ndjson`,
-  no-cache, and buffering control headers through both the request handler and
-  Vite dev handler.
-- `stream(...)` provides generic HTTP streaming for string and byte chunks from
-  sync iterables, async iterables, and `ReadableStream` sources with buffering
-  control headers through both the request handler and Vite dev handler.
+- `sse(...)` provides the first realtime HTTP helper. It serializes server-sent
+  events from synchronous iterables, asynchronous iterables, and `ReadableStream`
+  sources. Both HTTP handlers apply the required content, cache, and buffering
+  headers.
+- `jsonl(...)` serializes newline-delimited JSON streams. It accepts synchronous
+  iterables, asynchronous iterables, and `ReadableStream` sources. Both HTTP
+  handlers apply the required content, cache, and buffering headers.
+- `stream(...)` provides generic HTTP streaming for string and byte chunks. It
+  accepts synchronous iterables, asynchronous iterables, and `ReadableStream`
+  sources. The request and Vite development handlers apply buffering headers.
 - `checkWebSocketOrigin(...)` and `enforceWebSocketOrigin(...)` provide the
   first WebSocket security primitive with same-origin checks, exact allowlists,
   malformed-origin rejection, and explicit trusted non-browser missing-origin
@@ -255,21 +251,20 @@ Epic: #10
   preserving app-provided timing entries.
 - Script dependency audits provide the first GTM trust-boundary diagnostic
   foundation without yet implementing full analytics integration helpers.
-- `classifyImageSource(...)` treats only single-slash paths as local. A
-  protocol-relative source such as `//host/image.png` previously matched the
-  local branch and skipped the remote allowlist entirely, so it is now rejected
-  outright rather than resolved against the page origin.
+- `classifyImageSource(...)` treats only single-slash paths as local. Previously,
+  a protocol-relative source could bypass the remote allowlist. The function now
+  rejects a source such as `//host/image.png`.
 
 ## Adapters And Deployment
 
 Epic: #11
 
-- The production Node adapter converts Node HTTP requests and responses to the
-  web platform contract, serves safe static assets, preserves repeated
-  `Set-Cookie` headers, and exposes `createNodeServer(...)` from `@demiurge-js/core/node`.
-- Static serving rejects symbolic links in every path component, verifies the
-  real target remains inside the real public root, and uses `O_NOFOLLOW` for
-  the final open where the platform supports it.
+- The production Node adapter converts Node HTTP messages to the web platform
+  contract. It serves safe static assets and preserves repeated `Set-Cookie`
+  headers. `@demiurgejs/core/node` exports `createNodeServer(...)`.
+- Static serving rejects symbolic links in every path component. It verifies
+  that the real target stays in the real public root. Supported platforms use
+  `O_NOFOLLOW` for the final open operation.
 - Static responses expose ETag and Last-Modified validators, return bodyless
   `304` responses when they match, and support single byte ranges with
   `206`/`416` responses.

@@ -9,7 +9,7 @@ import {
   page,
   type RouteModule,
   type RouteProps,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 
 describe("client hydration", () => {
   beforeEach(() => {
@@ -239,8 +239,8 @@ function spyOnConsoleError() {
   return vi.spyOn(console, "error").mockImplementation(() => undefined);
 }
 
-// React reports hydration mismatches as recoverable errors rather than throwing,
-// so the only way to prove a mount was clean is to watch the error channel.
+// React reports hydration mismatches as recoverable errors. It does not throw
+// them. Monitoring the error channel verifies a clean mount.
 function captureRecoverableErrors() {
   const errors: string[] = [];
 

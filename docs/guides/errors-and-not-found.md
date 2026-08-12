@@ -24,10 +24,10 @@ per RFC 9457, which obsoleted RFC 7807:
 }
 ```
 
-The rule is deliberately strict. A bare `*/*`, a missing header, and a
-malformed one all get problem+json, because failing toward the machine format
-is the safe direction: a browser always sends an explicit `text/html`, while an
-API client that sends `*/*` never receives a page of markup it cannot parse.
+The rule is deliberately strict. A bare `*/*`, a missing header, and a malformed
+header get problem+json. This machine format is the safe default. A browser
+always sends an explicit `text/html` value. An API client that sends `*/*` never
+receives markup that it cannot parse.
 
 Negotiation happens in the request handler rather than an adapter, so every
 adapter inherits it.
@@ -52,8 +52,8 @@ of app code at a time:
 2. The same component with no layouts.
 3. The framework built-in with no layouts.
 
-A blank page is the outcome this whole design exists to prevent, so a broken
-layout degrades to the layout-free document instead of escalating to a 500.
+This design prevents a blank page. Therefore, a broken layout changes to the
+layout-free document instead of a 500 response.
 
 Opt out of layouts entirely:
 
@@ -77,21 +77,20 @@ The gate only fires when the app has at least one page route. An API-only app
 never wants an HTML not-found document, builds clean, and gets problem+json for
 everything.
 
-Page detection is a source scan, because the plugin cannot execute route
-modules at build time. It keys on the import rather than the bare word: a file
-counts as a page route only if it imports `page` from `@demiurge-js/core` and calls what
-it imported, aliases included. Scanning for `page(` alone would fire on
-`db.users.page(2)`, and telling an API that paginates to go write a 404
-document is exactly the failure this gate must not have.
+Page detection uses a source scan because the plugin cannot run route modules
+during the build. The scan checks imports, not the word alone. A page route must
+import `page` from `@demiurgejs/core` and call the imported function. Aliases are
+valid. A scan for `page(` alone would find `db.users.page(2)`. This false result
+could require an API application to create an unnecessary 404 document.
 
 Dev serves the built-in and warns once, naming the file to create.
 
 ### The client agrees with the server
 
-A server-rendered 404 carries `data-demiurge-fallback="not-found"` on the root
-element. The client hydrates that document, keeping the layouts the server
-resolved, and still replaces a page document whose route it can no longer match
-— that case is a genuine desync rather than a fallback.
+A server-rendered 404 has `data-demiurge-fallback="not-found"` on the root
+element. The client hydrates that document and keeps the server layouts. It
+replaces a page document when its route no longer matches. This condition is a
+synchronization error, not a fallback.
 
 ## Errors
 
@@ -101,7 +100,7 @@ Throw `httpError(...)` when a route, loader, middleware, or policy needs to
 return an intentional HTTP failure:
 
 ```ts
-import { httpError, json } from "@demiurge-js/core";
+import { httpError, json } from "@demiurgejs/core";
 
 export const POST = json(async () => {
   throw httpError(422, {
@@ -113,12 +112,12 @@ export const POST = json(async () => {
 ```
 
 The status argument is the `HttpErrorStatus` union of standard 4xx and 5xx
-codes. JavaScript callers receive the same runtime validation, so an accidental
-`httpError(200, ...)` fails where it is created instead of producing a success
-response with an error body.
+codes. JavaScript callers receive the same runtime validation. An accidental
+`httpError(200, ...)` fails at its source. It cannot make a successful response
+that has an error body.
 
 For an API route, the framework returns RFC 9457 `application/problem+json`.
-The request pathname and query become `instance`; `detail`, `type`, a custom
+The request pathname and query become `instance`. The `detail`, `type`, custom
 `title`, and extension members such as `errors` are preserved. A string second
 argument is shorthand for `detail`. Standard status titles are defaults.
 
@@ -130,7 +129,7 @@ claiming every failure is 500.
 Typed details are deliberate public output and remain visible in production
 problem responses. Messages and stacks from arbitrary thrown values remain
 redacted exactly as before. The optional third argument carries `headers` and
-`cause`; headers support protocol requirements such as `WWW-Authenticate` and
+`cause`. Headers support protocol requirements such as `WWW-Authenticate` and
 `Retry-After` on both problem responses and error documents.
 
 `httpError(...)` is a throw-only signal. Normal successful and redirecting
@@ -148,27 +147,28 @@ Where the failure happened decides what the caller gets.
 | Inside middleware or policy | Negotiated, same rule as not-found |
 | While rendering the error page | Plain text, no app code |
 
-The last row matters most. Once the error path has failed, the app path cannot
-be trusted a second time in the same request, so there is no second attempt at
-app markup.
+The last row is important. After the error path fails, the framework cannot
+trust the application path again in that request. The framework does not make
+a second attempt to render application markup.
 
 The error document renders without layouts. The error path runs the minimum
 amount of app code that can still produce a page.
 
 ### Dev shows the stack, production never does
 
-Production keeps the guarantee that no stack trace, file path, or framework
-internal reaches a response body. Dev renders its own document with the
-message, the stack, and the route that failed, and puts the thrown message in
-`detail` on a problem+json response.
+Production does not put stack traces, file paths, or framework internals in a
+response body. Development renders a framework document with the error message,
+stack, and failed route. A problem+json response puts the error message in
+`detail`.
 
 That redaction applies to unexpected values. An `HttpError` is the explicit
 boundary where an app author chooses public `detail` and extension members, so
 those fields are stable in development and production.
 
-The switch is the build mode. The Vite dev middleware sets it when it calls the
-shared handler; it is absent from the public `RequestHandlerOptions`, and it is
-gated a second time on `NODE_ENV !== "production"`. There is no user-facing
+The build mode controls this behavior. The Vite development middleware sets the
+mode when it calls the shared handler. Public `RequestHandlerOptions` does not
+include this mode. `NODE_ENV !== "production"` provides a second control. No
+user-facing
 option to misconfigure into leaking.
 
 In dev the framework document wins over the app's `@error.tsx`, because the
@@ -199,10 +199,10 @@ production redaction.
 
 ## Dev and production run the same path
 
-Route handling runs in a Vite middleware registered before Vite's own, so it
-sees a request first. A second middleware, registered from the hook
-`configureServer` returns, runs after Vite and turns anything Vite could not
-serve into the same negotiated not-found production returns.
+Route handling uses a middleware that runs before the Vite middleware. It sees
+the request first. The `configureServer` hook registers a second middleware
+after Vite. This middleware gives unserved requests the same negotiated
+not-found response as production.
 
 Dev used to answer an unmatched navigation with a bodiless shell and a 200
 while production answered with an empty 404. Both now render the same document

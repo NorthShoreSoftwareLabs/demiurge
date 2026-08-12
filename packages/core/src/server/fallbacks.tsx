@@ -1,9 +1,8 @@
 import type { NotFoundProps, RouteErrorProps } from "../route";
 
-// Deliberately plain. The framework ships a working 404 so nothing is ever
-// blank, and the build gate refuses to let an app reach production still
-// rendering this one. A generic framework page in front of real users is a
-// failure of the framework, not of the app that never got around to it.
+// This fallback is deliberately plain. It prevents a blank 404 response. The
+// build gate prevents an application from using it in production. The framework
+// must not show a generic page to users.
 export function BuiltInNotFound({ pathname }: NotFoundProps) {
   return (
     <main>

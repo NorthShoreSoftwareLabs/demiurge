@@ -16,12 +16,12 @@ import {
   security,
   type RouteModule,
   type RouteProps,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 import {
   createNodeServer,
   nodeAdapter,
   renderNodePageResponse,
-} from "@demiurge-js/core/node";
+} from "@demiurgejs/core/node";
 
 function routeModule(module: RouteModule) {
   return vi.fn(async () => module);
@@ -586,9 +586,9 @@ describe("Node adapter", () => {
     }
   });
 
-  // A cancelled download is ordinary traffic. Routing it through onError would
-  // log a stack trace per abandoned image, and any unauthenticated client can
-  // trigger that at will — the same log-flood the 501 guard above prevents.
+  // A canceled download is ordinary traffic. The onError path would record a
+  // stack trace for each abandoned image. An unauthenticated client can cause
+  // this condition. The 501 guard above prevents the same excessive logging.
   it("does not report a client hanging up mid-response as a server error", async () => {
     const onError = vi.fn();
     const server = createNodeServer({
@@ -640,14 +640,13 @@ describe("Node adapter", () => {
     }
   });
 
-  // This is the seam where the production route glob once silently dropped
-  // `.ts` files (`@policy.ts`, `@middleware.ts`): every other test in this
-  // suite uses a stub handler, so nothing exercised `createRequestHandler`
-  // against real route modules through an actual Node server. This test
-  // boots the real production stack — createNodeServer, createRequestHandler,
-  // a page route, and an inherited @policy.ts — the way examples/node-server
-  // does, and checks the three things that policy is supposed to guarantee:
-  // server-rendered markup, the stylesheet link, and the CSP header.
+  // Previously, the production route glob omitted `.ts` files such as
+  // `@policy.ts` and `@middleware.ts`. Other tests in this suite use a stub
+  // handler. They do not test `createRequestHandler` with real route modules
+  // through a Node server. This test starts the same production stack as the
+  // node-server example. It includes createNodeServer, createRequestHandler, a
+  // page route, and an inherited @policy.ts. It verifies server markup, the
+  // stylesheet link, and the CSP header.
   it("serves a real page route through the full production stack with its inherited policy applied", async () => {
     const handler = createRequestHandler({
       routes: {

@@ -1,4 +1,4 @@
-import { defineMetadata, page } from "@demiurge-js/core";
+import { defineMetadata, page } from "@demiurgejs/core";
 
 export const metadata = defineMetadata({ title: "About" });
 

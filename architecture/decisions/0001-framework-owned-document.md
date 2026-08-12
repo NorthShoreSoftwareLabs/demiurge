@@ -30,7 +30,7 @@ manifest, and production document output.
 - Managed scripts, hydration data, structured data, and streaming payloads can
   all receive the request nonce from one renderer.
 - Development, SSR, and static generation share document behavior.
-- A page application must provide its root `@not-found.tsx`; the framework will
+- A page application must provide its root `@not-found.tsx`. The framework will
   not silently substitute branded markup.
 - Adapters must declare whether they can provide document capabilities such as
   streaming, static headers, and nonce injection.

@@ -13,6 +13,6 @@ NODE_ENV=production pnpm start
 ```
 
 The server defaults to `127.0.0.1:4190`. Set `HOST` and `PORT` for the target
-runtime. Cancelling the response body aborts the React render; an error before
-the shell becomes the normal 500 response, while an error after shell commit is
-reported and the HTTP status remains 200.
+runtime. Canceling the response body stops the React render. An error before the
+shell becomes the normal 500 response. The framework reports an error after the
+shell commit, and the HTTP status stays 200.

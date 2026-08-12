@@ -9,9 +9,9 @@ Tracking: [GitHub issue #115](https://github.com/NorthShoreSoftwareLabs/demiurge
 Demiurge knows a great deal about an app at build time that it currently only
 checks at request time. Route policies, CORS policies, CSP directives, document
 script contributions, and adapter capabilities are all values the build can see.
-Today several of them are validated on the first request that happens to reach
-the route, which violates the enforcement doctrine's rule that a mistake should
-fail at the earliest moment it can be detected.
+The framework validates some values only when the first request reaches the
+route. This behavior conflicts with the enforcement doctrine. A detectable
+error must fail at the earliest possible stage.
 
 This RFC covers one reusable mechanism for verifying declared policy against
 declared use, and the checks that mechanism enables. Browser capability helpers
@@ -39,10 +39,11 @@ part of this slice.
   `worker(new URL("./x.worker.ts", import.meta.url))` is what tells the build
   that every route transitively importing that module needs `worker-src`. There
   is no separate annotation to keep in sync.
-- Declarations hoist through the module graph. The build computes the effective
-  route policy instead of the app maintaining it by hand, which also produces
-  provenance: `/editor` allows `worker-src` because `src/editor/pdf.ts` asked
-  for it. The [platform boundaries](../architecture/platform-boundaries.md) already ask audit output to explain
+- Declarations move through the module graph. The build computes the effective
+  route policy. The application does not maintain this policy manually. This
+  process also records the source. For example, `/editor` allows `worker-src`
+  because `src/editor/pdf.ts` requires it. The
+  [platform boundaries](../architecture/platform-boundaries.md) require audit output to explain
   why each permission exists, and only the hoisted form can answer that.
 - Route-level policy declaration remains the escape hatch for code the app
   cannot edit, primarily `node_modules`.
@@ -71,9 +72,9 @@ Invariants:
   the other. This is the specific Next.js behavior to avoid.
 - Dynamic construction the AST can see the shape of but not the value is a dev
   diagnostic, never a build failure.
-- Findings in `node_modules` are audit-only, because the developer cannot fix
-  them by editing code and putting them in the build trains people to ignore
-  the channel.
+- Findings in `node_modules` are audit-only. The developer cannot correct them
+  by editing application code. Build findings that users cannot correct reduce
+  the value of the channel.
 
 The startup rung was missing from the original doctrine, which covers only
 build-time failure (rule 3) and browser-only reporting (rule 4).
@@ -108,10 +109,10 @@ build-time failure (rule 3) and browser-only reporting (rule 4).
 - RSC is the selected direction for server component rendering and Flight must
   operate under strict CSP.
 - This RFC does not introduce a second islands-style rendering model.
-- React ships the RSC runtime halves. It does not ship the bundler integration,
-  which is the actual work: splitting the module graph on the `react-server`
-  export condition, client and server reference registries, and wiring Flight
-  into responses and navigation.
+- React supplies the RSC runtime parts. It does not supply bundler integration.
+  The integration must split the module graph on the `react-server` export
+  condition. It must also create reference registries and connect Flight to
+  responses and navigation.
 - Nothing in this spec may assume a hydration mode exists.
 
 ## Features To Implement
@@ -156,9 +157,8 @@ Small, independent of the mechanism, possibly a separate slice:
   suggestions while still accepting arbitrary sources.
 - `{nonce}` is a magic token discoverable only by reading source.
   `securityPolicyRequiresNonce` scans for the substring.
-- `mergeCsp` unions arrays, so a route can widen a directive but never narrow
-  one, and the only escape is `csp: false`, which drops the entire policy rather
-  than one directive.
+- `mergeCsp` combines arrays. A route can widen a directive but cannot narrow it.
+  The `csp: false` option removes the complete policy, not one directive.
 - `ContentSecurityPolicy` has no `workerSrc`, `childSrc`, `frameSrc`,
   `manifestSrc`, or `mediaSrc`. The strict preset therefore cannot express a
   policy that permits a worker, and an app cannot declare one even deliberately.
@@ -166,30 +166,29 @@ Small, independent of the mechanism, possibly a separate slice:
 
 ## Open Decisions
 
-- **Severity assignment for existing audit findings.** Proposal: the three
-  `error` rows become fatal at build, because each means a script the app
-  deliberately added will be blocked by a policy the app deliberately set. The
-  four `warning` rows never fail the build under any setting and live only in
-  `demiurge audit`, because failing builds over style opinions teaches people
-  that build failures are negotiable. New CORS literal checks are fatal.
+- **Severity assignment for existing audit findings.** Proposal: make the three
+  `error` rows fatal during the build. Each row identifies an application script
+  that application policy will block. The four `warning` rows never fail the
+  build. They appear only in `demiurge audit`. Style opinions must not make build
+  failures seem optional. New CORS literal checks are fatal.
   Not yet accepted.
-- **Function-form contributions.** `ScriptContribution` may be a function of the
-  request context, so a route's scripts may not exist until a request arrives,
-  which makes them unverifiable at build for the same reason `cors: publicApi`
-  is. Open: does the static array form become the encouraged default with the
-  function form a named opt-out of verification, or do both stay equal citizens
-  with the function form falling through to startup and runtime checks?
+- **Function-form contributions.** `ScriptContribution` can be a function of the
+  request context. Therefore, route scripts might not exist before a request
+  arrives. The build cannot verify these scripts or `cors: publicApi`.
+  Open question: Should the static array be the recommended default?
+  Should the function form explicitly disable verification? Alternatively,
+  should both forms have equal status and use startup and runtime checks?
   **This is where the session stopped.**
-- **Roadmap ordering.** RSC is Phase 6 and the Vite Environment API abstraction
-  is Phase 9, but multi-graph RSC on Vite is close to what the Environment API
-  exists to enable. Check whether Phase 6 depends on Phase 9 machinery.
+- **Roadmap ordering.** RSC is Phase 6. The Vite Environment API abstraction is
+  Phase 9. Multi-graph RSC on Vite uses similar Environment API functions.
+  Check whether Phase 6 depends on Phase 9 machinery.
 - **CORS origin patterns.** `origins` accepts exact strings only. Subdomain
   allowlists are a common real need and a classic source of origin-matching
   bugs. If added, a typed form such as `{ subdomainsOf: "example.com" }` keeps
   the anchoring in framework hands rather than accepting a regex.
 - Whether the dev diagnostic rung ships as terminal output through the plugin's
   `this.warn` or waits for a real overlay. Nothing currently touches the HMR
-  socket; `configureServer` only watches for typed routes.
+  socket. `configureServer` only watches for typed routes.
 
 ## Later Consumers, Out Of Scope Here
 

@@ -1,4 +1,4 @@
-import type { NotFoundProps } from "@demiurge-js/core";
+import type { NotFoundProps } from "@demiurgejs/core";
 
 export default function NotFound({ pathname }: NotFoundProps) {
   return (

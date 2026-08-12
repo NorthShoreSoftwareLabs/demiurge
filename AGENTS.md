@@ -4,11 +4,11 @@ These instructions apply to the entire repository.
 
 ## Project contract
 
-Demiurge is a React framework whose route pipeline, HTML document, security
-policy, and deployment boundary are framework concerns. Preserve that ownership
-model when changing APIs or runtime behavior.
+Demiurge is a React framework for secure routing, server rendering, and
+framework-managed HTML documents. Preserve these framework responsibilities
+when you change an API or runtime behavior.
 
-- The published package is `@demiurge-js/core` in `packages/core`.
+- The published package is `@demiurgejs/core` in `packages/core`.
 - Examples are workspace consumers of the built package. Do not add source path
   aliases that bypass package exports, declarations, or peer dependencies.
 - Node 22.13 is the supported runtime floor. CI proves both that floor and the
@@ -51,11 +51,36 @@ scratch files, or feature inventories.
 - Treat security declarations and adapter capabilities as typed, auditable
   framework inputs. Fail at build or startup when a violation is knowable there.
 - Preserve app ownership of pages, layouts, fallbacks, metadata, policy, and
-  styles; do not introduce framework-branded runtime fallbacks.
+  styles. Do not introduce framework-branded runtime fallbacks.
 - Keep server-only data and secrets out of browser bundles. Browser navigation
   receives server data through the typed navigation response boundary.
 - Update examples and documentation when developer-facing behavior changes.
 - Add a test at the layer where the behavior can actually fail.
+
+## Writing standard
+
+Use [ASD-STE100 Issue 9](https://www.asd-ste100.org/) for all repository prose.
+This rule applies to documentation, comments, diagnostics, UI text, issues,
+pull requests, and commit bodies.
+
+- Use an approved word when it gives the correct meaning.
+- Use project terms and API names as technical names.
+- Use one term for one item or action. Do not use synonyms for style.
+- Use active voice. Identify the person or system that does the action.
+- Write only one instruction in each sentence.
+- Use no more than 20 words in an instruction.
+- Use no more than 25 words in a descriptive sentence.
+- Put a condition before the action that it controls.
+- Use short paragraphs and vertical lists for complex information.
+- Do not use contractions, slang, idioms, or Latin abbreviations.
+- Do not omit articles or other words to make a sentence shorter.
+
+Code symbols, commands, URLs, literal quotations, and legal text do not have to
+use the controlled vocabulary. Do not change an API name only to satisfy this
+writing standard. Make the text around these items compliant.
+
+Run `pnpm lint:writing` after you change prose. The check finds objective
+violations. You must also review terminology, meaning, and active voice.
 
 ## Commits
 
@@ -71,11 +96,11 @@ Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.
 - Add a body when the motivation or behavior is not clear from the subject.
 - Mark a breaking change with `!` before the colon or a `BREAKING CHANGE:`
   footer, and explain the migration in the commit body.
-- Keep commits coherent; do not mix unrelated cleanup into a feature or fix.
+- Keep commits coherent. Do not mix unrelated cleanup into a feature or fix.
 
 ## Branches and releases
 
-- Treat protected `main` as the integration branch; use short-lived branches
+- Treat protected `main` as the integration branch. Use short-lived branches
   and reviewed pull requests rather than a permanent `develop` branch.
 - Do not create routine version branches. A maintenance or stabilization branch
   requires the conditions documented in
@@ -94,6 +119,7 @@ before considering a change finished:
 
 ```sh
 pnpm lint
+pnpm lint:writing
 pnpm typecheck
 pnpm test
 pnpm coverage

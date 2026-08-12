@@ -5,7 +5,7 @@ import {
   meta,
   resolveMetadata,
   structuredData,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 
 describe("document metadata", () => {
   it("defines app-owned metadata objects", () => {

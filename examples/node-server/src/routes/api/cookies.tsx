@@ -1,4 +1,4 @@
-import { response } from "@demiurge-js/core";
+import { response } from "@demiurgejs/core";
 
 export const GET = response(() => {
   const headers = new Headers({

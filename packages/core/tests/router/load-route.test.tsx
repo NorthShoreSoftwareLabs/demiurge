@@ -14,11 +14,11 @@ import {
   type LayoutProps,
   type RouteModule,
   type RouteProps,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 import {
   unstable_createRouteManifest,
   unstable_loadPageRoute,
-} from "@demiurge-js/core/internal/testing";
+} from "@demiurgejs/core/internal/testing";
 
 function View(_props: RouteProps) {
   return null;

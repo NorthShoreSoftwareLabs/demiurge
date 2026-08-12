@@ -6,10 +6,9 @@ export type InitialRouteData = {
 
 export const HYDRATION_DATA_ELEMENT_ID = "__demiurge_data";
 export const HYDRATION_ROOT_ATTRIBUTE = "data-demiurge-hydrate";
-// Marks a document the server rendered as a fallback rather than a page. The
-// client hydrates markup it can reproduce and replaces markup it cannot, and
-// without this it has no way to tell a server-rendered 404 apart from a page
-// document its own manifest no longer matches.
+// Marks a server document as a fallback, not a page. The client hydrates markup
+// that it can reproduce. It replaces other markup. This attribute distinguishes
+// a server 404 from a page that does not match the client manifest.
 export const HYDRATION_FALLBACK_ATTRIBUTE = "data-demiurge-fallback";
 
 export function serializeInitialRouteData(

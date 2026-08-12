@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analytics } from "@demiurge-js/core";
+import { analytics } from "@demiurgejs/core";
 
 describe("analytics integrations", () => {
   it("creates a consent-aware Plausible script descriptor", () => {

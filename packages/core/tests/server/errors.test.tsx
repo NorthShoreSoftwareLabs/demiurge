@@ -8,11 +8,11 @@ import {
   type RouteErrorProps,
   type RouteModule,
   type RouteProps,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 import {
   unstable_createRouteManifest,
   handleRequestWithManifest,
-} from "@demiurge-js/core/internal/testing";
+} from "@demiurgejs/core/internal/testing";
 
 function BrokenView(_props: RouteProps): never {
   throw new Error("Loader blew up in /srv/app/routes/index.tsx");

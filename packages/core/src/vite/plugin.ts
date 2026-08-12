@@ -217,11 +217,10 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
         }
       });
 
-      // Returning a hook registers this after Vite's own middlewares, so it
-      // only sees requests Vite could not serve either. `appType` is
-      // "custom", so no SPA fallback intercepts them first. This is what makes
-      // dev and production agree on an unmatched path: both render the same
-      // negotiated not-found instead of dev handing back a bodiless shell.
+      // The returned hook registers this after the Vite middleware. It sees
+      // only requests that Vite cannot serve. `appType` is "custom", so no SPA
+      // fallback intercepts these requests. Development and production render
+      // the same negotiated not-found response for an unmatched path.
       return () => {
         server.middlewares.use(async (request, response, next) => {
           try {
@@ -272,10 +271,11 @@ type AstNode = {
   type: string;
 };
 
-// Page data and document contributions are server capabilities. Removing them
-// after Vite/React have parsed TypeScript and JSX, but before Rollup follows the
-// final client graph, keeps request code and its server-only imports out of
-// browser chunks. The exported document bindings remain as `undefined` so the
+// Page data and document contributions are server capabilities. Vite and React
+// first parse TypeScript and JSX. The plugin then removes these capabilities
+// before Rollup follows the final client graph. This sequence excludes request
+// code and server-only imports from browser chunks. The exported document
+// bindings remain as `undefined` so the
 // route module keeps a stable shape without evaluating their initializers.
 export function stripClientPageData(code: string) {
   const ast = parseAst(code) as unknown as AstNode;
@@ -535,11 +535,11 @@ export function createHandler(options = {}) {
 `;
 }
 
-// Shared by both virtual entries so the prefix stripping and the route-key
-// shape can never drift between them the way they did before: the server
-// entry needs framework-attached `.ts` files such as `@policy.ts` and
-// `@middleware.ts`, which the old `.tsx`-only glob silently dropped from
-// production while dev's own `findRouteFiles` kept enforcing them.
+// Both virtual entries use this function. Therefore, their prefix removal and
+// route-key formats stay equal. The server entry requires framework-attached
+// `.ts` files such as `@policy.ts` and `@middleware.ts`. Previously, a
+// `.tsx`-only glob omitted these files from production. Development still found
+// and applied them.
 function createRouteMapSource(
   routesDir: string,
   {
@@ -560,11 +560,10 @@ ${exportRoutes ? "export " : ""}const routes = Object.fromEntries(
 );`;
 }
 
-// These two run only on the server: they gate a request before the route is
-// invoked and never render. Globbing them into the client entry emits them as
-// fetchable chunks in `dist/client`, publishing whatever a middleware or
-// policy closes over — credentials, auth logic, internal hostnames — to
-// anyone who reads the asset directory.
+// These two files run only on the server. They control a request before the
+// route runs and do not render. A client glob would create public chunks in
+// `dist/client`. These chunks could expose credentials, authorization logic, or
+// internal host names from a middleware or policy closure.
 const serverOnlyRouteFiles = ["@middleware.ts", "@policy.ts"];
 
 function toRootAbsoluteGlobs(routesDir: string, includeServerOnly: boolean) {
@@ -603,10 +602,9 @@ function createStylesImport(
     : "";
 }
 
-// Dev renders through the production pipeline, so the only things it adds are
-// the virtual client entry, Vite's HTML transform, and the dev flag that turns
-// on stack traces. Every security and routing decision comes from the shared
-// handler.
+// Development renders through the production pipeline. It adds the virtual
+// client entry, the Vite HTML transform, and a development flag for stack
+// traces. The shared handler makes all security and routing decisions.
 function createDevRuntimeOptions(
   server: ViteDevServer,
   options: DemiurgeVitePluginOptions,
@@ -692,9 +690,8 @@ function createDevFallbackOptions(
 
 const warnedRoots = new Set<string>();
 
-// The framework built-in is a stopgap, not a 404 anyone should ship. The build
-// gate is what enforces that; this is the same message arriving early enough
-// to act on.
+// The framework built-in is a temporary fallback, not a production 404. The
+// build gate enforces this rule. This warning gives the same message earlier.
 function warnMissingRootNotFound(manifest: RouteManifest, routesDir: string) {
   if (
     warnedRoots.has(routesDir) ||
@@ -775,12 +772,10 @@ const DEMIURGE_NAMED_IMPORT = new RegExp(
   "g",
 );
 
-// The plugin cannot evaluate route modules at build time, so page detection
-// reads the source. The signal is the import rather than the bare word: an
-// API-only app doing `db.users.page(2)` must never be told to write a 404
-// document it will never serve, and pagination is everywhere in API code.
-// Importing `page` from the framework package is the one thing only a page
-// route does.
+// The plugin cannot evaluate route modules during the build. Therefore, page
+// detection reads the source. It checks the import, not only the word. An API
+// application can call `db.users.page(2)` without serving an HTML document.
+// Only a page route imports `page` from the framework package.
 export function declaresPageRoute(source: string) {
   const locals = [...source.matchAll(DEMIURGE_NAMED_IMPORT)].flatMap((match) =>
     match[1].split(",").flatMap((binding) => {

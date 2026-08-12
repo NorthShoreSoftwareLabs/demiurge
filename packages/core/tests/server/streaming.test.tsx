@@ -6,8 +6,8 @@ import {
   page,
   security,
   type RouteModule,
-} from "@demiurge-js/core";
-import { renderNodePageResponse } from "@demiurge-js/core/node";
+} from "@demiurgejs/core";
+import { renderNodePageResponse } from "@demiurgejs/core/node";
 
 function routeModule(module: RouteModule) {
   return vi.fn(async () => module);

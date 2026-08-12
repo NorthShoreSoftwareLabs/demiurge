@@ -1,4 +1,4 @@
-import { Link, page, type RouteProps } from "@demiurge-js/core";
+import { Link, page, type RouteProps } from "@demiurgejs/core";
 
 let sharedDataLoads = 0;
 

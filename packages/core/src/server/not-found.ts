@@ -88,9 +88,9 @@ export function renderNotFoundDocument(
 ) {
   const NotFound = match.notFound ?? BuiltInNotFound;
 
-  // Three attempts, each one giving up a layer of app code. A layout resolved
-  // for an unmatched path is the likeliest thing to throw here, and falling
-  // back to the layout-free document beats escalating a 404 into a 500.
+  // Three attempts remove one application layer at a time. A layout for an
+  // unmatched path can cause an error. The layout-free document prevents this
+  // error from changing a 404 response to a 500 response.
   try {
     return renderAttempt(match, NotFound, match.layouts, options);
   } catch (error) {

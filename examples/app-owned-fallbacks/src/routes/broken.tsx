@@ -1,4 +1,4 @@
-import { page } from "@demiurge-js/core";
+import { page } from "@demiurgejs/core";
 import type { ReactNode } from "react";
 
 export const GET = page({ view: BrokenPage });

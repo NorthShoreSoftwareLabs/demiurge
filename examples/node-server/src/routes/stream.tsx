@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { page } from "@demiurge-js/core";
+import { page } from "@demiurgejs/core";
 
 const DeferredMessage = lazy(async () => {
   await new Promise((resolve) => setTimeout(resolve, 100));

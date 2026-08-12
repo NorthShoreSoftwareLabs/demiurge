@@ -9,9 +9,9 @@ export type ProblemDetails = {
   [extension: string]: unknown;
 };
 
-// RFC 9457, which obsoleted RFC 7807. Shipping this as the framework default
-// is the lever for pushing apps toward correct status codes and a parseable
-// error shape rather than everyone inventing `{ "error": "..." }`.
+// RFC 9457 replaced RFC 7807. This framework default gives applications correct
+// status codes and a parseable error format. Applications do not need to create
+// separate `{ "error": "..." }` formats.
 export function createProblemDetails({
   detail,
   instance,

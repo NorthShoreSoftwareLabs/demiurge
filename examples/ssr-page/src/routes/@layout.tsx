@@ -4,7 +4,7 @@ import {
   defineMetadata,
   preconnect,
   type LayoutProps,
-} from "@demiurge-js/core";
+} from "@demiurgejs/core";
 
 export const links = defineLinks([preconnect("https://api.example.com")]);
 
