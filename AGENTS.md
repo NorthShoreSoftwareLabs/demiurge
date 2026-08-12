@@ -111,6 +111,10 @@ Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.
 - Mark a breaking change with `!` before the colon or a `BREAKING CHANGE:`
   footer, and explain the migration in the commit body.
 - Keep commits coherent. Do not mix unrelated cleanup into a feature or fix.
+- Add a `Refs #123` footer to each commit that relates to an issue.
+- For an issue in another repository, use `Refs owner/repository#123`.
+- If a direct commit completes all verified criteria, use `Closes #123` instead.
+- Do not use a closing keyword for partial work.
 
 ## Branches and releases
 
