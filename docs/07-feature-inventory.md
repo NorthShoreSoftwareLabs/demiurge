@@ -2,7 +2,8 @@
 
 This file tracks every major feature family discussed so far. Status values:
 
-- `implemented`: works in the `0.0.1` prototype.
+- `implemented`: works in the current framework release and is covered by the
+  matching tests or production probe.
 - `designed`: documented API direction, not implemented.
 - `planned`: identified as important, needs deeper design.
 
@@ -111,7 +112,7 @@ implementation.
 | Webhook verification helpers | implemented |
 | Trusted Types report-only mode | implemented |
 | Trusted Types enforce mode | implemented |
-| COOP/COEP/CORP cross-origin isolation preset | designed |
+| COOP/COEP/CORP cross-origin isolation preset | implemented |
 | Secret/env validation | implemented |
 | Dependency/script audit | implemented |
 
