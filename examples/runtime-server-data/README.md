@@ -23,4 +23,4 @@ more than two seconds and reload to see public data refresh. Send
 The example uses `createMemoryCacheStore()`, which shares data only inside one
 Node process. Multi-replica production deployments should inject a distributed
 store that passes `verifyCacheStoreContract(...)` from
-`@demiurge/core/data/testing`.
+`@demiurge-js/core/data/testing`.

@@ -1,4 +1,4 @@
-import { Link, page, type RouteProps } from "@demiurge/core";
+import { Link, page, type RouteProps } from "@demiurge-js/core";
 
 export const GET = page({
   view: HomePage,
@@ -8,7 +8,7 @@ function HomePage(_props: RouteProps) {
   return (
     <main className="page-shell">
       <section className="intro">
-        <p className="eyebrow">MVP 0.0.1 fixture</p>
+        <p className="eyebrow">Demiurge example</p>
         <h1>Route files own addresses, not pages.</h1>
         <p>
           This fixture app exercises the framework router from outside the

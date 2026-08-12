@@ -1,0 +1,95 @@
+{
+  "name": "@demiurge-js/core",
+  "version": "0.1.0",
+  "description": "A React framework where the document, security policy, and route pipeline are the framework's job.",
+  "license": "MIT",
+  "author": "North Shore Software Labs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NorthShoreSoftwareLabs/demiurge.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/NorthShoreSoftwareLabs/demiurge#readme",
+  "bugs": {
+    "url": "https://github.com/NorthShoreSoftwareLabs/demiurge/issues"
+  },
+  "keywords": [
+    "react",
+    "framework",
+    "router",
+    "ssr",
+    "vite",
+    "node"
+  ],
+  "type": "module",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./internal/testing": {
+      "types": "./dist/internal/testing.d.ts",
+      "default": "./dist/internal/testing.js"
+    },
+    "./data/testing": {
+      "types": "./dist/data/testing.d.ts",
+      "default": "./dist/data/testing.js"
+    },
+    "./vite": {
+      "types": "./dist/vite/index.d.ts",
+      "default": "./dist/vite/index.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "default": "./dist/node/index.js"
+    },
+    "./static": {
+      "types": "./dist/static/index.d.ts",
+      "default": "./dist/static/index.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "dev": "vite build --watch",
+    "coverage": "vitest run --coverage",
+    "prepack": "pnpm build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "vite": "^6.0.7"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^22.13.0",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^4.1.10",
+    "jsdom": "^30.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,4 +1,4 @@
-import { httpError, page, query, type RouteProps } from "@demiurge/core";
+import { httpError, page, query, type RouteProps } from "@demiurge-js/core";
 
 type SourceSample = {
   channel: string;

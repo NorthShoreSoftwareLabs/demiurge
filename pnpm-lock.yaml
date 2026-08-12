@@ -35,9 +35,9 @@ importers:
 
   examples/app-owned-fallbacks:
     dependencies:
-      '@demiurge/core':
+      '@demiurge-js/core':
         specifier: workspace:*
-        version: link:../../packages/demiurge
+        version: link:../../packages/core
       react:
         specifier: ^19.0.0
         version: 19.2.8
@@ -60,9 +60,9 @@ importers:
 
   examples/basic-blog:
     dependencies:
-      '@demiurge/core':
+      '@demiurge-js/core':
         specifier: workspace:*
-        version: link:../../packages/demiurge
+        version: link:../../packages/core
       react:
         specifier: ^19.0.0
         version: 19.2.8
@@ -85,9 +85,9 @@ importers:
 
   examples/node-server:
     dependencies:
-      '@demiurge/core':
+      '@demiurge-js/core':
         specifier: workspace:*
-        version: link:../../packages/demiurge
+        version: link:../../packages/core
       react:
         specifier: ^19.0.0
         version: 19.2.8
@@ -110,9 +110,9 @@ importers:
 
   examples/runtime-server-data:
     dependencies:
-      '@demiurge/core':
+      '@demiurge-js/core':
         specifier: workspace:*
-        version: link:../../packages/demiurge
+        version: link:../../packages/core
       react:
         specifier: ^19.0.0
         version: 19.2.8
@@ -135,9 +135,9 @@ importers:
 
   examples/ssr-page:
     dependencies:
-      '@demiurge/core':
+      '@demiurge-js/core':
         specifier: workspace:*
-        version: link:../../packages/demiurge
+        version: link:../../packages/core
       react:
         specifier: ^19.0.0
         version: 19.2.8
@@ -160,9 +160,9 @@ importers:
 
   examples/static-export:
     dependencies:
-      '@demiurge/core':
+      '@demiurge-js/core':
         specifier: workspace:*
-        version: link:../../packages/demiurge
+        version: link:../../packages/core
       react:
         specifier: ^19.0.0
         version: 19.2.8
@@ -185,9 +185,9 @@ importers:
 
   examples/streaming-page:
     dependencies:
-      '@demiurge/core':
+      '@demiurge-js/core':
         specifier: workspace:*
-        version: link:../../packages/demiurge
+        version: link:../../packages/core
       react:
         specifier: ^19.0.0
         version: 19.2.8
@@ -208,7 +208,7 @@ importers:
         specifier: ^6.0.7
         version: 6.4.3(@types/node@22.20.1)(tsx@4.23.11)
 
-  packages/demiurge:
+  packages/core:
     devDependencies:
       '@testing-library/react':
         specifier: ^16.3.2

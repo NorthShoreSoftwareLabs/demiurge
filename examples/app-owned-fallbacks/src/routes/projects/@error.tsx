@@ -1,4 +1,4 @@
-import { Link, type RouteErrorProps } from "@demiurge/core";
+import { Link, type RouteErrorProps } from "@demiurge-js/core";
 
 export default function ProjectError({ pathname, status }: RouteErrorProps) {
   return (

@@ -34,7 +34,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Verify minimum-Node package contract
-        run: pnpm --filter demiurge test && pnpm test:pack
+        run: pnpm --filter @demiurge-js/core test && pnpm test:pack
 
   verify:
     name: pnpm verify
@@ -72,6 +72,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-html
-          path: packages/demiurge/coverage/
+          path: packages/core/coverage/
           retention-days: 7
           if-no-files-found: ignore

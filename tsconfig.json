@@ -9,7 +9,9 @@
     "examples/runtime-server-data/.demiurge/route-manifest.d.ts",
     "examples/app-owned-fallbacks/.demiurge/route-manifest.d.ts",
     "examples/static-export/.demiurge/route-manifest.d.ts",
-    "scripts"
+    "tests/integration",
+    "tests/package",
+    "tooling"
   ],
   "exclude": ["examples/**/vite.config.ts", "examples/**/dist"]
 }

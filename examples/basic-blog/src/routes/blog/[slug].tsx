@@ -1,4 +1,4 @@
-import { defineMetadata, page, type RouteProps } from "@demiurge/core";
+import { defineMetadata, page, type RouteProps } from "@demiurge-js/core";
 
 export const GET = page({
   view: BlogPost,

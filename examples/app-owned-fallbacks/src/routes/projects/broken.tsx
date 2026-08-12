@@ -1,4 +1,4 @@
-import { httpError, page } from "@demiurge/core";
+import { httpError, page } from "@demiurge-js/core";
 import type { ReactNode } from "react";
 
 export const GET = page({ view: BrokenProjectPage });

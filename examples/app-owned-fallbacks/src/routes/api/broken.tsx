@@ -1,4 +1,4 @@
-import { httpError, json } from "@demiurge/core";
+import { httpError, json } from "@demiurge-js/core";
 
 export const GET = json(() => {
   throw httpError(409, {

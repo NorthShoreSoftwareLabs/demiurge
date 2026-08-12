@@ -1,4 +1,4 @@
-import { defineRoutePolicy } from "@demiurge/core";
+import { defineRoutePolicy } from "@demiurge-js/core";
 
 export const policy = defineRoutePolicy({
   security: {

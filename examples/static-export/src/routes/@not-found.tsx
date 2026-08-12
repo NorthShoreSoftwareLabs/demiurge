@@ -1,4 +1,4 @@
-import { Link, defineMetadata } from "@demiurge/core";
+import { Link, defineMetadata } from "@demiurge-js/core";
 
 export const metadata = defineMetadata({ title: "Page not found" });
 

@@ -1,4 +1,4 @@
-import { Link, defineMetadata, type NotFoundProps } from "@demiurge/core";
+import { Link, defineMetadata, type NotFoundProps } from "@demiurge-js/core";
 
 export const metadata = defineMetadata({
   title: "Not found",

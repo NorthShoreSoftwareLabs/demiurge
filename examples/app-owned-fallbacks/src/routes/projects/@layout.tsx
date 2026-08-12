@@ -1,4 +1,4 @@
-import type { LayoutProps } from "@demiurge/core";
+import type { LayoutProps } from "@demiurge-js/core";
 
 export default function ProjectLayout({ children }: LayoutProps) {
   return (

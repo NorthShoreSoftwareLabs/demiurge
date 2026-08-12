@@ -37,8 +37,8 @@ jobs:
       - name: Validate version and dist-tag
         id: version
         run: |
-          package_name=$(node -p 'require("./packages/demiurge/package.json").name')
-          package_version=$(node -p 'require("./packages/demiurge/package.json").version')
+          package_name=$(node -p 'require("./packages/core/package.json").name')
+          package_version=$(node -p 'require("./packages/core/package.json").version')
           test "$GITHUB_REF_NAME" = "v$package_version"
           dist_tag=latest
           case "$package_version" in
@@ -113,7 +113,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Publish package
-        run: npm publish ./packages/demiurge --access public --provenance --tag "${{ needs.verify.outputs.dist-tag }}"
+        run: npm publish ./packages/core --access public --provenance --tag "${{ needs.verify.outputs.dist-tag }}"
 
       - name: Create GitHub release
         env:

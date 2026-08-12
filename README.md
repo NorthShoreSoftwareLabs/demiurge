@@ -22,7 +22,7 @@ three directories away is not.
 
 ```tsx
 // src/routes/blog/[slug].tsx
-import { page } from "@demiurge/core";
+import { page } from "@demiurge-js/core";
 
 export const GET = page({
   data: ({ cache, path }) =>
@@ -36,7 +36,7 @@ export const GET = page({
 Demiurge needs Node 22.13 or newer, React 19, and Vite 6.
 
 ```sh
-pnpm add @demiurge/core react react-dom
+pnpm add @demiurge-js/core react react-dom
 pnpm add -D vite @vitejs/plugin-react typescript @types/react @types/react-dom
 ```
 
@@ -44,7 +44,7 @@ pnpm add -D vite @vitejs/plugin-react typescript @types/react @types/react-dom
 // vite.config.ts
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { demiurge } from "@demiurge/core/vite";
+import { demiurge } from "@demiurge-js/core/vite";
 
 export default defineConfig({
   plugins: [demiurge({ typedRoutes: true }), react()],
@@ -53,7 +53,7 @@ export default defineConfig({
 
 ```tsx
 // src/routes/index.tsx
-import { page } from "@demiurge/core";
+import { page } from "@demiurge-js/core";
 
 export const GET = page({
   view: () => <main>Hello from Demiurge</main>,
@@ -62,7 +62,7 @@ export const GET = page({
 
 ```tsx
 // src/routes/@not-found.tsx
-import type { NotFoundProps } from "@demiurge/core";
+import type { NotFoundProps } from "@demiurge-js/core";
 
 export default function NotFound({ pathname }: NotFoundProps) {
   return <main>Nothing at {pathname}</main>;
@@ -127,7 +127,7 @@ dynamic route declares.
 Policy is inherited down the route tree from `@policy.ts` files:
 
 ```ts
-import { security } from "@demiurge/core";
+import { security } from "@demiurge-js/core";
 
 export const policy = {
   document: security.strict(),
@@ -177,7 +177,7 @@ export const GET = page({
 Scopes are `build`, `public`, `private`, `request`, and `none`. Stale-while-
 revalidate coordinates one refresh across replicas rather than letting every
 request start its own. Custom stores implement a published contract, and
-`@demiurge/core/data/testing` verifies an implementation against it.
+`@demiurge-js/core/data/testing` verifies an implementation against it.
 
 ## Documents
 
@@ -208,7 +208,7 @@ process that serves both:
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createNodeServer, renderNodePageResponse } from "@demiurge/core/node";
+import { createNodeServer, renderNodePageResponse } from "@demiurge-js/core/node";
 import { createHandler } from "./dist/server/server-entry.js";
 
 const root = fileURLToPath(new URL("dist/client", import.meta.url));
@@ -230,12 +230,12 @@ server.listen(Number(process.env.PORT ?? 4173), process.env.HOST ?? "127.0.0.1")
 
 `allowedHosts` is mandatory, forwarded headers are ignored until you name a
 trusted proxy, and the static root rejects traversal and symlinks. See
-[Node deployment](./docs/11-node-deployment.md) for proxy trust, timeouts,
+[Node deployment](./docs/guides/node-deployment.md) for proxy trust, timeouts,
 graceful shutdown, and shared cache stores.
 
 ### Static
 
-`@demiurge/core/static` prerenders pages, resolves `paths` exports for dynamic routes,
+`@demiurge-js/core/static` prerenders pages, resolves `paths` exports for dynamic routes,
 and writes an app-owned `404.html`. It emits `demiurge-static-manifest.json`
 recording the response headers a host must apply at each path, which keeps the
 adapter independent of any one provider's configuration format. The build fails
@@ -247,7 +247,7 @@ already let a build reject a target that cannot provide something the app uses.
 
 ## Examples
 
-Each example is a workspace that installs `@demiurge/core` the way a published
+Each example is a workspace that installs `@demiurge-js/core` the way a published
 consumer would.
 
 | Example | Shows |
@@ -262,30 +262,29 @@ consumer would.
 
 ## Documentation
 
-- [Framework vision](./docs/00-framework-vision.md)
-- [Route capabilities](./docs/01-route-capabilities.md)
-- [Security and strict CSP](./docs/02-security-csp.md)
-- [Data and static generation](./docs/04-data-and-static-generation.md)
-- [Errors and not-found behavior](./docs/09-errors-and-not-found.md)
-- [Platform features and integrations](./docs/05-platform-features.md)
-- [Node deployment](./docs/11-node-deployment.md)
-- [Feature inventory](./docs/07-feature-inventory.md)
-- [Implementation roadmap](./docs/03-implementation-roadmap.md)
-- [Testing strategy](./docs/08-testing-strategy.md)
-- [Release process](./docs/10-release-process.md)
+- [Documentation index](./docs/README.md)
+- [Getting started](./docs/getting-started.md)
+- [Route reference](./docs/reference/routes.md)
+- [Security guide](./docs/guides/security.md)
+- [Data and caching](./docs/guides/data-and-caching.md)
+- [Errors and not-found behavior](./docs/guides/errors-and-not-found.md)
+- [Node deployment](./docs/guides/node-deployment.md)
+
+Maintainers and contributors can also read the [architecture records](./architecture/README.md),
+[open RFCs](./rfcs/README.md), and [contribution guide](./CONTRIBUTING.md).
 
 ## Status
 
-Demiurge 0.1.0 is the first public release. Routing, SSR, streaming, static
-output, the Node adapter, the document pipeline, the cache, and the security
-presets are implemented and tested. React Server Components, edge adapters, and the
-`npm create demiurge-app` scaffold ([#22](https://github.com/NorthShoreSoftwareLabs/demiurge/issues/22))
-are not. [`docs/07-feature-inventory.md`](./docs/07-feature-inventory.md) tracks
-every feature family and its state.
+Demiurge 0.1.0 is prepared on `main` but has not been published. Routing, SSR,
+streaming, static output, the Node adapter, the document pipeline, the cache,
+and the security presets are implemented and tested. React Server Components,
+edge adapters, and the `npm create demiurge-app` scaffold
+([#22](https://github.com/NorthShoreSoftwareLabs/demiurge/issues/22)) are not.
+GitHub issues and milestones are the source of truth for delivery status.
 
 ## Working on the framework
 
-The library lives in `packages/demiurge` and the examples consume it through
+The library lives in `packages/core` and the examples consume it through
 `node_modules`, so the package's `exports` map, its emitted declarations, and
 its peer dependencies are exercised by the normal build rather than bypassed by
 a path alias. Examples read the library's `dist`, not its source.
@@ -310,7 +309,7 @@ declarations, cache-store conformance API, and a clean consumer's typecheck and
 Vite production build. That is the only check that sees the package the way a
 consumer does.
 
-Framework source modules under `packages/demiurge/src`:
+Framework source modules under `packages/core/src`:
 
 | Module | Owns |
 | --- | --- |

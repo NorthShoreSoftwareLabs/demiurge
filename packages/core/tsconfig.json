@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@demiurge-js/core": ["src/index.ts"],
+      "@demiurge-js/core/data/testing": ["src/data/testing.ts"],
+      "@demiurge-js/core/internal/testing": ["src/internal/testing.ts"],
+      "@demiurge-js/core/node": ["src/node/index.ts"],
+      "@demiurge-js/core/static": ["src/static/index.ts"],
+      "@demiurge-js/core/vite": ["src/vite/index.ts"]
+    }
+  },
+  "include": ["src", "tests"]
+}

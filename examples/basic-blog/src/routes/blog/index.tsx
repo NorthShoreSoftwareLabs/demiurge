@@ -1,4 +1,4 @@
-import { Link, page, type RouteProps } from "@demiurge/core";
+import { Link, page, type RouteProps } from "@demiurge-js/core";
 
 export const GET = page({
   view: BlogIndex,

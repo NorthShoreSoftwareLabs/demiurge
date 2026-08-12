@@ -1,4 +1,4 @@
-import type { RouteErrorProps } from "@demiurge/core";
+import type { RouteErrorProps } from "@demiurge-js/core";
 
 export default function RouteError({ error, pathname }: RouteErrorProps) {
   const message = error instanceof Error ? error.message : "Unknown route error";

@@ -3,7 +3,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createNodeServer, renderNodePageResponse } from "@demiurge/core/node";
+import { createNodeServer, renderNodePageResponse } from "@demiurge-js/core/node";
 import { createHandler } from "./dist/server/server-entry.js";
 
 const root = fileURLToPath(new URL("dist/client", import.meta.url));

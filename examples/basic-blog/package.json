@@ -8,7 +8,7 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@demiurge/core": "workspace:*",
+    "@demiurge-js/core": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

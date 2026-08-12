@@ -1,15 +1,15 @@
 # Changelog
 
-Released framework changes are grouped below by version. Open work lives in
-GitHub issues, and `tasks/` holds the implementation specs.
+Released framework changes are grouped below by version. Open work and delivery
+status live in GitHub issues and milestones.
 
-## 0.1.0 — 2026-08-11
+## 0.1.0 — Unreleased
 
 ## Pipeline Quality Gates
 
 Epic: #1
 
-- The library lives in `packages/demiurge` as a pnpm workspace, and the examples
+- The library lives in `packages/core` as a pnpm workspace, and the examples
   depend on it by name so resolution runs through `node_modules` and the
   package `exports` map instead of a path alias.
 - The package builds to `dist` with emitted declarations, and `react`,
@@ -167,7 +167,7 @@ Epic: #7
   contract. Framework-owned `app:environment:schemaVersion` and scope prefixes
   isolate every backend key and tag while request entries remain local.
 - `createMemoryCacheStore(...)` implements that contract, and
-  `@demiurge/core/data/testing` exports a runner-neutral conformance verifier for
+  `@demiurge-js/core/data/testing` exports a runner-neutral conformance verifier for
   custom Redis/KV-style adapters. Cache invalidation is async so network stores
   do not need a fake synchronous API.
 - `createRequestHandler({ cacheStore })` creates a new facade per request while
@@ -266,7 +266,7 @@ Epic: #11
 
 - The production Node adapter converts Node HTTP requests and responses to the
   web platform contract, serves safe static assets, preserves repeated
-  `Set-Cookie` headers, and exposes `createNodeServer(...)` from `@demiurge/core/node`.
+  `Set-Cookie` headers, and exposes `createNodeServer(...)` from `@demiurge-js/core/node`.
 - Static serving rejects symbolic links in every path component, verifies the
   real target remains inside the real public root, and uses `O_NOFOLLOW` for
   the final open where the platform supports it.
