@@ -16,7 +16,8 @@ handlers and React server components without hiding when work runs.
 - ~~Stale-while-revalidate for shared data entries, with stale retention on
   refresh failure, store-coordinated refresh leases, atomic publication, and
   adapter-managed background lifetime.~~ Shipped for data-query results in
-  #112; render-artifact ISR remains separate work.
+  #112, including Node `waitUntil` tracking and bounded graceful-shutdown drain;
+  render-artifact ISR remains separate work.
 - Origin render-artifact caching and incremental static regeneration, using the
   same freshness, stale-window, tag, and atomic-publication semantics as data
   caching.
@@ -42,6 +43,9 @@ handlers and React server components without hiding when work runs.
 - `examples/static-blog`
 - ~~`examples/runtime-server-data`~~ Shipped in #49 with a production probe for
   cache scopes, account partitioning, and TTL expiry.
+- ~~Node stale-while-revalidate lifecycle~~ Shipped in `examples/node-server`:
+  the shared home query has fresh/stale deadlines, and its refresh promise is
+  tracked by the Node server through graceful shutdown.
 - `examples/cache-invalidation`
 - `examples/redis-cache-adapter`
 

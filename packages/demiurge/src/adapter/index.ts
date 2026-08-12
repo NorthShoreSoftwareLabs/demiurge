@@ -1,4 +1,5 @@
 export type AdapterCapability =
+  | "backgroundLifetime"
   | "crossOriginIsolationHeaders"
   | "nonceInjection"
   | "sharedCache"
@@ -27,6 +28,7 @@ export type AdapterCapabilityCheck = {
 };
 
 const defaultCapabilities = {
+  backgroundLifetime: false,
   crossOriginIsolationHeaders: false,
   nonceInjection: false,
   sharedCache: false,

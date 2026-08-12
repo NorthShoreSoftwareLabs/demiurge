@@ -23,7 +23,8 @@ shared caching.
   that one trust boundary (#89, #93).
 - Node lifecycle controls: production timeout defaults, request abort on client
   disconnect, readiness state, explicit signal registration, active-response
-  draining, and bounded forced shutdown (#94, #103).
+  draining, tracked background `waitUntil` work, and bounded forced shutdown
+  (#94, #103, #112).
 - Redis/shared cache adapter.
 - KV cache adapter.
 - Static output artifact generation.
@@ -91,3 +92,7 @@ shared caching.
 - Gateway rate limiting complements rather than silently replaces application
   controls. Services behind Apigee/API Gateway trust identity only through the
   configured network/proxy boundary and should not remain directly reachable.
+- The Node adapter owns one abort signal per request. Premature request,
+  response, or socket closure aborts active route data and React streaming work
+  once; loaders, middleware, handlers, and upstream clients propagate
+  `request.signal` rather than creating detached work.

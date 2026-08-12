@@ -95,6 +95,7 @@ describe("static output adapter", () => {
   it("declares only the static output capability", () => {
     expect(staticAdapter).toEqual({
       capabilities: {
+        backgroundLifetime: false,
         crossOriginIsolationHeaders: false,
         nonceInjection: false,
         sharedCache: false,
@@ -140,12 +141,14 @@ describe("static output adapter", () => {
     expect(home).toContain("Built at export time");
     expect(home).toContain("<title>Static home</title>");
     expect(home).toContain('<template id="__demiurge_data">');
+    expect(home).toContain('"navigation":"document"');
     expect(home).toContain('src="/assets/app-a1b2c3d4.js"');
     expect(home).toContain('href="/assets/app-a1b2c3d4.css"');
     expect(post).toContain("Post");
     expect(post).toContain("hello world");
     expect(notFound).toContain("Nothing at");
     expect(notFound).toContain("/404");
+    expect(notFound).toContain('"navigation":"document"');
     expect(await readFile(join(outDir, "assets", "app-a1b2c3d4.js"), "utf8"))
       .toBe("export {};\n");
     expect(existsSync(join(outDir, "api", "health", "index.html"))).toBe(false);

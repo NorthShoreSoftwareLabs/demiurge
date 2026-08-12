@@ -240,6 +240,14 @@ serverless or edge adapter to pass it to its execution context. They also accept
 error. Without an error hook, Demiurge logs the failure rather than creating an
 unhandled rejection.
 
+The Node adapter exposes that lifetime as `server.waitUntil(promise)`. Graceful
+shutdown first stops accepting requests, then drains active responses and every
+tracked background promise. Both use the same `shutdown.gracePeriod`; when the
+deadline expires, connections are forced closed and shutdown completes without
+waiting indefinitely for an uncooperative promise. A rejected tracked promise
+is observed through `shutdown.onBackgroundError` (or logged by default), so it
+cannot become an unhandled rejection.
+
 Incremental static regeneration is the same state machine applied to a render
 artifact instead of a query value:
 
@@ -331,8 +339,10 @@ creates a fresh cache facade for every request:
 
 ```ts
 import { createMemoryCacheStore, createRequestHandler } from "demiurge";
+import { createNodeServer } from "demiurge/node";
 
 const store = createMemoryCacheStore();
+let server: ReturnType<typeof createNodeServer>;
 const handler = createRequestHandler({
   cacheStore: {
     namespace: {
@@ -342,9 +352,19 @@ const handler = createRequestHandler({
     },
     onBackgroundError: (error) => logger.error(error),
     store,
-    waitUntil: (promise) => backgroundTasks.add(promise),
+    waitUntil: (promise) => server.waitUntil(promise),
   },
   routes,
+});
+
+server = createNodeServer({
+  allowedHosts: ["example.com"],
+  handler,
+  shutdown: {
+    gracePeriod: 30_000,
+    onBackgroundError: (error) => logger.error(error),
+    signals: ["SIGINT", "SIGTERM"],
+  },
 });
 ```
 
@@ -358,6 +378,12 @@ does not silently create process-global state.
 The built-in memory store is useful for one Node process and tests. It is not a
 distributed cache: multiple replicas need a Redis/KV-style implementation of
 the same `CacheStore` contract.
+
+`nodeAdapter` declares the portable `backgroundLifetime` capability because its
+server tracks `waitUntil` work. Static adapters leave it false. Future edge and
+serverless adapters may declare the same capability only when they forward each
+promise to the platform execution context; merely starting a detached promise
+does not satisfy the contract.
 
 Both memory APIs are bounded to 10,000 entries by default and accept
 `maximumEntries` when a process has a deliberately larger or smaller memory

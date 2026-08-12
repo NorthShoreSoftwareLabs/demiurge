@@ -38,6 +38,7 @@ export type { StaticFileHandler, StaticFileHandlerOptions } from "./static";
 export const nodeAdapter = defineAdapter({
   name: "node",
   capabilities: {
+    backgroundLifetime: true,
     crossOriginIsolationHeaders: true,
     nonceInjection: true,
     streaming: true,
@@ -66,6 +67,7 @@ export type NodeServerState = "draining" | "ready" | "stopped";
 
 export type NodeGracefulShutdownOptions = {
   gracePeriod?: number;
+  onBackgroundError?: (error: unknown) => void;
   onStateChange?: (state: NodeServerState) => void;
   signals?: readonly NodeShutdownSignal[];
 };
@@ -78,6 +80,7 @@ export type NodeServerOptions = NodeRequestListenerOptions & {
 export type NodeServer = Server & {
   isReady: () => boolean;
   shutdown: () => Promise<void>;
+  waitUntil: (promise: Promise<unknown>) => void;
 };
 
 export const defaultNodeServerTimeouts = {
@@ -231,8 +234,10 @@ function attachNodeServerLifecycle(
 
   let draining = false;
   let shutdownPromise: Promise<void> | undefined;
+  let checkShutdownCompletion: (() => void) | undefined;
   const signalHandlers = new Map<NodeShutdownSignal, () => void>();
   const activeResponses = new Map<Socket, number>();
+  const backgroundTasks = new Set<Promise<void>>();
 
   server.on("connection", (socket) => {
     activeResponses.set(socket, 0);
@@ -265,6 +270,22 @@ function attachNodeServerLifecycle(
   });
 
   server.isReady = () => server.listening && !draining;
+  server.waitUntil = (promise) => {
+    const tracked = Promise.resolve(promise)
+      .catch((error: unknown) => {
+        try {
+          (options?.onBackgroundError ?? defaultOnError)(error);
+        } catch (reportingError) {
+          defaultOnError(reportingError);
+        }
+      })
+      .then(() => undefined)
+      .finally(() => {
+        backgroundTasks.delete(tracked);
+        checkShutdownCompletion?.();
+      });
+    backgroundTasks.add(tracked);
+  };
   server.shutdown = () => {
     if (shutdownPromise) {
       return shutdownPromise;
@@ -273,21 +294,23 @@ function attachNodeServerLifecycle(
     draining = true;
     options?.onStateChange?.("draining");
     shutdownPromise = new Promise<void>((resolveShutdown, rejectShutdown) => {
+      let closeError: Error | undefined;
+      let deadlineReached = false;
+      let serverClosed = false;
+      let settled = false;
       const forceTimer = setTimeout(() => {
+        deadlineReached = true;
         server.closeAllConnections();
+        completeShutdown();
       }, gracePeriod);
 
       server.close((error) => {
-        clearTimeout(forceTimer);
-        removeSignalHandlers();
-        options?.onStateChange?.("stopped");
-
         if (error && (error as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING") {
-          rejectShutdown(error);
-          return;
+          closeError = error;
         }
 
-        resolveShutdown();
+        serverClosed = true;
+        completeShutdown();
       });
       server.closeIdleConnections();
       closeTrackedIdleConnections();
@@ -297,6 +320,31 @@ function attachNodeServerLifecycle(
         server.closeIdleConnections();
         closeTrackedIdleConnections();
       });
+
+      checkShutdownCompletion = completeShutdown;
+
+      function completeShutdown() {
+        if (
+          settled ||
+          !serverClosed ||
+          (!deadlineReached && backgroundTasks.size > 0)
+        ) {
+          return;
+        }
+
+        settled = true;
+        checkShutdownCompletion = undefined;
+        clearTimeout(forceTimer);
+        removeSignalHandlers();
+        options?.onStateChange?.("stopped");
+
+        if (closeError) {
+          rejectShutdown(closeError);
+          return;
+        }
+
+        resolveShutdown();
+      }
     });
 
     return shutdownPromise;

@@ -452,6 +452,7 @@ Adapters should declare what deployment features they support:
 const adapter = defineAdapter({
   name: "node",
   capabilities: {
+    backgroundLifetime: true,
     nonceInjection: true,
     streaming: true,
     webSocket: true,
@@ -461,10 +462,10 @@ const adapter = defineAdapter({
 assertAdapterCapabilities(adapter, ["streaming", "nonceInjection"]);
 ```
 
-The adapter contract exposes capability checks for nonce injection, streaming,
-WebSocket, WebTransport, cross-origin isolation headers, static output, and
-shared cache support. Concrete Node and static adapters now exercise that
-contract; an Edge adapter and shared cache implementations remain.
+The adapter contract exposes capability checks for background lifetime, nonce
+injection, streaming, WebSocket, WebTransport, cross-origin isolation headers,
+static output, and shared cache support. Concrete Node and static adapters now
+exercise that contract; an Edge adapter and shared cache implementations remain.
 
 ### Devtools And Audits
 

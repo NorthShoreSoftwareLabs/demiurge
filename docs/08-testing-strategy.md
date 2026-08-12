@@ -106,6 +106,7 @@ Candidate tool: Playwright.
 Adapters must declare and prove capabilities:
 
 - streaming
+- background lifetime and bounded drain
 - nonce injection
 - WebSocket support
 - static output

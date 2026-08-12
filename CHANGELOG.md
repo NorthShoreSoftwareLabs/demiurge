@@ -48,9 +48,10 @@ Epic: #4
   default, and resolves client IP, scheme, and host through one typed hop-count
   or CIDR proxy-trust policy. IP rate limits consume the resolved peer identity.
 - The Node server exposes typed timeout configuration, readiness state, and a
-  bounded graceful `shutdown()` with optional SIGINT/SIGTERM registration. It
-  aborts Web Requests on premature client disconnect so route and render work
-  can cancel promptly.
+  bounded graceful `shutdown()` with optional SIGINT/SIGTERM registration.
+  `waitUntil(...)` keeps cache refreshes and other tracked background work alive
+  through the same bounded drain. It aborts Web Requests on premature client
+  disconnect so route and render work can cancel promptly.
 - Default double-submit CSRF protection for cookie-authenticated unsafe methods,
   configurable cookie/header token names, explicit route-policy exemptions,
   and secure token/cookie issuance helpers with browser round-trip coverage.

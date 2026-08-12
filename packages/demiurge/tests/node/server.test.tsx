@@ -4,9 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
 import { request as httpRequest, type Server } from "node:http";
+import { Suspense, use } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
   assertAdapterCapabilities,
+  createCache,
+  createMemoryCacheStore,
   createRequestHandler,
   defineRoutePolicy,
   page,
@@ -14,7 +17,11 @@ import {
   type RouteModule,
   type RouteProps,
 } from "demiurge";
-import { createNodeServer, nodeAdapter } from "demiurge/node";
+import {
+  createNodeServer,
+  nodeAdapter,
+  renderNodePageResponse,
+} from "demiurge/node";
 
 function routeModule(module: RouteModule) {
   return vi.fn(async () => module);
@@ -22,6 +29,23 @@ function routeModule(module: RouteModule) {
 
 function HomePage({ data }: RouteProps<"/", { message: string }>) {
   return <main data-testid="home">{data.message}</main>;
+}
+
+function createStreamingPage(value: Promise<string>) {
+  function DeferredValue() {
+    return <strong>{use(value)}</strong>;
+  }
+
+  return function StreamingPage() {
+    return (
+      <main>
+        <h1>Streaming shell</h1>
+        <Suspense fallback={<p>Loading value</p>}>
+          <DeferredValue />
+        </Suspense>
+      </main>
+    );
+  };
 }
 
 // `fetch` itself refuses to construct a forbidden-method request client-side,
@@ -111,7 +135,11 @@ describe("Node adapter", () => {
         ),
     });
 
-    assertAdapterCapabilities(nodeAdapter, ["streaming", "nonceInjection"]);
+    assertAdapterCapabilities(nodeAdapter, [
+      "backgroundLifetime",
+      "streaming",
+      "nonceInjection",
+    ]);
 
     try {
       server.listen(0, "127.0.0.1");
@@ -261,6 +289,114 @@ describe("Node adapter", () => {
     expect(states).toEqual(["ready", "draining", "stopped"]);
   });
 
+  it("drains waitUntil work before completing graceful shutdown", async () => {
+    const background = deferred<void>();
+    const states: string[] = [];
+    const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler: async () => new Response("ok"),
+      shutdown: {
+        gracePeriod: 1_000,
+        onStateChange: (state) => states.push(state),
+      },
+    });
+
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    server.waitUntil(background.promise);
+    let stopped = false;
+    const shutdown = server.shutdown().then(() => {
+      stopped = true;
+    });
+
+    await new Promise((resolveTick) => setImmediate(resolveTick));
+    expect(stopped).toBe(false);
+    expect(states).toEqual(["ready", "draining"]);
+
+    background.resolve();
+    await shutdown;
+
+    expect(stopped).toBe(true);
+    expect(states).toEqual(["ready", "draining", "stopped"]);
+  });
+
+  it("keeps a stale cache refresh alive through Node graceful shutdown", async () => {
+    const refresh = deferred<number>();
+    let loads = 0;
+    let now = 0;
+    const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler: async () => new Response("ok"),
+      shutdown: { gracePeriod: 1_000 },
+    });
+    const cache = createCache({
+      namespace: {
+        app: "node-lifetime-test",
+        environment: "test",
+        schemaVersion: 1,
+      },
+      now: () => now,
+      store: createMemoryCacheStore({ now: () => now }),
+      waitUntil: (promise) => server.waitUntil(promise),
+    });
+    const request = {
+      fn: () => ++loads === 1 ? 1 : refresh.promise,
+      key: ["home"],
+      scope: "public",
+      staleWhileRevalidate: 100,
+      ttl: 10,
+    } as const;
+
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    await expect(cache.get(request)).resolves.toBe(1);
+    now = 11;
+    await expect(cache.get(request)).resolves.toBe(1);
+
+    let stopped = false;
+    const shutdown = server.shutdown().then(() => {
+      stopped = true;
+    });
+    await new Promise((resolveTick) => setImmediate(resolveTick));
+    expect(stopped).toBe(false);
+
+    refresh.resolve(2);
+    await shutdown;
+    expect(stopped).toBe(true);
+  });
+
+  it("bounds waitUntil draining by the graceful shutdown deadline", async () => {
+    const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler: async () => new Response("ok"),
+      shutdown: { gracePeriod: 5 },
+    });
+
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    server.waitUntil(new Promise(() => undefined));
+
+    await expect(server.shutdown()).resolves.toBeUndefined();
+    expect(server.isReady()).toBe(false);
+  });
+
+  it("reports rejected waitUntil work without creating an unhandled rejection", async () => {
+    const onBackgroundError = vi.fn();
+    const error = new Error("refresh failed");
+    const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler: async () => new Response("ok"),
+      shutdown: { onBackgroundError },
+    });
+
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    server.waitUntil(Promise.reject(error));
+
+    await vi.waitFor(() => expect(onBackgroundError).toHaveBeenCalledWith(error));
+    await server.shutdown();
+  });
+
   it("forces active connections closed when the shutdown deadline expires", async () => {
     const started = deferred<void>();
     const server = createNodeServer({
@@ -321,6 +457,130 @@ describe("Node adapter", () => {
       await aborted.promise;
       await new Promise((resolveTick) => setImmediate(resolveTick));
       expect(abortCount).toBe(1);
+    } finally {
+      await server.shutdown();
+    }
+  });
+
+  it("aborts active page data exactly once through the production request stack", async () => {
+    const started = deferred<void>();
+    const aborted = deferred<void>();
+    let abortCount = 0;
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page({
+            data: ({ request }) =>
+              new Promise<{ message: string }>((resolveData) => {
+                request.signal.addEventListener(
+                  "abort",
+                  () => {
+                    abortCount += 1;
+                    aborted.resolve();
+                    resolveData({ message: "aborted" });
+                  },
+                  { once: true },
+                );
+                started.resolve();
+              }),
+            view: HomePage,
+          }),
+        }),
+      },
+    });
+    const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler,
+    });
+
+    try {
+      server.listen(0, "127.0.0.1");
+      await once(server, "listening");
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      const request = httpRequest({ host: "127.0.0.1", path: "/", port });
+      request.on("error", () => undefined);
+      request.end();
+      await started.promise;
+      request.destroy();
+
+      await aborted.promise;
+      await new Promise((resolveTick) => setImmediate(resolveTick));
+      expect(abortCount).toBe(1);
+    } finally {
+      await server.shutdown();
+    }
+  });
+
+  it("cancels active React streaming work exactly once after a client disconnect", async () => {
+    const value = deferred<string>();
+    const streamCancelled = deferred<void>();
+    let cancellationCount = 0;
+    const handler = createRequestHandler({
+      renderPage: async (match, options) => {
+        const response = await renderNodePageResponse(match, options);
+        const reader = response.body!.getReader();
+
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            async cancel(reason) {
+              cancellationCount += 1;
+              streamCancelled.resolve();
+              await reader.cancel(reason);
+            },
+            async pull(controller) {
+              const chunk = await reader.read();
+
+              if (chunk.done) {
+                controller.close();
+              } else {
+                controller.enqueue(chunk.value);
+              }
+            },
+          }),
+          { headers: response.headers, status: response.status },
+        );
+      },
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page({
+            render: { mode: "streaming" },
+            view: createStreamingPage(value.promise),
+          }),
+        }),
+      },
+    });
+    const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler,
+    });
+
+    try {
+      server.listen(0, "127.0.0.1");
+      await once(server, "listening");
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+
+      await new Promise<void>((resolveShell, rejectShell) => {
+        const request = httpRequest(
+          { host: "127.0.0.1", path: "/", port },
+          (response) => {
+            response.setEncoding("utf8");
+            response.on("data", (chunk: string) => {
+              if (chunk.includes("Loading value")) {
+                request.destroy();
+                resolveShell();
+              }
+            });
+          },
+        );
+        request.on("error", rejectShell);
+        request.end();
+      });
+
+      await streamCancelled.promise;
+      await new Promise((resolveTick) => setImmediate(resolveTick));
+      expect(cancellationCount).toBe(1);
     } finally {
       await server.shutdown();
     }

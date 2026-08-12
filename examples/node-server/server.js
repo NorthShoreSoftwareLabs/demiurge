@@ -12,6 +12,10 @@ const manifest = JSON.parse(
   await readFile(join(root, "demiurge-manifest.json"), "utf8"),
 );
 const cacheStore = createMemoryCacheStore();
+let server;
+const reportBackgroundError = (error) => {
+  console.error("Demiurge Node background task failed.", error);
+};
 const applicationHandler = createHandler({
   cacheStore: {
     namespace: {
@@ -19,7 +23,11 @@ const applicationHandler = createHandler({
       environment: process.env.NODE_ENV ?? "development",
       schemaVersion: 1,
     },
+    onBackgroundError: reportBackgroundError,
     store: cacheStore,
+    waitUntil(promise) {
+      server.waitUntil(promise);
+    },
   },
   clientEntry: manifest.clientEntry,
   renderPage: renderNodePageResponse,
@@ -30,7 +38,6 @@ const port = Number(process.env.PORT ?? 4173);
 const allowedHosts = (process.env.ALLOWED_HOSTS ?? `${host},localhost`)
   .split(",")
   .map((value) => value.trim());
-let server;
 const handler = (request) => {
   if (new URL(request.url).pathname === "/.well-known/ready") {
     return new Response(server?.isReady() ? "ready" : "draining", {
@@ -46,6 +53,7 @@ server = createNodeServer({
   handler,
   shutdown: {
     gracePeriod: 30_000,
+    onBackgroundError: reportBackgroundError,
     onStateChange(state) {
       console.log(`Demiurge Node server state: ${state}`);
     },

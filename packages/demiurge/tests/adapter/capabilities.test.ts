@@ -15,6 +15,7 @@ describe("adapter capability checks", () => {
     });
 
     expect(adapter.capabilities).toEqual({
+      backgroundLifetime: false,
       crossOriginIsolationHeaders: false,
       nonceInjection: false,
       sharedCache: false,
