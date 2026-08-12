@@ -44,6 +44,20 @@ scratch files, or feature inventories.
 - Do not describe a version as released until its signed tag, GitHub release,
   and npm artifact exist. Until then, use `Unreleased` or `prepared on main`.
 
+### Issue completion
+
+When work starts from a GitHub issue, complete these steps after the change
+reaches `main`:
+
+1. Verify each acceptance criterion against the current repository state.
+2. Update the issue title, description, or checklist when the implementation
+   changes the documented contract.
+3. Add a completion comment that identifies the commit and verification result.
+4. Close the implementation issue as completed.
+5. Confirm that the project item has the `Done` status.
+
+Do not close an epic until all required issues are complete.
+
 ## Change rules
 
 - Keep development, Node production, and static behavior on the shared route
