@@ -15,8 +15,9 @@ routes, including scripts that may be statically declared or render-discovered.
 - Custom `meta(...)`, `link(...)`, structured data, sitemap, and robots helpers.
 - `defineScripts` for static script contributions.
 - Managed `<Script />` for render-discovered conditional scripts.
-- Script placement and loading strategies: before interactive, after
-  interactive, idle, module, worker where supported.
+- Static script ordering strategies: before interactive, module, and after
+  interactive. Idle, visibility-triggered, and worker execution are deferred
+  until a client runtime can honor those timing guarantees.
 - Hoisting rules for scripts discovered during render.
 - CSP diagnostics when a script cannot satisfy effective policy.
 - Resource hints: preload, preconnect, modulepreload.
@@ -39,6 +40,11 @@ routes, including scripts that may be statically declared or render-discovered.
 None open.
 
 ## Decisions Made
+
+- The 0.1 public union contains only `beforeInteractive`, `module`, and
+  `afterInteractive`. The renderer orders them deterministically and `module`
+  emits `type="module"`. Strategies requiring a client scheduler are not
+  accepted until implemented; JavaScript callers receive a runtime error.
 
 - Hoisting is a placement optimization, not a correctness mechanism (#39).
   Discovered before the head flushes, a script hoists. Discovered after, it

@@ -174,6 +174,11 @@ Integration packages should declare:
 - Whether the integration can run in strict CSP without `unsafe-inline` or
   `unsafe-eval`.
 
+For 0.1, static script contributions support `beforeInteractive`, `module`, and
+`afterInteractive` as deterministic ordering categories. Deferred-until-idle,
+visibility-triggered, and worker execution remain future client-runtime work;
+they are not accepted as inert configuration values.
+
 The framework should not silently weaken CSP when a third-party integration is
 added. It should either merge declared needs or produce an actionable diagnostic.
 

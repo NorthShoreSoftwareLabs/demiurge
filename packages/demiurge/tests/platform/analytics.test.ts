@@ -20,18 +20,18 @@ describe("analytics integrations", () => {
     });
   });
 
-  it("supports HTTPS custom endpoints and script strategies", () => {
+  it("supports HTTPS custom endpoints and supported script strategies", () => {
     const integration = analytics.plausible({
       domain: "example.com",
       endpoint: "https://analytics.example.com/",
-      strategy: "idle",
+      strategy: "beforeInteractive",
     });
 
     expect(integration.connectSrc).toBe("https://analytics.example.com");
     expect(integration.script).toMatchObject({
       dataApi: "https://analytics.example.com/api/event",
       src: "https://analytics.example.com/js/script.js",
-      strategy: "idle",
+      strategy: "beforeInteractive",
     });
   });
 

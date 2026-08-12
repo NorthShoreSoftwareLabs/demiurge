@@ -117,7 +117,7 @@ describe("route loading", () => {
           }),
           script({
             src: "https://cdn.example.com/post.js",
-            strategy: "idle",
+            strategy: "module",
           }),
         ]),
       }),
@@ -176,13 +176,13 @@ describe("route loading", () => {
       },
       {
         kind: "script",
-        src: "https://cdn.example.com/blog.js",
-        strategy: "afterInteractive",
+        src: "https://cdn.example.com/post.js",
+        strategy: "module",
       },
       {
         kind: "script",
-        src: "https://cdn.example.com/post.js",
-        strategy: "idle",
+        src: "https://cdn.example.com/blog.js",
+        strategy: "afterInteractive",
       },
     ]);
   });

@@ -3,10 +3,13 @@ import type { HttpRouteContext, MaybePromise } from "../route";
 export type ScriptStrategy =
   | "afterInteractive"
   | "beforeInteractive"
-  | "idle"
-  | "module"
-  | "visible"
-  | "worker";
+  | "module";
+
+const SCRIPT_STRATEGIES = new Set<ScriptStrategy>([
+  "afterInteractive",
+  "beforeInteractive",
+  "module",
+]);
 
 export type ScriptTag = {
   async?: boolean;
@@ -35,10 +38,24 @@ export function defineScripts(contribution: ScriptContribution) {
 export function script(options: Omit<ScriptTag, "kind" | "strategy"> & {
   strategy?: ScriptStrategy;
 }): ScriptTag {
+  const strategy = options.strategy ?? "afterInteractive";
+
+  if (!SCRIPT_STRATEGIES.has(strategy)) {
+    throw new Error(
+      `Unsupported script strategy ${JSON.stringify(strategy)}. Demiurge 0.1 supports "beforeInteractive", "module", and "afterInteractive"; deferred, visibility-triggered, and worker loading require a future client script runtime.`,
+    );
+  }
+
+  if (strategy === "module" && options.type && options.type !== "module") {
+    throw new Error(
+      'The "module" script strategy cannot be combined with type="text/javascript".',
+    );
+  }
+
   return {
     ...options,
     kind: "script",
-    strategy: options.strategy ?? "afterInteractive",
+    strategy,
   };
 }
 
@@ -102,17 +119,5 @@ function scriptStrategyOrder(strategy: ScriptStrategy) {
     return 1;
   }
 
-  if (strategy === "afterInteractive") {
-    return 2;
-  }
-
-  if (strategy === "idle") {
-    return 3;
-  }
-
-  if (strategy === "visible") {
-    return 4;
-  }
-
-  return 5;
+  return 2;
 }

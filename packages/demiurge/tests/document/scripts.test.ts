@@ -100,13 +100,10 @@ describe("document scripts", () => {
     ]);
   });
 
-  it("orders scripts across every strategy from beforeInteractive through worker", async () => {
+  it("orders the supported strategies beforeInteractive, module, then afterInteractive", async () => {
     const scripts = await resolveScripts(
       [
         [
-          script({ src: "https://cdn.example.com/worker.js", strategy: "worker" }),
-          script({ src: "https://cdn.example.com/visible.js", strategy: "visible" }),
-          script({ src: "https://cdn.example.com/idle.js", strategy: "idle" }),
           script({
             src: "https://cdn.example.com/after.js",
             strategy: "afterInteractive",
@@ -125,10 +122,26 @@ describe("document scripts", () => {
       "https://cdn.example.com/before.js",
       "https://cdn.example.com/module.js",
       "https://cdn.example.com/after.js",
-      "https://cdn.example.com/idle.js",
-      "https://cdn.example.com/visible.js",
-      "https://cdn.example.com/worker.js",
     ]);
+  });
+
+  it("rejects strategies whose client loading runtime is not implemented", () => {
+    expect(() =>
+      script({
+        src: "https://cdn.example.com/idle.js",
+        strategy: "idle" as never,
+      }),
+    ).toThrow(/Unsupported script strategy "idle"/);
+  });
+
+  it("rejects a module strategy that is overridden with a classic script type", () => {
+    expect(() =>
+      script({
+        src: "https://cdn.example.com/app.js",
+        strategy: "module",
+        type: "text/javascript",
+      }),
+    ).toThrow(/cannot be combined/);
   });
 
   it("treats scripts with the same src but a different type as distinct entries", async () => {
