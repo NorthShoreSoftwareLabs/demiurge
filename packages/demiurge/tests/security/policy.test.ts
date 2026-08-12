@@ -189,6 +189,77 @@ describe("security policy headers", () => {
     );
   });
 
+  it("renders modern and compatibility reporting targets on both CSP policies", () => {
+    const headers = createSecurityHeaders({
+      csp: {
+        defaultSrc: ["'self'"],
+        reportTo: "csp-endpoint",
+        reportUri: ["/security/reports"],
+      },
+      headers: {
+        reportingEndpoints: {
+          metrics: "https://reports.example.com/metrics",
+          "csp-endpoint": "/security/reports",
+        },
+      },
+      trustedTypes: {
+        mode: "report-only",
+        policies: ["demiurge"],
+        requireFor: ["script"],
+      },
+    });
+
+    expect(headers.get("reporting-endpoints")).toBe(
+      'csp-endpoint="/security/reports", metrics="https://reports.example.com/metrics"',
+    );
+    expect(headers.get("content-security-policy")).toBe(
+      "default-src 'self'; report-uri /security/reports; report-to csp-endpoint",
+    );
+    expect(headers.get("content-security-policy-report-only")).toBe(
+      "require-trusted-types-for 'script'; trusted-types demiurge; report-uri /security/reports; report-to csp-endpoint",
+    );
+  });
+
+  it("rejects invalid reporting endpoint and group configuration", () => {
+    expect(() => createSecurityHeaders({
+      headers: {
+        reportingEndpoints: {
+          "Bad Group": "/reports",
+        },
+      },
+    })).toThrow(/Invalid reporting endpoint name/);
+
+    expect(() => createSecurityHeaders({
+      csp: {
+        reportTo: "missing",
+      },
+    })).toThrow(
+      'Demiurge CSP report-to group "missing" is not defined in headers.reportingEndpoints.',
+    );
+
+    expect(() => createSecurityHeaders({
+      headers: {
+        reportingEndpoints: {
+          csp: "http://reports.example.com/csp" as `https://${string}`,
+        },
+      },
+    })).toThrow(/same-origin path or an HTTPS URL/);
+
+    expect(() => createSecurityHeaders({
+      csp: {
+        reportUri: ["/reports; script-src *" as `/${string}`],
+      },
+    })).toThrow(/same-origin path or an HTTPS URL/);
+
+    expect(() => createSecurityHeaders({
+      headers: {
+        reportingEndpoints: {
+          csp: '/reports", injected="https://evil.example' as `/${string}`,
+        },
+      },
+    })).toThrow(/same-origin path or an HTTPS URL/);
+  });
+
   it("omits the Trusted Types directives when no policy is configured", () => {
     const headers = createSecurityHeaders(security.static());
 
@@ -249,6 +320,25 @@ describe("security policy cascade", () => {
     expect(headers.get("content-security-policy")).toContain(
       "img-src 'self' data: blob: https://images.example.com",
     );
+  });
+
+  it("merges reporting endpoint groups while overriding the selected CSP group", () => {
+    const policy = mergeSecurityPolicies(
+      {
+        csp: { reportTo: "csp" },
+        headers: { reportingEndpoints: { csp: "/csp-reports" } },
+      },
+      {
+        csp: { reportTo: "runtime" },
+        headers: { reportingEndpoints: { runtime: "/runtime-reports" } },
+      },
+    );
+    const headers = createSecurityHeaders(policy);
+
+    expect(headers.get("reporting-endpoints")).toBe(
+      'csp="/csp-reports", runtime="/runtime-reports"',
+    );
+    expect(headers.get("content-security-policy")).toBe("report-to runtime");
   });
 
   it("lets child policy override scalar security headers", () => {
@@ -312,6 +402,43 @@ describe("security policy cascade", () => {
 });
 
 describe("security audit output", () => {
+  it("warns when report-only Trusted Types has no deliverable target", () => {
+    const audit = createSecurityAudit({
+      document: {
+        policy: {
+          trustedTypes: {
+            mode: "report-only",
+            policies: ["demiurge"],
+          },
+        },
+      },
+    });
+
+    expect(audit.findings).toContainEqual({
+      code: "report-only-target-missing",
+      message:
+        "Trusted Types report-only mode has no deliverable target. Configure CSP reportTo with a matching Reporting-Endpoints member, reportUri for compatibility, or both.",
+      severity: "warning",
+    });
+  });
+
+  it("accepts a mapped Reporting API target for report-only Trusted Types", () => {
+    const audit = createSecurityAudit({
+      document: {
+        policy: {
+          csp: { reportTo: "csp" },
+          headers: { reportingEndpoints: { csp: "/reports" } },
+          trustedTypes: {
+            mode: "report-only",
+            policies: ["demiurge"],
+          },
+        },
+      },
+    });
+
+    expect(audit.findings).toEqual([]);
+  });
+
   it("audits rendered document headers and effective route policy", () => {
     const audit = createSecurityAudit({
       document: {

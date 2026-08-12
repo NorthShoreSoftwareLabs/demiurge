@@ -175,6 +175,8 @@ export function createSecurityHeaders(
   policy: SecurityPolicy,
   options: SecurityHeadersOptions = {},
 ) {
+  validateReportingConfiguration(policy);
+
   const headers = new Headers();
   const csp = policy.csp !== false && policy.csp
     ? renderCsp(policy.csp, options)
@@ -197,7 +199,9 @@ export function createSecurityHeaders(
   setHeader(
     headers,
     "content-security-policy-report-only",
-    reportsTrustedTypes ? trustedTypes : undefined,
+    reportsTrustedTypes
+      ? joinCspDirectives(trustedTypes, renderCspReportingDirectives(policy.csp))
+      : undefined,
   );
 
   applySecurityHeaders(headers, policy.headers, options);
@@ -230,9 +234,29 @@ function mergeSecurityPolicy(
 ): SecurityPolicy {
   return {
     csp: mergeCsp(base.csp, override.csp),
-    headers: mergeObject(base.headers, override.headers),
+    headers: mergeSecurityHeaders(base.headers, override.headers),
     trustedTypes: override.trustedTypes ?? base.trustedTypes,
   };
+}
+
+function mergeSecurityHeaders(
+  base: SecurityHeaderPolicy | undefined,
+  override: SecurityHeaderPolicy | undefined,
+) {
+  const merged = mergeObject(base, override);
+
+  if (!merged || override?.reportingEndpoints === false) {
+    return merged;
+  }
+
+  if (base?.reportingEndpoints && override?.reportingEndpoints) {
+    merged.reportingEndpoints = {
+      ...base.reportingEndpoints,
+      ...override.reportingEndpoints,
+    };
+  }
+
+  return merged;
 }
 
 function mergeObject<T extends object>(
@@ -273,9 +297,17 @@ function mergeCsp(
   for (const [name, value] of cspDirectiveEntries(override)) {
     const baseValue = base[name];
 
-    if (Array.isArray(baseValue) && Array.isArray(value)) {
+    if (
+      name !== "reportUri" &&
+      Array.isArray(baseValue) &&
+      Array.isArray(value)
+    ) {
       setCspDirective(merged, name, dedupeSources([...baseValue, ...value]));
     }
+  }
+
+  if (base.reportUri && override.reportUri) {
+    merged.reportUri = [...new Set([...base.reportUri, ...override.reportUri])];
   }
 
   return merged;
@@ -290,7 +322,11 @@ function setCspDirective(
   name: keyof ContentSecurityPolicy,
   value: readonly string[],
 ) {
-  if (name === "upgradeInsecureRequests") {
+  if (
+    name === "reportTo" ||
+    name === "reportUri" ||
+    name === "upgradeInsecureRequests"
+  ) {
     return;
   }
 
@@ -312,6 +348,11 @@ function applySecurityHeaders(
   setHeader(headers, "cross-origin-embedder-policy", policy.crossOriginEmbedderPolicy);
   setHeader(headers, "cross-origin-resource-policy", policy.crossOriginResourcePolicy);
   setHeader(headers, "permissions-policy", policy.permissionsPolicy);
+  setHeader(
+    headers,
+    "reporting-endpoints",
+    renderReportingEndpoints(policy.reportingEndpoints),
+  );
 
   if (
     policy.strictTransportSecurity &&
@@ -383,6 +424,10 @@ function renderCsp(
   const directives: string[] = [];
 
   for (const [name, value] of cspDirectiveEntries(policy)) {
+    if (name === "reportTo" || name === "reportUri") {
+      continue;
+    }
+
     if (value === false || value === undefined) {
       continue;
     }
@@ -397,7 +442,123 @@ function renderCsp(
     directives.push(`${directiveName} ${renderCspSources(value, options).join(" ")}`);
   }
 
+  const reporting = renderCspReportingDirectives(policy);
+
+  if (reporting) {
+    directives.push(reporting);
+  }
+
   return directives.join("; ");
+}
+
+function renderCspReportingDirectives(
+  policy: ContentSecurityPolicy | false | undefined,
+) {
+  if (!policy) {
+    return undefined;
+  }
+
+  const directives: string[] = [];
+
+  if (policy.reportUri?.length) {
+    directives.push(`report-uri ${policy.reportUri.join(" ")}`);
+  }
+
+  if (policy.reportTo) {
+    directives.push(`report-to ${policy.reportTo}`);
+  }
+
+  return joinCspDirectives(...directives);
+}
+
+function renderReportingEndpoints(
+  endpoints: SecurityHeaderPolicy["reportingEndpoints"],
+) {
+  if (!endpoints) {
+    return undefined;
+  }
+
+  return Object.entries(endpoints)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, url]) => `${name}="${escapeStructuredFieldString(url)}"`)
+    .join(", ");
+}
+
+function escapeStructuredFieldString(value: string) {
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+}
+
+function validateReportingConfiguration(policy: SecurityPolicy) {
+  const endpoints = policy.headers?.reportingEndpoints;
+
+  if (endpoints) {
+    const entries = Object.entries(endpoints);
+
+    if (entries.length === 0) {
+      throw new Error("Demiurge Reporting-Endpoints requires at least one endpoint.");
+    }
+
+    for (const [name, url] of entries) {
+      validateReportingEndpointName(name);
+      validateReportingEndpointUrl(url, `Reporting-Endpoints member ${JSON.stringify(name)}`);
+    }
+  }
+
+  const csp = policy.csp || undefined;
+
+  if (csp?.reportTo) {
+    validateReportingEndpointName(csp.reportTo);
+
+    if (!endpoints || !(csp.reportTo in endpoints)) {
+      throw new Error(
+        `Demiurge CSP report-to group ${JSON.stringify(csp.reportTo)} is not defined in headers.reportingEndpoints.`,
+      );
+    }
+  }
+
+  for (const url of csp?.reportUri ?? []) {
+    validateReportingEndpointUrl(url, "CSP report-uri target");
+  }
+}
+
+function validateReportingEndpointName(name: string) {
+  // Reporting-Endpoints is an RFC 8941 dictionary, whose member names are
+  // lowercase Structured Field keys. CSP `report-to` uses the same name.
+  if (!/^(?:[a-z]|\*)[a-z0-9_.*-]*$/.test(name)) {
+    throw new Error(
+      `Invalid reporting endpoint name ${JSON.stringify(name)}. Use a lowercase Structured Field key.`,
+    );
+  }
+}
+
+function validateReportingEndpointUrl(url: string, label: string) {
+  if (
+    !isAsciiHeaderValue(url) ||
+    /[\s,;"\\]/.test(url) ||
+    (!url.startsWith("/") && !url.startsWith("https://"))
+  ) {
+    throw new Error(`${label} must be a same-origin path or an HTTPS URL.`);
+  }
+
+  if (url.startsWith("//")) {
+    throw new Error(`${label} must not be a scheme-relative URL.`);
+  }
+
+  let parsed: URL;
+
+  try {
+    parsed = new URL(url, "https://demiurge.invalid");
+  } catch {
+    throw new Error(`${label} must be a valid URI reference.`);
+  }
+
+  if (parsed.username || parsed.password || parsed.hash) {
+    throw new Error(`${label} must not contain credentials or a fragment.`);
+  }
+}
+
+function isAsciiHeaderValue(value: string) {
+  return /^[\x20-\x7e]+$/.test(value);
 }
 
 function cspDirectiveEntries(policy: ContentSecurityPolicy) {

@@ -19,6 +19,7 @@ describe("security report endpoint handler", () => {
             "violated-directive": "script-src",
           },
         }),
+        headers: { "content-type": "application/csp-report" },
         method: "POST",
       }),
     );
@@ -62,6 +63,7 @@ describe("security report endpoint handler", () => {
             url: "https://app.example.com/",
           },
         ]),
+        headers: { "content-type": "application/reports+json" },
         method: "POST",
       }),
     );
@@ -90,6 +92,20 @@ describe("security report endpoint handler", () => {
     ]);
   });
 
+  it("rejects a supplied content type that browsers do not use for reports", async () => {
+    const handler = createSecurityReportHandler();
+    const response = await handler(new Request("https://app.example.com/reports", {
+      body: "{}",
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    }));
+
+    expect(response.status).toBe(415);
+    await expect(response.text()).resolves.toBe(
+      "Unsupported security report Content-Type.",
+    );
+  });
+
   it("rejects unsupported methods, invalid JSON, and oversized reports", async () => {
     const handler = createSecurityReportHandler({
       maxBodySize: "8b",
@@ -103,6 +119,7 @@ describe("security report endpoint handler", () => {
     const invalidJsonResponse = await handler(
       new Request("https://app.example.com/reports", {
         body: "not json",
+        headers: { "content-type": "application/csp-report" },
         method: "POST",
       }),
     );
@@ -111,6 +128,7 @@ describe("security report endpoint handler", () => {
         body: "{}",
         headers: {
           "content-length": "9",
+          "content-type": "application/reports+json",
         },
         method: "POST",
       }),

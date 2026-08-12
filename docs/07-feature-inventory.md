@@ -100,7 +100,8 @@ implementation.
 | CSP auto mode for static/dynamic split | designed |
 | Strict CSP for streaming SSR | implemented |
 | Strict CSP for RSC | designed |
-| Security report endpoint | implemented |
+| Reporting-Endpoints and CSP report-to/report-uri configuration | implemented |
+| Security report endpoint (`application/csp-report` and `application/reports+json`) | implemented |
 | Typed CORS | implemented |
 | CSRF defaults for cookie-auth unsafe methods | implemented |
 | Rate limiting | implemented |
@@ -108,8 +109,8 @@ implementation.
 | Upload limits | implemented |
 | WebSocket origin checks | implemented |
 | Webhook verification helpers | implemented |
-| Trusted Types report-only mode | designed |
-| Trusted Types enforce mode | designed |
+| Trusted Types report-only mode | implemented |
+| Trusted Types enforce mode | implemented |
 | COOP/COEP/CORP cross-origin isolation preset | designed |
 | Secret/env validation | implemented |
 | Dependency/script audit | implemented |

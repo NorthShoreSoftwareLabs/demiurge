@@ -23,6 +23,8 @@ with React rendering modes instead of being left to user middleware.
   libraries.
 - COOP/COEP/CORP cross-origin isolation preset.
 - Security audit output showing effective route policy.
+- Typed `Reporting-Endpoints`, CSP `report-to`, and compatibility `report-uri`
+  configuration, including report-only delivery diagnostics (#113).
 
 ## Examples Required
 
@@ -64,3 +66,7 @@ with React rendering modes instead of being left to user middleware.
   fail a real session in production rather than fail a build. Strict promises
   the strongest policy that cannot break a user at runtime, and Trusted Types
   enforcement sits outside that promise.
+- `report-to` is the primary CSP reporting mechanism. `report-uri` remains an
+  explicit compatibility option because supporting browsers ignore it when
+  `report-to` is present, while older browsers may still need it. A report-only
+  audit warns when neither mechanism has a deliverable target (#113).

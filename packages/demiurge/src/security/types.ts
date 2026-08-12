@@ -24,10 +24,18 @@ export type ContentSecurityPolicy = {
   frameAncestors?: readonly CspSource[];
   imgSrc?: readonly CspSource[];
   objectSrc?: readonly CspSource[];
+  /** Deprecated compatibility targets used alongside `reportTo`. */
+  reportUri?: readonly ReportingEndpointUrl[];
+  /** A named member of `headers.reportingEndpoints`. */
+  reportTo?: string;
   scriptSrc?: readonly CspSource[];
   styleSrc?: readonly CspSource[];
   upgradeInsecureRequests?: boolean;
 };
+
+export type ReportingEndpointUrl = `/${string}` | `https://${string}`;
+
+export type ReportingEndpoints = Readonly<Record<string, ReportingEndpointUrl>>;
 
 export type ReferrerPolicy =
   | "no-referrer"
@@ -161,6 +169,7 @@ export type SecurityHeaderPolicy = {
   crossOriginResourcePolicy?: "same-origin" | "same-site" | "cross-origin" | false;
   permissionsPolicy?: string | false;
   referrerPolicy?: ReferrerPolicy | false;
+  reportingEndpoints?: ReportingEndpoints | false;
   strictTransportSecurity?: StrictTransportSecurityPolicy | false;
 };
 

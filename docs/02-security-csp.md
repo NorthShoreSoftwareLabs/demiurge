@@ -413,8 +413,41 @@ normalized into an allowed origin.
 
 ## Security Report Endpoint
 
-Applications should be able to collect browser security reports without writing
-ad hoc JSON parsing in every route:
+Reporting is configured in two connected places. `Reporting-Endpoints` maps a
+lowercase group name to a same-origin path or HTTPS URL, while CSP's `report-to`
+directive selects that group. Demiurge also supports the deprecated
+`report-uri` directive as an explicit compatibility target:
+
+```ts
+const policy = security.strict({
+  csp: {
+    reportTo: "csp-endpoint",
+    reportUri: ["/.well-known/security-reports"],
+  },
+  headers: {
+    reportingEndpoints: {
+      "csp-endpoint": "/.well-known/security-reports",
+    },
+  },
+  trustedTypes: {
+    mode: "report-only",
+    policies: ["demiurge"],
+    requireFor: ["script"],
+  },
+});
+```
+
+This emits `Reporting-Endpoints`, appends `report-uri` followed by `report-to`
+to the enforcing CSP, and includes the same reporting directives in the
+Trusted Types report-only CSP. Modern browsers use `report-to`; the legacy
+directive is deliberately opt-in but recommended during the compatibility
+transition. A configured `reportTo` name must exist in `reportingEndpoints`.
+Group names use lowercase Structured Field key syntax. Endpoint values reject
+insecure absolute URLs and raw header/CSP delimiters; percent-encode such URL
+characters when they are data.
+
+Applications can collect the resulting reports without ad hoc JSON parsing in
+every route:
 
 ```ts
 import { createSecurityReportHandler, response } from "demiurge";
@@ -426,14 +459,34 @@ const report = createSecurityReportHandler({
   },
 });
 
-export const POST = response(({ request }) => report(request));
+export const POST = response(({ request }) => report(request), {
+  security: {
+    csrf: false,
+    rateLimit: { key: "ip", limit: 60, window: "1m" },
+  },
+});
 ```
 
-The first report endpoint slice accepts CSP report payloads and batched
-Reporting API arrays, calls an optional `onReport` callback once per normalized
+The handler accepts legacy `application/csp-report` payloads and batched
+`application/reports+json` Reporting API arrays. It rejects any other supplied
+media type with `415`, calls an optional `onReport` callback once per normalized
 report, rejects non-POST methods with `405`, rejects malformed JSON with `400`,
 and enforces an optional `maxBodySize` against bytes as they are consumed. A
 declared `Content-Length` above the limit is still rejected before reading.
+
+Treat every report field as attacker-controlled input. Reports may contain
+document URLs, referrers, blocked URLs, user-agent data, and—when a policy asks
+for `report-sample`—a short source sample. Minimize retention, redact before
+logging or rendering, rate-limit the public endpoint, and do not place secrets
+in an endpoint URL. Reporting API delivery is best effort. Same-origin modern
+reports may carry credentials, whereas cross-origin endpoints do not receive
+them; the route above therefore declares the intentional CSRF exemption and
+must not mutate authenticated application state.
+
+References: [MDN CSP violation reporting](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP#violation_reporting),
+[MDN `Reporting-Endpoints`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Reporting-Endpoints),
+[CSP Level 3 reporting directives](https://www.w3.org/TR/CSP/#directives-reporting),
+and the [Reporting API delivery model](https://w3c.github.io/reporting/).
 
 The first request-limit slice supports helper-attached request body limits:
 

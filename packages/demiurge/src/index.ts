@@ -289,6 +289,8 @@ export type {
   RateLimitResult,
   RateLimitStore,
   ReferrerPolicy,
+  ReportingEndpointUrl,
+  ReportingEndpoints,
   SecurityAudit,
   SecurityAuditFinding,
   SecurityAuditOptions,

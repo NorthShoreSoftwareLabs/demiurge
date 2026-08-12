@@ -23,6 +23,10 @@ export function createSecurityAudit(options: SecurityAuditOptions = {}) {
   const headers = document
     ? auditDocumentPolicy(document.policy, document.headers, findings)
     : {};
+
+  if (document) {
+    auditReportOnlyDelivery(document.policy, findings);
+  }
   const route = options.route
     ? auditRoutePolicy(options.route, findings)
     : undefined;
@@ -50,6 +54,31 @@ export function createSecurityAudit(options: SecurityAuditOptions = {}) {
     headers,
     route,
   } satisfies SecurityAudit;
+}
+
+function auditReportOnlyDelivery(
+  policy: SecurityPolicy,
+  findings: SecurityAuditFinding[],
+) {
+  if (!policy.trustedTypes || policy.trustedTypes.mode !== "report-only") {
+    return;
+  }
+
+  const csp = policy.csp || undefined;
+  const hasLegacyTarget = Boolean(csp?.reportUri?.length);
+  const endpoints = policy.headers?.reportingEndpoints;
+  const hasReportingApiTarget = Boolean(
+    csp?.reportTo && endpoints && endpoints[csp.reportTo],
+  );
+
+  if (!hasLegacyTarget && !hasReportingApiTarget) {
+    findings.push({
+      code: "report-only-target-missing",
+      message:
+        "Trusted Types report-only mode has no deliverable target. Configure CSP reportTo with a matching Reporting-Endpoints member, reportUri for compatibility, or both.",
+      severity: "warning",
+    });
+  }
 }
 
 export function auditScriptDependencies(

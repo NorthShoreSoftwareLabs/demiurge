@@ -34,6 +34,12 @@ export function createSecurityReportHandler(
       });
     }
 
+    const contentTypeResponse = enforceReportContentType(request);
+
+    if (contentTypeResponse) {
+      return contentTypeResponse;
+    }
+
     const bodySizeResponse = enforceReportBodySize(options, request);
 
     if (bodySizeResponse) {
@@ -71,6 +77,31 @@ export function createSecurityReportHandler(
       status: 204,
     });
   };
+}
+
+const supportedReportContentTypes = new Set([
+  "application/csp-report",
+  "application/reports+json",
+]);
+
+function enforceReportContentType(request: Request) {
+  const value = request.headers.get("content-type");
+
+  // Keep direct/programmatic calls compatible. Browser-generated reports
+  // always send one of the two media types below.
+  if (!value) {
+    return null;
+  }
+
+  const mediaType = value.split(";", 1)[0]?.trim().toLowerCase();
+
+  if (mediaType && supportedReportContentTypes.has(mediaType)) {
+    return null;
+  }
+
+  return new Response("Unsupported security report Content-Type.", {
+    status: 415,
+  });
 }
 
 function enforceReportBodySize(

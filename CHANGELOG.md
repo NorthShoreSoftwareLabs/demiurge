@@ -68,8 +68,13 @@ Epic: #4
   integrity when required, early third-party execution, and Google Tag Manager's
   wide runtime trust boundary.
 - `createSecurityReportHandler(...)` provides a POST-only CSP/Reporting API
-  report ingestion helper with optional body-size enforcement and per-report
-  callbacks.
+  report ingestion helper for `application/csp-report` and
+  `application/reports+json`, with media-type validation, optional body-size
+  enforcement, and per-report callbacks.
+- Typed `Reporting-Endpoints`, CSP `report-to`, and compatibility `report-uri`
+  configuration validates names and targets, emits deterministic headers,
+  carries reporting directives into Trusted Types report-only CSP, and warns
+  when report-only mode has no deliverable target (#113).
 - `validateUploads(...)` validates parsed `FormData` files against required
   fields, per-file size limits, aggregate size limits, and MIME/type allowlists.
 - Cache and idempotency keys reject non-finite numbers, negative zero, and
