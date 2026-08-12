@@ -178,6 +178,130 @@ describe("Node HTTP bridge", () => {
     ).toThrow(UntrustedHostError);
   });
 
+  it("supports exact, mapped IPv4, and IPv6 trusted proxy ranges", () => {
+    const forwardedRequest = (remoteAddress: string, ranges: readonly string[]) =>
+      toWebRequest(
+        incoming({
+          headers: {
+            host: "internal.example",
+            "x-forwarded-for": "203.0.113.8",
+            "x-forwarded-host": "example.test",
+            "x-forwarded-proto": "https",
+          },
+          socket: { remoteAddress } as never,
+        }),
+        { allowedHosts: ["example.test"], trustProxy: { ranges } },
+      );
+
+    expect(forwardedRequest("10.0.0.1", ["10.0.0.1"]).url).toMatch(
+      /^https:\/\/example\.test/,
+    );
+    expect(forwardedRequest("::ffff:10.2.3.4", ["10.0.0.0/8"]).url).toMatch(
+      /^https:\/\/example\.test/,
+    );
+    expect(forwardedRequest("2001:db8::1", ["2001:db8::/32"]).url).toMatch(
+      /^https:\/\/example\.test/,
+    );
+  });
+
+  it("does not trust a proxy address from the wrong IP family", () => {
+    const request = toWebRequest(
+      incoming({
+        headers: {
+          host: "example.test",
+          "x-forwarded-host": "forwarded.example.test",
+          "x-forwarded-proto": "https",
+        },
+        socket: { remoteAddress: "192.0.2.5" } as never,
+      }),
+      {
+        allowedHosts: ["example.test"],
+        trustProxy: { ranges: ["2001:db8::/32"] },
+      },
+    );
+
+    expect(request.url).toBe("http://example.test/health?ready=true");
+  });
+
+  it("selects forwarded header arrays from the trusted edge inward", () => {
+    const request = toWebRequest(
+      incoming({
+        headers: {
+          host: "internal.example",
+          "x-forwarded-for": ["192.0.2.7", "203.0.113.8"],
+          "x-forwarded-host": ["ignored.example", "example.test"],
+          "x-forwarded-proto": ["http", "https"],
+        },
+      }),
+      { allowedHosts: ["example.test"], trustProxy: { hops: 1 } },
+    );
+
+    expect(request.url).toBe("https://example.test/health?ready=true");
+  });
+
+  it("rejects unsupported trusted forwarding protocols", () => {
+    expect(() =>
+      toWebRequest(
+        incoming({
+          headers: {
+            host: "internal.example",
+            "x-forwarded-host": "example.test",
+            "x-forwarded-proto": "ftp",
+          },
+        }),
+        { allowedHosts: ["example.test"], trustProxy: { hops: 1 } },
+      ),
+    ).toThrow('Unsupported forwarded protocol "ftp"');
+  });
+
+  it("enforces explicit allowed-host ports while a host-only entry accepts any port", () => {
+    const exact = toWebRequest(
+      incoming({ headers: { host: "example.test:8443" } }),
+      { allowedHosts: ["example.test:8443"] },
+    );
+    const hostOnly = toWebRequest(
+      incoming({ headers: { host: "example.test:9443" } }),
+      { allowedHosts: ["example.test"] },
+    );
+
+    expect(exact.url).toMatch(/^http:\/\/example\.test:8443/);
+    expect(hostOnly.url).toMatch(/^http:\/\/example\.test:9443/);
+    expect(() =>
+      toWebRequest(
+        incoming({ headers: { host: "example.test:9443" } }),
+        { allowedHosts: ["example.test:8443"] },
+      ),
+    ).toThrow(UntrustedHostError);
+  });
+
+  it.each([
+    " example.test",
+    "user@example.test",
+    "example.test/path",
+    "example.test?query",
+    "example.test#hash",
+    "[invalid",
+  ])("rejects malformed allowed host %s at configuration time", (host) => {
+    expect(() =>
+      toWebRequest(incoming({ headers: { host: "example.test" } }), {
+        allowedHosts: [host],
+      }),
+    ).toThrow("allowed host");
+  });
+
+  it("rejects missing and malformed request authorities", () => {
+    expect(() =>
+      toWebRequest(incoming({ headers: {} }), {
+        allowedHosts: ["example.test"],
+      }),
+    ).toThrow(UntrustedHostError);
+    expect(() =>
+      toWebRequest(incoming({ headers: { host: "user@example.test" } }), {
+        allowedHosts: ["example.test"],
+      }),
+    ).toThrow(UntrustedHostError);
+  });
+
   it("feeds only the resolved peer identity to IP rate limiting", () => {
     const store = createMemoryRateLimitStore();
     const policy = { key: "ip", limit: 1, window: "1m" } as const;

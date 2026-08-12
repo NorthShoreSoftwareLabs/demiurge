@@ -63,6 +63,17 @@ describe("browser router fallbacks", () => {
     });
   });
 
+  it("renders the built-in not-found UI when no app fallback exists", async () => {
+    window.history.replaceState(null, "", "/missing");
+    const Router = createFileRouter({ routes: {} });
+
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByText("No route matched /missing.")).toBeTruthy();
+    });
+  });
+
   it("renders inherited @loading UI while matched routes load", async () => {
     const routeResolver = deferred<Record<string, unknown>>();
     const Router = createFileRouter({
@@ -162,6 +173,49 @@ describe("browser router fallbacks", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Route error at /blog: load failed")).toBeTruthy();
+    });
+  });
+
+  it("clears loading UI when a route fails without an error fallback", async () => {
+    window.history.replaceState(null, "", "/blog");
+    const Router = createFileRouter({
+      loading: Loading,
+      routes: {
+        "./routes/blog/index.tsx": vi.fn(async () => {
+          throw new Error("load failed");
+        }),
+      },
+    });
+
+    render(<Router />);
+    expect(screen.getByText("App loading")).toBeTruthy();
+
+    await waitFor(() => {
+      expect(screen.queryByText("App loading")).toBeNull();
+    });
+  });
+
+  it("resets a rendered route error after navigating to another pathname", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    window.history.replaceState(null, "", "/broken");
+    const Router = createFileRouter({
+      routes: {
+        "./routes/@error.tsx": routeModule({ default: RouteError }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+        "./routes/broken.tsx": routeModule({ GET: page(BrokenPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => {
+      expect(screen.getByText("Route error at /broken: render failed")).toBeTruthy();
+    });
+
+    window.history.pushState(null, "", "/blog");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Blog page at /blog")).toBeTruthy();
     });
   });
 
