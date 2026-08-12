@@ -1,0 +1,36 @@
+{
+  "name": "create-demiurge",
+  "version": "0.1.0",
+  "description": "Create a Demiurge application.",
+  "license": "MIT",
+  "author": "North Shore Software Labs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NorthShoreSoftwareLabs/demiurge.git",
+    "directory": "packages/create-demiurge"
+  },
+  "homepage": "https://github.com/NorthShoreSoftwareLabs/demiurge#readme",
+  "bugs": {
+    "url": "https://github.com/NorthShoreSoftwareLabs/demiurge/issues"
+  },
+  "type": "module",
+  "bin": {
+    "create-demiurge": "./bin/create-demiurge.mjs"
+  },
+  "files": [
+    "bin",
+    "templates",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

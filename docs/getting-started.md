@@ -2,6 +2,17 @@
 
 Demiurge requires Node 22.13 or newer, React 19, and Vite 6.
 
+## Create an application
+
+Run the scaffold and select a page or API template:
+
+```sh
+npm create demiurge
+```
+
+The page template includes the root layout, fallback documents, policy, styles,
+and Vite configuration. The API template does not include page-route files.
+
 ## Install
 
 ```sh
