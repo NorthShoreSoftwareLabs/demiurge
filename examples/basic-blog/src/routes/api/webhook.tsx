@@ -1,4 +1,4 @@
-import { webhook } from "demiurge";
+import { webhook } from "@demiurge/core";
 
 export const POST = webhook.hmac({
   handler: ({ rawBody }) => Response.json({ received: rawBody.length }),

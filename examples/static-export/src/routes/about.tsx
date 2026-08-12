@@ -1,4 +1,4 @@
-import { defineMetadata, page } from "demiurge";
+import { defineMetadata, page } from "@demiurge/core";
 
 export const metadata = defineMetadata({ title: "About" });
 

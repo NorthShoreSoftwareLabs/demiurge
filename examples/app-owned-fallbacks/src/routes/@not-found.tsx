@@ -1,4 +1,4 @@
-import { Link, type NotFoundProps } from "demiurge";
+import { Link, type NotFoundProps } from "@demiurge/core";
 
 export default function RootNotFound({ pathname }: NotFoundProps) {
   return (

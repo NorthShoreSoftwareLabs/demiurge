@@ -79,7 +79,7 @@ everything.
 
 Page detection is a source scan, because the plugin cannot execute route
 modules at build time. It keys on the import rather than the bare word: a file
-counts as a page route only if it imports `page` from `demiurge` and calls what
+counts as a page route only if it imports `page` from `@demiurge/core` and calls what
 it imported, aliases included. Scanning for `page(` alone would fire on
 `db.users.page(2)`, and telling an API that paginates to go write a 404
 document is exactly the failure this gate must not have.
@@ -101,7 +101,7 @@ Throw `httpError(...)` when a route, loader, middleware, or policy needs to
 return an intentional HTTP failure:
 
 ```ts
-import { httpError, json } from "demiurge";
+import { httpError, json } from "@demiurge/core";
 
 export const POST = json(async () => {
   throw httpError(422, {

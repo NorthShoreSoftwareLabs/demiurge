@@ -26,7 +26,7 @@ import {
   type CacheScope,
   type RouteModule,
   type RouteProps,
-} from "demiurge";
+} from "@demiurge/core";
 import { renderPageDocument } from "../../src/server";
 
 function View(_props: RouteProps) {

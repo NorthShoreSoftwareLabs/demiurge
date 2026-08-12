@@ -1,4 +1,4 @@
-import { httpError, json } from "demiurge";
+import { httpError, json } from "@demiurge/core";
 
 const sourceCounts = new Map<string, number>();
 

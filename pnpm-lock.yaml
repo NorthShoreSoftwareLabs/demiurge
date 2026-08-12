@@ -35,7 +35,7 @@ importers:
 
   examples/app-owned-fallbacks:
     dependencies:
-      demiurge:
+      '@demiurge/core':
         specifier: workspace:*
         version: link:../../packages/demiurge
       react:
@@ -60,7 +60,7 @@ importers:
 
   examples/basic-blog:
     dependencies:
-      demiurge:
+      '@demiurge/core':
         specifier: workspace:*
         version: link:../../packages/demiurge
       react:
@@ -85,7 +85,7 @@ importers:
 
   examples/node-server:
     dependencies:
-      demiurge:
+      '@demiurge/core':
         specifier: workspace:*
         version: link:../../packages/demiurge
       react:
@@ -110,7 +110,7 @@ importers:
 
   examples/runtime-server-data:
     dependencies:
-      demiurge:
+      '@demiurge/core':
         specifier: workspace:*
         version: link:../../packages/demiurge
       react:
@@ -135,7 +135,7 @@ importers:
 
   examples/ssr-page:
     dependencies:
-      demiurge:
+      '@demiurge/core':
         specifier: workspace:*
         version: link:../../packages/demiurge
       react:
@@ -160,7 +160,7 @@ importers:
 
   examples/static-export:
     dependencies:
-      demiurge:
+      '@demiurge/core':
         specifier: workspace:*
         version: link:../../packages/demiurge
       react:
@@ -185,7 +185,7 @@ importers:
 
   examples/streaming-page:
     dependencies:
-      demiurge:
+      '@demiurge/core':
         specifier: workspace:*
         version: link:../../packages/demiurge
       react:

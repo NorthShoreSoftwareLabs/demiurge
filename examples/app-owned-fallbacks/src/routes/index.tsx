@@ -1,4 +1,4 @@
-import { Link, page } from "demiurge";
+import { Link, page } from "@demiurge/core";
 
 export const GET = page({ view: HomePage });
 

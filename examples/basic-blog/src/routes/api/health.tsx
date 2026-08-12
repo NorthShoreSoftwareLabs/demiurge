@@ -1,4 +1,4 @@
-import { json, text } from "demiurge";
+import { json, text } from "@demiurge/core";
 
 export const GET = json(({ pathname }) => ({
   ok: true,

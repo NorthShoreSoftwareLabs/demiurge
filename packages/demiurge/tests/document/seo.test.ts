@@ -7,7 +7,7 @@ import {
   renderOgImageSvg,
   renderRobots,
   renderSitemap,
-} from "demiurge";
+} from "@demiurge/core";
 
 describe("document SEO outputs", () => {
   it("renders escaped sitemap XML with alternates", () => {

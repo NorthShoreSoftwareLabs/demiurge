@@ -16,12 +16,12 @@ import {
   security,
   type RouteModule,
   type RouteProps,
-} from "demiurge";
+} from "@demiurge/core";
 import {
   createNodeServer,
   nodeAdapter,
   renderNodePageResponse,
-} from "demiurge/node";
+} from "@demiurge/core/node";
 
 function routeModule(module: RouteModule) {
   return vi.fn(async () => module);

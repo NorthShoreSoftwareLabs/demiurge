@@ -73,7 +73,7 @@ after its client has gone away.
 The production server injects that adapter renderer explicitly:
 
 ```ts
-import { renderNodePageResponse } from "demiurge/node";
+import { renderNodePageResponse } from "@demiurge/core/node";
 
 const handler = createHandler({
   renderPage: renderNodePageResponse,
@@ -86,7 +86,7 @@ unsupported runtime fail with a direct configuration error.
 The Vite plugin wires this into development:
 
 ```ts
-import { demiurge } from "demiurge/vite";
+import { demiurge } from "@demiurge/core/vite";
 
 export default defineConfig({
   plugins: [demiurge(), react()],
@@ -140,7 +140,7 @@ route patterns:
 The hidden generated route type file augments the framework package:
 
 ```ts
-declare module "demiurge" {
+declare module "@demiurge/core" {
   interface RoutePathVars {
     "/blog/[slug]": { slug: PathValue };
   }
@@ -162,7 +162,7 @@ Route components and handlers can opt into the same generated route map with a
 route-pattern generic:
 
 ```tsx
-import { page, type RouteProps } from "demiurge";
+import { page, type RouteProps } from "@demiurge/core";
 
 export const GET = page({
   view: BlogPost,
@@ -416,7 +416,7 @@ The first WebSocket security slice exposes origin checks before the full route
 capability exists:
 
 ```ts
-import { enforceWebSocketOrigin } from "demiurge";
+import { enforceWebSocketOrigin } from "@demiurge/core";
 
 const response = enforceWebSocketOrigin(
   { origins: ["https://app.example.com"] },

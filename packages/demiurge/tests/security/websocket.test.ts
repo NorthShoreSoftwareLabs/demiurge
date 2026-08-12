@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkWebSocketOrigin,
   enforceWebSocketOrigin,
-} from "demiurge";
+} from "@demiurge/core";
 
 describe("WebSocket origin checks", () => {
   it("allows same-origin browser upgrade requests", () => {

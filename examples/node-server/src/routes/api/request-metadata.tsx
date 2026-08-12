@@ -1,4 +1,4 @@
-import { json } from "demiurge";
+import { json } from "@demiurge/core";
 
 export const GET = json(({ request }) => ({
   destination: request.headers.get("sec-fetch-dest"),

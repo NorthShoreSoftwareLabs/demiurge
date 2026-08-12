@@ -1,4 +1,4 @@
-import type { LayoutProps } from "demiurge";
+import type { LayoutProps } from "@demiurge/core";
 import "../styles.css";
 
 export default function RootLayout({ children }: LayoutProps) {

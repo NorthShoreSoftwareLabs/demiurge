@@ -12,7 +12,7 @@ import {
   type NotFoundProps,
   type RouteModule,
   type RouteProps,
-} from "demiurge";
+} from "@demiurge/core";
 
 function View(_props: RouteProps) {
   return <main>Home</main>;

@@ -1,4 +1,4 @@
-import type { LayoutProps } from "demiurge";
+import type { LayoutProps } from "@demiurge/core";
 
 export default function BlogLayout({ children }: LayoutProps) {
   return (

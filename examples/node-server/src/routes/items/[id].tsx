@@ -1,4 +1,4 @@
-import { page } from "demiurge";
+import { page } from "@demiurge/core";
 
 export const GET = page(({ path }) => (
   <main>

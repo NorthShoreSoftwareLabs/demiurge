@@ -1,4 +1,4 @@
-import { Link, defineMetadata, page, type RouteProps } from "demiurge";
+import { Link, defineMetadata, page, type RouteProps } from "@demiurge/core";
 
 type HomeData = {
   output: string[];

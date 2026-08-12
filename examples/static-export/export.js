@@ -2,7 +2,7 @@
 
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { generateStaticOutput } from "demiurge/static";
+import { generateStaticOutput } from "@demiurge/core/static";
 import { routes } from "./.demiurge/server/server-entry.js";
 
 const outDir = resolve("dist");

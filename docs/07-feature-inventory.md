@@ -16,7 +16,7 @@ implementation.
 | Feature | Status |
 | --- | --- |
 | File-based route discovery | implemented |
-| Framework package public API from `demiurge` | implemented |
+| Framework package public API from `@demiurge/core` | implemented |
 | Split source modules: `route`, `router`, `browser`, `internal` | implemented |
 | `GET = page(...)` route capability | implemented |
 | HTTP request handler for response capabilities | implemented |

@@ -348,7 +348,7 @@ async function handleMatchedRoute(
 
           if (match.match.render.mode === "streaming" && !options.renderPage) {
             throw new Error(
-              "Streaming page routes require an adapter renderer. Pass renderNodePageResponse from demiurge/node as createRequestHandler({ renderPage }).",
+              "Streaming page routes require an adapter renderer. Pass renderNodePageResponse from @demiurge/core/node as createRequestHandler({ renderPage }).",
             );
           }
 

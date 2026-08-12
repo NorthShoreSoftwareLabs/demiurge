@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateUploads } from "demiurge";
+import { validateUploads } from "@demiurge/core";
 
 describe("upload validation", () => {
   it("accepts required uploads within size and MIME limits", () => {

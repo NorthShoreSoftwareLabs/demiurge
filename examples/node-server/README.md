@@ -30,7 +30,7 @@ shutdown drains it within the configured grace period rather than abandoning
 publication. Every request still gets its own cache facade. The memory store is
 intentionally limited to one Node process; a deployment with multiple replicas
 should inject a shared Redis/KV implementation that passes
-`demiurge/data/testing`'s contract.
+`@demiurge/core/data/testing`'s contract.
 
 The client build emits `dist/client/demiurge-manifest.json`; `server.js` reads
 its hashed entry and stylesheet paths and passes them to the generated

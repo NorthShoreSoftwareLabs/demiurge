@@ -1,4 +1,4 @@
-import { Link, type RouteErrorProps } from "demiurge";
+import { Link, type RouteErrorProps } from "@demiurge/core";
 
 // Production renders this for a failure inside a page render. It never
 // receives anything it could leak: the message and stack stay on the server,

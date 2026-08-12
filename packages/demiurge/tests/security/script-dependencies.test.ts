@@ -4,7 +4,7 @@ import {
   createSecurityAudit,
   script,
   security,
-} from "demiurge";
+} from "@demiurge/core";
 
 describe("script dependency audit", () => {
   it("reports missing purpose and integrity for third-party scripts", () => {

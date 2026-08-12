@@ -3,8 +3,8 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createMemoryCacheStore } from "demiurge";
-import { createNodeServer, renderNodePageResponse } from "demiurge/node";
+import { createMemoryCacheStore } from "@demiurge/core";
+import { createNodeServer, renderNodePageResponse } from "@demiurge/core/node";
 import { createHandler } from "./dist/server/server-entry.js";
 
 const root = fileURLToPath(new URL("dist/client", import.meta.url));

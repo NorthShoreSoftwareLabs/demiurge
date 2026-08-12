@@ -4,7 +4,7 @@ import {
   httpError,
   isHttpError,
   type HttpErrorStatus,
-} from "demiurge";
+} from "@demiurge/core";
 
 describe("httpError", () => {
   it("creates a typed error with safe defaults and an optional cause", () => {

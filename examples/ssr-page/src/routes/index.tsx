@@ -1,4 +1,4 @@
-import { Link, page, type RouteProps } from "demiurge";
+import { Link, page, type RouteProps } from "@demiurge/core";
 
 type HomeData = {
   checksum: number;

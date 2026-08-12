@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defineFonts, font, fontPreloadLinks, renderFontFaceCss } from "demiurge";
+import { defineFonts, font, fontPreloadLinks, renderFontFaceCss } from "@demiurge/core";
 
 describe("font planning", () => {
   it("renders local font faces and deterministic preload links", () => {

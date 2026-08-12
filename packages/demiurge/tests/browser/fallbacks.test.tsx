@@ -12,7 +12,7 @@ import {
   type LayoutProps,
   type RouteErrorProps,
   type RouteProps,
-} from "demiurge";
+} from "@demiurge/core";
 
 describe("browser router fallbacks", () => {
   beforeEach(() => {

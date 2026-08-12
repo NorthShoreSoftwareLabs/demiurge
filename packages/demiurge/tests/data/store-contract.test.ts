@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMemoryCacheStore, type CacheStore } from "demiurge";
+import { createMemoryCacheStore, type CacheStore } from "@demiurge/core";
 import {
   verifyCacheStoreContract,
   verifyCacheStoreRefreshContract,

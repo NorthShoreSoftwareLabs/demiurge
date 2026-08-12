@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { defineInstrumentation } from "demiurge";
+import { defineInstrumentation } from "@demiurge/core";
 
 describe("observability instrumentation", () => {
   it("dispatches typed signals to the event and signal handlers", async () => {

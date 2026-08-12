@@ -85,7 +85,7 @@ None open.
   it simultaneously, and a lock cannot tell autoscaling from a collision.
 - `CacheStore` operations are async-capable and receive only fully namespaced,
   scope-qualified keys and tags. Request entries never reach the store. Cache
-  invalidation is consequently async, and `demiurge/data/testing` publishes a
+  invalidation is consequently async, and `@demiurge/core/data/testing` publishes a
   runner-neutral verifier custom adapters can execute (#47).
 - `createRequestHandler({ cacheStore: { namespace, store } })` creates one
   cache facade per request. Shared scopes use the injected backend across

@@ -1,4 +1,4 @@
-import { httpError, json } from "demiurge";
+import { httpError, json } from "@demiurge/core";
 
 export const GET = json(() => {
   throw httpError(401, "Sign in to access this endpoint.", {

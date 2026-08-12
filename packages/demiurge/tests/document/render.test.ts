@@ -9,7 +9,7 @@ import {
   resolveMetadata,
   script,
   structuredData,
-} from "demiurge";
+} from "@demiurge/core";
 import {
   HYDRATION_DATA_ELEMENT_ID,
   HYDRATION_ROOT_ATTRIBUTE,

@@ -4,8 +4,8 @@ import {
   defineEnvSchema,
   env,
   validateEnv,
-} from "demiurge";
-import type { EnvSchema } from "demiurge";
+} from "@demiurge/core";
+import type { EnvSchema } from "@demiurge/core";
 
 describe("environment validation", () => {
   it("parses typed environment variables from an explicit source", () => {

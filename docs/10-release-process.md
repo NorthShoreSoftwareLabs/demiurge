@@ -7,21 +7,20 @@ matching GitHub release. A local build is never uploaded directly.
 
 ## One-time registry setup
 
-The unscoped npm name `demiurge` is currently owned by an unrelated project.
-Before the first public release, maintainers must either obtain that package or
-change Demiurge to an organization-owned scope such as
-`@northshoresoftwarelabs/demiurge`. A scoped rename must update the package
-name, public import specifiers, generated virtual-module source, examples, and
-pack test together. It is a publishing decision, not a reason to weaken the
-local artifact contract.
+Demiurge publishes from the `@demiurge` npm scope. The first package is
+`@demiurge/core`; the scope leaves room for independently versioned adapters or
+tooling later without forcing the 0.1 package's existing subpath exports into
+separate packages now.
 
-After the name is controlled:
+Before the first public release:
 
-1. Configure npm trusted publishing for this repository and
+1. Create or claim the `@demiurge` npm organization and grant the maintainers
+   publish access to `@demiurge/core`.
+2. Configure npm trusted publishing for this repository and
    `.github/workflows/release.yml`.
-2. Create a protected GitHub environment named `npm`, require maintainer
+3. Create a protected GitHub environment named `npm`, require maintainer
    approval, and restrict it to version tags.
-3. Leave the package's `publishConfig.provenance` and public access settings in
+4. Leave the package's `publishConfig.provenance` and public access settings in
    place. Do not add a long-lived npm token when trusted publishing is
    available.
 

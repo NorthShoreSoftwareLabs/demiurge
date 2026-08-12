@@ -2,7 +2,7 @@ import {
   Link,
   defineMetadata,
   type LayoutProps,
-} from "demiurge";
+} from "@demiurge/core";
 
 export const metadata = defineMetadata({
   description: "A production Node runtime example for Demiurge.",

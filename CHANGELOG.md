@@ -1,12 +1,9 @@
 # Changelog
 
-What has actually shipped, by area. This file is the record of completed work;
-open work lives in GitHub issues, and `tasks/` holds the specs.
+Released framework changes are grouped below by version. Open work lives in
+GitHub issues, and `tasks/` holds the implementation specs.
 
-Nothing here is released yet. The package metadata is staged for `0.1.0`, so
-the changes below remain unreleased until the release checklist is complete.
-
-## 0.1.0 — Unreleased
+## 0.1.0 — 2026-08-11
 
 ## Pipeline Quality Gates
 
@@ -170,7 +167,7 @@ Epic: #7
   contract. Framework-owned `app:environment:schemaVersion` and scope prefixes
   isolate every backend key and tag while request entries remain local.
 - `createMemoryCacheStore(...)` implements that contract, and
-  `demiurge/data/testing` exports a runner-neutral conformance verifier for
+  `@demiurge/core/data/testing` exports a runner-neutral conformance verifier for
   custom Redis/KV-style adapters. Cache invalidation is async so network stores
   do not need a fake synchronous API.
 - `createRequestHandler({ cacheStore })` creates a new facade per request while
@@ -269,7 +266,7 @@ Epic: #11
 
 - The production Node adapter converts Node HTTP requests and responses to the
   web platform contract, serves safe static assets, preserves repeated
-  `Set-Cookie` headers, and exposes `createNodeServer(...)` from `demiurge/node`.
+  `Set-Cookie` headers, and exposes `createNodeServer(...)` from `@demiurge/core/node`.
 - Static serving rejects symbolic links in every path component, verifies the
   real target remains inside the real public root, and uses `O_NOFOLLOW` for
   the final open where the platform supports it.

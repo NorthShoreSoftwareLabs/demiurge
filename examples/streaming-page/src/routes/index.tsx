@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { defineMetadata, page } from "demiurge";
+import { defineMetadata, page } from "@demiurge/core";
 
 const DeferredPanel = lazy(async () => {
   await new Promise((resolve) => setTimeout(resolve, 250));

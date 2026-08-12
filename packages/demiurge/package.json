@@ -1,5 +1,5 @@
 {
-  "name": "demiurge",
+  "name": "@demiurge/core",
   "version": "0.1.0",
   "description": "A React framework where the document, security policy, and route pipeline are the framework's job.",
   "license": "MIT",

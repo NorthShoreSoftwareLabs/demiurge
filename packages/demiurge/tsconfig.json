@@ -3,12 +3,12 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "demiurge": ["src/index.ts"],
-      "demiurge/data/testing": ["src/data/testing.ts"],
-      "demiurge/internal/testing": ["src/internal/testing.ts"],
-      "demiurge/node": ["src/node/index.ts"],
-      "demiurge/static": ["src/static/index.ts"],
-      "demiurge/vite": ["src/vite/index.ts"]
+      "@demiurge/core": ["src/index.ts"],
+      "@demiurge/core/data/testing": ["src/data/testing.ts"],
+      "@demiurge/core/internal/testing": ["src/internal/testing.ts"],
+      "@demiurge/core/node": ["src/node/index.ts"],
+      "@demiurge/core/static": ["src/static/index.ts"],
+      "@demiurge/core/vite": ["src/vite/index.ts"]
     }
   },
   "include": ["src", "tests"]

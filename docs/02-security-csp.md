@@ -109,7 +109,7 @@ export const GET = react({
 The first static CSP slice exposes a static preset and deterministic hash helper:
 
 ```ts
-import { createSecurityHeaders, cspHash, security } from "demiurge";
+import { createSecurityHeaders, cspHash, security } from "@demiurge/core";
 
 createSecurityHeaders(
   security.static({
@@ -227,7 +227,7 @@ seconds.
 Cookie-authenticated unsafe methods get CSRF protection by default.
 
 ```ts
-import { text } from "demiurge";
+import { text } from "@demiurge/core";
 
 export const POST = text(({ request }) => request.text());
 ```
@@ -244,7 +244,7 @@ an exemption while protecting browser credential flows by default.
 Issue the token from a deliberate same-origin endpoint or document action:
 
 ```ts
-import { issueCsrfToken, response } from "demiurge";
+import { issueCsrfToken, response } from "@demiurge/core";
 
 export const GET = response(() => {
   const issued = issueCsrfToken();
@@ -298,7 +298,7 @@ Framework responsibilities:
 An endpoint that is intentionally cross-origin can opt out in its route policy:
 
 ```ts
-import { defineRoutePolicy } from "demiurge";
+import { defineRoutePolicy } from "@demiurge/core";
 
 export const policy = defineRoutePolicy({
   security: {
@@ -332,7 +332,7 @@ Rate limiting and request size limits should be typed policy, not scattered
 middleware snippets.
 
 ```ts
-import { defineRoutePolicy } from "demiurge";
+import { defineRoutePolicy } from "@demiurge/core";
 
 export const policy = defineRoutePolicy({
   security: {
@@ -367,7 +367,7 @@ shared cache, or through platform features.
 Runtime configuration should fail closed before request handling starts:
 
 ```ts
-import { defineEnvSchema, env, validateEnv } from "demiurge";
+import { defineEnvSchema, env, validateEnv } from "@demiurge/core";
 
 const schema = defineEnvSchema({
   API_ORIGIN: env.url({ protocols: ["https:"] }),
@@ -391,7 +391,7 @@ WebSocket routes need explicit origin checks because browser upgrade requests
 can carry cookies and other ambient credentials:
 
 ```ts
-import { enforceWebSocketOrigin } from "demiurge";
+import { enforceWebSocketOrigin } from "@demiurge/core";
 
 const rejected = enforceWebSocketOrigin(
   { origins: "same-origin" },
@@ -450,7 +450,7 @@ Applications can collect the resulting reports without ad hoc JSON parsing in
 every route:
 
 ```ts
-import { createSecurityReportHandler, response } from "demiurge";
+import { createSecurityReportHandler, response } from "@demiurge/core";
 
 const report = createSecurityReportHandler({
   maxBodySize: "32kb",
@@ -606,7 +606,7 @@ Framework responsibilities:
 The first webhook slice provides a generic HMAC helper:
 
 ```ts
-import { webhook } from "demiurge";
+import { webhook } from "@demiurge/core";
 
 export const POST = webhook.hmac({
   secret: env.WEBHOOK_SECRET,
@@ -694,7 +694,7 @@ Implemented security policy should be inspectable without issuing a real
 request:
 
 ```ts
-import { createSecurityAudit, security } from "demiurge";
+import { createSecurityAudit, security } from "@demiurge/core";
 
 const audit = createSecurityAudit({
   document: {
@@ -738,7 +738,7 @@ export const GET = react({
 Security policy composition should work from app to layout to route:
 
 ```ts
-import { defineSecurityPolicy, mergeSecurityPolicies, security } from "demiurge";
+import { defineSecurityPolicy, mergeSecurityPolicies, security } from "@demiurge/core";
 
 export const appPolicy = defineSecurityPolicy(security.strict());
 
@@ -766,7 +766,7 @@ before enforcing CSRF, rate limits, allowed methods, and body size limits.
 The framework should expose named presets:
 
 ```ts
-import { createSecurityHeaders, security } from "demiurge";
+import { createSecurityHeaders, security } from "@demiurge/core";
 
 createSecurityHeaders(security.preset("strict"), { nonce });
 createSecurityHeaders(security.preset("cross-origin-isolated"), { nonce });
@@ -784,7 +784,7 @@ Metadata should be a first-class route/layout export, not arbitrary raw head
 markup.
 
 ```ts
-import { defineMetadata } from "demiurge";
+import { defineMetadata } from "@demiurge/core";
 
 export const metadata = defineMetadata({
   title: "Checkout",
@@ -803,7 +803,7 @@ export const metadata = defineMetadata({
 Layouts can provide defaults:
 
 ```ts
-import { defineMetadata } from "demiurge";
+import { defineMetadata } from "@demiurge/core";
 
 export const metadata = defineMetadata({
   title: {

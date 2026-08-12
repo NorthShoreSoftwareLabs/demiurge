@@ -9,7 +9,7 @@ import {
   page,
   type RouteModule,
   type RouteProps,
-} from "demiurge";
+} from "@demiurge/core";
 
 describe("client hydration", () => {
   beforeEach(() => {

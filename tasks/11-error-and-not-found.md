@@ -133,7 +133,7 @@ example provides the nested ownership and failure-site walkthrough.
   response shape (#21).
 
 - Page detection for the build gate is a source scan keyed on the `page` import
-  from `demiurge`, not on the bare word and not on the file extension. The
+  from `@demiurge/core`, not on the bare word and not on the file extension. The
   plugin cannot execute route modules at build time. A `page(` scan fires on
   `db.users.page(2)`, and an API-only app must never be told to write a 404
   document it will never serve; extension misses a page route whose view is

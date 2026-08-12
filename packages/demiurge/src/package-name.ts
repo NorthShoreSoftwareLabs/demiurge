@@ -8,4 +8,4 @@
 // strings elsewhere in the source. `__demiurge_data`, `virtual:demiurge/*`,
 // `demiurge-manifest.json`, and friends name the framework, not the package,
 // and they stay put if the registry name ever changes.
-export const PACKAGE_NAME = "demiurge";
+export const PACKAGE_NAME = "@demiurge/core";

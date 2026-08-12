@@ -338,8 +338,8 @@ Create one shared store and inject it into the request handler. The handler
 creates a fresh cache facade for every request:
 
 ```ts
-import { createMemoryCacheStore, createRequestHandler } from "demiurge";
-import { createNodeServer } from "demiurge/node";
+import { createMemoryCacheStore, createRequestHandler } from "@demiurge/core";
+import { createNodeServer } from "@demiurge/core/node";
 
 const store = createMemoryCacheStore();
 let server: ReturnType<typeof createNodeServer>;
@@ -411,7 +411,7 @@ store without depending on a test runner:
 import {
   verifyCacheStoreContract,
   verifyCacheStoreRefreshContract,
-} from "demiurge/data/testing";
+} from "@demiurge/core/data/testing";
 
 await verifyCacheStoreContract(() => createMyStore());
 await verifyCacheStoreRefreshContract(() => createMyStore());

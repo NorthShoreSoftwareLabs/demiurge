@@ -22,7 +22,7 @@ import {
   script,
   validateCorsPolicy,
   validateRateLimitPolicy,
-} from "demiurge";
+} from "@demiurge/core";
 // createCorsPreflightResponse is an internal helper (not re-exported from the
 // package root) that backs the request handler's OPTIONS preflight handling.
 import { createCorsPreflightResponse } from "../../src/security/cors";

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createMemoryIdempotencyStore,
   runIdempotentMutation,
-} from "demiurge";
+} from "@demiurge/core";
 
 describe("idempotent mutations", () => {
   it("uses a finite configurable default TTL", async () => {
