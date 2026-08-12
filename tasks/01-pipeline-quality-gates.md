@@ -48,8 +48,10 @@ None open.
   README and identical license text. `pnpm test:pack` treats metadata, legal
   files, declarations, every export, and a clean external app build as one
   artifact contract rather than trusting workspace examples alone.
-- Node 22 is the minimum supported runtime for `0.1.0`; CI exercises the packed
-  consumer on that floor while the complete verification job runs on Node 24.
+- Node 22.13 is the minimum supported runtime for `0.1.0`; CI pins that exact
+  floor for the package contract while the complete verification job runs on
+  Node 24. Node declarations stay on the matching Node 22 major so newer APIs
+  cannot enter the public implementation unnoticed.
 - Releases originate only from a clean, signed version tag. The release
   workflow re-runs verification, rejects open p1 milestone issues and unrelated
   npm ownership, publishes through npm trusted publishing with provenance, and

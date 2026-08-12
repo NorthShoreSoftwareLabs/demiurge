@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   node-floor:
-    name: Node 22 package contract
+    name: Node 22.13 package contract
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -27,7 +27,7 @@ jobs:
       - name: Setup minimum Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.13.0
           cache: pnpm
 
       - name: Install dependencies

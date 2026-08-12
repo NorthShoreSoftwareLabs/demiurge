@@ -7,7 +7,7 @@ other deployment shapes.
 
 ## Requirements
 
-- Node.js 22 or newer
+- Node.js 22.13 or newer
 - React and React DOM 19
 - Vite 6 when using the `demiurge/vite` build integration
 

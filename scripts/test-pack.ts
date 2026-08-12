@@ -89,7 +89,7 @@ try {
       "react-dom@^19.0.0",
       "vite@^6.0.7",
       "typescript@^5.7.2",
-      "@types/node@^22.0.0",
+      "@types/node@^22.13.0",
       "@types/react@^19.0.2",
       "@types/react-dom@^19.0.2",
       "@vitejs/plugin-react@^4.3.4",
@@ -124,7 +124,7 @@ try {
   assert(installedBugs?.url === "https://github.com/NorthShoreSoftwareLabs/demiurge/issues", "Packed package is missing its issue tracker.");
   assert(installedRepository?.type === "git" && installedRepository.url === expectedPackage.repository, "Packed package is missing its Git repository.");
   assert(installedRepository.directory === "packages/demiurge", "Packed package must identify its monorepo directory.");
-  assert(installedEngines?.node === ">=22.0.0", "Packed package must declare the supported Node runtime.");
+  assert(installedEngines?.node === ">=22.13.0", "Packed package must declare the supported Node runtime.");
   assert(installedPublishConfig?.access === "public" && installedPublishConfig.provenance === true, "Packed package must require public provenance publication.");
   assert(Array.isArray(installedPackage.keywords) && installedPackage.keywords.includes("react"), "Packed package is missing npm discovery keywords.");
 
