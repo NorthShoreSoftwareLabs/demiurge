@@ -58,14 +58,46 @@ describe("file route conventions", () => {
     ]);
   });
 
+  it("decodes segments after preserving encoded slash boundaries", () => {
+    expect(unstable_splitPathname("/caf%C3%A9/hello%20world/a%2Fb/%25")).toEqual([
+      "café",
+      "hello world",
+      "a/b",
+      "%",
+    ]);
+  });
+
+  it("rejects malformed percent encoding deterministically", () => {
+    expect(() => unstable_splitPathname("/bad/%")).toThrow(
+      /Malformed percent encoding/,
+    );
+  });
+
   it("matches static, dynamic, and catchall path variables", () => {
     expect(unstable_matchSegments(["blog"], ["blog"])).toEqual({});
     expect(
-      unstable_matchSegments(["blog", ":slug"], ["blog", "hello%20world"]),
+      unstable_matchSegments(["blog", ":slug"], ["blog", "hello world"]),
     ).toEqual({ slug: "hello world" });
     expect(unstable_matchSegments(["docs", "*path"], ["docs", "a", "b"]))
       .toEqual({ path: "a/b" });
     expect(unstable_matchSegments(["blog"], ["blog", "extra"])).toBeNull();
+  });
+
+  it("matches encoded runtime URLs consistently across route shapes", () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/café.tsx": routeModule({ GET: page(View) }),
+      "./routes/posts/[slug].tsx": routeModule({ GET: page(View) }),
+      "./routes/files/[...path].tsx": routeModule({ GET: page(View) }),
+    });
+
+    expect(unstable_findRouteMatch(manifest.routes, "/caf%C3%A9")?.path)
+      .toEqual({});
+    expect(
+      unstable_findRouteMatch(manifest.routes, "/posts/a%2Fb")?.path,
+    ).toEqual({ slug: "a/b" });
+    expect(
+      unstable_findRouteMatch(manifest.routes, "/files/caf%C3%A9/a%2Fb")?.path,
+    ).toEqual({ path: "café/a/b" });
   });
 
   it("classifies @layout files as layouts and normal names as routes", () => {

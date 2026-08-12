@@ -38,6 +38,11 @@ None open.
 
 ## Decisions Made
 
+- Runtime pathnames are split on literal `/` before each segment is percent
+  decoded. Static, dynamic, and catchall matching therefore share one Unicode,
+  space, percent, and encoded-slash contract. Malformed escapes return an
+  unreported problem+json 400 before application code runs (#108).
+
 - Route matching never uses filenames as a runtime tiebreaker. Static,
   dynamic, and terminal catchall segments have positional precedence;
   equal-shape ties are rejected with both files and a witness URL.

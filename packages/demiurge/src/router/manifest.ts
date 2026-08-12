@@ -689,7 +689,7 @@ export function matchSegments(
     }
 
     if (routeSegment.startsWith(":")) {
-      path[routeSegment.slice(1)] = decodeURIComponent(pathnameSegment);
+      path[routeSegment.slice(1)] = pathnameSegment;
       continue;
     }
 
@@ -848,5 +848,30 @@ export function scoreRoute(fileSegments: string[]) {
 }
 
 export function splitPathname(pathname: string) {
-  return pathname.replace(/^\/|\/$/g, "").split("/").filter(Boolean);
+  return pathname
+    .replace(/^\/|\/$/g, "")
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => {
+      try {
+        // Split before decoding so `%2F` remains content in one segment
+        // instead of silently changing the route shape.
+        return decodeURIComponent(segment);
+      } catch (cause) {
+        throw new MalformedPathnameError(pathname, { cause });
+      }
+    });
+}
+
+export class MalformedPathnameError extends URIError {
+  readonly pathname: string;
+
+  constructor(pathname: string, options?: ErrorOptions) {
+    super(
+      `Malformed percent encoding in URL pathname ${JSON.stringify(pathname)}.`,
+      options,
+    );
+    this.name = "MalformedPathnameError";
+    this.pathname = pathname;
+  }
 }

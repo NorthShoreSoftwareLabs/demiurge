@@ -1484,6 +1484,26 @@ describe("request handler", () => {
     expect(response.status).toBe(404);
   });
 
+  it("returns a controlled 400 for malformed path encoding without reporting an app error", async () => {
+    const onError = vi.fn();
+    const handler = createRequestHandler({ onError, routes: {} });
+    const response = await handler(
+      new Request("https://example.test/bad/%", {
+        headers: { accept: "application/json" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("content-type")).toContain(
+      "application/problem+json",
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      status: 400,
+      title: "Bad Request",
+    });
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it("renders page routes with SSR and an optional client entry", async () => {
     const handler = createRequestHandler({
       ssr: {

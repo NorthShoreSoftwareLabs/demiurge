@@ -12,6 +12,7 @@ export {
   loadNotFoundMatch,
   loadPageRoute,
   loadRoute,
+  MalformedPathnameError,
   matchSegments,
   scoreRoute,
   splitPathname,

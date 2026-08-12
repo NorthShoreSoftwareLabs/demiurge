@@ -5,6 +5,7 @@ import {
   isNavigationDataRequest,
   isAttachedFileForRoute,
   loadPageRoute,
+  MalformedPathnameError,
   markNavigationResponse,
   NAVIGATION_DATA_HEADER,
   NAVIGATION_ERROR_RESPONSE,
@@ -40,6 +41,7 @@ import {
 import { renderFailureResponse } from "./errors";
 import type { FailureSite } from "./failure-site";
 import { renderNotFoundResponse } from "./not-found";
+import { createProblemResponse } from "./problem";
 import {
   applyCorsHeaders,
   createCorsPreflightResponse,
@@ -144,8 +146,25 @@ export async function handleRequestWithManifest(
 ) {
   const url = new URL(request.url);
   const fallbackOptions = createFallbackOptions(url, options);
-  const routeMatch = findRouteMatch(manifest.routes, url.pathname);
   const navigationDataRequest = isNavigationDataRequest(request);
+  let routeMatch: ReturnType<typeof findRouteMatch>;
+
+  try {
+    routeMatch = findRouteMatch(manifest.routes, url.pathname);
+  } catch (error) {
+    if (!(error instanceof MalformedPathnameError)) {
+      throw error;
+    }
+
+    const response = createProblemResponse({
+      instance: `${url.pathname}${url.search}`,
+      status: 400,
+      title: "Bad Request",
+    });
+    return navigationDataRequest
+      ? markNavigationResponse(response, NAVIGATION_ERROR_RESPONSE)
+      : response;
+  }
 
   if (!routeMatch) {
     try {
@@ -364,7 +383,10 @@ async function handleMatchedRoute(
 
       response = requestBodyTooLargeResponse();
     }
-    const headers = createSecurityHeaders(policy.document ?? {}, { nonce });
+    const headers = createSecurityHeaders(policy.document ?? {}, {
+      nonce,
+      request,
+    });
 
     for (const [name, value] of headers) {
       response.headers.set(name, value);

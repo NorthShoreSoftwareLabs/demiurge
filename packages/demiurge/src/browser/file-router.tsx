@@ -435,7 +435,12 @@ function scrollToHash(hash: string) {
       return;
     }
 
-    const id = decodeURIComponent(hash.slice(1));
+    let id: string;
+    try {
+      id = decodeURIComponent(hash.slice(1));
+    } catch {
+      id = hash.slice(1);
+    }
     document.getElementById(id)?.scrollIntoView?.();
   });
 }
