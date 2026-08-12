@@ -392,6 +392,16 @@ async function handleMatchedRoute(
       response.headers.set(name, value);
     }
 
+    // A CSP nonce must be unpredictable for every transmitted response. A
+    // browser or shared HTTP cache replaying this document would also replay
+    // its nonce, so nonce-backed documents are never reusable HTTP cache
+    // representations. This intentionally overrides app-provided public cache
+    // directives; cache data or a nonce-free render artifact below this layer
+    // instead.
+    if (nonce) {
+      response.headers.set("cache-control", "private, no-store");
+    }
+
     if (method === "HEAD") {
       await response.body?.cancel();
 

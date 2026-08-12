@@ -909,6 +909,12 @@ describe("request handler", () => {
     expect(strictResponse.headers.get("content-security-policy")).toMatch(
       /'nonce-[A-Za-z0-9+/=]+'/,
     );
+    expect(strictResponse.headers.get("strict-transport-security")).toBe(
+      "max-age=31536000",
+    );
+    expect(strictResponse.headers.get("cache-control")).toBe(
+      "private, no-store",
+    );
     expect(strictHtml).toMatch(/nonce="[A-Za-z0-9+/=]+"/);
     expect(staticResponse.headers.get("content-security-policy")).toContain(
       "script-src 'self'",
@@ -916,7 +922,30 @@ describe("request handler", () => {
     expect(staticResponse.headers.get("content-security-policy")).not.toContain(
       "nonce-",
     );
+    expect(staticResponse.headers.has("cache-control")).toBe(false);
     expect(staticHtml).not.toContain(" nonce=");
+  });
+
+  it("overrides cacheable response directives on nonce-backed documents", async () => {
+    const handler = createRequestHandler({
+      renderPage: () =>
+        new Response("<main>cached</main>", {
+          headers: {
+            "cache-control": "public, max-age=3600",
+            "content-type": "text/html; charset=utf-8",
+          },
+        }),
+      routes: {
+        "./routes/@policy.ts": routeModule({
+          policy: defineRoutePolicy({ document: security.strict() }),
+        }),
+        "./routes/index.tsx": routeModule({ GET: page(View) }),
+      },
+    });
+
+    const response = await handler(new Request("https://example.test/"));
+
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
   });
 
   it("scopes inherited @policy files to route group subtrees", async () => {

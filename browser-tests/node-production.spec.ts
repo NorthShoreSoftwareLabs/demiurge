@@ -34,6 +34,7 @@ test("strict CSP and browser security headers are enforced", async ({ page }) =>
   expect(headers["cross-origin-opener-policy"]).toBe("same-origin");
   expect(headers["cross-origin-resource-policy"]).toBe("same-origin");
   expect(headers["permissions-policy"]).toContain("camera=()");
+  expect(headers["cache-control"]).toBe("private, no-store");
   expect(csp).toContain("default-src 'self'");
   expect(csp).toContain("'strict-dynamic'");
   expect(csp).toContain("upgrade-insecure-requests");

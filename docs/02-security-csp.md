@@ -72,10 +72,10 @@ nonce on a script contribution.
 A nonce-backed document is not a reusable HTTP-cache representation. CSP
 requires the server to generate a unique nonce each time it transmits the
 policy, so a CDN must not replay one cached nonce-bearing document to multiple
-requests and a browser must not reuse one as a fresh document response. Until
-the framework synthesizes these cache restrictions, applications and adapters
-must mark nonce-backed documents `Cache-Control: no-store`. Static or otherwise
-replayable documents need a hash/static CSP instead.
+requests and a browser must not reuse one as a fresh document response. Demiurge
+therefore overrides any application cache directive on a nonce-backed document
+with `Cache-Control: private, no-store`. Static or otherwise replayable
+documents need a hash/static CSP instead.
 
 This does not prevent caching work below the HTTP response. The origin may cache
 data or a nonce-free render artifact and then wrap it with a fresh nonce and CSP
@@ -405,6 +405,11 @@ response. Exact allowlists can use normalized origins such as
 `https://app.example.com`; `origins: "same-origin"` compares against the request
 URL's own origin. Missing origins are rejected unless the policy explicitly sets
 `allowMissingOrigin: true` for trusted non-browser clients.
+
+Origin values are parsed as serialized browser origins: an HTTP(S) scheme,
+hostname, and optional port, with no path, query, fragment, or credentials.
+URL-like values outside that grammar are rejected instead of being silently
+normalized into an allowed origin.
 
 ## Security Report Endpoint
 

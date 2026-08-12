@@ -93,7 +93,36 @@ function normalizeOrigin(origin: string) {
   }
 
   try {
-    return new URL(origin).origin;
+    // Origin is a serialized origin, not an arbitrary URL. `new URL()` alone
+    // would silently discard a path, query, fragment, or credentials and could
+    // turn a malformed attacker-supplied header into an allowed origin.
+    if (origin !== origin.trim()) {
+      return null;
+    }
+
+    const schemeSeparator = origin.indexOf("://");
+
+    if (schemeSeparator === -1) {
+      return null;
+    }
+
+    const authority = origin.slice(schemeSeparator + 3);
+
+    if (!authority || /[/?#]/.test(authority)) {
+      return null;
+    }
+
+    const url = new URL(origin);
+
+    if (
+      (url.protocol !== "http:" && url.protocol !== "https:") ||
+      url.username ||
+      url.password
+    ) {
+      return null;
+    }
+
+    return url.origin;
   } catch {
     return null;
   }

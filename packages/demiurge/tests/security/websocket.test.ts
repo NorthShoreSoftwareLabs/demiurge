@@ -24,7 +24,7 @@ describe("WebSocket origin checks", () => {
   it("allows explicitly configured origins", () => {
     const request = new Request("https://api.example.com/socket", {
       headers: {
-        origin: "https://app.example.com/dashboard",
+        origin: "https://app.example.com",
       },
     });
 
@@ -41,6 +41,30 @@ describe("WebSocket origin checks", () => {
       origin: "https://app.example.com",
       reason: undefined,
     });
+  });
+
+  it("rejects URL-like values that are not serialized origins", () => {
+    for (const origin of [
+      "https://app.example.com/forged-path",
+      "https://user@app.example.com",
+      "https://app.example.com?forged=true",
+      "wss://app.example.com",
+    ]) {
+      const request = new Request("https://api.example.com/socket", {
+        headers: { origin },
+      });
+
+      expect(
+        checkWebSocketOrigin(
+          { origins: ["https://app.example.com"] },
+          request,
+        ),
+      ).toMatchObject({
+        allowed: false,
+        origin,
+        reason: "invalid-origin",
+      });
+    }
   });
 
   it("rejects missing, malformed, and unlisted origins", async () => {

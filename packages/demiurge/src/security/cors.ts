@@ -15,6 +15,15 @@ export function createCorsHeaders(
   const origin = context.request.headers.get("origin");
   const headers = new Headers();
 
+  // An allowlist makes the representation origin-dependent even when this
+  // particular request has no Origin header or supplies a denied origin. The
+  // Vary field therefore has to be present on every branch; adding it only to
+  // allowed responses lets a shared cache reuse a denied response for an
+  // allowed origin (or the reverse).
+  if (policy.origins !== "*") {
+    appendVary(headers, "Origin");
+  }
+
   if (!origin) {
     return headers;
   }
@@ -26,10 +35,6 @@ export function createCorsHeaders(
   }
 
   headers.set("access-control-allow-origin", allowedOrigin);
-
-  if (allowedOrigin !== "*") {
-    headers.append("vary", "Origin");
-  }
 
   if (policy.credentials) {
     headers.set("access-control-allow-credentials", "true");
@@ -120,6 +125,24 @@ export function validateCorsPolicy(policy: CorsPolicy) {
       "Demiurge CORS policy cannot use wildcard origins with credentials.",
     );
   }
+
+  if (
+    policy.credentials &&
+    (policy.headers?.includes("*") || policy.exposeHeaders?.includes("*"))
+  ) {
+    throw new Error(
+      "Demiurge credentialed CORS policy must list allowed and exposed headers explicitly.",
+    );
+  }
+
+  if (
+    policy.maxAge !== undefined &&
+    (!Number.isSafeInteger(policy.maxAge) || policy.maxAge < 0)
+  ) {
+    throw new Error(
+      "Demiurge CORS maxAge must be a non-negative integer number of seconds.",
+    );
+  }
 }
 
 function resolveAllowedOrigin(policy: CorsPolicy, origin: string) {
@@ -133,12 +156,31 @@ function resolveAllowedOrigin(policy: CorsPolicy, origin: string) {
 function mergeHeaders(target: Headers, source: Headers) {
   source.forEach((value, name) => {
     if (name === "vary" && target.has("vary")) {
-      target.set("vary", `${target.get("vary")}, ${value}`);
+      for (const field of value.split(",")) {
+        appendVary(target, field.trim());
+      }
       return;
     }
 
     target.set(name, value);
   });
+}
+
+function appendVary(headers: Headers, field: string) {
+  if (!field) {
+    return;
+  }
+
+  const existing = headers.get("vary")
+    ?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean) ?? [];
+
+  if (existing.some((value) => value.toLowerCase() === field.toLowerCase())) {
+    return;
+  }
+
+  headers.set("vary", [...existing, field].join(", "));
 }
 
 function normalizeCorsMethod(method: string | null): HttpMethod | null {
