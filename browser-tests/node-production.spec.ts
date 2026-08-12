@@ -4,7 +4,13 @@ test("production SSR hydrates and navigates without a document reload", async ({
   page,
 }) => {
   const pageErrors: Error[] = [];
+  const routeDataRequests: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error));
+  page.on("request", (request) => {
+    if (request.headers()["x-demiurge-navigation"] === "data") {
+      routeDataRequests.push(request.url());
+    }
+  });
 
   const response = await page.goto("/");
 
@@ -16,11 +22,15 @@ test("production SSR hydrates and navigates without a document reload", async ({
   await page.getByRole("link", { name: "alpha" }).click();
   await expect(page).toHaveURL("http://localhost:42177/items/alpha");
   await expect(page.getByRole("heading", { name: "Item: alpha" })).toBeVisible();
+  await page.getByRole("link", { name: "Home" }).click();
+  await expect(page.getByRole("heading", { name: "SSR is running" })).toBeVisible();
+  await expect(page.locator("[data-rendered-by=node]")).toBeVisible();
 
   const navigationCount = await page.evaluate(
     () => performance.getEntriesByType("navigation").length,
   );
   expect(navigationCount).toBe(1);
+  expect(routeDataRequests).toContain("http://localhost:42177/");
   expect(pageErrors).toEqual([]);
 });
 
