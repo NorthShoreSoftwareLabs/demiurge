@@ -92,11 +92,80 @@ describe("data cache primitives", () => {
       "Demiurge cache keys cannot contain circular references.",
     );
     expect(() => serializeCacheKey([hidden] as never)).toThrow(
-      "Demiurge cache key objects require enumerable string properties.",
+      "Demiurge cache key objects require enumerable string data properties.",
     );
     expect(() => serializeCacheKey([symbol] as never)).toThrow(
-      "Demiurge cache key objects require enumerable string properties.",
+      "Demiurge cache key objects require enumerable string data properties.",
     );
+  });
+
+  it("rejects array holes, custom state, symbols, and accessors", () => {
+    const sparse = Array(1);
+    const custom = Object.assign([], { custom: true });
+    const symbol = Object.assign([], { [Symbol("secret")]: true });
+    const accessor = Object.defineProperty([], "0", {
+      enumerable: true,
+      get: () => "value",
+    });
+    const objectAccessor = Object.defineProperty({}, "value", {
+      enumerable: true,
+      get: () => "value",
+    });
+
+    for (const value of [sparse, custom, symbol, accessor]) {
+      expect(() => serializeCacheKey(value as never)).toThrow(
+        "Demiurge cache key arrays must be dense and cannot contain accessors or custom properties.",
+      );
+    }
+    expect(() => serializeCacheKey([objectAccessor] as never)).toThrow(
+      "Demiurge cache key objects require enumerable string data properties.",
+    );
+  });
+
+  it("serializes distinct accepted nested values without collisions", () => {
+    const atoms = [null, false, true, -1, 0, 1, "", "0", "value"] as const;
+    const values: unknown[] = [...atoms];
+
+    for (const atom of atoms) {
+      values.push([atom], [atom, null], { value: atom }, { a: atom, z: null });
+    }
+
+    const firstLevel = [...values];
+    for (const value of firstLevel) {
+      values.push([value, "nested"], { nested: value });
+    }
+
+    const serialized = values.map((value) =>
+      serializeCacheKey([value] as never),
+    );
+    expect(new Set(serialized).size).toBe(values.length);
+  });
+
+  it("rejects invalid keys before cache store access", async () => {
+    const store = {
+      delete: vi.fn(),
+      get: vi.fn(),
+      invalidateTags: vi.fn(),
+      set: vi.fn(),
+    };
+    const cache = createCache({
+      namespace: { app: "test", environment: "test", schemaVersion: 1 },
+      store,
+    });
+
+    await expect(
+      cache.get({
+        fn: vi.fn(),
+        key: [Array(1)] as never,
+        scope: "public",
+      }),
+    ).rejects.toThrow("Demiurge cache key arrays must be dense");
+    await expect(cache.invalidateKey([Array(1)] as never)).rejects.toThrow(
+      "Demiurge cache key arrays must be dense",
+    );
+    expect(store.get).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+    expect(store.set).not.toHaveBeenCalled();
   });
 
   it("parses cache durations", () => {

@@ -48,6 +48,10 @@ handlers and React server components without hiding when work runs.
 ## Tests Required
 
 - Unit tests for cache key/tag behavior.
+- Collision tests prove injective serialization across accepted nested values;
+  runtime validation rejects non-finite numbers, negative zero, sparse or
+  customized arrays, accessors, hidden state, symbols, and non-plain objects
+  before cache or idempotency store access (#105).
 - Type tests for `paths`, route path values, and invalidation helpers.
 - Fixture build tests for static dynamic routes.
 - ~~Adapter contract tests for shared cache behavior.~~ The store-level contract

@@ -827,6 +827,26 @@ function stableSerialize(value: CacheKeyPart, ancestors: Set<object>): string {
   ancestors.add(value);
 
   if (Array.isArray(value)) {
+    const ownKeys = Reflect.ownKeys(value);
+    const expectedKeys = [
+      ...Array.from({ length: value.length }, (_, index) => String(index)),
+      "length",
+    ];
+
+    if (
+      ownKeys.length !== expectedKeys.length ||
+      ownKeys.some((key, index) => key !== expectedKeys[index]) ||
+      expectedKeys.slice(0, -1).some((key) => {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key);
+        return !descriptor?.enumerable || !("value" in descriptor);
+      })
+    ) {
+      ancestors.delete(value);
+      throw new Error(
+        "Demiurge cache key arrays must be dense and cannot contain accessors or custom properties.",
+      );
+    }
+
     const serialized = `[${value
       .map((part) => stableSerialize(part, ancestors))
       .join(",")}]`;
@@ -848,11 +868,11 @@ function stableSerialize(value: CacheKeyPart, ancestors: Set<object>): string {
     ownKeys.some((key) => typeof key === "symbol") ||
     ownKeys.some((key) => {
       const descriptor = Object.getOwnPropertyDescriptor(value, key);
-      return !descriptor?.enumerable;
+      return !descriptor?.enumerable || !("value" in descriptor);
     })
   ) {
     throw new Error(
-      "Demiurge cache key objects require enumerable string properties.",
+      "Demiurge cache key objects require enumerable string data properties.",
     );
   }
 

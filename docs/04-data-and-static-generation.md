@@ -318,9 +318,11 @@ refresh methods are an all-or-nothing capability required by
 `staleWhileRevalidate`; provider implementations must make lease acquisition and
 token-checked publication atomic in their own storage system.
 
-Cache and idempotency keys accept only JSON-like primitives, arrays, and plain
-objects. Numbers must be finite; negative zero is rejected rather than silently
-colliding with zero. Runtime JavaScript callers also fail before store access
+Cache and idempotency keys accept only JSON-like primitives, dense arrays, and
+plain objects with enumerable string data properties. Array holes, custom or
+symbol properties, and accessors are rejected so every accepted runtime value
+has one unambiguous serialization. Numbers must be finite; negative zero is
+rejected rather than silently colliding with zero. Runtime JavaScript callers also fail before store access
 when a key contains `undefined`, functions, symbols, special object instances,
 non-enumerable properties, or circular references.
 
