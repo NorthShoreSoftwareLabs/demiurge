@@ -105,7 +105,9 @@ export function createStaticFileHandler(
       return new Response(null, { headers, status: 304 });
     }
 
-    const range = parseRange(request.headers.get("range"), stats.size);
+    const range = canApplyRange(request, stats.mtimeMs)
+      ? parseRange(request.headers.get("range"), stats.size)
+      : null;
 
     if (range === "unsatisfiable") {
       await file.close();
@@ -190,7 +192,14 @@ function parseRange(
 
   const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
 
-  if (!match || (!match[1] && !match[2]) || size === 0) {
+  // A server that does not support the requested unit, syntax, or multiple
+  // ranges ignores Range and returns the complete representation. A 416 is
+  // reserved for a valid byte-range set that cannot select this resource.
+  if (!match || (!match[1] && !match[2])) {
+    return null;
+  }
+
+  if (size === 0) {
     return "unsatisfiable";
   }
 
@@ -198,7 +207,7 @@ function parseRange(
     const suffixLength = Number(match[2]);
 
     if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
-      return "unsatisfiable";
+      return null;
     }
 
     return { start: Math.max(0, size - suffixLength), end: size - 1 };
@@ -207,16 +216,37 @@ function parseRange(
   const start = Number(match[1]);
   const requestedEnd = match[2] ? Number(match[2]) : size - 1;
 
-  if (
-    !Number.isSafeInteger(start) ||
-    !Number.isSafeInteger(requestedEnd) ||
-    start >= size ||
-    requestedEnd < start
-  ) {
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(requestedEnd)) {
+    return null;
+  }
+
+  if (start >= size) {
     return "unsatisfiable";
   }
 
+  if (match[2] && requestedEnd < start) {
+    return null;
+  }
+
   return { start, end: Math.min(requestedEnd, size - 1) };
+}
+
+function canApplyRange(request: Request, mtimeMs: number) {
+  const ifRange = request.headers.get("if-range");
+
+  if (ifRange === null) {
+    return true;
+  }
+
+  // If-Range requires strong comparison for an entity-tag. This handler's
+  // stat-derived validator is intentionally weak, so only an HTTP date can
+  // authorize a partial response.
+  if (ifRange.trim().startsWith('"') || /^W\//i.test(ifRange.trim())) {
+    return false;
+  }
+
+  const date = Date.parse(ifRange);
+  return Number.isFinite(date) && Math.floor(mtimeMs / 1000) * 1000 <= date;
 }
 
 function resolveFilePath(root: string, prefix: string, pathname: string) {

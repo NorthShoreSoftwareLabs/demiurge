@@ -129,10 +129,10 @@ describe("static file handler", () => {
     }
   });
 
-  it("answers unsatisfiable and unsupported ranges with 416", async () => {
+  it("answers valid but unsatisfiable ranges with 416", async () => {
     const handle = createStaticFileHandler({ root });
 
-    for (const range of ["bytes=13-20", "bytes=5-4", "bytes=0-1,4-5"]) {
+    for (const range of ["bytes=13-20", "bytes=14-"]) {
       const response = await handle(request("/robots.txt", {
         headers: { range },
       }));
@@ -141,6 +141,48 @@ describe("static file handler", () => {
       expect(response?.body).toBeNull();
       expect(response?.headers.get("content-range")).toBe("bytes */13");
       expect(response?.headers.get("content-length")).toBeNull();
+    }
+  });
+
+  it("ignores unsupported, malformed, and multiple ranges", async () => {
+    const handle = createStaticFileHandler({ root });
+
+    for (const range of ["items=0-1", "bytes=5-4", "bytes=0-1,4-5", "bytes=-0"]) {
+      const response = await handle(request("/robots.txt", {
+        headers: { range },
+      }));
+
+      expect(response?.status).toBe(200);
+      expect(response?.headers.get("content-range")).toBeNull();
+      await expect(response?.text()).resolves.toBe("User-agent: *");
+    }
+  });
+
+  it("honors If-Range dates and ignores ranges for stale dates or weak tags", async () => {
+    const handle = createStaticFileHandler({ root });
+    const initial = await handle(request("/robots.txt"));
+    const lastModified = initial?.headers.get("last-modified");
+    const etag = initial?.headers.get("etag");
+    await initial?.body?.cancel();
+
+    const matchingDate = await handle(request("/robots.txt", {
+      headers: { "if-range": lastModified!, range: "bytes=0-3" },
+    }));
+    const staleDate = await handle(request("/robots.txt", {
+      headers: {
+        "if-range": "Thu, 01 Jan 1970 00:00:00 GMT",
+        range: "bytes=0-3",
+      },
+    }));
+    const weakTag = await handle(request("/robots.txt", {
+      headers: { "if-range": etag!, range: "bytes=0-3" },
+    }));
+
+    expect(matchingDate?.status).toBe(206);
+    await expect(matchingDate?.text()).resolves.toBe("User");
+    for (const response of [staleDate, weakTag]) {
+      expect(response?.status).toBe(200);
+      await expect(response?.text()).resolves.toBe("User-agent: *");
     }
   });
 
