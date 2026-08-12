@@ -110,8 +110,8 @@ type RequestCacheEntry<TResult> = {
 };
 
 type PendingStoreEntry = {
-  invalidated: boolean;
   promise: Promise<unknown>;
+  state: { invalidated: boolean };
   tags: readonly string[];
 };
 
@@ -241,13 +241,9 @@ export function createCache(options: CreateCacheOptions): Cache {
         return await currentPending.promise as TResult;
       }
 
-      const pending = {
-        invalidated: false,
-        promise: undefined as unknown as Promise<TResult>,
-        tags,
-      } satisfies PendingStoreEntry;
+      const state = { invalidated: false };
       const value = Promise.resolve().then(request.fn).then(async (result) => {
-        if (!pending.invalidated) {
+        if (!state.invalidated) {
           await options.store.set(key, {
             expiresAt: storeExpirationTime(now(), request.ttl),
             staleUntil: storeStaleTime(
@@ -262,7 +258,11 @@ export function createCache(options: CreateCacheOptions): Cache {
 
         return result;
       });
-      pending.promise = value;
+      const pending: PendingStoreEntry = {
+        promise: value,
+        state,
+        tags,
+      };
       sharedPending.set(key, pending);
 
       try {
@@ -284,7 +284,7 @@ export function createCache(options: CreateCacheOptions): Cache {
           const pending = sharedPending.get(storeKey);
 
           if (pending) {
-            pending.invalidated = true;
+            pending.state.invalidated = true;
             deletedPending = true;
           }
 
@@ -309,10 +309,10 @@ export function createCache(options: CreateCacheOptions): Cache {
 
       for (const pending of sharedPending.values()) {
         if (
-          !pending.invalidated &&
+          !pending.state.invalidated &&
           pending.tags.some((value) => storeTags.has(value))
         ) {
-          pending.invalidated = true;
+          pending.state.invalidated = true;
           deletedPending += 1;
         }
       }
