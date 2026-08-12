@@ -24,6 +24,7 @@ implementation.
 | `@layout.tsx` nested layouts | implemented |
 | App-provided loading/not-found browser fallback options | implemented |
 | Inherited `@loading.tsx`, `@not-found.tsx`, and `@error.tsx` | implemented |
+| Controlled malformed-path 400s in document and SPA navigation | implemented |
 | Server-rendered not-found document inside inherited layouts | implemented |
 | Layout-free not-found fallback when a layout throws | implemented |
 | Content-negotiated not-found: document or RFC 9457 problem+json | implemented |
@@ -60,7 +61,9 @@ implementation.
 | --- | --- |
 | Client-side page rendering | implemented |
 | SPA navigation with server data transport and supersession safety | implemented |
-| Client/server page-data compiler boundary | implemented |
+| Query/hash/history-aware SPA navigation | implemented |
+| Client/server page-data and document-contribution compiler boundary | implemented |
+| Static-output native document navigation | implemented |
 | SSR | implemented |
 | Streaming SSR | implemented |
 | React Server Components | designed |
@@ -83,6 +86,7 @@ implementation.
 | Public custom cache-store contract and conformance verifier | implemented |
 | Request-handler shared cache injection with request isolation | implemented |
 | Shared stale-while-revalidate with distributed refresh coordination | implemented |
+| Node `waitUntil` background tracking and bounded shutdown drain | implemented |
 | Origin render-artifact cache and incremental static regeneration | designed |
 | CDN/browser cache policy and adapter-aware purge | designed |
 | Typed tags and invalidation | implemented |

@@ -6,6 +6,7 @@ import { createPageRenderTree } from "./render-tree";
 export type SsrOptions = {
   clientEntry?: string;
   lang?: string;
+  navigation?: "document";
   styles?: string[];
   title?: string;
 };
@@ -24,7 +25,13 @@ export function renderPageDocument(
   const html = renderToString(createPageRenderTree(match));
 
   return renderDocument({
-    body: { data: match.data, html },
+    body: {
+      data: match.data,
+      html,
+      navigation: match.render.mode === "static"
+        ? "document"
+        : options.navigation,
+    },
     entrySrc: options.clientEntry,
     lang: options.lang,
     links: match.links,

@@ -1566,10 +1566,23 @@ describe("request handler", () => {
     const data = vi.fn(async ({ request }: { request: Request }) => ({
       headline: new URL(request.url).searchParams.get("headline") ?? "missing",
     }));
+    const layoutLinks = vi.fn(({ search }: { search: URLSearchParams }) =>
+      search.has("headline") ? [preconnect("https://layout.example.test")] : []
+    );
+    const pageScripts = vi.fn(({ search }: { search: URLSearchParams }) =>
+      search.has("headline")
+        ? [script({ src: "https://scripts.example.test/navigation.js" })]
+        : []
+    );
     const handler = createRequestHandler({
       routes: {
+        "./routes/@layout.tsx": routeModule({
+          default: Layout,
+          links: defineLinks(layoutLinks),
+        }),
         "./routes/index.tsx": routeModule({
           GET: page<string, { headline: string }>({ data, view: DataView }),
+          scripts: defineScripts(pageScripts),
         }),
       },
     });
@@ -1590,7 +1603,27 @@ describe("request handler", () => {
       data: { headline: "Server" },
       hasData: true,
     });
-    expect(data).toHaveBeenCalledTimes(1);
+    const historyResponse = await handler(
+      new Request("https://example.test/?headline=History", {
+        headers: {
+          accept: "application/json",
+          "x-demiurge-navigation": "data",
+        },
+      }),
+    );
+    await expect(historyResponse.json()).resolves.toEqual({
+      data: { headline: "History" },
+      hasData: true,
+    });
+    expect(data).toHaveBeenCalledTimes(2);
+    expect(layoutLinks).toHaveBeenCalledTimes(2);
+    expect(pageScripts).toHaveBeenCalledTimes(2);
+    expect(layoutLinks.mock.calls.map(([context]) =>
+      context.search.get("headline")
+    )).toEqual(["Server", "History"]);
+    expect(pageScripts.mock.calls.map(([context]) =>
+      context.search.get("headline")
+    )).toEqual(["Server", "History"]);
   });
 
   it("marks navigation misses separately from route-data errors", async () => {

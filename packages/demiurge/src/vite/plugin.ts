@@ -272,12 +272,15 @@ type AstNode = {
   type: string;
 };
 
-// Page data is a server capability. Removing it after Vite/React have parsed
-// TypeScript and JSX, but before Rollup follows the final client graph, keeps
-// request code and its data-only imports out of browser chunks.
+// Page data and document contributions are server capabilities. Removing them
+// after Vite/React have parsed TypeScript and JSX, but before Rollup follows the
+// final client graph, keeps request code and its server-only imports out of
+// browser chunks. The exported document bindings remain as `undefined` so the
+// route module keeps a stable shape without evaluating their initializers.
 export function stripClientPageData(code: string) {
   const ast = parseAst(code) as unknown as AstNode;
   const dataRanges: Array<{ end: number; start: number }> = [];
+  const documentRanges = findDocumentContributionRanges(ast);
   const serverImports: AstNode[] = [];
 
   walkAst(ast, (node) => {
@@ -302,18 +305,20 @@ export function stripClientPageData(code: string) {
     }
   });
 
-  if (dataRanges.length === 0) {
+  const serverRanges = [...dataRanges, ...documentRanges];
+
+  if (serverRanges.length === 0) {
     return code;
   }
 
-  const removalRanges = [...dataRanges];
+  const removalRanges = [...serverRanges];
   for (const declaration of serverImports) {
     const localNames = asNodeArray(declaration.specifiers)
       .map((specifier) => asNode(specifier.local))
       .filter((local): local is AstNode => local?.type === "Identifier")
       .map((local) => String(local.name));
     const masked = maskRanges(code, [
-      ...dataRanges,
+      ...serverRanges,
       { end: declaration.end, start: declaration.start },
     ]);
     const leakedName = localNames.find((name) =>
@@ -322,7 +327,7 @@ export function stripClientPageData(code: string) {
 
     if (leakedName) {
       throw new Error(
-        `Server-only import ${JSON.stringify(leakedName)} is used by client route code. Move that use into the page data function or a client-safe module.`,
+        `Server-only import ${JSON.stringify(leakedName)} is used by client route code. Move that use into page data, a document contribution, or a client-safe module.`,
       );
     }
 
@@ -330,8 +335,56 @@ export function stripClientPageData(code: string) {
   }
 
   return replaceRanges(code, removalRanges, (range) =>
-    dataRanges.includes(range) ? "data: undefined" : ""
+    dataRanges.includes(range) ? "data: undefined" :
+      documentRanges.includes(range) ? "undefined" : ""
   );
+}
+
+const documentContributionNames = new Set(["links", "metadata", "scripts"]);
+
+function findDocumentContributionRanges(ast: AstNode) {
+  const exportedLocals = new Set<string>();
+
+  for (const statement of asNodeArray(ast.body)) {
+    if (statement.type !== "ExportNamedDeclaration") continue;
+
+    const declaration = asNode(statement.declaration);
+    if (declaration?.type === "VariableDeclaration") {
+      for (const declarator of asNodeArray(declaration.declarations)) {
+        const id = asNode(declarator.id);
+        if (
+          id?.type === "Identifier" &&
+          documentContributionNames.has(String(id.name))
+        ) {
+          exportedLocals.add(String(id.name));
+        }
+      }
+    }
+
+    for (const specifier of asNodeArray(statement.specifiers)) {
+      const exported = propertyName(specifier.exported);
+      const local = propertyName(specifier.local);
+      if (exported && local && documentContributionNames.has(exported)) {
+        exportedLocals.add(local);
+      }
+    }
+  }
+
+  const ranges: Array<{ end: number; start: number }> = [];
+  walkAst(ast, (node) => {
+    if (node.type !== "VariableDeclarator") return;
+    const id = asNode(node.id);
+    const init = asNode(node.init);
+    if (
+      id?.type === "Identifier" &&
+      exportedLocals.has(String(id.name)) &&
+      init
+    ) {
+      ranges.push({ end: init.end, start: init.start });
+    }
+  });
+
+  return ranges;
 }
 
 function isRouteSource(

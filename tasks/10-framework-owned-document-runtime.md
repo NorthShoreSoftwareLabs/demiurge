@@ -30,6 +30,14 @@ rendering mode coordination all meet.
 - Apply a document nonce to framework-managed script tags when provided.
 - Remove `examples/basic-blog/index.html`.
 - Remove `examples/basic-blog/src/main.tsx`.
+- Keep page data and request-aware document contributions on the server during
+  SPA navigation. Client chunks retain views and layouts only; navigation data
+  travels through the typed server response envelope.
+- Treat pathname/search changes as data navigations, hash-only changes as
+  document scrolling, and browser back/forward as first-class navigation.
+- Mark static hydration payloads for native document navigation; a static host
+  has no route-data endpoint, and each target HTML artifact owns its complete
+  build-time data and document head.
 
 ## Future Work
 

@@ -168,7 +168,7 @@ async function createDocumentShell(
   options: SsrRenderOptions,
 ) {
   const shell = renderDocumentShell({
-    body: { data: match.data },
+    body: { data: match.data, navigation: options.navigation },
     entrySrc: options.clientEntry,
     lang: options.lang,
     links: match.links,

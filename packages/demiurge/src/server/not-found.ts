@@ -127,6 +127,7 @@ function renderAttempt(
       data: undefined,
       fallback: "not-found",
       html: renderToString(content),
+      navigation: options.navigation,
     },
     entrySrc: options.clientEntry,
     lang: options.lang,

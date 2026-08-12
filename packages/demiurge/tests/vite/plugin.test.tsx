@@ -89,6 +89,25 @@ export const GET = page({
     expect(transformed).toContain("view: View");
   });
 
+  it("strips document contributions and their server-only imports from client routes", () => {
+    const source = `
+import { privateCdn } from "./document.server.js";
+import { defineLinks, defineMetadata, defineScripts, page } from "demiurge";
+export const links = defineLinks(() => [privateCdn.link()]);
+export const metadata = defineMetadata({ title: privateCdn.title });
+const routeScripts = defineScripts(() => [privateCdn.script()]);
+export { routeScripts as scripts };
+export const GET = page({ view: () => null });`;
+    const transformed = unstable_stripClientPageData(source);
+
+    expect(transformed).not.toContain("privateCdn");
+    expect(transformed).not.toContain("document.server");
+    expect(transformed).toContain("export const links = undefined");
+    expect(transformed).toContain("export const metadata = undefined");
+    expect(transformed).toContain("const routeScripts = undefined");
+    expect(transformed).toContain("view: () => null");
+  });
+
   it("rejects server-only imports used by client route code", () => {
     const source = `
 import { secret } from "./secrets.server.js";

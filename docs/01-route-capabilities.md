@@ -66,6 +66,10 @@ export const GET = page({
 The static adapter rejects both runtime modes. Streaming requires an adapter
 with streaming response support; the production Node adapter pipes the Web
 response body with backpressure and aborts its source when the client closes.
+That client lifecycle is also exposed as `request.signal` to page data,
+middleware, and route handlers. Pass it to `fetch(...)`, database drivers, and
+SDK calls that accept an `AbortSignal`; work that ignores it cannot be stopped
+after its client has gone away.
 The production server injects that adapter renderer explicitly:
 
 ```ts
@@ -93,13 +97,29 @@ In development, HTTP and page capabilities run through the shared request
 pipeline. Vite transforms both buffered and streaming document shells before
 the response is written. Later client navigations request page data from that
 same server pipeline, including middleware, policy, cache, and request context;
-the browser imports the view module but never invokes the page `data` function.
+the browser imports the view module but never invokes page `data`, request-aware
+`links`, request-aware `scripts`, or metadata formatting. Document contributions
+are resolved on the server for every navigation but are deliberately not
+re-applied to the already-loaded document in the 0.1 runtime.
 
-The client compiler removes `page({ data })` implementations from route chunks.
-Data code that imports Node or private application modules should keep those
-imports in a `*.server.ts` module. Demiurge removes data-only `.server` imports
-and fails the client build if a server-only binding is also used by view code.
-Server modules should not rely on import-time side effects.
+The client compiler removes `page({ data })`, `links`, `scripts`, and `metadata`
+initializers from route chunks. Code that imports Node or private application
+modules should keep those imports in a `*.server.ts` module outside the routes
+directory. Demiurge removes contribution-only `.server` imports and fails the
+client build if a server-only binding is also used by view code. Server modules
+should not rely on import-time side effects.
+
+Pathname and query changes request fresh server data and participate in browser
+back/forward history. Hash-only changes do not reload route data. Malformed
+percent-encoded paths receive the server's 400 navigation response and render
+through the root route error boundary rather than escaping as an unhandled
+browser exception.
+
+Static output deliberately uses native document navigation. Each target HTML
+artifact already contains its build-time data, metadata, links, and scripts,
+and a static host has no route-data endpoint. The hydration payload carries
+this navigation mode so `<Link>` never mistakes a static HTML response for the
+server navigation envelope.
 
 ## Generated Typed URLs
 

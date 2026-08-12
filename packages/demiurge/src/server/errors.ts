@@ -134,7 +134,7 @@ async function renderErrorDocument(
   );
 
   return renderDocument({
-    body: { data: undefined, html },
+    body: { data: undefined, html, navigation: options.navigation },
     entrySrc: options.clientEntry,
     lang: options.lang,
     nonce: options.nonce,

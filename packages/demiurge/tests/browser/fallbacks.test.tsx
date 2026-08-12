@@ -4,6 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createFileRouter,
+  defineLinks,
+  defineScripts,
   httpError,
   Link,
   page,
@@ -15,11 +17,17 @@ import {
 describe("browser router fallbacks", () => {
   beforeEach(() => {
     window.history.replaceState(null, "", "/");
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      Response.json(
+        { hasData: true },
+        { headers: { "x-demiurge-navigation": "data" } },
+      )));
   });
 
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("does not render framework-owned loading markup by default", () => {
@@ -175,6 +183,25 @@ describe("browser router fallbacks", () => {
     });
   });
 
+  it("renders malformed encoded paths through the root error boundary", async () => {
+    window.history.replaceState(null, "", "/items/%E0%A4%A");
+    const Router = createFileRouter({
+      loadNavigationData: async () => {
+        throw httpError(400, { title: "Bad Request" });
+      },
+      routes: {
+        "./routes/@error.tsx": routeModule({ default: StatusError }),
+        "./routes/items/[id].tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Route status: 400")).toBeTruthy();
+    });
+  });
+
   it("renders matched pages inside inherited layouts", async () => {
     const Router = createFileRouter({
       routes: {
@@ -246,6 +273,52 @@ describe("browser router fallbacks", () => {
       "http://localhost:3000/?q=first",
       "http://localhost:3000/?q=second",
     ]);
+  });
+
+  it("never resolves server document contributions in the browser", async () => {
+    const layoutLinks = vi.fn(() => {
+      throw new Error("Layout links must not run in the browser.");
+    });
+    const layoutScripts = vi.fn(() => {
+      throw new Error("Layout scripts must not run in the browser.");
+    });
+    const pageLinks = vi.fn(() => {
+      throw new Error("Page links must not run in the browser.");
+    });
+    const pageScripts = vi.fn(() => {
+      throw new Error("Page scripts must not run in the browser.");
+    });
+    const Router = createFileRouter({
+      loadNavigationData: async () => ({
+        data: "from server",
+        hasData: true,
+      }),
+      routes: {
+        "./routes/@layout.tsx": routeModule({
+          default: RootLayout,
+          links: defineLinks(layoutLinks),
+          scripts: defineScripts(layoutScripts),
+        }),
+        "./routes/index.tsx": routeModule({
+          GET: page<string, string>({
+            data: () => {
+              throw new Error("Page data must not run in the browser.");
+            },
+            view: QueryPage,
+          }),
+          links: defineLinks(pageLinks),
+          scripts: defineScripts(pageScripts),
+        }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Query: from server")).toBeTruthy());
+
+    expect(layoutLinks).not.toHaveBeenCalled();
+    expect(layoutScripts).not.toHaveBeenCalled();
+    expect(pageLinks).not.toHaveBeenCalled();
+    expect(pageScripts).not.toHaveBeenCalled();
   });
 
   it("does not reload route data for a hash-only navigation", async () => {

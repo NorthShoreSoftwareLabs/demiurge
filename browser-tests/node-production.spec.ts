@@ -34,6 +34,84 @@ test("production SSR hydrates and navigates without a document reload", async ({
   expect(pageErrors).toEqual([]);
 });
 
+test("SPA navigation keeps request callbacks server-only across query history", async ({
+  page,
+}) => {
+  const pageErrors: Error[] = [];
+  const routeDataRequests: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error));
+  page.on("request", (request) => {
+    if (request.headers()["x-demiurge-navigation"] === "data") {
+      routeDataRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/");
+  await page.getByRole("link", { name: "Test navigation" }).click();
+  await expect(page).toHaveURL("http://localhost:42177/navigation");
+  await expect(page.getByText("Query: none")).toBeVisible();
+  await expect(page.getByText("Loaded by the server.")).toBeVisible();
+
+  await page.getByRole("link", { name: "Repeated query" }).click();
+  await expect(page).toHaveURL(
+    "http://localhost:42177/navigation?q=alpha&q=beta#results",
+  );
+  await expect(page.getByText("Query: alpha, beta")).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL("http://localhost:42177/navigation");
+  await expect(page.getByText("Query: none")).toBeVisible();
+  await page.goForward();
+  await expect(page).toHaveURL(
+    "http://localhost:42177/navigation?q=alpha&q=beta#results",
+  );
+  await expect(page.getByText("Query: alpha, beta")).toBeVisible();
+
+  const clientChunks = await page.evaluate(async () => {
+    const urls = performance.getEntriesByType("resource")
+      .map((entry) => entry.name)
+      .filter((url) => new URL(url).pathname.endsWith(".js"));
+    return await Promise.all([...new Set(urls)].map(async (url) =>
+      await (await fetch(url)).text()
+    ));
+  });
+
+  expect(routeDataRequests).toEqual(expect.arrayContaining([
+    "http://localhost:42177/navigation",
+    "http://localhost:42177/navigation?q=alpha&q=beta",
+  ]));
+  expect(routeDataRequests.filter((url) =>
+    url === "http://localhost:42177/navigation"
+  )).toHaveLength(2);
+  expect(routeDataRequests.filter((url) =>
+    url === "http://localhost:42177/navigation?q=alpha&q=beta"
+  )).toHaveLength(2);
+  expect(clientChunks.join("\n")).not.toContain(
+    "DEMIURGE_SERVER_ONLY_NAVIGATION_CALLBACK",
+  );
+  expect(pageErrors).toEqual([]);
+});
+
+test("malformed encoded SPA paths render a controlled 400 route error", async ({
+  page,
+}) => {
+  const pageErrors: Error[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error));
+
+  await page.goto("/");
+  await page.waitForLoadState("networkidle");
+  await page.getByRole("link", { name: "Test malformed URL" }).click();
+
+  await expect(page).toHaveURL("http://localhost:42177/items/%E0%A4%A");
+  await expect(
+    page.getByRole("heading", {
+      name: "Something went wrong at /items/%E0%A4%A",
+    }),
+  ).toBeVisible();
+  await expect(page.getByText("400", { exact: true })).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
+
 test("strict CSP and browser security headers are enforced", async ({ page }) => {
   const response = await page.goto("/");
   const headers = response?.headers() ?? {};

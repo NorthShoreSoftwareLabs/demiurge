@@ -47,6 +47,7 @@ export type NavigationDataLoader = (
 export type FileRouterOptions = {
   initialMatch?: PendingRouteMatch;
   loadNavigationData?: NavigationDataLoader;
+  navigation?: "document" | "server";
   routes: Record<string, RouteImporter>;
   loading?: ComponentType;
   notFound?: ComponentType<NotFoundProps>;
@@ -54,6 +55,7 @@ export type FileRouterOptions = {
 
 export function createFileRouter(options: FileRouterOptions) {
   const manifest = createRouteManifest(options.routes);
+  const navigationDataLoader = options.loadNavigationData ?? loadNavigationData;
 
   return function FileRouter() {
     const [location, setLocation] = useState(() => getCurrentLocation());
@@ -95,15 +97,21 @@ export function createFileRouter(options: FileRouterOptions) {
         if (isCurrent() && !settled && Loading) {
           setMatch({ loading: Loading, status: "loading" });
         }
+      }).catch(() => {
+        // Loading UI is optional. A malformed pathname or broken loading
+        // module must not become an unhandled rejection while the main route
+        // pipeline resolves the controlled error state.
       });
       const request = new Request(location.href, { signal: controller.signal });
-      Promise.resolve(options.loadNavigationData?.(request))
+      Promise.resolve(navigationDataLoader(request))
         .then((initialData) =>
           loadPageRoute(
             manifest,
             location.pathname,
             request,
             initialData,
+            undefined,
+            { documentContributions: false },
           ),
         )
         .then((nextMatch) => {
@@ -142,6 +150,7 @@ export function createFileRouter(options: FileRouterOptions) {
 
     const router = useMemo(
       () => ({
+        navigation: options.navigation ?? "server",
         push(to: string) {
           const previous = getCurrentLocation();
           window.history.pushState(null, "", to);
@@ -215,19 +224,29 @@ export async function hydrateFileRouter(options: HydrateFileRouterOptions) {
 
   const manifest = createRouteManifest(options.routes);
   const navigationDataLoader = options.loadNavigationData ?? loadNavigationData;
+  const initialData = options.initialData ?? readInitialRouteData(document);
   const match = await loadPageRoute(
     manifest,
     window.location.pathname,
     new Request(window.location.href),
-    options.initialData ??
-      readInitialRouteData(document) ??
-      await navigationDataLoader(new Request(window.location.href)),
+    initialData ?? await navigationDataLoader(new Request(window.location.href)),
+    undefined,
+    { documentContributions: false },
   );
   const hydratable = isHydratableMatch(match, root);
   const Router = createFileRouter(
     hydratable
-      ? { ...options, initialMatch: match, loadNavigationData: navigationDataLoader }
-      : { ...options, loadNavigationData: navigationDataLoader },
+      ? {
+        ...options,
+        initialMatch: match,
+        loadNavigationData: navigationDataLoader,
+        navigation: initialData?.navigation ?? options.navigation,
+      }
+      : {
+        ...options,
+        loadNavigationData: navigationDataLoader,
+        navigation: initialData?.navigation ?? options.navigation,
+      },
   );
   const { createRoot, hydrateRoot } = await import("react-dom/client");
 
@@ -258,7 +277,10 @@ export function Link<const TTo extends AppHref>(
       className={props.className}
       href={to}
       onClick={(event) => {
-        if (shouldHandleLinkClick(event)) {
+        if (
+          router.navigation === "server" &&
+          shouldHandleLinkClick(event)
+        ) {
           event.preventDefault();
           router.push(to);
         }
@@ -456,10 +478,12 @@ function shouldHandleLinkClick(event: MouseEvent<HTMLAnchorElement>) {
 }
 
 type RouterApi = {
+  navigation: "document" | "server";
   push(to: string): void;
 };
 
 const RouterContext = createContext<RouterApi>({
+  navigation: "document",
   push(to) {
     window.location.href = to;
   },

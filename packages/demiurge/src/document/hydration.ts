@@ -1,6 +1,7 @@
 export type InitialRouteData = {
   data?: unknown;
   hasData: boolean;
+  navigation?: "document";
 };
 
 export const HYDRATION_DATA_ELEMENT_ID = "__demiurge_data";
@@ -11,9 +12,12 @@ export const HYDRATION_ROOT_ATTRIBUTE = "data-demiurge-hydrate";
 // document its own manifest no longer matches.
 export const HYDRATION_FALLBACK_ATTRIBUTE = "data-demiurge-fallback";
 
-export function serializeInitialRouteData(data: unknown) {
+export function serializeInitialRouteData(
+  data: unknown,
+  options: { navigation?: "document" } = {},
+) {
   return escapeJsonScript(
-    JSON.stringify({ data, hasData: true }),
+    JSON.stringify({ data, hasData: true, ...options }),
   );
 }
 

@@ -69,13 +69,14 @@ export async function generateStaticOutput(
   const outputEntries = planOutputEntries(paths.map((path) => path.pathname));
   const rateLimitStore = createMemoryRateLimitStore();
   const pending: PendingOutput[] = [];
+  const ssr = { ...options.ssr, navigation: "document" as const };
 
   for (const entry of outputEntries) {
     const request = createDocumentRequest(origin, entry.pathname);
     const response = await handleRequestWithManifest(manifest, request, {
       onError: options.onError,
       rateLimitStore,
-      ssr: options.ssr,
+      ssr,
     });
 
     pending.push(await prepareOutput(entry, response, 200));
@@ -85,7 +86,7 @@ export async function generateStaticOutput(
     manifest,
     createDocumentRequest(origin, "/404"),
     {
-      ...options.ssr,
+      ...ssr,
       onError: (error, site) =>
         options.onError?.(error, { pathname: "/404", site }),
     },

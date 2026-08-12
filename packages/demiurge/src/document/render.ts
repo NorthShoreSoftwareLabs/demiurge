@@ -16,6 +16,7 @@ export type DocumentBody = {
   data: unknown;
   fallback?: "not-found";
   html: string;
+  navigation?: "document";
 };
 
 export type RenderDocumentOptions = {
@@ -59,7 +60,7 @@ export function renderDocumentShell({
   const documentTitle = metadata?.title ?? title;
   const trailingBodyContent = [
     ...scripts.map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`),
-    renderBootstrapData(body.data),
+    renderBootstrapData(body.data, body.navigation),
     ...(entrySrc ? [renderEntryScript(entrySrc, nonce)] : []),
   ].join("\n");
 
@@ -124,8 +125,8 @@ function renderRootStart(body: Omit<DocumentBody, "html">) {
   return `    <div id="root" ${HYDRATION_ROOT_ATTRIBUTE}=""${fallback}>`;
 }
 
-function renderBootstrapData(data: unknown) {
-  return `    <template id="${HYDRATION_DATA_ELEMENT_ID}">${serializeInitialRouteData(data)}</template>`;
+function renderBootstrapData(data: unknown, navigation?: "document") {
+  return `    <template id="${HYDRATION_DATA_ELEMENT_ID}">${serializeInitialRouteData(data, { navigation })}</template>`;
 }
 
 function renderEntryScript(entrySrc: string, nonce: string | undefined) {

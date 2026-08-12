@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createRequestHandler,
   hydrateFileRouter,
+  Link,
   page,
   type RouteModule,
   type RouteProps,
@@ -132,6 +133,31 @@ describe("client hydration", () => {
     expect(documentRoot().textContent).toBe("Explicit headline");
   });
 
+  it("leaves links in static documents to native document navigation", async () => {
+    const loadNavigationData = vi.fn(async () => ({ hasData: true }));
+    const routes = {
+      "./routes/blog/index.tsx": routeModule({
+        GET: page({
+          render: { mode: "static" },
+          view: StaticPage,
+        }),
+      }),
+    };
+    await installServerDocument(routes, "/blog");
+
+    await act(async () => {
+      await hydrateFileRouter({ loadNavigationData, routes });
+    });
+
+    const link = documentRoot().querySelector("a");
+    if (!link) throw new Error("Expected the static route link.");
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+
+    expect(link.dispatchEvent(event)).toBe(true);
+    expect(event.defaultPrevented).toBe(false);
+    expect(loadNavigationData).not.toHaveBeenCalled();
+  });
+
   it("replaces server markup when the client cannot match the route", async () => {
     document.body.innerHTML =
       `<div id="root" data-demiurge-hydrate=""><p>Stale server markup</p></div>`;
@@ -243,6 +269,10 @@ function BlogPage({ pathname }: RouteProps) {
 
 function HeadlineView({ data }: RouteProps<string, { headline: string }>) {
   return <p>{data.headline}</p>;
+}
+
+function StaticPage() {
+  return <Link hash="section" to="/blog">Static section</Link>;
 }
 
 function NotFound({ pathname }: { pathname: string }) {

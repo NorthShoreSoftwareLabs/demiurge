@@ -309,12 +309,16 @@ export async function loadPageRoute(
   request = new Request(`http://demiurge.local${pathname}`),
   initialData?: InitialRouteData,
   cache: Cache = createMemoryCache(),
+  options: { documentContributions?: boolean } = {},
 ): Promise<PendingRouteMatch> {
+  const documentContributions = options.documentContributions ?? true;
   const routeMatch = findRouteMatch(manifest.routes, pathname);
 
   if (!routeMatch) {
     return {
-      ...(await loadNotFoundMatch(manifest, pathname)),
+      ...(await loadNotFoundMatch(manifest, pathname, {
+        documentContributions,
+      })),
       status: "not-found",
     };
   }
@@ -332,6 +336,7 @@ export async function loadPageRoute(
           manifest.fallbacks.notFound,
           routeMatch.route,
         ),
+        documentContributions,
         layouts: matchingLayouts,
       })),
       status: "not-found",
@@ -360,31 +365,37 @@ export async function loadPageRoute(
           ? await pageModule.GET.data(context)
           : initialData?.data,
       error: await loadErrorFallbackForRoute(manifest, routeMatch.route),
-      links: await resolveLinks(
-        [
-          ...layoutModules.map((module) => module.links),
-          pageModule.links,
-        ],
-        context,
-      ),
+      links: documentContributions
+        ? await resolveLinks(
+          [
+            ...layoutModules.map((module) => module.links),
+            pageModule.links,
+          ],
+          context,
+        )
+        : [],
       page: pageModule.GET.view as ComponentType<RouteProps<string, unknown>>,
       layouts: layoutModules.map(
         (module) => module.default as ComponentType<LayoutProps>,
       ),
-      metadata: resolveMetadata(
-        ...layoutModules.map((module) => module.metadata),
-        pageModule.metadata,
-      ),
+      metadata: documentContributions
+        ? resolveMetadata(
+          ...layoutModules.map((module) => module.metadata),
+          pageModule.metadata,
+        )
+        : resolveMetadata(),
       path: routeMatch.path,
       pathname,
       render: pageModule.GET.render,
-      scripts: await resolveScripts(
-        [
-          ...layoutModules.map((module) => module.scripts),
-          pageModule.scripts,
-        ],
-        context,
-      ),
+      scripts: documentContributions
+        ? await resolveScripts(
+          [
+            ...layoutModules.map((module) => module.scripts),
+            pageModule.scripts,
+          ],
+          context,
+        )
+        : [],
     },
   };
 }
@@ -463,7 +474,19 @@ export async function loadErrorFallback(
   manifest: RouteManifest,
   pathname: string,
 ) {
-  const routeMatch = findRouteMatch(manifest.routes, pathname);
+  let routeMatch: ReturnType<typeof findRouteMatch>;
+
+  try {
+    routeMatch = findRouteMatch(manifest.routes, pathname);
+  } catch (error) {
+    if (!(error instanceof MalformedPathnameError)) throw error;
+
+    return await loadErrorFallbackComponent(
+      manifest.fallbacks.error.find((fallback) =>
+        fallback.fileSegments.length === 0
+      ),
+    );
+  }
 
   if (routeMatch) {
     return await loadErrorFallbackForRoute(manifest, routeMatch.route);
@@ -499,6 +522,7 @@ export async function loadNotFoundMatch(
   manifest: RouteManifest,
   pathname: string,
   options: {
+    documentContributions?: boolean;
     fallback?: FallbackRoute;
     layouts?: LayoutRoute[];
     onLayoutError?: (error: unknown) => void;
@@ -511,11 +535,14 @@ export async function loadNotFoundMatch(
   const notFound = fallbackModule?.default as
     | ComponentType<NotFoundProps>
     | undefined;
+  const documentContributions = options.documentContributions ?? true;
 
   if (fallbackModule?.layout === false) {
     return {
       layouts: [],
-      metadata: resolveMetadata(fallbackModule.metadata),
+      metadata: documentContributions
+        ? resolveMetadata(fallbackModule.metadata)
+        : resolveMetadata(),
       notFound,
       pathname,
     };
@@ -532,10 +559,12 @@ export async function loadNotFoundMatch(
       layouts: layoutModules.map(
         (module) => module.default as ComponentType<LayoutProps>,
       ),
-      metadata: resolveMetadata(
-        ...layoutModules.map((module) => module.metadata),
-        fallbackModule?.metadata,
-      ),
+      metadata: documentContributions
+        ? resolveMetadata(
+          ...layoutModules.map((module) => module.metadata),
+          fallbackModule?.metadata,
+        )
+        : resolveMetadata(),
       notFound,
       pathname,
     };
@@ -544,7 +573,9 @@ export async function loadNotFoundMatch(
 
     return {
       layouts: [],
-      metadata: resolveMetadata(fallbackModule?.metadata),
+      metadata: documentContributions
+        ? resolveMetadata(fallbackModule?.metadata)
+        : resolveMetadata(),
       notFound,
       pathname,
     };
