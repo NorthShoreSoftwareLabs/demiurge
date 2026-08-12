@@ -1,7 +1,9 @@
 import { spawn } from "node:child_process";
+import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const exampleRoot = resolve("examples/runtime-server-data");
+await assertClientExcludesServerData(exampleRoot);
 const child = spawn(process.execPath, ["server.js"], {
   cwd: exampleRoot,
   env: {
@@ -71,6 +73,29 @@ try {
 
     child.once("exit", () => resolveExit());
   });
+}
+
+async function assertClientExcludesServerData(root: string) {
+  const assetsDir = resolve(root, "dist/client/assets");
+  const files = await readdir(assetsDir);
+  const javascript = await Promise.all(
+    files
+      .filter((file) => file.endsWith(".js"))
+      .map((file) => readFile(resolve(assetsDir, file), "utf8")),
+  );
+  const bundle = javascript.join("\n");
+  const forbidden = [
+    "x-demo-account",
+    "runtime-source",
+    "Runtime data source returned",
+  ];
+  const leaked = forbidden.find((value) => bundle.includes(value));
+
+  if (leaked) {
+    throw new Error(
+      `Client build leaked server page-data code containing ${JSON.stringify(leaked)}.`,
+    );
+  }
 }
 
 async function fetchDocument(origin: string, headers: Record<string, string> = {}) {

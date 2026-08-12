@@ -58,7 +58,8 @@ implementation.
 | Feature | Status |
 | --- | --- |
 | Client-side page rendering | implemented |
-| SPA navigation | implemented |
+| SPA navigation with server data transport and supersession safety | implemented |
+| Client/server page-data compiler boundary | implemented |
 | SSR | implemented |
 | Streaming SSR | implemented |
 | React Server Components | designed |

@@ -56,6 +56,7 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
   let isBuild = false;
 
   return {
+    enforce: "post",
     name: "demiurge",
     config(config) {
       return createViteConfig(config);

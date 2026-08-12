@@ -91,7 +91,15 @@ export default defineConfig({
 
 In development, HTTP and page capabilities run through the shared request
 pipeline. Vite transforms both buffered and streaming document shells before
-the response is written, while the browser router owns later client navigation.
+the response is written. Later client navigations request page data from that
+same server pipeline, including middleware, policy, cache, and request context;
+the browser imports the view module but never invokes the page `data` function.
+
+The client compiler removes `page({ data })` implementations from route chunks.
+Data code that imports Node or private application modules should keep those
+imports in a `*.server.ts` module. Demiurge removes data-only `.server` imports
+and fails the client build if a server-only binding is also used by view code.
+Server modules should not rely on import-time side effects.
 
 ## Generated Typed URLs
 
@@ -103,6 +111,10 @@ route patterns:
 <Link to="/blog">Blog</Link>
 <Link to="/blog/[slug]" path={{ slug: "file-based-routing" }}>Read</Link>
 <Link to="/blog/file-based-routing">Read</Link>
+<Link to="/blog?preview=true#comments">Preview</Link>
+<Link to="/blog" search={{ tag: ["web", "typescript"], page: 2 }} hash="comments">
+  Filtered posts
+</Link>
 ```
 
 The hidden generated route type file augments the framework package:
@@ -121,6 +133,10 @@ declare module "demiurge" {
 
 This means unknown URLs fail typecheck, dynamic patterns require their `path`
 values, and concrete dynamic URLs can still autocomplete as real strings.
+Literal query strings and fragments remain valid. Structured `search` values
+are the safer construction path; arrays serialize as repeated keys, while
+`null` and `undefined` values are omitted. Structured `search` and `hash`
+replace embedded values when both forms are present.
 
 Route components and handlers can opt into the same generated route map with a
 route-pattern generic:
