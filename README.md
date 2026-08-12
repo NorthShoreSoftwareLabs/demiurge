@@ -159,7 +159,9 @@ false. Call `await server.shutdown()` directly in hosts that own signals.
 The Node static handler treats its configured `root` as a security boundary:
 it rejects traversal, malformed paths, null bytes, and symbolic links in any
 path component. Copy real build artifacts into the public root rather than
-linking assets from elsewhere in a monorepo.
+linking assets from elsewhere in a monorepo. Static responses include ETag and
+Last-Modified validators, answer matching conditional requests with `304`, and
+support one byte range per request with `206`/`416` responses.
 
 [`examples/node-server`](./examples/node-server) is the complete working
 version, including Vite configuration, typed virtual-module declarations, SSR
@@ -178,8 +180,10 @@ it once with `pnpm --filter demiurge build`, or run `pnpm dev:lib` in a second
 terminal to rebuild on change while you work on an example.
 
 `pnpm test:pack` packs the tarball, installs it into a scratch app, and
-imports every entry point. That is the only check that sees the package the way
-a consumer does.
+imports every entry point. It also checks the shipped metadata, README, license,
+declarations, cache-store conformance API, and a clean consumer's typecheck and
+Vite production build. That is the only check that sees the package the way a
+consumer does.
 
 For a static production build, run
 `pnpm --filter @demiurge-examples/static-export build`. The example writes rendered pages
@@ -210,3 +214,4 @@ Current source modules, all under `packages/demiurge/src`:
 - [Feature inventory](./docs/07-feature-inventory.md)
 - [Testing strategy](./docs/08-testing-strategy.md)
 - [Errors and not-found behavior](./docs/09-errors-and-not-found.md)
+- [Release process](./docs/10-release-process.md)

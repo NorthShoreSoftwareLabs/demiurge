@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify signed release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      dist-tag: ${{ steps.version.outputs.dist-tag }}
+      package-name: ${{ steps.version.outputs.package-name }}
+      package-version: ${{ steps.version.outputs.package-version }}
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Validate version and dist-tag
+        id: version
+        run: |
+          package_name=$(node -p 'require("./packages/demiurge/package.json").name')
+          package_version=$(node -p 'require("./packages/demiurge/package.json").version')
+          test "$GITHUB_REF_NAME" = "v$package_version"
+          dist_tag=latest
+          case "$package_version" in
+            *-*) dist_tag=next ;;
+          esac
+          echo "package-name=$package_name" >> "$GITHUB_OUTPUT"
+          echo "package-version=$package_version" >> "$GITHUB_OUTPUT"
+          echo "dist-tag=$dist_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Require a verified annotated tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag_object=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --jq '.object.type + " " + .object.sha')
+          object_type=${tag_object%% *}
+          object_sha=${tag_object##* }
+          test "$object_type" = tag
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object_sha" --jq '.verification.verified')" = true
+
+      - name: Require a closed 0.1 milestone
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          open_p1=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label p1 --milestone "0.1.0 Production ready Node" --limit 100 --json number --jq length)
+          test "$open_p1" = 0
+
+      - name: Refuse an unrelated npm package owner
+        env:
+          PACKAGE_NAME: ${{ steps.version.outputs.package-name }}
+        run: |
+          if repository=$(npm view "$PACKAGE_NAME" repository.url --json 2>/dev/null); then
+            case "$repository" in
+              *NorthShoreSoftwareLabs/demiurge*) ;;
+              *) echo "npm package $PACKAGE_NAME belongs to another repository: $repository" >&2; exit 1 ;;
+            esac
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run clean-checkout verification
+        run: pnpm verify
+
+  publish:
+    name: Publish with provenance
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node for npm
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish package
+        run: npm publish ./packages/demiurge --access public --provenance --tag "${{ needs.verify.outputs.dist-tag }}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes --title "Demiurge ${{ needs.verify.outputs.package-version }}" --verify-tag

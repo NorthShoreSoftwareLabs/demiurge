@@ -44,6 +44,21 @@ None open.
 
 ## Decisions Made
 
+- The publishable package is MIT licensed and ships its own package-focused
+  README and identical license text. `pnpm test:pack` treats metadata, legal
+  files, declarations, every export, and a clean external app build as one
+  artifact contract rather than trusting workspace examples alone.
+- Node 22 is the minimum supported runtime for `0.1.0`; CI exercises the packed
+  consumer on that floor while the complete verification job runs on Node 24.
+- Releases originate only from a clean, signed version tag. The release
+  workflow re-runs verification, rejects open p1 milestone issues and unrelated
+  npm ownership, publishes through npm trusted publishing with provenance, and
+  creates the GitHub release after npm succeeds. Stable versions use `latest`;
+  prereleases use `next`.
+- The existing unscoped npm name belongs to an unrelated project. Registry
+  ownership or a coordinated scoped rename is a first-publish operation; it
+  does not change the local `0.1.0` artifact and external-consumer contract.
+
 - CI uploads the coverage HTML report only when the run fails (#14). The text
   reporter already prints the per-file table into the log and per-file
   thresholds name the file that dipped, so the report adds line-level detail

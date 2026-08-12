@@ -67,7 +67,8 @@ pnpm verify
 
 `verify` enforces ESLint across source, tests, scripts, and examples; generated
 route types plus `tsc --noEmit`; Vitest coverage at 80% minimum; the example
-builds; and the packed-tarball smoke test.
+builds; and the packed artifact contract, including a clean external consumer
+typecheck and production build.
 
 ## Done definition
 

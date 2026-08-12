@@ -3,8 +3,10 @@
 What has actually shipped, by area. This file is the record of completed work;
 open work lives in GitHub issues, and `tasks/` holds the specs.
 
-Nothing here is released yet. The package is `0.0.1` and unpublished, so these
-are development milestones rather than versioned releases.
+Nothing here is released yet. The package metadata is staged for `0.1.0`, so
+the changes below remain unreleased until the release checklist is complete.
+
+## 0.1.0 — Unreleased
 
 ## Pipeline Quality Gates
 
@@ -25,6 +27,8 @@ Epic: #1
 Epic: #4
 
 - Public `security` helpers for strict, API, and cross-origin-isolated presets.
+- The strict preset sends one year of HSTS on HTTPS responses without opting
+  subdomains into the policy or enrolling the domain in browser preload lists.
 - `defineSecurityPolicy(...)` and `mergeSecurityPolicies(...)` for app/layout/
   route policy cascade.
 - `createSecurityHeaders(...)` for deterministic CSP, security header, HSTS,
@@ -263,6 +267,9 @@ Epic: #11
 - Static serving rejects symbolic links in every path component, verifies the
   real target remains inside the real public root, and uses `O_NOFOLLOW` for
   the final open where the platform supports it.
+- Static responses expose ETag and Last-Modified validators, return bodyless
+  `304` responses when they match, and support single byte ranges with
+  `206`/`416` responses.
 - Vite production builds emit a client manifest containing the client entry and
   hashed stylesheets. The framework-owned SSR server entry loads route modules
   and creates a request handler that can be mounted by the Node adapter.

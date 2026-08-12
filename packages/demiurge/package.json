@@ -1,9 +1,31 @@
 {
   "name": "demiurge",
-  "version": "0.0.1",
+  "version": "0.1.0",
+  "description": "A React framework where the document, security policy, and route pipeline are the framework's job.",
+  "license": "MIT",
+  "author": "North Shore Software Labs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NorthShoreSoftwareLabs/demiurge.git",
+    "directory": "packages/demiurge"
+  },
+  "homepage": "https://github.com/NorthShoreSoftwareLabs/demiurge#readme",
+  "bugs": {
+    "url": "https://github.com/NorthShoreSoftwareLabs/demiurge/issues"
+  },
+  "keywords": [
+    "react",
+    "framework",
+    "router",
+    "ssr",
+    "vite",
+    "node"
+  ],
   "type": "module",
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "exports": {
     ".": {
@@ -35,8 +57,16 @@
     "build": "vite build && tsc -p tsconfig.build.json",
     "dev": "vite build --watch",
     "coverage": "vitest run --coverage",
+    "prepack": "pnpm build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "peerDependencies": {
     "react": "^19.0.0",
