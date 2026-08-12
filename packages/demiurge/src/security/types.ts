@@ -99,6 +99,10 @@ export type RateLimitResult = {
   resetAt: number;
 };
 
+export type MemoryRateLimitStoreOptions = {
+  maximumEntries?: number;
+};
+
 export type RateLimitStore = {
   increment: (
     key: string,

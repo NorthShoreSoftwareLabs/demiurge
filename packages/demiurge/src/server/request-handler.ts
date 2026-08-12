@@ -1,8 +1,14 @@
 import {
+  createNavigationDataResponse,
   createRouteManifest,
   findRouteMatch,
+  isNavigationDataRequest,
   isAttachedFileForRoute,
   loadPageRoute,
+  markNavigationResponse,
+  NAVIGATION_DATA_HEADER,
+  NAVIGATION_ERROR_RESPONSE,
+  NAVIGATION_NOT_FOUND_RESPONSE,
   type LoadedRouteMatch,
   type RouteManifest,
   type RouteRecord,
@@ -11,6 +17,7 @@ import {
   createCache,
   createMemoryCache,
   serializeCacheNamespace,
+  type CacheDuration,
   type CacheNamespace,
   type CacheStore,
 } from "../data";
@@ -45,6 +52,11 @@ import {
   type RateLimitStore,
 } from "../security";
 import {
+  limitRequestBody,
+  RequestBodyTooLargeError,
+  requestBodyTooLargeResponse,
+} from "../security/request";
+import {
   createCspNonce,
   securityPolicyRequiresNonce,
 } from "../security/policy";
@@ -65,7 +77,10 @@ export type RequestHandlerOptions = {
 
 export type RequestCacheStoreOptions = {
   namespace: CacheNamespace;
+  onBackgroundError?: (error: unknown) => void;
+  refreshLeaseTtl?: CacheDuration;
   store: CacheStore;
+  waitUntil?: (promise: Promise<void>) => void;
 };
 
 // `dev` and `transformDocument` are deliberately absent from the public
@@ -130,10 +145,19 @@ export async function handleRequestWithManifest(
   const url = new URL(request.url);
   const fallbackOptions = createFallbackOptions(url, options);
   const routeMatch = findRouteMatch(manifest.routes, url.pathname);
+  const navigationDataRequest = isNavigationDataRequest(request);
 
   if (!routeMatch) {
     try {
-      return await renderNotFoundResponse(manifest, request, fallbackOptions);
+      const response = await renderNotFoundResponse(
+        manifest,
+        request,
+        fallbackOptions,
+      );
+
+      return navigationDataRequest
+        ? markNavigationResponse(response, NAVIGATION_NOT_FOUND_RESPONSE)
+        : response;
     } catch (error) {
       fallbackOptions.onError(error, "page");
 
@@ -145,7 +169,7 @@ export async function handleRequestWithManifest(
   }
 
   try {
-    return await handleMatchedRoute(
+    const response = await handleMatchedRoute(
       manifest,
       request,
       url,
@@ -153,18 +177,36 @@ export async function handleRequestWithManifest(
       options,
       fallbackOptions,
     );
+
+    if (
+      navigationDataRequest &&
+      !response.headers.has(NAVIGATION_DATA_HEADER)
+    ) {
+      return markNavigationResponse(
+        response,
+        response.status === 404
+          ? NAVIGATION_NOT_FOUND_RESPONSE
+          : NAVIGATION_ERROR_RESPONSE,
+      );
+    }
+
+    return response;
   } catch (error) {
     // Anything escaping here failed before a route body ran: loading the route
     // module, resolving its capability or inherited policy, or a middleware
     // throwing. That is the one failure site with no committed response shape,
     // so it negotiates on `accept` the way an unmatched path does.
-    return await renderFailureResponse(
+    const response = await renderFailureResponse(
       manifest,
       request,
       error,
       "middleware",
       fallbackOptions,
     );
+
+    return navigationDataRequest
+      ? markNavigationResponse(response, NAVIGATION_ERROR_RESPONSE)
+      : response;
   }
 }
 
@@ -240,6 +282,8 @@ async function handleMatchedRoute(
     );
   }
 
+  request = limitRequestBody(routeSecurity?.request, request);
+
   if (capability.kind === "page") {
     const context = {
       path: routeMatch.path,
@@ -255,53 +299,71 @@ async function handleMatchedRoute(
     const nonce = securityPolicyRequiresNonce(policy.document)
       ? createCspNonce()
       : undefined;
-    const response = await runRouteMiddleware(middlewares, context, async () => {
-      // A page render has already committed to a document, so a failure here
-      // renders the error document rather than negotiating. Returning the
-      // response instead of throwing keeps the failure site distinguishable
-      // from a middleware failure further out.
-      try {
-        const match = await loadPageRoute(
-          manifest,
-          url.pathname,
-          request,
-          undefined,
-          createRequestCache(options.cacheStore),
-        );
+    let response: Response;
 
-        if (match.status !== "ready") {
-          return await renderNotFoundResponse(manifest, request, {
+    try {
+      response = await runRouteMiddleware(middlewares, context, async () => {
+        // A page render has already committed to a document, so a failure here
+        // renders the error document rather than negotiating. Returning the
+        // response instead of throwing keeps the failure site distinguishable
+        // from a middleware failure further out.
+        try {
+          const match = await loadPageRoute(
+            manifest,
+            url.pathname,
+            request,
+            undefined,
+            createRequestCache(options.cacheStore),
+          );
+
+          if (match.status !== "ready") {
+            return await renderNotFoundResponse(manifest, request, {
+              ...fallbackOptions,
+              nonce,
+            });
+          }
+
+          if (isNavigationDataRequest(request)) {
+            return createNavigationDataResponse(match.match.data);
+          }
+
+          if (match.match.render.mode === "streaming" && !options.renderPage) {
+            throw new Error(
+              "Streaming page routes require an adapter renderer. Pass renderNodePageResponse from demiurge/node as createRequestHandler({ renderPage }).",
+            );
+          }
+
+          const renderPage = options.renderPage ?? renderPageResponse;
+
+          return await renderPage(match.match, {
+            ...options.ssr,
+            nonce,
+            onStreamError: (error) => {
+              options.onError?.(error, {
+                pathname: url.pathname,
+                site: "page",
+              });
+            },
+            signal: request.signal,
+          });
+        } catch (error) {
+          if (error instanceof RequestBodyTooLargeError) {
+            return requestBodyTooLargeResponse();
+          }
+
+          return await renderFailureResponse(manifest, request, error, "page", {
             ...fallbackOptions,
             nonce,
           });
         }
-
-        if (match.match.render.mode === "streaming" && !options.renderPage) {
-          throw new Error(
-            "Streaming page routes require an adapter renderer. Pass renderNodePageResponse from demiurge/node as createRequestHandler({ renderPage }).",
-          );
-        }
-
-        const renderPage = options.renderPage ?? renderPageResponse;
-
-        return await renderPage(match.match, {
-          ...options.ssr,
-          nonce,
-          onStreamError: (error) => {
-            options.onError?.(error, {
-              pathname: url.pathname,
-              site: "page",
-            });
-          },
-          signal: request.signal,
-        });
-      } catch (error) {
-        return await renderFailureResponse(manifest, request, error, "page", {
-          ...fallbackOptions,
-          nonce,
-        });
+      });
+    } catch (error) {
+      if (!(error instanceof RequestBodyTooLargeError)) {
+        throw error;
       }
-    });
+
+      response = requestBodyTooLargeResponse();
+    }
     const headers = createSecurityHeaders(policy.document ?? {}, { nonce });
 
     for (const [name, value] of headers) {
@@ -331,27 +393,41 @@ async function handleMatchedRoute(
     manifest,
     routeMatch.route,
   );
-  const response = await runRouteMiddleware(middlewares, context, async () => {
-    // An API route never gets HTML, whatever the caller asked for.
-    try {
-      if (capability.kind === "not-found" && capability.body === undefined) {
-        return applyCapabilityInit(
-          await renderNotFoundResponse(manifest, request, fallbackOptions),
-          capability.init,
+  let response: Response;
+
+  try {
+    response = await runRouteMiddleware(middlewares, context, async () => {
+      // An API route never gets HTML, whatever the caller asked for.
+      try {
+        if (capability.kind === "not-found" && capability.body === undefined) {
+          return applyCapabilityInit(
+            await renderNotFoundResponse(manifest, request, fallbackOptions),
+            capability.init,
+          );
+        }
+
+        return await toResponse(capability, context);
+      } catch (error) {
+        if (error instanceof RequestBodyTooLargeError) {
+          return requestBodyTooLargeResponse();
+        }
+
+        return await renderFailureResponse(
+          manifest,
+          request,
+          error,
+          "route",
+          fallbackOptions,
         );
       }
-
-      return await toResponse(capability, context);
-    } catch (error) {
-      return await renderFailureResponse(
-        manifest,
-        request,
-        error,
-        "route",
-        fallbackOptions,
-      );
+    });
+  } catch (error) {
+    if (!(error instanceof RequestBodyTooLargeError)) {
+      throw error;
     }
-  });
+
+    response = requestBodyTooLargeResponse();
+  }
 
   // Finalization is still the route's own failure site, so a bad `timing` or
   // `cors` value on an API route yields problem+json rather than falling out
@@ -371,7 +447,7 @@ async function handleMatchedRoute(
 
 function createRequestCache(options: RequestCacheStoreOptions | undefined) {
   return options
-    ? createCache({ namespace: options.namespace, store: options.store })
+    ? createCache(options)
     : createMemoryCache();
 }
 

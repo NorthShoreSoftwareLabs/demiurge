@@ -27,10 +27,14 @@ function HomePage({ data }: RouteProps<"/", { message: string }>) {
 // `fetch` itself refuses to construct a forbidden-method request client-side,
 // so exercising the server's own guard needs the lower-level `http.request`,
 // which has no such restriction.
-function rawRequest(port: number, method: string) {
+function rawRequest(
+  port: number,
+  method: string,
+  headers?: Record<string, string>,
+) {
   return new Promise<{ status: number | undefined }>((resolveRequest, rejectRequest) => {
     const req = httpRequest(
-      { host: "127.0.0.1", method, port },
+      { headers, host: "127.0.0.1", method, port },
       (response) => {
         response.resume();
         response.on("end", () => resolveRequest({ status: response.statusCode }));
@@ -53,6 +57,7 @@ describe("Node adapter", () => {
     const root = mkdtempSync(join(tmpdir(), "demiurge-node-server-"));
     writeFileSync(join(root, "app.js"), "console.log('ok');");
     const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
       handler: async () => new Response("route"),
       static: { root },
     });
@@ -67,8 +72,7 @@ describe("Node adapter", () => {
       expect(response.status).toBe(200);
       await expect(response.text()).resolves.toBe("console.log('ok');");
     } finally {
-      server.close();
-      await once(server, "close").catch(() => undefined);
+      await server.shutdown();
       await rm(root, { force: true, recursive: true });
     }
   });
@@ -76,7 +80,11 @@ describe("Node adapter", () => {
   it("accepts a custom static file handler", async () => {
     const handler = vi.fn(async () => new Response("route"));
     const staticHandler = vi.fn(async () => new Response("custom asset"));
-    const server = createNodeServer({ handler, static: staticHandler });
+    const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler,
+      static: staticHandler,
+    });
 
     try {
       server.listen(0, "127.0.0.1");
@@ -89,13 +97,13 @@ describe("Node adapter", () => {
       expect(staticHandler).toHaveBeenCalledOnce();
       expect(handler).not.toHaveBeenCalled();
     } finally {
-      server.close();
-      await once(server, "close").catch(() => undefined);
+      await server.shutdown();
     }
   });
 
   it("falls through to the Web Request handler and exposes capabilities", async () => {
     const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
       handler: async (request) =>
         new Response(
           JSON.stringify({ pathname: new URL(request.url).pathname }),
@@ -114,13 +122,13 @@ describe("Node adapter", () => {
 
       await expect(response.json()).resolves.toEqual({ pathname: "/api/health" });
     } finally {
-      server.close();
-      await once(server, "close").catch(() => undefined);
+      await server.shutdown();
     }
   });
 
   it("returns a generic 500 when the handler throws", async () => {
     const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
       handler: async () => {
         throw new Error("secret stack detail");
       },
@@ -136,14 +144,14 @@ describe("Node adapter", () => {
       expect(response.status).toBe(500);
       await expect(response.text()).resolves.toBe("Internal Server Error");
     } finally {
-      server.close();
-      await once(server, "close").catch(() => undefined);
+      await server.shutdown();
     }
   });
 
   it("responds 501 to forbidden methods instead of a generic 500", async () => {
     const onError = vi.fn();
     const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
       handler: async () => new Response("route"),
       onError,
     });
@@ -158,8 +166,163 @@ describe("Node adapter", () => {
       expect(response.status).toBe(501);
       expect(onError).not.toHaveBeenCalled();
     } finally {
-      server.close();
-      await once(server, "close").catch(() => undefined);
+      await server.shutdown();
+    }
+  });
+
+  it("rejects an unrecognized Host before calling the request handler", async () => {
+    const handler = vi.fn(async () => new Response("route"));
+    const server = createNodeServer({
+      allowedHosts: ["example.test"],
+      handler,
+    });
+
+    try {
+      server.listen(0, "127.0.0.1");
+      await once(server, "listening");
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      const response = await rawRequest(port, "GET", { host: "evil.example" });
+
+      expect(response.status).toBe(421);
+      expect(handler).not.toHaveBeenCalled();
+    } finally {
+      await server.shutdown();
+    }
+  });
+
+  it("applies typed production timeout defaults and validates overrides", () => {
+    const server = createNodeServer({
+      allowedHosts: ["localhost"],
+      handler: async () => new Response("ok"),
+    });
+    const configured = createNodeServer({
+      allowedHosts: ["localhost"],
+      handler: async () => new Response("ok"),
+      timeouts: {
+        headersTimeout: 81_000,
+        keepAliveTimeout: 80_000,
+        requestTimeout: 120_000,
+      },
+    });
+
+    expect(server.keepAliveTimeout).toBe(65_000);
+    expect(server.headersTimeout).toBe(66_000);
+    expect(server.requestTimeout).toBe(300_000);
+    expect(configured.keepAliveTimeout).toBe(80_000);
+    expect(configured.headersTimeout).toBe(81_000);
+    expect(configured.requestTimeout).toBe(120_000);
+    expect(() =>
+      createNodeServer({
+        allowedHosts: ["localhost"],
+        handler: async () => new Response("ok"),
+        timeouts: { keepAliveTimeout: 0 },
+      }),
+    ).toThrow("keepAliveTimeout must be a positive integer");
+    expect(() =>
+      createNodeServer({
+        allowedHosts: ["localhost"],
+        handler: async () => new Response("ok"),
+        timeouts: { headersTimeout: 60_000 },
+      }),
+    ).toThrow("headersTimeout must be greater than keepAliveTimeout");
+  });
+
+  it("marks readiness false and drains an active request before shutdown", async () => {
+    const response = deferred<Response>();
+    const started = deferred<void>();
+    const states: string[] = [];
+    const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler: async () => {
+        started.resolve();
+        return await response.promise;
+      },
+      shutdown: {
+        gracePeriod: 1_000,
+        onStateChange: (state) => states.push(state),
+      },
+    });
+
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const pendingFetch = fetch(`http://127.0.0.1:${port}/slow`);
+    await started.promise;
+
+    expect(server.isReady()).toBe(true);
+    const shutdown = server.shutdown();
+    expect(server.isReady()).toBe(false);
+    response.resolve(new Response("complete"));
+
+    await expect((await pendingFetch).text()).resolves.toBe("complete");
+    await expect(shutdown).resolves.toBeUndefined();
+    expect(states).toEqual(["ready", "draining", "stopped"]);
+  });
+
+  it("forces active connections closed when the shutdown deadline expires", async () => {
+    const started = deferred<void>();
+    const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler: async () => {
+        started.resolve();
+        return await new Promise<Response>(() => undefined);
+      },
+      shutdown: { gracePeriod: 5 },
+    });
+
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const pendingFetch = fetch(`http://127.0.0.1:${port}/never`).catch(
+      () => undefined,
+    );
+    await started.promise;
+
+    await expect(server.shutdown()).resolves.toBeUndefined();
+    await pendingFetch;
+    expect(server.isReady()).toBe(false);
+  });
+
+  it("aborts route work exactly once when the client disconnects", async () => {
+    const started = deferred<void>();
+    const aborted = deferred<void>();
+    let abortCount = 0;
+    const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler: (request) =>
+        new Promise<Response>((resolveResponse) => {
+          request.signal.addEventListener(
+            "abort",
+            () => {
+              abortCount += 1;
+              aborted.resolve();
+              resolveResponse(new Response("aborted"));
+            },
+            { once: true },
+          );
+          started.resolve();
+        }),
+    });
+
+    try {
+      server.listen(0, "127.0.0.1");
+      await once(server, "listening");
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      const request = httpRequest({ host: "127.0.0.1", path: "/slow", port });
+      request.on("error", () => undefined);
+      request.end();
+      await started.promise;
+      request.destroy();
+
+      await aborted.promise;
+      await new Promise((resolveTick) => setImmediate(resolveTick));
+      expect(abortCount).toBe(1);
+    } finally {
+      await server.shutdown();
     }
   });
 
@@ -169,6 +332,7 @@ describe("Node adapter", () => {
   it("does not report a client hanging up mid-response as a server error", async () => {
     const onError = vi.fn();
     const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
       onError,
       handler: async () =>
         new Response(
@@ -212,9 +376,7 @@ describe("Node adapter", () => {
 
       expect(onError).not.toHaveBeenCalled();
     } finally {
-      server.close();
-      server.closeAllConnections();
-      await once(server, "close").catch(() => undefined);
+      await server.shutdown();
     }
   });
 
@@ -246,7 +408,10 @@ describe("Node adapter", () => {
         styles: ["/assets/client-entry.css"],
       },
     });
-    const server = createNodeServer({ handler });
+    const server = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler,
+    });
 
     try {
       server.listen(0, "127.0.0.1");
@@ -268,8 +433,16 @@ describe("Node adapter", () => {
       expect(csp).toMatch(/script-src 'nonce-[^']+' 'strict-dynamic'/);
       expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     } finally {
-      server.close();
-      await once(server, "close").catch(() => undefined);
+      await server.shutdown();
     }
   });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+}

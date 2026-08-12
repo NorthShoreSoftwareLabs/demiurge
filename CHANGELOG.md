@@ -33,16 +33,26 @@ Epic: #4
 - Static CSP preset and `cspHash(...)` helper for build-time hash-based CSP.
 - Helper-attached CORS policy, actual response CORS headers, generated
   preflight responses, and wildcard-plus-credentials validation.
-- Helper-attached request body size limits enforced before route handlers read
-  oversized declared bodies.
+- Helper-attached request body limits reject oversized declarations before a
+  read and count actual bytes for chunked or understated bodies as they are
+  consumed.
 - Helper-attached request allowed-method policy enforced before route handlers
   run.
 - Helper-attached fixed-window rate limits with pluggable server storage and
-  dev in-memory storage.
+  bounded, expiration-aware in-memory storage.
+- The Node adapter requires an allowed-host policy, ignores forwarded headers by
+  default, and resolves client IP, scheme, and host through one typed hop-count
+  or CIDR proxy-trust policy. IP rate limits consume the resolved peer identity.
+- The Node server exposes typed timeout configuration, readiness state, and a
+  bounded graceful `shutdown()` with optional SIGINT/SIGTERM registration. It
+  aborts Web Requests on premature client disconnect so route and render work
+  can cancel promptly.
 - Default double-submit CSRF protection for cookie-authenticated unsafe methods,
-  configurable cookie/header token names, and explicit route-policy exemptions.
-- Generic HMAC webhook helper that preserves raw bodies and rejects missing or
-  invalid signatures before the app handler runs.
+  configurable cookie/header token names, explicit route-policy exemptions,
+  and secure token/cookie issuance helpers with browser round-trip coverage.
+- Generic HMAC webhook helper that verifies exact request bytes with Web Crypto,
+  supports padded base64 and explicit prefixes, and rejects missing, malformed,
+  or invalid signatures before the app handler runs.
 - `createSecurityAudit(...)` for rendered header snapshots, effective route
   policy inspection, and structured security findings.
 - `createSecurityAudit(...)` reports document static scripts that are missing
@@ -58,6 +68,16 @@ Epic: #4
   callbacks.
 - `validateUploads(...)` validates parsed `FormData` files against required
   fields, per-file size limits, aggregate size limits, and MIME/type allowlists.
+- Cache and idempotency keys reject non-finite numbers, negative zero, and
+  unsupported runtime values instead of allowing JSON serialization collisions.
+- In-memory cache and idempotency stores sweep expired entries, have configurable
+  finite entry ceilings, and deterministically evict the oldest completed value.
+  Idempotency defaults to a 24-hour result TTL that begins after completion;
+  in-flight mutations never expire or get evicted.
+- Shared data caches implement `staleWhileRevalidate` with distinct fresh and
+  stale deadlines, store-coordinated refresh leases, atomic owner-only
+  publication, invalidation-safe cancellation, background lifetime hooks, and
+  stale retention when refresh fails (#112).
 
 ## Route Policies And Middleware
 
@@ -65,6 +85,9 @@ Epic: #5
 
 - Route groups such as `(admin)` organize route files and framework-attached
   files without changing generated URLs or runtime path matching.
+- Route manifests use positional static/dynamic/catchall specificity, require
+  terminal catchalls, and reject canonical runtime-shape collisions with both
+  source files and a witness URL instead of silently shadowing by filename.
 - `@policy.ts` files are discovered as framework-attached policy files, while
   ordinary `policy.tsx` files remain real URL routes.
 - Inherited `@policy.ts` route security is merged root-to-leaf and enforced by
@@ -237,6 +260,9 @@ Epic: #11
 - The production Node adapter converts Node HTTP requests and responses to the
   web platform contract, serves safe static assets, preserves repeated
   `Set-Cookie` headers, and exposes `createNodeServer(...)` from `demiurge/node`.
+- Static serving rejects symbolic links in every path component, verifies the
+  real target remains inside the real public root, and uses `O_NOFOLLOW` for
+  the final open where the platform supports it.
 - Vite production builds emit a client manifest containing the client entry and
   hashed stylesheets. The framework-owned SSR server entry loads route modules
   and creates a request handler that can be mounted by the Node adapter.

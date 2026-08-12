@@ -16,6 +16,11 @@ file in this folder came to say "in progress" at once.
 | What already shipped? | `CHANGELOG.md` |
 | Why is it designed this way? | `docs/` |
 
+`docs/07-feature-inventory.md` is reconciled against source and `CHANGELOG.md`
+at every milestone close. It is a release snapshot, not an independent status
+tracker, and must distinguish callable primitives from automatically wired
+runtime behavior.
+
 ## Epics
 
 Each spec has a tracking issue whose checklist is the completion count. The

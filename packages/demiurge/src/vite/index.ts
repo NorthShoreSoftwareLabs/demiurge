@@ -7,5 +7,6 @@ export {
   createDocumentHtml as unstable_createDocumentHtml,
   createDevRouteImporters as unstable_createDevRouteImporters,
   handleDevRequest as unstable_handleDevRequest,
+  stripClientPageData as unstable_stripClientPageData,
 } from "./plugin";
 export type { DemiurgeVitePluginOptions } from "./plugin";

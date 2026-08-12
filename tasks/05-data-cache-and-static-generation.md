@@ -13,13 +13,18 @@ handlers and React server components without hiding when work runs.
 - Component-level server data through request context.
 - `query(...)` objects with typed return values and typed invalidation tags.
 - Cache scopes: build, public, private, request, none.
-- Stale-while-revalidate for shared data entries, with stale retention on refresh
-  failure, refresh coalescing, and adapter-managed background lifetime.
+- ~~Stale-while-revalidate for shared data entries, with stale retention on
+  refresh failure, store-coordinated refresh leases, atomic publication, and
+  adapter-managed background lifetime.~~ Shipped for data-query results in
+  #112; render-artifact ISR remains separate work.
 - Origin render-artifact caching and incremental static regeneration, using the
   same freshness, stale-window, tag, and atomic-publication semantics as data
   caching.
 - Cache adapters: memory, Redis, KV, custom. The public custom-store contract
   and conformance verifier shipped in #47.
+- Keep provider SDKs out of core. Core owns semantics, contracts, capability
+  checks, and conformance; optional integration packages own provider clients,
+  credentials, retries, limits, and deployment wiring.
 - One public cache API, with the framework holding its own instances rather than
   a reserved namespace inside the app's.
 - Typed invalidation from server actions, route handlers, and React server code.

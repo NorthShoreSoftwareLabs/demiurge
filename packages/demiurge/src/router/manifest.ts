@@ -196,7 +196,8 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
     });
   }
 
-  manifest.routes.sort((a, b) => b.score - a.score || a.file.localeCompare(b.file));
+  validateRoutePatterns(manifest.routes);
+  manifest.routes.sort(compareRouteSpecificity);
   manifest.layouts.sort(
     (a, b) => a.fileSegments.length - b.fileSegments.length || a.file.localeCompare(b.file),
   );
@@ -217,6 +218,89 @@ export function createRouteManifest(routes: Record<string, RouteImporter>) {
   );
 
   return manifest;
+}
+
+function validateRoutePatterns(routes: RouteRecord[]) {
+  const shapes = new Map<string, RouteRecord>();
+
+  for (const route of routes) {
+    const catchallIndex = route.segments.findIndex((segment) =>
+      segment.startsWith("*"),
+    );
+
+    if (catchallIndex !== -1 && catchallIndex !== route.segments.length - 1) {
+      throw new Error(
+        `Catchall route segment in "${route.file}" must be the final URL segment.`,
+      );
+    }
+
+    const shape = route.segments.map(canonicalRouteSegment).join("/");
+    const existing = shapes.get(shape);
+
+    if (existing) {
+      throw new Error(
+        `Ambiguous routes "${existing.file}" and "${route.file}" have the same runtime shape and both match "${routeWitnessPath(route.segments)}".`,
+      );
+    }
+
+    shapes.set(shape, route);
+  }
+}
+
+function canonicalRouteSegment(segment: string) {
+  if (segment.startsWith("*")) {
+    return "*";
+  }
+
+  if (segment.startsWith(":")) {
+    return ":";
+  }
+
+  return `=${segment}`;
+}
+
+function routeWitnessPath(segments: string[]) {
+  if (segments.length === 0) {
+    return "/";
+  }
+
+  return `/${segments
+    .map((segment) => segment.startsWith(":") || segment.startsWith("*")
+      ? "example"
+      : segment)
+    .join("/")}`;
+}
+
+function compareRouteSpecificity(left: RouteRecord, right: RouteRecord) {
+  const length = Math.max(left.segments.length, right.segments.length);
+
+  for (let index = 0; index < length; index += 1) {
+    const difference =
+      routeSegmentSpecificity(right.segments[index]) -
+      routeSegmentSpecificity(left.segments[index]);
+
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+
+  return left.file.localeCompare(right.file);
+}
+
+function routeSegmentSpecificity(segment: string | undefined) {
+  if (segment === undefined) {
+    return 4;
+  }
+
+  if (segment.startsWith("*")) {
+    return 1;
+  }
+
+  if (segment.startsWith(":")) {
+    return 2;
+  }
+
+  return 3;
 }
 
 export async function loadPageRoute(

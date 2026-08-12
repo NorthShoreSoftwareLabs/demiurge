@@ -56,6 +56,8 @@ export {
 export {
   auditScriptDependencies,
   createCorsHeaders,
+  createCsrfCookie,
+  createCsrfToken,
   createMemoryRateLimitStore,
   createSecurityAudit,
   createSecurityHeaders,
@@ -72,6 +74,7 @@ export {
   enforceRateLimit,
   enforceRequestSecurity,
   enforceWebSocketOrigin,
+  issueCsrfToken,
   mergeRoutePolicies,
   mergeRouteSecurityPolicies,
   mergeSecurityPolicies,
@@ -148,6 +151,7 @@ export type {
   QueryDefinition,
   MemoryCacheOptions,
   MemoryCacheStoreOptions,
+  MemoryIdempotencyStoreOptions,
 } from "./data";
 export type {
   DocumentMetadataTag,
@@ -268,6 +272,7 @@ export type {
   CorsPolicy,
   CorsRequestContext,
   CorsResponseOptions,
+  CsrfCookieOptions,
   CsrfPolicy,
   CspHashAlgorithm,
   CspDirectiveValue,
@@ -277,6 +282,8 @@ export type {
   EnvValidationIssue,
   EnvVariable,
   InferEnvSchema,
+  IssuedCsrfToken,
+  MemoryRateLimitStoreOptions,
   RateLimitKey,
   RateLimitPolicy,
   RateLimitResult,

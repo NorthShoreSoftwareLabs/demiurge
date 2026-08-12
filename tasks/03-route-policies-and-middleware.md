@@ -16,6 +16,8 @@ while preserving file-based routing and allowing real URL files like
 - Explicit ordering rules for middleware and policies.
 - Typed request context enriched by middleware.
 - App-owned `@loading.tsx`, `@not-found.tsx`, and `@error.tsx` inheritance.
+- Deterministic positional route specificity and manifest-time rejection of
+  group-erased or parameter-renamed runtime shape collisions (#107).
 
 ## Examples Required
 
@@ -35,6 +37,10 @@ while preserving file-based routing and allowing real URL files like
 None open.
 
 ## Decisions Made
+
+- Route matching never uses filenames as a runtime tiebreaker. Static,
+  dynamic, and terminal catchall segments have positional precedence;
+  equal-shape ties are rejected with both files and a witness URL.
 
 - Middleware short-circuits with any response capability, and `page(...)` is a
   type error (#35). Middleware runs after matching and already holds the

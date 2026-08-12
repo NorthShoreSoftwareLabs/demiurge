@@ -1,6 +1,6 @@
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
-import { extname, resolve, sep } from "node:path";
+import { constants } from "node:fs";
+import { lstat, open, realpath } from "node:fs/promises";
+import { extname, join, relative, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 
 export type StaticFileHandler = (request: Request) => Promise<Response | null>;
@@ -54,6 +54,7 @@ export function createStaticFileHandler(
   options: StaticFileHandlerOptions,
 ): StaticFileHandler {
   const root = resolve(options.root);
+  const realRoot = realpath(root);
   const prefix = normalizePrefix(options.prefix);
   const isExcluded = options.exclude ?? defaultExcluded;
   const isImmutable = options.immutable ?? defaultImmutable;
@@ -73,11 +74,13 @@ export function createStaticFileHandler(
       return null;
     }
 
-    const stats = await statFile(filePath);
+    const opened = await openStaticFile(root, await safeRealRoot(realRoot), filePath);
 
-    if (!stats?.isFile()) {
+    if (!opened) {
       return null;
     }
+
+    const { file, stats } = opened;
 
     const headers = new Headers({
       "cache-control": isImmutable(fileNameOf(filePath))
@@ -90,11 +93,12 @@ export function createStaticFileHandler(
     });
 
     if (request.method === "HEAD") {
+      await file.close();
       return new Response(null, { headers });
     }
 
     return new Response(
-      Readable.toWeb(createReadStream(filePath)) as ReadableStream,
+      Readable.toWeb(file.createReadStream()) as ReadableStream,
       { headers },
     );
   };
@@ -132,12 +136,83 @@ function resolveFilePath(root: string, prefix: string, pathname: string) {
   return candidate.startsWith(`${root}${sep}`) ? candidate : null;
 }
 
-async function statFile(filePath: string) {
+async function safeRealRoot(root: Promise<string>) {
   try {
-    return await stat(filePath);
+    return await root;
   } catch {
     return null;
   }
+}
+
+async function openStaticFile(
+  root: string,
+  realRoot: string | null,
+  filePath: string,
+) {
+  if (!realRoot || !(await hasNoSymlinkComponents(root, filePath))) {
+    return null;
+  }
+
+  let resolvedTarget: string;
+
+  try {
+    resolvedTarget = await realpath(filePath);
+  } catch {
+    return null;
+  }
+
+  if (!isPathInside(realRoot, resolvedTarget)) {
+    return null;
+  }
+
+  const noFollow =
+    typeof constants.O_NOFOLLOW === "number" ? constants.O_NOFOLLOW : 0;
+  let file: Awaited<ReturnType<typeof open>>;
+
+  try {
+    // O_NOFOLLOW closes the final-component race on platforms that expose it.
+    // The component walk and realpath containment check cover directory links.
+    file = await open(filePath, constants.O_RDONLY | noFollow);
+  } catch {
+    return null;
+  }
+
+  try {
+    const stats = await file.stat();
+
+    if (!stats.isFile()) {
+      await file.close();
+      return null;
+    }
+
+    return { file, stats };
+  } catch {
+    await file.close();
+    return null;
+  }
+}
+
+async function hasNoSymlinkComponents(root: string, filePath: string) {
+  const parts = relative(root, filePath).split(sep);
+  let current = root;
+
+  try {
+    for (const part of parts) {
+      current = join(current, part);
+
+      if ((await lstat(current)).isSymbolicLink()) {
+        return false;
+      }
+    }
+  } catch {
+    return false;
+  }
+
+  return true;
+}
+
+function isPathInside(root: string, candidate: string) {
+  return candidate.startsWith(`${root}${sep}`);
 }
 
 function normalizePrefix(prefix: string | undefined) {

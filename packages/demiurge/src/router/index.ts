@@ -18,6 +18,16 @@ export {
   toRouteSegments,
 } from "./manifest";
 export type { InitialRouteData } from "../document";
+export {
+  createNavigationDataResponse,
+  isNavigationDataRequest,
+  markNavigationResponse,
+  NAVIGATION_DATA_HEADER,
+  NAVIGATION_DATA_REQUEST,
+  NAVIGATION_DATA_RESPONSE,
+  NAVIGATION_ERROR_RESPONSE,
+  NAVIGATION_NOT_FOUND_RESPONSE,
+} from "./navigation-data";
 export type {
   FallbackRoute,
   LayoutRoute,

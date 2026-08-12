@@ -233,6 +233,13 @@ routes/
 `routes/(app)/dashboard.ts` maps to `/dashboard`.
 Generated route types and runtime matching both omit route group segments.
 
+Runtime precedence is positional and independent of filenames: an exact segment
+beats a dynamic segment at the same position, and a dynamic segment beats a
+catchall. Catchalls must be final. Routes whose canonical runtime shape is
+identical after removing group names and parameter names fail manifest creation
+with both source files and a witness URL. For example, `users/[id].tsx` and
+`users/[slug].tsx` are an error rather than one silently shadowing the other.
+
 Layout inheritance should have an escape hatch for embedded or standalone
 documents:
 

@@ -9,9 +9,13 @@ export {
   validateCorsPolicy,
 } from "./cors";
 export {
+  createCsrfCookie,
+  createCsrfToken,
   enforceCsrfProtection,
+  issueCsrfToken,
   parseCookieHeader,
 } from "./csrf";
+export type { CsrfCookieOptions, IssuedCsrfToken } from "./csrf";
 export {
   EnvValidationError,
   defineEnvSchema,
@@ -58,6 +62,7 @@ export type {
   CspHashAlgorithm,
   CspDirectiveValue,
   CspSource,
+  MemoryRateLimitStoreOptions,
   RateLimitKey,
   RateLimitPolicy,
   RateLimitResult,

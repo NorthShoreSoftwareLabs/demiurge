@@ -18,6 +18,8 @@ import {
   type InitialRouteData,
 } from "../document";
 import {
+  HTTP_ERROR_STATUSES,
+  httpError,
   isHttpError,
   type NotFoundProps,
   type RouteErrorProps,
@@ -28,13 +30,23 @@ import {
   loadErrorFallback,
   loadLoadingFallback,
   loadPageRoute,
+  NAVIGATION_DATA_HEADER,
+  NAVIGATION_DATA_REQUEST,
+  NAVIGATION_DATA_RESPONSE,
+  NAVIGATION_ERROR_RESPONSE,
+  NAVIGATION_NOT_FOUND_RESPONSE,
   type PendingRouteMatch,
 } from "../router";
 import { BuiltInNotFound } from "../server/fallbacks";
 import { href, type AppHref, type LinkTarget, type LinkTo } from "../routing";
 
-type FileRouterOptions = {
+export type NavigationDataLoader = (
+  request: Request,
+) => Promise<InitialRouteData>;
+
+export type FileRouterOptions = {
   initialMatch?: PendingRouteMatch;
+  loadNavigationData?: NavigationDataLoader;
   routes: Record<string, RouteImporter>;
   loading?: ComponentType;
   notFound?: ComponentType<NotFoundProps>;
@@ -49,6 +61,7 @@ export function createFileRouter(options: FileRouterOptions) {
       () => options.initialMatch ?? { status: "loading" },
     );
     const initialMatchPending = useRef(Boolean(options.initialMatch));
+    const navigationSequence = useRef(0);
 
     useEffect(() => {
       function onPopState() {
@@ -61,6 +74,11 @@ export function createFileRouter(options: FileRouterOptions) {
 
     useEffect(() => {
       let cancelled = false;
+      let settled = false;
+      const sequence = ++navigationSequence.current;
+      const controller = new AbortController();
+      const isCurrent = () =>
+        !cancelled && sequence === navigationSequence.current;
 
       if (
         initialMatchPending.current &&
@@ -74,23 +92,39 @@ export function createFileRouter(options: FileRouterOptions) {
 
       setMatch({ status: "loading" });
       loadLoadingFallback(manifest, location.pathname).then((Loading) => {
-        if (!cancelled && Loading) {
+        if (isCurrent() && !settled && Loading) {
           setMatch({ loading: Loading, status: "loading" });
         }
       });
-      loadPageRoute(manifest, location.pathname)
+      const request = new Request(location.href, { signal: controller.signal });
+      Promise.resolve(options.loadNavigationData?.(request))
+        .then((initialData) =>
+          loadPageRoute(
+            manifest,
+            location.pathname,
+            request,
+            initialData,
+          ),
+        )
         .then((nextMatch) => {
-          if (!cancelled) {
+          settled = true;
+          if (isCurrent()) {
             setMatch(nextMatch);
           }
         })
         .catch(async (error: unknown) => {
+          settled = true;
+
+          if (!isCurrent() || controller.signal.aborted) {
+            return;
+          }
+
           const ErrorFallback = await loadErrorFallback(
             manifest,
             location.pathname,
           );
 
-          if (!cancelled) {
+          if (isCurrent()) {
             setMatch({
               Error: ErrorFallback,
               error,
@@ -102,14 +136,25 @@ export function createFileRouter(options: FileRouterOptions) {
 
       return () => {
         cancelled = true;
+        controller.abort();
       };
-    }, [location.pathname]);
+    }, [location.pathname, location.search]);
 
     const router = useMemo(
       () => ({
         push(to: string) {
+          const previous = getCurrentLocation();
           window.history.pushState(null, "", to);
-          setLocation(getCurrentLocation());
+          const next = getCurrentLocation();
+          setLocation(next);
+
+          if (
+            previous.pathname === next.pathname &&
+            previous.search === next.search &&
+            previous.hash !== next.hash
+          ) {
+            scrollToHash(next.hash);
+          }
         },
       }),
       [],
@@ -118,6 +163,7 @@ export function createFileRouter(options: FileRouterOptions) {
     return createElement(RouterContext.Provider, {
       value: router,
       children: createElement(RouteRenderer, {
+        key: `${location.pathname}${location.search}`,
         Loading: options.loading,
         NotFound: options.notFound,
         match,
@@ -168,15 +214,20 @@ export async function hydrateFileRouter(options: HydrateFileRouterOptions) {
   }
 
   const manifest = createRouteManifest(options.routes);
+  const navigationDataLoader = options.loadNavigationData ?? loadNavigationData;
   const match = await loadPageRoute(
     manifest,
     window.location.pathname,
     new Request(window.location.href),
-    options.initialData ?? readInitialRouteData(document),
+    options.initialData ??
+      readInitialRouteData(document) ??
+      await navigationDataLoader(new Request(window.location.href)),
   );
   const hydratable = isHydratableMatch(match, root);
   const Router = createFileRouter(
-    hydratable ? { ...options, initialMatch: match } : options,
+    hydratable
+      ? { ...options, initialMatch: match, loadNavigationData: navigationDataLoader }
+      : { ...options, loadNavigationData: navigationDataLoader },
   );
   const { createRoot, hydrateRoot } = await import("react-dom/client");
 
@@ -319,8 +370,74 @@ function errorStatus(error: unknown) {
 
 function getCurrentLocation() {
   return {
+    hash: window.location.hash,
+    href: window.location.href,
     pathname: window.location.pathname,
+    search: window.location.search,
   };
+}
+
+async function loadNavigationData(request: Request) {
+  const headers = new Headers(request.headers);
+  headers.set("accept", "application/json");
+  headers.set(NAVIGATION_DATA_HEADER, NAVIGATION_DATA_REQUEST);
+  const response = await fetch(new Request(request, {
+    credentials: "same-origin",
+    headers,
+  }));
+  const kind = response.headers.get(NAVIGATION_DATA_HEADER);
+
+  if (kind === NAVIGATION_DATA_RESPONSE) {
+    const value = await response.json() as Partial<InitialRouteData>;
+
+    if (value.hasData !== true) {
+      throw new Error("Demiurge received malformed navigation route data.");
+    }
+
+    return { data: value.data, hasData: true };
+  }
+
+  if (kind === NAVIGATION_NOT_FOUND_RESPONSE) {
+    return { hasData: true };
+  }
+
+  if (kind === NAVIGATION_ERROR_RESPONSE || !response.ok) {
+    const problem = await readProblem(response);
+    const status = HTTP_ERROR_STATUSES.includes(
+      response.status as (typeof HTTP_ERROR_STATUSES)[number],
+    )
+      ? response.status as (typeof HTTP_ERROR_STATUSES)[number]
+      : 500;
+
+    throw httpError(status, {
+      detail: typeof problem?.detail === "string" ? problem.detail : undefined,
+      title: typeof problem?.title === "string" ? problem.title : undefined,
+    });
+  }
+
+  throw new Error(
+    "Demiurge expected a navigation data response from the application server.",
+  );
+}
+
+async function readProblem(response: Response) {
+  try {
+    return await response.json() as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}
+
+function scrollToHash(hash: string) {
+  queueMicrotask(() => {
+    if (!hash) {
+      window.scrollTo?.(0, 0);
+      return;
+    }
+
+    const id = decodeURIComponent(hash.slice(1));
+    document.getElementById(id)?.scrollIntoView?.();
+  });
 }
 
 function shouldHandleLinkClick(event: MouseEvent<HTMLAnchorElement>) {

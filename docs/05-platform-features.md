@@ -348,11 +348,19 @@ instrumentation.trace(...)
 reportWebVitals(...)
 ```
 
-The first instrumentation slice provides `defineInstrumentation(...)`. It
-dispatches normalized request, server-start, trace, and web-vitals signals to
-application-owned handlers, including an optional catch-all event handler. The
-API has no telemetry vendor dependency, so an adapter can forward the signals
-to OpenTelemetry or another backend without changing route code.
+The first observability slice provides `defineInstrumentation(...)`. Today it is
+a typed event dispatcher application code can call; the request handler, Node
+adapter, renderer, cache, and action pipeline do not automatically emit through
+it yet. It must not be described as complete framework instrumentation until
+those runtime paths are wired.
+
+Instrumentation and a telemetry backend are separate concerns. Core should
+measure lifecycle operations and propagate W3C trace context. An optional
+OpenTelemetry integration should turn those signals into active spans and
+metrics with async context. Datadog, Honeycomb, and similar systems can consume
+OTLP; vendor-specific adapters are reserved for capabilities the portable path
+cannot express. The callback dispatcher remains useful for lightweight logs and
+tests without an OpenTelemetry dependency.
 
 Core signals:
 
@@ -365,6 +373,9 @@ Core signals:
 - CSP/Trusted Types violation reporting.
 - Core Web Vitals.
 - Server-Timing headers.
+
+Automatic request/server/render/cache/action signals, `traceparent`
+propagation, active-span context, metrics, and log correlation are roadmap work.
 
 ### Forms, Actions, And Mutations
 
@@ -476,6 +487,27 @@ demiurge audit route /checkout
 
 Audit output should show inherited policy and explain why each permission exists.
 
+### Future Feature Flags And Experiments
+
+Feature flags and A/B tests should use a small core contract plus optional
+provider integrations. Core should own typed flag definitions and result
+shapes, deterministic request-stable assignment, explicit evaluation context,
+SSR-to-hydration consistency, test overrides, cache-partition checks, and an
+exposure-event contract. Vendor packages should own LaunchDarkly, Statsig,
+GrowthBook, Unleash, Edge Config, and similar SDK setup, credentials, retries,
+streaming updates, and provider-specific limits.
+
+Experiment assignment is not a generic cache lookup. It needs a declared sticky
+identity or anonymous assignment cookie, deterministic bucketing, and exposure
+recording only when a variant is actually rendered. A public cached result must
+either include the variant in its key or be rejected; otherwise one user's
+assignment can leak to everyone. The server-selected variant and bootstrap data
+must agree so hydration never re-buckets the visitor. Provider adapters may
+supply evaluation and event delivery, but must not redefine those core
+correctness rules.
+
+This is future work and is not part of the 0.1.0 surface.
+
 ## Integration Territory
 
 These should be easy to add through typed integrations, but do not all need to
@@ -490,6 +522,7 @@ live in core:
 - Email providers.
 - Database adapters.
 - Deployment adapters.
+- Feature-flag and experimentation providers.
 
 Integrations should feed core primitives instead of bypassing them.
 

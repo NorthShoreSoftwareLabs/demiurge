@@ -1,5 +1,6 @@
 import type { HttpMethod } from "../route/types";
 import type { RequestSecurityPolicy } from "./types";
+import { copyRequestConnectionMetadata } from "../server/request-metadata";
 
 const byteUnits = {
   b: 1,
@@ -19,7 +20,7 @@ export function enforceRequestSecurity(
     return methodResponse;
   }
 
-  if (!policy?.maxBodySize) {
+  if (policy?.maxBodySize === undefined) {
     return null;
   }
 
@@ -46,6 +47,72 @@ export function enforceRequestSecurity(
   }
 
   return null;
+}
+
+export class RequestBodyTooLargeError extends Error {
+  constructor() {
+    super("Demiurge request body exceeded maxBodySize while being read.");
+    this.name = "RequestBodyTooLargeError";
+  }
+}
+
+export function limitRequestBody(
+  policy: RequestSecurityPolicy | undefined,
+  request: Request,
+) {
+  if (policy?.maxBodySize === undefined || request.body === null) {
+    return request;
+  }
+
+  const maximumBytes = parseBodySize(policy.maxBodySize);
+  const reader = request.body.getReader();
+  let bytesRead = 0;
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const result = await reader.read();
+
+      if (result.done) {
+        controller.close();
+        return;
+      }
+
+      bytesRead += result.value.byteLength;
+
+      if (bytesRead > maximumBytes) {
+        const error = new RequestBodyTooLargeError();
+        controller.error(error);
+
+        try {
+          await reader.cancel(error);
+        } catch {
+          // The size error is authoritative even if the source rejects cancel.
+        }
+
+        return;
+      }
+
+      controller.enqueue(result.value);
+    },
+    async cancel(reason) {
+      try {
+        await reader.cancel(reason);
+      } catch {
+        // The downstream cancellation has already completed.
+      }
+    },
+  });
+
+  const limitedRequest = new Request(request, {
+    body,
+    duplex: "half",
+  } as RequestInit);
+  copyRequestConnectionMetadata(request, limitedRequest);
+
+  return limitedRequest;
+}
+
+export function requestBodyTooLargeResponse() {
+  return new Response("Request body too large.", { status: 413 });
 }
 
 export function enforceAllowedMethods(

@@ -17,6 +17,14 @@ document/security systems instead of added through unsafe snippets.
 - Core Web Vitals reporting.
 - Server-Timing headers.
 - Route audit/devtools UI.
+- Wire the existing typed observability dispatcher into request, Node lifecycle,
+  render, action, cache/SWR, webhook, and security-report paths. Add W3C trace
+  context propagation and an optional OpenTelemetry integration; vendor
+  backends consume OTLP or live in separate packages.
+- Future typed feature-flag and experimentation contract: request-stable
+  deterministic assignment, SSR/hydration consistency, cache partitioning,
+  exposure hooks, and test overrides in core; vendor SDKs in optional adapter
+  packages. This is explicitly post-0.1.0 work.
 
 ## Examples Required
 
@@ -42,3 +50,12 @@ None open.
   doctrine puts detectable mistakes at the build. The acknowledgement is a named
   declaration rather than a blocker, so the marketing tag still ships without
   anyone reaching for the switch that turns strict mode off entirely.
+- Feature flags and experiments follow the same core/integration boundary as
+  caching. Core owns portable correctness semantics; optional provider packages
+  own SDK clients and delivery. Experiment assignment is not modeled as an
+  ordinary cache lookup because sticky identity and exposure semantics matter.
+- `defineInstrumentation(...)` currently dispatches explicit application calls;
+  it is not yet automatic framework instrumentation. OpenTelemetry supplies
+  context, spans, metrics, and export conventions, while Datadog/Honeycomb are
+  destinations or optional integrations rather than synonyms for
+  instrumentation.

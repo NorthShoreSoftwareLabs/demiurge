@@ -1,4 +1,10 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -24,6 +30,10 @@ beforeAll(() => {
   mkdirSync(join(root, "docs"), { recursive: true });
   writeFileSync(join(root, "docs", "index.html"), "<html>docs</html>");
   writeFileSync(join(outside, "secret.txt"), "do not serve me");
+  mkdirSync(join(outside, "private"));
+  writeFileSync(join(outside, "private", "nested.txt"), "also secret");
+  symlinkSync(join(outside, "secret.txt"), join(root, "file-link.txt"), "file");
+  symlinkSync(join(outside, "private"), join(root, "directory-link"), "dir");
 });
 
 afterAll(() => {
@@ -140,6 +150,20 @@ describe("static file handler", () => {
     await expect(handle(request("/%ZZ"))).resolves.toBeNull();
     await expect(
       handle(request("/robots.txt%00.js")),
+    ).resolves.toBeNull();
+  });
+
+  it("does not serve a file symlink that escapes the static root", async () => {
+    const handle = createStaticFileHandler({ root });
+
+    await expect(handle(request("/file-link.txt"))).resolves.toBeNull();
+  });
+
+  it("does not serve through a symlinked directory that escapes the root", async () => {
+    const handle = createStaticFileHandler({ root });
+
+    await expect(
+      handle(request("/directory-link/nested.txt")),
     ).resolves.toBeNull();
   });
 

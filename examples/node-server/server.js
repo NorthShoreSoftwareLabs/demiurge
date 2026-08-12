@@ -1,4 +1,4 @@
-/* global console, process, URL */
+/* global console, process, Response, URL */
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -12,7 +12,7 @@ const manifest = JSON.parse(
   await readFile(join(root, "demiurge-manifest.json"), "utf8"),
 );
 const cacheStore = createMemoryCacheStore();
-const handler = createHandler({
+const applicationHandler = createHandler({
   cacheStore: {
     namespace: {
       app: "demiurge-node-example",
@@ -27,10 +27,32 @@ const handler = createHandler({
 });
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 4173);
+const allowedHosts = (process.env.ALLOWED_HOSTS ?? `${host},localhost`)
+  .split(",")
+  .map((value) => value.trim());
+let server;
+const handler = (request) => {
+  if (new URL(request.url).pathname === "/.well-known/ready") {
+    return new Response(server?.isReady() ? "ready" : "draining", {
+      status: server?.isReady() ? 200 : 503,
+    });
+  }
 
-createNodeServer({
+  return applicationHandler(request);
+};
+
+server = createNodeServer({
+  allowedHosts,
   handler,
+  shutdown: {
+    gracePeriod: 30_000,
+    onStateChange(state) {
+      console.log(`Demiurge Node server state: ${state}`);
+    },
+    signals: ["SIGINT", "SIGTERM"],
+  },
   static: { root },
-}).listen(port, host, () => {
+});
+server.listen(port, host, () => {
   console.log(`Demiurge Node server listening on http://${host}:${port}`);
 });

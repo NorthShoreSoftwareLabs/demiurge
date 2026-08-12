@@ -1,8 +1,10 @@
 import type {
+  MemoryRateLimitStoreOptions,
   RateLimitKey,
   RateLimitPolicy,
   RateLimitStore,
 } from "./types";
+import { getRequestConnectionMetadata } from "../server/request-metadata";
 
 const durationUnits = {
   h: 60 * 60 * 1000,
@@ -15,11 +17,29 @@ type MemoryRateLimitEntry = {
   resetAt: number;
 };
 
-export function createMemoryRateLimitStore(): RateLimitStore {
+const defaultMaximumEntries = 10_000;
+
+export function createMemoryRateLimitStore(
+  options: MemoryRateLimitStoreOptions = {},
+): RateLimitStore {
+  const maximumEntries = options.maximumEntries ?? defaultMaximumEntries;
+
+  if (!Number.isSafeInteger(maximumEntries) || maximumEntries <= 0) {
+    throw new Error(
+      "Demiurge rate limit maximumEntries must be a positive integer.",
+    );
+  }
+
   const entries = new Map<string, MemoryRateLimitEntry>();
+  let nextExpiration = Number.POSITIVE_INFINITY;
 
   return {
     increment(key, windowMs, now) {
+      if (now >= nextExpiration) {
+        sweepExpiredEntries(entries, now);
+        nextExpiration = findNextExpiration(entries);
+      }
+
       const existing = entries.get(key);
 
       if (!existing || existing.resetAt <= now) {
@@ -27,7 +47,13 @@ export function createMemoryRateLimitStore(): RateLimitStore {
           count: 1,
           resetAt: now + windowMs,
         };
+
+        if (!existing && entries.size >= maximumEntries) {
+          evictOldestEntry(entries);
+        }
+
         entries.set(key, next);
+        nextExpiration = Math.min(nextExpiration, next.resetAt);
         return next;
       }
 
@@ -35,6 +61,35 @@ export function createMemoryRateLimitStore(): RateLimitStore {
       return existing;
     },
   };
+}
+
+function sweepExpiredEntries(
+  entries: Map<string, MemoryRateLimitEntry>,
+  now: number,
+) {
+  for (const [key, entry] of entries) {
+    if (entry.resetAt <= now) {
+      entries.delete(key);
+    }
+  }
+}
+
+function findNextExpiration(entries: Map<string, MemoryRateLimitEntry>) {
+  let nextExpiration = Number.POSITIVE_INFINITY;
+
+  for (const entry of entries.values()) {
+    nextExpiration = Math.min(nextExpiration, entry.resetAt);
+  }
+
+  return nextExpiration;
+}
+
+function evictOldestEntry(entries: Map<string, MemoryRateLimitEntry>) {
+  const oldestKey = entries.keys().next().value;
+
+  if (oldestKey !== undefined) {
+    entries.delete(oldestKey);
+  }
 }
 
 export function enforceRateLimit(
@@ -121,15 +176,5 @@ function resolveRateLimitKey(key: RateLimitKey, request: Request) {
 }
 
 function clientIp(request: Request) {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-
-  if (forwardedFor) {
-    return forwardedFor.split(",")[0].trim() || "unknown";
-  }
-
-  return (
-    request.headers.get("cf-connecting-ip") ??
-    request.headers.get("x-real-ip") ??
-    "unknown"
-  );
+  return getRequestConnectionMetadata(request)?.clientIp ?? "unknown";
 }

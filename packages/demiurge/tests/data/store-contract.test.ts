@@ -1,11 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { createMemoryCacheStore, type CacheStore } from "demiurge";
-import { verifyCacheStoreContract } from "../../src/data/testing";
+import {
+  verifyCacheStoreContract,
+  verifyCacheStoreRefreshContract,
+} from "../../src/data/testing";
 
 describe("cache store contract", () => {
   it("is satisfied by the framework memory store", async () => {
     await expect(
       verifyCacheStoreContract(createMemoryCacheStore),
+    ).resolves.toBeUndefined();
+  });
+
+  it("verifies atomic stale-refresh coordination", async () => {
+    await expect(
+      verifyCacheStoreRefreshContract(createMemoryCacheStore),
     ).resolves.toBeUndefined();
   });
 

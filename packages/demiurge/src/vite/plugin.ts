@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join, resolve, relative, sep } from "node:path";
-import type { Plugin, UserConfig, ViteDevServer } from "vite";
+import { parseAst, type Plugin, type UserConfig, type ViteDevServer } from "vite";
 import { renderDocument } from "../document";
 import type {
   LinkTag,
@@ -86,6 +86,17 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
 
       return null;
     },
+    transform: {
+      order: "post",
+      handler(code, id, transformOptions) {
+        if (transformOptions?.ssr || !isRouteSource(root, options, id)) {
+          return null;
+        }
+
+        const transformed = stripClientPageData(code);
+        return transformed === code ? null : { code: transformed, map: null };
+      },
+    },
     generateBundle(_outputOptions, bundle) {
       const entry = Object.values(bundle).find(
         (item) =>
@@ -164,7 +175,12 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
           let webRequest: Request;
 
           try {
-            webRequest = toWebRequest(request);
+            webRequest = toWebRequest(request, {
+              // Vite performs its own configured host allowlist check before
+              // Demiurge's middleware runs. Production Node listeners require
+              // an explicit application allowlist instead.
+              allowedHosts: [request.headers.host ?? "localhost"],
+            });
           } catch (error) {
             if (error instanceof UnsupportedMethodError) {
               writeNotImplemented(response);
@@ -211,7 +227,9 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
             let webRequest: Request;
 
             try {
-              webRequest = toWebRequest(request);
+              webRequest = toWebRequest(request, {
+                allowedHosts: [request.headers.host ?? "localhost"],
+              });
             } catch (error) {
               if (error instanceof UnsupportedMethodError) {
                 writeNotImplemented(response);
@@ -244,6 +262,163 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       };
     },
   };
+}
+
+type AstNode = {
+  [key: string]: unknown;
+  end: number;
+  start: number;
+  type: string;
+};
+
+// Page data is a server capability. Removing it after Vite/React have parsed
+// TypeScript and JSX, but before Rollup follows the final client graph, keeps
+// request code and its data-only imports out of browser chunks.
+export function stripClientPageData(code: string) {
+  const ast = parseAst(code) as unknown as AstNode;
+  const dataRanges: Array<{ end: number; start: number }> = [];
+  const serverImports: AstNode[] = [];
+
+  walkAst(ast, (node) => {
+    if (node.type === "ImportDeclaration" && isServerOnlyImport(node)) {
+      serverImports.push(node);
+      return;
+    }
+
+    if (node.type !== "CallExpression" || !isPageCallee(node.callee)) {
+      return;
+    }
+
+    const argument = asNodeArray(node.arguments)[0];
+    if (argument?.type !== "ObjectExpression") {
+      return;
+    }
+
+    for (const property of asNodeArray(argument.properties)) {
+      if (property.type === "Property" && propertyName(property.key) === "data") {
+        dataRanges.push({ end: property.end, start: property.start });
+      }
+    }
+  });
+
+  if (dataRanges.length === 0) {
+    return code;
+  }
+
+  const removalRanges = [...dataRanges];
+  for (const declaration of serverImports) {
+    const localNames = asNodeArray(declaration.specifiers)
+      .map((specifier) => asNode(specifier.local))
+      .filter((local): local is AstNode => local?.type === "Identifier")
+      .map((local) => String(local.name));
+    const masked = maskRanges(code, [
+      ...dataRanges,
+      { end: declaration.end, start: declaration.start },
+    ]);
+    const leakedName = localNames.find((name) =>
+      new RegExp(`\\b${escapeRegExp(name)}\\b`).test(masked)
+    );
+
+    if (leakedName) {
+      throw new Error(
+        `Server-only import ${JSON.stringify(leakedName)} is used by client route code. Move that use into the page data function or a client-safe module.`,
+      );
+    }
+
+    removalRanges.push({ end: declaration.end, start: declaration.start });
+  }
+
+  return replaceRanges(code, removalRanges, (range) =>
+    dataRanges.includes(range) ? "data: undefined" : ""
+  );
+}
+
+function isRouteSource(
+  root: string,
+  options: DemiurgeVitePluginOptions,
+  id: string,
+) {
+  const file = id.split("?", 1)[0] ?? id;
+  const routesRoot = resolve(root, options.routesDir ?? "src/routes");
+  const pathFromRoutes = relative(routesRoot, file);
+  return pathFromRoutes !== "" &&
+    pathFromRoutes !== ".." &&
+    !pathFromRoutes.startsWith(`..${sep}`);
+}
+
+function walkAst(value: unknown, visit: (node: AstNode) => void) {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) walkAst(item, visit);
+    return;
+  }
+
+  const node = value as Partial<AstNode>;
+  if (typeof node.type !== "string") return;
+  visit(node as AstNode);
+  for (const [key, child] of Object.entries(node)) {
+    if (!new Set(["end", "loc", "start", "type"]).has(key)) {
+      walkAst(child, visit);
+    }
+  }
+}
+
+function asNode(value: unknown) {
+  return value && typeof value === "object" && "type" in value
+    ? value as AstNode
+    : undefined;
+}
+
+function asNodeArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.map(asNode).filter((node): node is AstNode => Boolean(node))
+    : [];
+}
+
+function isPageCallee(value: unknown) {
+  const callee = asNode(value);
+  if (callee?.type === "Identifier") return callee.name === "page";
+  return callee?.type === "MemberExpression" &&
+    propertyName(callee.property) === "page";
+}
+
+function propertyName(value: unknown) {
+  const property = asNode(value);
+  return property?.type === "Identifier" || property?.type === "Literal"
+    ? String(property.name ?? property.value)
+    : undefined;
+}
+
+function isServerOnlyImport(node: AstNode) {
+  const source = asNode(node.source)?.value;
+  return typeof source === "string" &&
+    /(?:^|[/.-])server(?:[/.-]|$)/.test(source);
+}
+
+function maskRanges(code: string, ranges: Array<{ end: number; start: number }>) {
+  const characters = [...code];
+  for (const { end, start } of ranges) {
+    characters.fill(" ", start, end);
+  }
+  return characters.join("");
+}
+
+function replaceRanges(
+  code: string,
+  ranges: Array<{ end: number; start: number }>,
+  replacement: (range: { end: number; start: number }) => string,
+) {
+  return [...ranges]
+    .sort((left, right) => right.start - left.start)
+    .reduce(
+      (result, range) =>
+        `${result.slice(0, range.start)}${replacement(range)}${result.slice(range.end)}`,
+      code,
+    );
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function createViteConfig(config: UserConfig): UserConfig {

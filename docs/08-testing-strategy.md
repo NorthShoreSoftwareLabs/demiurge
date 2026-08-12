@@ -1,5 +1,15 @@
 # Testing Strategy
 
+## Browser conformance
+
+`pnpm test:browser` runs Playwright against a production build of the Node
+example. Chromium is a required `pnpm verify` and CI gate. The suite verifies
+behavior that DOM emulation and handler-level tests cannot prove: hydration and
+SPA navigation without document reloads, browser CSP enforcement, response
+security headers, repeated secure-cookie acceptance, browser-generated Fetch
+Metadata, and production 404 rendering. Failed CI runs retain a trace and
+screenshot for diagnosis.
+
 Demiurge should test like a framework, not like a single app. That means using
 several test layers, each protecting a different kind of contract.
 

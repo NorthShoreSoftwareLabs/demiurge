@@ -33,7 +33,10 @@ describe("client hydration", () => {
     expect(serverParagraph?.textContent).toBe("Blog page at /blog");
 
     await act(async () => {
-      await hydrateFileRouter({ routes });
+      await hydrateFileRouter({
+        loadNavigationData: async () => ({ hasData: true }),
+        routes,
+      });
     });
 
     expect(root.querySelector("p")).toBe(serverParagraph);
@@ -49,7 +52,10 @@ describe("client hydration", () => {
     const collectErrors = captureRecoverableErrors();
 
     await act(async () => {
-      await hydrateFileRouter({ routes });
+      await hydrateFileRouter({
+        loadNavigationData: async () => ({ hasData: true }),
+        routes,
+      });
     });
 
     expect(documentRoot().textContent).toBe("Blog page at /blog");
@@ -81,7 +87,7 @@ describe("client hydration", () => {
     expect(consoleError).not.toHaveBeenCalled();
   });
 
-  it("loads route data on the client when the document carries no payload", async () => {
+  it("loads route data from the server when the document carries no payload", async () => {
     const data = vi.fn(async () => ({ headline: "Client headline" }));
     const routes = {
       "./routes/blog/index.tsx": routeModule({
@@ -92,11 +98,17 @@ describe("client hydration", () => {
     document.body.innerHTML = `<div id="root"></div>`;
 
     await act(async () => {
-      await hydrateFileRouter({ routes });
+      await hydrateFileRouter({
+        loadNavigationData: async () => ({
+          data: { headline: "Server navigation headline" },
+          hasData: true,
+        }),
+        routes,
+      });
     });
 
-    expect(data).toHaveBeenCalledTimes(1);
-    expect(documentRoot().textContent).toBe("Client headline");
+    expect(data).not.toHaveBeenCalled();
+    expect(documentRoot().textContent).toBe("Server navigation headline");
   });
 
   it("prefers explicitly provided initial data over the document payload", async () => {
@@ -125,7 +137,11 @@ describe("client hydration", () => {
       `<div id="root" data-demiurge-hydrate=""><p>Stale server markup</p></div>`;
 
     await act(async () => {
-      await hydrateFileRouter({ notFound: NotFound, routes: {} });
+      await hydrateFileRouter({
+        loadNavigationData: async () => ({ hasData: true }),
+        notFound: NotFound,
+        routes: {},
+      });
     });
 
     expect(documentRoot().textContent).toBe("App not found: /blog");
@@ -142,7 +158,11 @@ describe("client hydration", () => {
     }
 
     await act(async () => {
-      await hydrateFileRouter({ root, routes });
+      await hydrateFileRouter({
+        loadNavigationData: async () => ({ hasData: true }),
+        root,
+        routes,
+      });
     });
 
     expect(root.textContent).toBe("Blog page at /blog");

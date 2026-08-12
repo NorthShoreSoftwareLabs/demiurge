@@ -71,15 +71,16 @@ implementation.
 
 | Feature | Status |
 | --- | --- |
-| Route-level `data` for page `GET` | partially implemented |
+| Route-level `data` for page `GET` | implemented |
 | Component-level server data through request context | designed |
 | Reusable `query(...)` objects | implemented |
 | Explicit cache API | implemented |
 | Cache scopes: build/public/private/request/none | implemented |
-| Cache adapters: memory/Redis/KV/custom | partially implemented |
+| Memory and public custom cache adapters | implemented |
+| Provider Redis/KV cache packages | designed |
 | Public custom cache-store contract and conformance verifier | implemented |
 | Request-handler shared cache injection with request isolation | implemented |
-| Shared stale-while-revalidate with distributed refresh coordination | designed |
+| Shared stale-while-revalidate with distributed refresh coordination | implemented |
 | Origin render-artifact cache and incremental static regeneration | designed |
 | CDN/browser cache policy and adapter-aware purge | designed |
 | Typed tags and invalidation | implemented |
@@ -92,20 +93,20 @@ implementation.
 
 | Feature | Status |
 | --- | --- |
-| Strict security preset | designed |
+| Strict security preset | implemented |
 | CSP nonce mode | implemented |
 | CSP hash mode for static output | partially implemented |
 | CSP auto mode for static/dynamic split | designed |
 | Strict CSP for streaming SSR | implemented |
 | Strict CSP for RSC | designed |
 | Security report endpoint | implemented |
-| Typed CORS | designed |
+| Typed CORS | implemented |
 | CSRF defaults for cookie-auth unsafe methods | implemented |
-| Rate limiting | designed |
-| Request size limits | designed |
+| Rate limiting | implemented |
+| Request size limits | implemented |
 | Upload limits | implemented |
 | WebSocket origin checks | implemented |
-| Webhook verification helpers | designed |
+| Webhook verification helpers | implemented |
 | Trusted Types report-only mode | designed |
 | Trusted Types enforce mode | designed |
 | COOP/COEP/CORP cross-origin isolation preset | designed |
@@ -138,7 +139,9 @@ implementation.
 | Analytics integrations | partially implemented |
 | GTM integration with trust-boundary audit | partially implemented |
 | Sentry/PostHog/Plausible integrations | planned |
-| OpenTelemetry instrumentation | partially implemented |
+| Typed observability event dispatcher (manual calls only) | implemented |
+| Automatic framework instrumentation and OpenTelemetry context | planned |
+| Feature flags and A/B experimentation | planned |
 | Core Web Vitals reporting | designed |
 | Server-Timing headers | implemented |
 | Route audit/devtools UI | designed |
@@ -148,8 +151,13 @@ implementation.
 | Feature | Status |
 | --- | --- |
 | Node adapter | implemented |
+| Node trusted-proxy, allowed-host, abort, and lifecycle controls | implemented |
 | Edge adapter | planned |
 | Static adapter | implemented |
 | Adapter capability checks | implemented |
 | Cloud Run deployment guidance | planned |
 | Shared cache adapters such as Redis | designed |
+| GCP/AWS runtime, state, and gateway integration packages | planned |
+| Typed multi-target deployment profiles | planned |
+| Demiurge-owned build CLI and versioned artifact manifest on Vite | planned |
+| Internal Vite Environment API abstraction | planned |

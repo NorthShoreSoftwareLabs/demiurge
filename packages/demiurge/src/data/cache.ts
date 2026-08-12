@@ -59,21 +59,36 @@ export type CacheNamespace = {
 
 export type CacheStoreEntry = {
   expiresAt: number | null;
+  staleUntil: number | null;
   tags: readonly string[];
   value: unknown;
 };
 
 export type CacheStore = {
+  acquireRefreshLease?: (
+    key: string,
+    token: string,
+    expiresAt: number,
+  ) => MaybePromise<boolean>;
   delete: (key: string) => MaybePromise<boolean>;
   get: (key: string) => MaybePromise<CacheStoreEntry | undefined>;
   invalidateTags: (tags: readonly string[]) => MaybePromise<number>;
+  publishRefresh?: (
+    key: string,
+    token: string,
+    entry: CacheStoreEntry,
+  ) => MaybePromise<boolean>;
+  releaseRefreshLease?: (key: string, token: string) => MaybePromise<void>;
   set: (key: string, entry: CacheStoreEntry) => MaybePromise<void>;
 };
 
 export type CreateCacheOptions = {
   namespace: CacheNamespace;
   now?: () => number;
+  onBackgroundError?: (error: unknown) => void;
+  refreshLeaseTtl?: CacheDuration;
   store: CacheStore;
+  waitUntil?: (promise: Promise<void>) => void;
 };
 
 export type Invalidation = {
@@ -100,12 +115,28 @@ type PendingStoreEntry = {
   tags: readonly string[];
 };
 
+type CoordinatedCacheStore = CacheStore &
+  Required<
+    Pick<
+      CacheStore,
+      | "acquireRefreshLease"
+      | "publishRefresh"
+      | "releaseRefreshLease"
+    >
+  >;
+
 export type MemoryCacheOptions = {
+  maximumEntries?: number;
   now?: () => number;
+  onBackgroundError?: (error: unknown) => void;
+  refreshLeaseTtl?: CacheDuration;
+  waitUntil?: (promise: Promise<void>) => void;
 };
 
 export type MemoryCacheStoreOptions = {
   entries?: Map<string, CacheStoreEntry>;
+  maximumEntries?: number;
+  now?: () => number;
 };
 
 const sharedScopes = ["build", "private", "public"] as const;
@@ -114,6 +145,8 @@ const memoryNamespace = {
   environment: "local",
   schemaVersion: 1,
 } satisfies CacheNamespace;
+const defaultMemoryCacheMaximumEntries = 10_000;
+const defaultRefreshLeaseTtl = 30_000;
 
 export function query<TArgs extends readonly unknown[], TResult>(
   definition: QueryDefinition<TArgs, TResult>,
@@ -140,6 +173,7 @@ export function defineTags<
 
 export function createCache(options: CreateCacheOptions): Cache {
   const now = options.now ?? Date.now;
+  const refreshLeaseTtl = parseRefreshLeaseTtl(options.refreshLeaseTtl);
   const namespace = serializeCacheNamespace(options.namespace);
   const requestEntries = new Map<string, RequestCacheEntry<unknown>>();
   const sharedPending = new Map<string, PendingStoreEntry>();
@@ -159,12 +193,41 @@ export function createCache(options: CreateCacheOptions): Cache {
       }
 
       const key = serializeStoreKey(namespace, scope, rawKey);
+      const tags = (request.tags ?? []).map((value) =>
+        serializeStoreTag(namespace, scope, serializeCacheTag(value))
+      );
       const existing = await options.store.get(key);
 
       if (
         existing &&
         (existing.expiresAt === null || existing.expiresAt > now())
       ) {
+        return existing.value as TResult;
+      }
+
+      if (existing && isStaleEntryUsable(existing, now())) {
+        const refreshStore = requireRefreshStore(options.store);
+        const token = globalThis.crypto.randomUUID();
+        const acquired = await refreshStore.acquireRefreshLease(
+          key,
+          token,
+          now() + refreshLeaseTtl,
+        );
+
+        if (acquired) {
+          const refresh = refreshStaleEntry({
+            key,
+            now,
+            onBackgroundError: options.onBackgroundError,
+            refreshStore,
+            request,
+            tags,
+            token,
+          });
+
+          options.waitUntil?.(refresh);
+        }
+
         return existing.value as TResult;
       }
 
@@ -178,9 +241,6 @@ export function createCache(options: CreateCacheOptions): Cache {
         return await currentPending.promise as TResult;
       }
 
-      const tags = (request.tags ?? []).map((value) =>
-        serializeStoreTag(namespace, scope, serializeCacheTag(value))
-      );
       const pending = {
         invalidated: false,
         promise: undefined as unknown as Promise<TResult>,
@@ -190,6 +250,11 @@ export function createCache(options: CreateCacheOptions): Cache {
         if (!pending.invalidated) {
           await options.store.set(key, {
             expiresAt: storeExpirationTime(now(), request.ttl),
+            staleUntil: storeStaleTime(
+              now(),
+              request.ttl,
+              request.staleWhileRevalidate,
+            ),
             tags,
             value: result,
           });
@@ -260,10 +325,18 @@ export function createCache(options: CreateCacheOptions): Cache {
 }
 
 export function createMemoryCache(options: MemoryCacheOptions = {}): Cache {
+  const now = options.now ?? Date.now;
+
   return createCache({
     namespace: memoryNamespace,
-    now: options.now,
-    store: createMemoryCacheStore(),
+    now,
+    onBackgroundError: options.onBackgroundError,
+    refreshLeaseTtl: options.refreshLeaseTtl,
+    store: createMemoryCacheStore({
+      maximumEntries: options.maximumEntries,
+      now,
+    }),
+    waitUntil: options.waitUntil,
   });
 }
 
@@ -271,12 +344,43 @@ export function createMemoryCacheStore(
   options: MemoryCacheStoreOptions = {},
 ): CacheStore {
   const entries = options.entries ?? new Map<string, CacheStoreEntry>();
+  const refreshLeases = new Map<string, { expiresAt: number; token: string }>();
+  const maximumEntries =
+    options.maximumEntries ?? defaultMemoryCacheMaximumEntries;
+  const now = options.now ?? Date.now;
+
+  if (!Number.isSafeInteger(maximumEntries) || maximumEntries <= 0) {
+    throw new Error(
+      "Demiurge memory cache maximumEntries must be a positive integer.",
+    );
+  }
+
+  sweepExpiredCacheEntries(entries, refreshLeases, now());
+  evictOldestCacheEntries(entries, maximumEntries);
+  let nextExpiration = findNextCacheExpiration(entries);
 
   return {
+    acquireRefreshLease(key, token, expiresAt) {
+      const currentTime = now();
+      const existing = refreshLeases.get(key);
+
+      if (existing && existing.expiresAt > currentTime) {
+        return false;
+      }
+
+      refreshLeases.set(key, { expiresAt, token });
+      return true;
+    },
     delete(key) {
+      refreshLeases.delete(key);
       return entries.delete(key);
     },
     get(key) {
+      if (now() >= nextExpiration) {
+        sweepExpiredCacheEntries(entries, refreshLeases, now());
+        nextExpiration = findNextCacheExpiration(entries);
+      }
+
       return entries.get(key);
     },
     invalidateTags(tags) {
@@ -286,16 +390,125 @@ export function createMemoryCacheStore(
       for (const [key, entry] of entries) {
         if (entry.tags.some((value) => serializedTags.has(value))) {
           entries.delete(key);
+          refreshLeases.delete(key);
           deleted += 1;
         }
       }
 
       return deleted;
     },
+    publishRefresh(key, token, entry) {
+      const lease = refreshLeases.get(key);
+
+      if (!lease || lease.token !== token || lease.expiresAt <= now()) {
+        return false;
+      }
+
+      setMemoryCacheEntry(
+        entries,
+        refreshLeases,
+        maximumEntries,
+        key,
+        entry,
+      );
+      refreshLeases.delete(key);
+
+      if (entry.staleUntil !== null) {
+        nextExpiration = Math.min(nextExpiration, entry.staleUntil);
+      }
+
+      return true;
+    },
+    releaseRefreshLease(key, token) {
+      if (refreshLeases.get(key)?.token === token) {
+        refreshLeases.delete(key);
+      }
+    },
     set(key, entry) {
-      entries.set(key, entry);
+      const currentTime = now();
+
+      if (currentTime >= nextExpiration) {
+        sweepExpiredCacheEntries(entries, refreshLeases, currentTime);
+        nextExpiration = findNextCacheExpiration(entries);
+      }
+
+      refreshLeases.delete(key);
+      setMemoryCacheEntry(
+        entries,
+        refreshLeases,
+        maximumEntries,
+        key,
+        entry,
+      );
+
+      if (entry.staleUntil !== null) {
+        nextExpiration = Math.min(nextExpiration, entry.staleUntil);
+      }
     },
   };
+}
+
+function sweepExpiredCacheEntries(
+  entries: Map<string, CacheStoreEntry>,
+  refreshLeases: Map<string, { expiresAt: number; token: string }>,
+  now: number,
+) {
+  for (const [key, entry] of entries) {
+    if (entry.staleUntil !== null && entry.staleUntil <= now) {
+      entries.delete(key);
+      refreshLeases.delete(key);
+    }
+  }
+}
+
+function setMemoryCacheEntry(
+  entries: Map<string, CacheStoreEntry>,
+  refreshLeases: Map<string, { expiresAt: number; token: string }>,
+  maximumEntries: number,
+  key: string,
+  entry: CacheStoreEntry,
+) {
+  if (!entries.has(key) && entries.size >= maximumEntries) {
+    while (entries.size >= maximumEntries) {
+      const oldestKey = entries.keys().next().value;
+
+      if (oldestKey === undefined) {
+        break;
+      }
+
+      entries.delete(oldestKey);
+      refreshLeases.delete(oldestKey);
+    }
+  }
+
+  entries.set(key, entry);
+}
+
+function evictOldestCacheEntries(
+  entries: Map<string, CacheStoreEntry>,
+  targetSize: number,
+) {
+  while (entries.size > targetSize) {
+    const oldestKey = entries.keys().next().value;
+
+    if (oldestKey === undefined) {
+      return;
+    }
+
+    entries.delete(oldestKey);
+  }
+}
+
+function findNextCacheExpiration(entries: Map<string, CacheStoreEntry>) {
+  let nextExpiration = Number.POSITIVE_INFINITY;
+
+  for (const entry of entries.values()) {
+    if (entry.staleUntil !== null) {
+      nextExpiration = Math.min(nextExpiration, entry.staleUntil);
+    }
+  }
+
+  return nextExpiration;
 }
 
 export function serializeCacheNamespace(namespace: CacheNamespace) {
@@ -399,7 +612,7 @@ export function parseCacheDuration(duration: CacheDuration | undefined) {
 }
 
 export function serializeCacheKey(key: CacheKey) {
-  return stableSerialize(key);
+  return stableSerialize(key, new Set<object>());
 }
 
 export function serializeCacheTag(tag: CacheTag) {
@@ -459,6 +672,93 @@ function storeExpirationTime(now: number, ttl: CacheDuration | undefined) {
   return Number.isFinite(duration) ? now + duration : null;
 }
 
+function storeStaleTime(
+  now: number,
+  ttl: CacheDuration | undefined,
+  staleWhileRevalidate: CacheDuration | undefined,
+) {
+  const duration = parseCacheDuration(ttl);
+
+  if (!Number.isFinite(duration)) {
+    if (staleWhileRevalidate !== undefined) {
+      throw new Error(
+        "Demiurge staleWhileRevalidate requires a finite cache ttl.",
+      );
+    }
+
+    return null;
+  }
+
+  return now + duration + parseCacheDuration(staleWhileRevalidate ?? 0);
+}
+
+function parseRefreshLeaseTtl(duration: CacheDuration | undefined) {
+  const milliseconds = parseCacheDuration(duration ?? defaultRefreshLeaseTtl);
+
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0) {
+    throw new Error(
+      "Demiurge cache refreshLeaseTtl must be a positive finite duration.",
+    );
+  }
+
+  return milliseconds;
+}
+
+function isStaleEntryUsable(entry: CacheStoreEntry, now: number) {
+  return (
+    entry.expiresAt !== null &&
+    entry.expiresAt <= now &&
+    (entry.staleUntil === null || entry.staleUntil > now)
+  );
+}
+
+function requireRefreshStore(store: CacheStore): CoordinatedCacheStore {
+  if (
+    !store.acquireRefreshLease ||
+    !store.publishRefresh ||
+    !store.releaseRefreshLease
+  ) {
+    throw new Error(
+      "Demiurge staleWhileRevalidate requires a cache store with acquireRefreshLease, publishRefresh, and releaseRefreshLease coordination methods.",
+    );
+  }
+
+  return store as CoordinatedCacheStore;
+}
+
+async function refreshStaleEntry<TResult>(options: {
+  key: string;
+  now: () => number;
+  onBackgroundError: ((error: unknown) => void) | undefined;
+  refreshStore: CoordinatedCacheStore;
+  request: CacheRequest<TResult>;
+  tags: readonly string[];
+  token: string;
+}) {
+  try {
+    const result = await options.request.fn();
+    const currentTime = options.now();
+    await options.refreshStore.publishRefresh(options.key, options.token, {
+      expiresAt: storeExpirationTime(currentTime, options.request.ttl),
+      staleUntil: storeStaleTime(
+        currentTime,
+        options.request.ttl,
+        options.request.staleWhileRevalidate,
+      ),
+      tags: options.tags,
+      value: result,
+    });
+  } catch (error) {
+    if (options.onBackgroundError) {
+      options.onBackgroundError(error);
+    } else {
+      console.error("Demiurge stale cache refresh failed.", error);
+    }
+  } finally {
+    await options.refreshStore.releaseRefreshLease(options.key, options.token);
+  }
+}
+
 function validateNamespacePart(name: string, value: string) {
   const containsControlCharacter = [...value].some((character) => {
     const code = character.charCodeAt(0);
@@ -495,19 +795,75 @@ function deleteMatchingRequestTags(
   return deleted;
 }
 
-function stableSerialize(value: CacheKeyPart): string {
-  if (value === null || typeof value !== "object") {
+function stableSerialize(value: CacheKeyPart, ancestors: Set<object>): string {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "string"
+  ) {
     return JSON.stringify(value);
   }
 
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || Object.is(value, -0)) {
+      throw new Error(
+        "Demiurge cache keys require finite numbers and do not accept negative zero.",
+      );
+    }
+
+    return JSON.stringify(value);
+  }
+
+  if (typeof value !== "object") {
+    throw new Error(
+      `Demiurge cache keys do not accept values of type ${typeof value}.`,
+    );
+  }
+
+  if (ancestors.has(value)) {
+    throw new Error("Demiurge cache keys cannot contain circular references.");
+  }
+
+  ancestors.add(value);
+
   if (Array.isArray(value)) {
-    return `[${value.map(stableSerialize).join(",")}]`;
+    const serialized = `[${value
+      .map((part) => stableSerialize(part, ancestors))
+      .join(",")}]`;
+    ancestors.delete(value);
+    return serialized;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error(
+      "Demiurge cache keys accept only primitives, arrays, and plain objects.",
+    );
+  }
+
+  const ownKeys = Reflect.ownKeys(value);
+
+  if (
+    ownKeys.some((key) => typeof key === "symbol") ||
+    ownKeys.some((key) => {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      return !descriptor?.enumerable;
+    })
+  ) {
+    throw new Error(
+      "Demiurge cache key objects require enumerable string properties.",
+    );
   }
 
   const objectValue = value as { readonly [key: string]: CacheKeyPart };
-
-  return `{${Object.keys(objectValue)
+  const serialized = `{${Object.keys(objectValue)
     .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableSerialize(objectValue[key])}`)
+    .map(
+      (key) =>
+        `${JSON.stringify(key)}:${stableSerialize(objectValue[key], ancestors)}`,
+    )
     .join(",")}}`;
+  ancestors.delete(value);
+  return serialized;
 }

@@ -16,7 +16,8 @@ with React rendering modes instead of being left to user middleware.
 - CSP hash mode for static output.
 - CSP compatibility diagnostics for prerendering, streaming, and RSC.
 - CORS policy helpers and generated preflight responses.
-- CSRF defaults for cookie-authenticated unsafe methods.
+- CSRF defaults for cookie-authenticated unsafe methods, plus explicit
+  high-entropy token and secure cookie issuance helpers (#92).
 - Rate limits, request size limits, upload limits, and webhook verification.
 - Trusted Types report-only and enforce modes with diagnostics for incompatible
   libraries.
@@ -40,6 +41,17 @@ with React rendering modes instead of being left to user middleware.
 ## Open Decisions
 
 - Exact file name for cascading security: likely `@policy.ts`.
+
+## Future Work
+
+- Add typed cookie creation/serialization helpers that default sensitive,
+  host-only cookies to the `__Host-` prefix and require `Secure`, `Path=/`, and
+  no `Domain`; support `__Secure-` when subdomain sharing is intentional and
+  require `Secure`. Validate prefix invariants at runtime for JavaScript users,
+  default session cookies to `HttpOnly` and an explicit `SameSite` policy, and
+  document the narrow exception for JavaScript-readable double-submit CSRF
+  cookies. Diagnostics should teach the naming convention rather than silently
+  rewriting application cookie names (#111).
 
 ## Decisions Made
 

@@ -5,6 +5,74 @@ import {
 } from "demiurge";
 
 describe("idempotent mutations", () => {
+  it("uses a finite configurable default TTL", async () => {
+    let now = 0;
+    const store = createMemoryIdempotencyStore({
+      defaultTtl: "1s",
+      now: () => now,
+    });
+    const mutation = vi.fn(async () => mutation.mock.calls.length);
+    const request = { fn: mutation, key: ["default-ttl"] } as const;
+
+    await expect(store.run(request)).resolves.toMatchObject({ value: 1 });
+    now = 999;
+    await expect(store.run(request)).resolves.toMatchObject({
+      replayed: true,
+      value: 1,
+    });
+    now = 1_000;
+    await expect(store.run(request)).resolves.toMatchObject({
+      replayed: false,
+      value: 2,
+    });
+  });
+
+  it("bounds completed results with oldest-entry eviction", async () => {
+    const store = createMemoryIdempotencyStore({ maximumEntries: 2 });
+    const mutation = vi.fn(async (value: string) => value);
+
+    for (const value of ["first", "second", "third"]) {
+      await store.run({ fn: () => mutation(value), key: [value] });
+    }
+
+    const replay = await store.run({ fn: () => mutation("first"), key: ["first"] });
+    expect(replay.replayed).toBe(false);
+    expect(mutation).toHaveBeenCalledTimes(4);
+  });
+
+  it("never expires or evicts in-flight mutations", async () => {
+    let now = 0;
+    let resolveMutation!: (value: string) => void;
+    const pending = new Promise<string>((resolve) => {
+      resolveMutation = resolve;
+    });
+    const mutation = vi.fn(() => pending);
+    const store = createMemoryIdempotencyStore({ maximumEntries: 1, now: () => now });
+    const first = store.run({ fn: mutation, key: ["slow"], ttl: 1 });
+
+    now = 10_000;
+    const replay = store.run({ fn: mutation, key: ["slow"], ttl: 1 });
+    await expect(
+      store.run({ fn: async () => "other", key: ["other"] }),
+    ).rejects.toThrow(
+      "Demiurge idempotency store is at capacity with in-flight mutations.",
+    );
+    resolveMutation("done");
+
+    await expect(first).resolves.toMatchObject({ replayed: false, value: "done" });
+    await expect(replay).resolves.toMatchObject({ replayed: true, value: "done" });
+    expect(mutation).toHaveBeenCalledTimes(1);
+  });
+
+  it("validates in-memory idempotency limits", () => {
+    expect(() => createMemoryIdempotencyStore({ maximumEntries: 0 })).toThrow(
+      "Demiurge idempotency maximumEntries must be a positive integer.",
+    );
+    expect(() =>
+      createMemoryIdempotencyStore({ defaultTtl: Number.POSITIVE_INFINITY }),
+    ).toThrow("Demiurge cache duration must be a non-negative integer.");
+  });
+
   it("replays completed mutation results for the same key", async () => {
     const store = createMemoryIdempotencyStore();
     const createPost = vi.fn(async () => ({

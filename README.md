@@ -66,6 +66,11 @@ pnpm test
 pnpm build
 ```
 
+`pnpm test:browser` builds the production Node example and runs Chromium
+conformance checks for SSR hydration, client navigation, CSP enforcement,
+security headers, repeated secure cookies, Fetch Metadata, and app-owned 404s.
+Install the local browser once with `pnpm exec playwright install chromium`.
+
 ## Production Node quickstart
 
 A production app builds two bundles. The browser bundle contains route chunks,
@@ -112,18 +117,49 @@ const handler = createHandler({
 });
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 4173);
+const allowedHosts = (process.env.ALLOWED_HOSTS ?? "localhost,127.0.0.1")
+  .split(",")
+  .map((value) => value.trim());
 
-createNodeServer({
+const server = createNodeServer({
+  allowedHosts,
   handler,
+  shutdown: {
+    gracePeriod: 30_000,
+    signals: ["SIGINT", "SIGTERM"],
+  },
   static: { root },
-}).listen(port, host);
+});
+server.listen(port, host);
 ```
 
 Run `pnpm build`, then start the built application with
 `NODE_ENV=production pnpm start`. Deploy `dist/client`, `dist/server`,
 `server.js`, `package.json`, and installed production dependencies together.
 Set `HOST=0.0.0.0` when the process must accept traffic directly from a
-container or network interface.
+container or network interface. `allowedHosts` is mandatory and checks the
+authority before it becomes a Web `Request` URL; list the public hostnames (and
+ports when a port must be exact), not merely the bind address.
+
+Forwarded headers are ignored by default. Behind exactly one trusted reverse
+proxy, configure `trustProxy: { hops: 1 }`. Where proxy addresses are stable,
+prefer `trustProxy: { ranges: ["10.0.0.0/8"] }`. Demiurge then resolves the
+client address, scheme, and host right-to-left through that boundary. Never
+enable proxy trust on a process clients can reach around the proxy.
+
+The Node server defaults to a 65-second keep-alive timeout, a 66-second header
+timeout, and a five-minute request timeout. Tune these through the typed
+`timeouts` option so keep-alive exceeds the upstream load balancer's idle
+timeout and the header timeout remains greater than keep-alive. The configured
+signal handler flips `server.isReady()` to false, stops accepting connections,
+closes idle sockets, drains active responses, and force-closes at the grace
+deadline. A readiness endpoint should return `503` as soon as `isReady()` is
+false. Call `await server.shutdown()` directly in hosts that own signals.
+
+The Node static handler treats its configured `root` as a security boundary:
+it rejects traversal, malformed paths, null bytes, and symbolic links in any
+path component. Copy real build artifacts into the public root rather than
+linking assets from elsewhere in a monorepo.
 
 [`examples/node-server`](./examples/node-server) is the complete working
 version, including Vite configuration, typed virtual-module declarations, SSR
@@ -173,3 +209,4 @@ Current source modules, all under `packages/demiurge/src`:
 - [MVP 0.0.1](./docs/06-mvp-0.0.1.md)
 - [Feature inventory](./docs/07-feature-inventory.md)
 - [Testing strategy](./docs/08-testing-strategy.md)
+- [Errors and not-found behavior](./docs/09-errors-and-not-found.md)

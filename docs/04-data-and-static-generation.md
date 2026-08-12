@@ -127,9 +127,8 @@ facade and never reaches a shared backend. `none` bypasses both.
 The implemented cache stores data-query results. It does not cache rendered
 React output or complete HTTP responses. In particular:
 
-- `staleWhileRevalidate` is accepted by the public query type but is not yet
-  implemented by the cache runtime. An expired entry is deleted and recomputed
-  before the caller receives a value.
+- Stale-while-revalidate is implemented for shared data-query results. It does
+  not yet regenerate rendered React output or complete HTTP responses.
 - Omitting `ttl` currently gives a shared `build`, `public`, or `private` entry
   an infinite lifetime. Shared caching should therefore always declare a TTL
   and use tags for event-driven invalidation. A future API should require an
@@ -225,18 +224,21 @@ Given `ttl: "5m"` and `staleWhileRevalidate: "1h"`:
 - if a background refresh fails, retain the last good value through its stale
   window, report the error, and permit a later refresh attempt.
 
-The one-refresh rule must hold across the shared store, not merely inside one
-Node process. The current `CacheStore` contract has no distributed lease,
-compare-and-swap, or atomic publish primitive, and `sharedPending` only
-coalesces callers using one `Cache` instance. Redis/KV implementations therefore
-need a store-level refresh lease and atomic replacement contract before the
-framework can claim distributed stale-while-revalidate without a thundering
-herd.
+The one-refresh rule holds through the shared store, not merely inside one Node
+process. `CacheStore` exposes a refresh lease, token-checked publication, and
+token-checked release capability. Publication succeeds only for the current
+lease owner. Key and tag invalidation cancel the lease, preventing an in-flight
+refresh from resurrecting invalidated data. A custom store that omits these
+coordination methods remains usable for ordinary TTL caching but fails clearly
+if it encounters a stale-while-revalidate entry.
 
-Background refresh also needs runtime lifetime. A long-running Node adapter can
-track the refresh promise; a serverless or edge adapter needs a capability such
-as `waitUntil`. An adapter that cannot keep background work alive must report
-that limitation rather than silently dropping refreshes.
+Background refresh also needs runtime lifetime. `createCache(...)`,
+`createMemoryCache(...)`, and request-handler `cacheStore` configuration accept
+`waitUntil`, allowing a long-running Node adapter to track the promise and a
+serverless or edge adapter to pass it to its execution context. They also accept
+`onBackgroundError`; a failed refresh retains the stale value and reports the
+error. Without an error hook, Demiurge logs the failure rather than creating an
+unhandled rejection.
 
 Incremental static regeneration is the same state machine applied to a render
 artifact instead of a query value:
@@ -276,6 +278,23 @@ own TTL ends. Browser responses cannot be actively purged.
 
 ## Cache Backend
 
+### Core and provider integration boundary
+
+Demiurge core owns cache semantics, namespacing, public contracts, capability
+checks, and adapter conformance tests. It must stay usable without installing a
+cloud or database SDK. Provider-specific construction belongs in optional
+integration packages: Redis, Cloudflare KV/Durable Objects, Vercel KV, and
+similar packages own credentials, SDK clients, retries, provider limits, and
+deployment wiring while implementing the same core contracts.
+
+This split is deliberate. Shipping every provider in core would increase
+install size, dependency risk, and release coupling for users who do not use
+those services. Leaving everything to applications would fragment semantics
+and make `public`, `private`, invalidation, idempotency, and refresh guarantees
+mean different things per adapter. A small, honest core contract plus optional
+provider packages gives integrations a shared behavioral bar without bundling
+the ecosystem into the framework.
+
 The configured cache backend is for framework cache semantics, not arbitrary
 app storage. Custom backends implement the published async `CacheStore`
 contract:
@@ -286,11 +305,24 @@ type CacheStore = {
   set(key: string, entry: CacheStoreEntry): void | Promise<void>;
   delete(key: string): boolean | Promise<boolean>;
   invalidateTags(tags: readonly string[]): number | Promise<number>;
+  acquireRefreshLease?(key: string, token: string, expiresAt: number): boolean | Promise<boolean>;
+  publishRefresh?(key: string, token: string, entry: CacheStoreEntry): boolean | Promise<boolean>;
+  releaseRefreshLease?(key: string, token: string): void | Promise<void>;
 };
 ```
 
-`CacheStoreEntry.expiresAt` is an epoch-millisecond number or `null` for no
-expiry, so the contract remains JSON-safe instead of relying on `Infinity`.
+`CacheStoreEntry.expiresAt` is the fresh deadline and `staleUntil` is the final
+retention deadline. Both are epoch-millisecond numbers or `null`, so the
+contract remains JSON-safe instead of relying on `Infinity`. The three optional
+refresh methods are an all-or-nothing capability required by
+`staleWhileRevalidate`; provider implementations must make lease acquisition and
+token-checked publication atomic in their own storage system.
+
+Cache and idempotency keys accept only JSON-like primitives, arrays, and plain
+objects. Numbers must be finite; negative zero is rejected rather than silently
+colliding with zero. Runtime JavaScript callers also fail before store access
+when a key contains `undefined`, functions, symbols, special object instances,
+non-enumerable properties, or circular references.
 
 Create one shared store and inject it into the request handler. The handler
 creates a fresh cache facade for every request:
@@ -306,7 +338,9 @@ const handler = createRequestHandler({
       environment: process.env.NODE_ENV ?? "development",
       schemaVersion: 1,
     },
+    onBackgroundError: (error) => logger.error(error),
     store,
+    waitUntil: (promise) => backgroundTasks.add(promise),
   },
   routes,
 });
@@ -323,6 +357,16 @@ The built-in memory store is useful for one Node process and tests. It is not a
 distributed cache: multiple replicas need a Redis/KV-style implementation of
 the same `CacheStore` contract.
 
+Both memory APIs are bounded to 10,000 entries by default and accept
+`maximumEntries` when a process has a deliberately larger or smaller memory
+budget. The cache store opportunistically removes values after their stale
+retention deadline and evicts the oldest remaining value at capacity without
+running a background timer.
+Idempotency results default to a finite 24-hour TTL; configure `defaultTtl` or a
+request-specific `ttl`. Their TTL starts only after the mutation completes,
+and in-flight mutations are neither expired nor evicted. If every slot is
+in-flight, a new distinct mutation fails closed instead of exceeding the bound.
+
 The namespace is required for shared adapters and serializes as
 `app:environment:schemaVersion`. Demiurge adds that namespace and the cache
 scope to every key and tag before calling the store. Redis/KV adapters therefore
@@ -336,14 +380,20 @@ conformance checks as the framework memory
 store without depending on a test runner:
 
 ```ts
-import { verifyCacheStoreContract } from "demiurge/data/testing";
+import {
+  verifyCacheStoreContract,
+  verifyCacheStoreRefreshContract,
+} from "demiurge/data/testing";
 
 await verifyCacheStoreContract(() => createMyStore());
+await verifyCacheStoreRefreshContract(() => createMyStore());
 ```
 
-The verifier checks missing reads, set/get replacement, tag invalidation,
-deletion counts, preservation of entry metadata, and async implementations.
-Each invocation uses unique keys and cleans them up.
+The base verifier checks missing reads, set/get replacement, tag invalidation,
+deletion counts, preservation of entry metadata, and async implementations. The
+refresh verifier checks mutual exclusion, owner-only publication, token-safe
+release, and invalidation cancellation. Each invocation uses unique keys and
+cleans them up.
 
 Provider-specific Redis and KV constructors are not implemented yet. Today an
 adapter implements `CacheStore`, verifies it with the published contract, and

@@ -22,6 +22,7 @@ describe("data cache primitives", () => {
       fn: async (slug: string) => ({ slug, title: "Hello" }),
       key: (slug: string) => ["post", { slug }],
       scope: "public",
+      staleWhileRevalidate: "30s",
       tags: (slug) => [tags.posts(), tags.post({ slug })],
       ttl: "10m",
     });
@@ -29,6 +30,7 @@ describe("data cache primitives", () => {
 
     expect(request.key).toEqual(["post", { slug: "hello-world" }]);
     expect(request.scope).toBe("public");
+    expect(request.staleWhileRevalidate).toBe("30s");
     expect(request.tags).toEqual([
       { id: "posts" },
       { id: "post:hello-world" },
@@ -48,6 +50,55 @@ describe("data cache primitives", () => {
     );
   });
 
+  it("rejects numeric cache key values that JSON would collapse", () => {
+    for (const value of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      -0,
+    ]) {
+      expect(() => serializeCacheKey([value])).toThrow(
+        "Demiurge cache keys require finite numbers and do not accept negative zero.",
+      );
+    }
+
+    expect(serializeCacheKey([0])).not.toBe(serializeCacheKey([null]));
+  });
+
+  it("rejects unsupported runtime cache key values recursively", () => {
+    expect(() => serializeCacheKey([undefined] as never)).toThrow(
+      "Demiurge cache keys do not accept values of type undefined.",
+    );
+    expect(() => serializeCacheKey([new Date()] as never)).toThrow(
+      "Demiurge cache keys accept only primitives, arrays, and plain objects.",
+    );
+    expect(() =>
+      serializeCacheKey([{ nested: { value: Number.NaN } }] as never),
+    ).toThrow(
+      "Demiurge cache keys require finite numbers and do not accept negative zero.",
+    );
+  });
+
+  it("rejects circular and hidden cache key object state", () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const hidden = Object.defineProperty({}, "value", {
+      enumerable: false,
+      value: "secret",
+    });
+    const symbol = { [Symbol("secret")]: "value" };
+
+    expect(() => serializeCacheKey([circular] as never)).toThrow(
+      "Demiurge cache keys cannot contain circular references.",
+    );
+    expect(() => serializeCacheKey([hidden] as never)).toThrow(
+      "Demiurge cache key objects require enumerable string properties.",
+    );
+    expect(() => serializeCacheKey([symbol] as never)).toThrow(
+      "Demiurge cache key objects require enumerable string properties.",
+    );
+  });
+
   it("parses cache durations", () => {
     expect(parseCacheDuration(undefined)).toBe(Number.POSITIVE_INFINITY);
     expect(parseCacheDuration(250)).toBe(250);
@@ -55,6 +106,55 @@ describe("data cache primitives", () => {
     expect(parseCacheDuration("2s")).toBe(2_000);
     expect(parseCacheDuration("3m")).toBe(180_000);
     expect(parseCacheDuration("4h")).toBe(14_400_000);
+  });
+
+  it("bounds the in-memory cache with a configurable oldest-entry eviction", () => {
+    const entries = new Map();
+    const store = createMemoryCacheStore({ entries, maximumEntries: 2 });
+    const entry = {
+      expiresAt: null,
+      staleUntil: null,
+      tags: [],
+      value: "value",
+    };
+
+    store.set("first", entry);
+    store.set("second", entry);
+    store.set("third", entry);
+
+    expect([...entries.keys()]).toEqual(["second", "third"]);
+    expect(() => createMemoryCacheStore({ maximumEntries: 0 })).toThrow(
+      "Demiurge memory cache maximumEntries must be a positive integer.",
+    );
+  });
+
+  it("sweeps expired in-memory cache entries without a background timer", () => {
+    let now = 0;
+    const entries = new Map();
+    const store = createMemoryCacheStore({ entries, maximumEntries: 2, now: () => now });
+
+    store.set("expired", {
+      expiresAt: 5,
+      staleUntil: 10,
+      tags: [],
+      value: "old",
+    });
+    store.set("active", {
+      expiresAt: 50,
+      staleUntil: 100,
+      tags: [],
+      value: "active",
+    });
+    now = 10;
+    store.set("new", {
+      expiresAt: 50,
+      staleUntil: 100,
+      tags: [],
+      value: "new",
+    });
+
+    expect([...entries.keys()]).toEqual(["active", "new"]);
+    expect(store.get("expired")).toBeUndefined();
   });
 
   it("rejects invalid cache durations", () => {
@@ -99,6 +199,169 @@ describe("data cache primitives", () => {
 
     await expect(cache.get(request)).resolves.toBe("post-2");
     expect(loadPost).toHaveBeenCalledTimes(2);
+  });
+
+  it("serves stale values while one cache instance refreshes in the background", async () => {
+    let now = 0;
+    const store = createMemoryCacheStore({ now: () => now });
+    const background: Promise<void>[] = [];
+    const options = {
+      namespace: { app: "catalog", environment: "test", schemaVersion: 1 },
+      now: () => now,
+      store,
+      waitUntil: (promise: Promise<void>) => background.push(promise),
+    } as const;
+    const firstCache = createCache(options);
+    const secondCache = createCache(options);
+    const refresh = deferred<string>();
+    const loadPost = vi
+      .fn<() => Promise<string>>()
+      .mockResolvedValueOnce("post-1")
+      .mockImplementation(() => refresh.promise);
+    const request = {
+      fn: loadPost,
+      key: ["post", "hello"],
+      scope: "public",
+      staleWhileRevalidate: 20,
+      ttl: 10,
+    } as const;
+
+    await expect(firstCache.get(request)).resolves.toBe("post-1");
+    now = 11;
+
+    await expect(firstCache.get(request)).resolves.toBe("post-1");
+    await expect(secondCache.get(request)).resolves.toBe("post-1");
+    expect(loadPost).toHaveBeenCalledTimes(2);
+    expect(background).toHaveLength(1);
+
+    refresh.resolve("post-2");
+    await Promise.all(background);
+    await expect(secondCache.get(request)).resolves.toBe("post-2");
+  });
+
+  it("retains stale data and reports background refresh failures", async () => {
+    let now = 0;
+    const background: Promise<void>[] = [];
+    const errors: unknown[] = [];
+    const cache = createMemoryCache({
+      now: () => now,
+      onBackgroundError: (error) => errors.push(error),
+      waitUntil: (promise) => background.push(promise),
+    });
+    const failure = new Error("upstream unavailable");
+    const loadPost = vi
+      .fn<() => Promise<string>>()
+      .mockResolvedValueOnce("post-1")
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce("post-2");
+    const request = {
+      fn: loadPost,
+      key: ["post", "hello"],
+      scope: "public",
+      staleWhileRevalidate: 20,
+      ttl: 10,
+    } as const;
+
+    await expect(cache.get(request)).resolves.toBe("post-1");
+    now = 11;
+    await expect(cache.get(request)).resolves.toBe("post-1");
+    await Promise.all(background.splice(0));
+    expect(errors).toEqual([failure]);
+
+    await expect(cache.get(request)).resolves.toBe("post-1");
+    await Promise.all(background);
+    await expect(cache.get(request)).resolves.toBe("post-2");
+  });
+
+  it("does not publish a stale refresh after key invalidation", async () => {
+    let now = 0;
+    const background: Promise<void>[] = [];
+    const cache = createMemoryCache({
+      now: () => now,
+      waitUntil: (promise) => background.push(promise),
+    });
+    const refresh = deferred<string>();
+    const loadPost = vi
+      .fn<() => Promise<string>>()
+      .mockResolvedValueOnce("post-1")
+      .mockImplementationOnce(() => refresh.promise)
+      .mockResolvedValueOnce("post-3");
+    const request = {
+      fn: loadPost,
+      key: ["post", "hello"],
+      scope: "public",
+      staleWhileRevalidate: 20,
+      ttl: 10,
+    } as const;
+
+    await cache.get(request);
+    now = 11;
+    await expect(cache.get(request)).resolves.toBe("post-1");
+    await expect(cache.invalidateKey(request.key)).resolves.toBe(true);
+    refresh.resolve("post-2");
+    await Promise.all(background);
+
+    await expect(cache.get(request)).resolves.toBe("post-3");
+  });
+
+  it("blocks for a new value after the stale window expires", async () => {
+    let now = 0;
+    const cache = createMemoryCache({ now: () => now });
+    const loadPost = vi.fn(async () => `post-${loadPost.mock.calls.length}`);
+    const request = {
+      fn: loadPost,
+      key: ["post", "hello"],
+      scope: "public",
+      staleWhileRevalidate: 20,
+      ttl: 10,
+    } as const;
+
+    await expect(cache.get(request)).resolves.toBe("post-1");
+    now = 31;
+    await expect(cache.get(request)).resolves.toBe("post-2");
+    expect(loadPost).toHaveBeenCalledTimes(2);
+  });
+
+  it("requires explicit store coordination when stale serving is used", async () => {
+    let now = 0;
+    const memory = createMemoryCacheStore({ now: () => now });
+    const store = {
+      delete: memory.delete,
+      get: memory.get,
+      invalidateTags: memory.invalidateTags,
+      set: memory.set,
+    };
+    const cache = createCache({
+      namespace: { app: "catalog", environment: "test", schemaVersion: 1 },
+      now: () => now,
+      store,
+    });
+    const request = {
+      fn: async () => "post",
+      key: ["post"],
+      scope: "public",
+      staleWhileRevalidate: 20,
+      ttl: 10,
+    } as const;
+
+    await cache.get(request);
+    now = 11;
+    await expect(cache.get(request)).rejects.toThrow(
+      "staleWhileRevalidate requires a cache store",
+    );
+  });
+
+  it("requires a finite ttl for stale-while-revalidate", async () => {
+    const cache = createMemoryCache();
+
+    await expect(
+      cache.get({
+        fn: async () => "post",
+        key: ["post"],
+        scope: "public",
+        staleWhileRevalidate: "1m",
+      }),
+    ).rejects.toThrow("staleWhileRevalidate requires a finite cache ttl");
   });
 
   it("does not cache none-scoped work", async () => {
@@ -259,6 +522,7 @@ describe("data cache primitives", () => {
         'catalog:production:2:public:key:["post",{"slug":"hello"}]',
         {
           expiresAt: null,
+          staleUntil: null,
           tags: [
             "catalog:production:2:public:tag:posts",
             "catalog:production:2:public:tag:post:hello",

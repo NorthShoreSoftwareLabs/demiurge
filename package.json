@@ -13,14 +13,16 @@
     "lint": "eslint .",
     "coverage": "pnpm --filter demiurge coverage",
     "test": "pnpm --filter demiurge test",
+    "test:browser": "playwright test",
     "typecheck": "pnpm generate:routes && pnpm --filter demiurge typecheck && pnpm typecheck:consumers",
     "typecheck:consumers": "tsc --noEmit -p tsconfig.json",
     "test:pack": "tsx scripts/test-pack.ts",
     "test:examples": "tsx scripts/test-runtime-server-data.ts && tsx scripts/test-app-owned-fallbacks.ts",
-    "verify": "pnpm lint && pnpm --filter demiurge build && pnpm typecheck && pnpm coverage && pnpm build:examples && pnpm test:examples && pnpm test:pack"
+    "verify": "pnpm lint && pnpm --filter demiurge build && pnpm typecheck && pnpm coverage && pnpm build:examples && pnpm test:examples && pnpm test:browser && pnpm test:pack"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^26.1.2",
     "eslint": "^10.8.0",
     "globals": "^17.9.0",

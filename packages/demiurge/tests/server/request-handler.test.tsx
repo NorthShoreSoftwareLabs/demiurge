@@ -566,6 +566,65 @@ describe("request handler", () => {
     expect(handlerSpy).not.toHaveBeenCalled();
   });
 
+  it("counts chunked request bytes as handlers consume them", async () => {
+    const handlerSpy = vi.fn(({ request }: { request: Request }) => request.text());
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/echo.tsx": routeModule({
+          POST: text(handlerSpy, {
+            cors: { origins: ["https://app.example.com"] },
+            security: { request: { maxBodySize: "4b" } },
+          }),
+        }),
+      },
+    });
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode("he"));
+        controller.enqueue(encoder.encode("llo"));
+        controller.close();
+      },
+    });
+    const request = new Request("https://example.test/api/echo", {
+      body,
+      duplex: "half",
+      headers: { origin: "https://app.example.com" },
+      method: "POST",
+    } as RequestInit);
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(413);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://app.example.com",
+    );
+    await expect(response.text()).resolves.toBe("Request body too large.");
+    expect(handlerSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts actual bytes when Content-Length understates the body", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/echo.tsx": routeModule({
+          POST: text(({ request }) => request.text(), {
+            security: { request: { maxBodySize: "4b" } },
+          }),
+        }),
+      },
+    });
+    const response = await handler(
+      new Request("https://example.test/api/echo", {
+        body: "hello",
+        headers: { "content-length": "1" },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.text()).resolves.toBe("Request body too large.");
+  });
+
   it("rejects invalid declared content length for limited routes", async () => {
     const handler = createRequestHandler({
       routes: {
@@ -1281,7 +1340,10 @@ describe("request handler", () => {
       routes: {
         "./routes/api/webhook.tsx": routeModule({
           POST: webhook.hmac({
-            handler: ({ rawBody }) => Response.json({ rawBody }),
+            handler: ({ rawBody, text }) => Response.json({
+              bytes: [...rawBody],
+              rawBody: text(),
+            }),
             secret: "top-secret",
           }),
         }),
@@ -1302,7 +1364,76 @@ describe("request handler", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ rawBody: body });
+    await expect(response.json()).resolves.toEqual({
+      bytes: [...new TextEncoder().encode(body)],
+      rawBody: body,
+    });
+  });
+
+  it("verifies padded base64 HMAC signatures without truncating padding", async () => {
+    const body = new Uint8Array([0xff, 0x00, 0x61, 0x80]);
+    const signature = await hmacSignatureBytes(body, "top-secret", "base64");
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/webhook.tsx": routeModule({
+          POST: webhook.hmac({
+            encoding: "base64",
+            handler: ({ rawBody }) => Response.json({ bytes: [...rawBody] }),
+            secret: "top-secret",
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/webhook", {
+        body,
+        headers: { "x-webhook-signature": signature },
+        method: "POST",
+      }),
+    );
+
+    expect(signature.endsWith("=")).toBe(true);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ bytes: [...body] });
+  });
+
+  it("supports explicit signature prefixes and rejects malformed encodings", async () => {
+    const body = new TextEncoder().encode("payload");
+    const signature = await hmacSignatureBytes(body, "top-secret", "base64");
+    const handlerSpy = vi.fn(({ rawBody }: { rawBody: Uint8Array }) =>
+      Response.json({ bytes: [...rawBody] }),
+    );
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/webhook.tsx": routeModule({
+          POST: webhook.hmac({
+            encoding: "base64",
+            handler: handlerSpy,
+            prefix: "v1=",
+            secret: "top-secret",
+          }),
+        }),
+      },
+    });
+    const valid = await handler(
+      new Request("https://example.test/api/webhook", {
+        body,
+        headers: { "x-webhook-signature": `v1=${signature}` },
+        method: "POST",
+      }),
+    );
+    const malformed = await handler(
+      new Request("https://example.test/api/webhook", {
+        body,
+        headers: { "x-webhook-signature": "v1=%%%=" },
+        method: "POST",
+      }),
+    );
+
+    expect(valid.status).toBe(200);
+    expect(malformed.status).toBe(401);
+    expect(handlerSpy).toHaveBeenCalledTimes(1);
   });
 
   it("rejects webhooks with missing or invalid HMAC signatures", async () => {
@@ -1380,6 +1511,70 @@ describe("request handler", () => {
     expect(html).toContain("<title>Home</title>");
     expect(html).toContain('name="description" content="Server rendered home"');
     expect(html).toContain('src="/assets/client.js"');
+  });
+
+  it("returns server-executed data for browser navigations without rendering HTML", async () => {
+    const data = vi.fn(async ({ request }: { request: Request }) => ({
+      headline: new URL(request.url).searchParams.get("headline") ?? "missing",
+    }));
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page<string, { headline: string }>({ data, view: DataView }),
+        }),
+      },
+    });
+    const response = await handler(
+      new Request("https://example.test/?headline=Server", {
+        headers: {
+          accept: "application/json",
+          "x-demiurge-navigation": "data",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-demiurge-navigation")).toBe("data");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("vary")).toContain("x-demiurge-navigation");
+    await expect(response.json()).resolves.toEqual({
+      data: { headline: "Server" },
+      hasData: true,
+    });
+    expect(data).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks navigation misses separately from route-data errors", async () => {
+    const missingHandler = createRequestHandler({ routes: {} });
+    const brokenHandler = createRequestHandler({
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page({
+            data: () => {
+              throw new Error("private failure");
+            },
+            view: View,
+          }),
+        }),
+      },
+    });
+    const init = {
+      headers: {
+        accept: "application/json",
+        "x-demiurge-navigation": "data",
+      },
+    };
+    const missing = await missingHandler(
+      new Request("https://example.test/missing", init),
+    );
+    const broken = await brokenHandler(
+      new Request("https://example.test/", init),
+    );
+
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("x-demiurge-navigation")).toBe("not-found");
+    expect(broken.status).toBe(500);
+    expect(broken.headers.get("x-demiurge-navigation")).toBe("error");
   });
 
   it("escapes serialized route data for the hydration payload", async () => {
@@ -1601,6 +1796,14 @@ describe("request handler", () => {
 });
 
 async function hmacSignature(body: string, secret: string) {
+  return hmacSignatureBytes(new TextEncoder().encode(body), secret, "hex");
+}
+
+async function hmacSignatureBytes(
+  body: Uint8Array,
+  secret: string,
+  encoding: "base64" | "hex",
+) {
   const key = await globalThis.crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -1614,8 +1817,12 @@ async function hmacSignature(body: string, secret: string) {
   const signature = await globalThis.crypto.subtle.sign(
     "HMAC",
     key,
-    new TextEncoder().encode(body),
+    Uint8Array.from(body).buffer,
   );
+
+  if (encoding === "base64") {
+    return Buffer.from(signature).toString("base64");
+  }
 
   return Array.from(new Uint8Array(signature), (byte) =>
     byte.toString(16).padStart(2, "0"),

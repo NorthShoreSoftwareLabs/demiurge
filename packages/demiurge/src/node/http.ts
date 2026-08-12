@@ -1,14 +1,35 @@
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { isIP } from "node:net";
 import type {
   IncomingHttpHeaders,
   IncomingMessage,
   ServerResponse,
 } from "node:http";
+import { setRequestConnectionMetadata } from "../server/request-metadata";
 
-export type ToWebRequestOptions = {
-  protocol?: "http" | "https";
+export type HttpScheme = "http" | "https";
+
+export type NodeOriginPolicy = {
+  allowedHosts: readonly string[];
+  trustProxy?: TrustProxy;
 };
+
+export type ToWebRequestOptions = NodeOriginPolicy & {
+  signal?: AbortSignal;
+};
+
+export type TrustProxy =
+  | false
+  | { hops: number }
+  | { ranges: readonly string[] };
+
+const forwardedHeaders = {
+  for: "x-forwarded-for",
+  host: "x-forwarded-host",
+  protocol: "x-forwarded-proto",
+} as const satisfies Record<"for" | "host" | "protocol", string>;
+const defaultTrustProxy = false satisfies TrustProxy;
 
 // The Fetch spec forbids these on the `Request` constructor, so `new
 // Request(...)` throws for them. Left unguarded, every one of these requests
@@ -26,22 +47,82 @@ export class UnsupportedMethodError extends Error {
   }
 }
 
+export class UntrustedHostError extends Error {
+  host: string;
+
+  constructor(host: string) {
+    super(`HTTP host "${host}" is not allowed.`);
+    this.host = host;
+    this.name = "UntrustedHostError";
+  }
+}
+
+export function validateNodeOriginPolicy(policy: NodeOriginPolicy) {
+  if (policy.allowedHosts.length === 0) {
+    throw new Error("Demiurge Node allowedHosts must contain at least one host.");
+  }
+
+  for (const host of policy.allowedHosts) {
+    if (!parseAuthority(host)) {
+      throw new Error(`Demiurge Node allowed host "${host}" is invalid.`);
+    }
+  }
+
+  const trustProxy = policy.trustProxy ?? defaultTrustProxy;
+
+  if (trustProxy === false) {
+    return;
+  }
+
+  if ("hops" in trustProxy) {
+    if (!Number.isSafeInteger(trustProxy.hops) || trustProxy.hops < 0) {
+      throw new Error(
+        "Demiurge Node trustProxy hop count must be a non-negative integer.",
+      );
+    }
+
+    return;
+  }
+
+  for (const range of trustProxy.ranges) {
+    const network = range.split("/")[0];
+    ipMatchesRange(network, range);
+  }
+}
+
 export function toWebRequest(
   request: IncomingMessage,
-  options: ToWebRequestOptions = {},
+  options: ToWebRequestOptions,
 ) {
+  validateNodeOriginPolicy(options);
   const method = request.method ?? "GET";
 
   if (forbiddenMethods.has(method.toUpperCase())) {
     throw new UnsupportedMethodError(method);
   }
 
-  const protocol = options.protocol ?? "http";
-  const origin = `${protocol}://${request.headers.host ?? "localhost"}`;
+  const peerAddress = normalizeIpAddress(request.socket?.remoteAddress);
+  const proxy = resolveProxyChain(
+    peerAddress,
+    request.headers[forwardedHeaders.for],
+    options.trustProxy ?? defaultTrustProxy,
+  );
+  const forwardedProtocol = selectForwardedValue(
+    request.headers[forwardedHeaders.protocol],
+    proxy.forwardedDepth,
+  );
+  const protocol = resolveProtocol(request, forwardedProtocol);
+  const host = selectForwardedValue(
+    request.headers[forwardedHeaders.host],
+    proxy.forwardedDepth,
+  ) ?? request.headers.host;
+  const authority = validateAllowedHost(host, options.allowedHosts);
+  const origin = `${protocol}://${authority}`;
   const url = new URL(request.url ?? "/", origin);
   const init: RequestInit & { duplex?: "half" } = {
     headers: toHeaders(request.headers),
     method,
+    signal: options.signal,
   };
 
   if (method !== "GET" && method !== "HEAD") {
@@ -49,7 +130,230 @@ export function toWebRequest(
     init.duplex = "half";
   }
 
-  return new Request(url, init);
+  const webRequest = new Request(url, init);
+  setRequestConnectionMetadata(webRequest, { clientIp: proxy.clientIp });
+
+  return webRequest;
+}
+
+function resolveProtocol(
+  request: IncomingMessage,
+  forwardedProtocol: string | undefined,
+) {
+  if (forwardedProtocol) {
+    const protocol = forwardedProtocol.toLowerCase();
+
+    if (protocol !== "http" && protocol !== "https") {
+      throw new Error(`Unsupported forwarded protocol "${forwardedProtocol}".`);
+    }
+
+    return protocol;
+  }
+
+  return (request.socket as { encrypted?: boolean } | undefined)?.encrypted
+    ? "https"
+    : "http";
+}
+
+function validateAllowedHost(
+  host: string | undefined,
+  allowedHosts: readonly string[],
+) {
+  if (allowedHosts.length === 0) {
+    throw new Error("Demiurge Node allowedHosts must contain at least one host.");
+  }
+
+  if (!host) {
+    throw new UntrustedHostError("");
+  }
+
+  const authority = parseAuthority(host);
+
+  if (!authority) {
+    throw new UntrustedHostError(host);
+  }
+
+  const allowed = allowedHosts.some((candidate) => {
+    const expected = parseAuthority(candidate);
+
+    if (!expected) {
+      throw new Error(`Demiurge Node allowed host "${candidate}" is invalid.`);
+    }
+
+    return expected.port
+      ? expected.host === authority.host
+      : expected.hostname === authority.hostname;
+  });
+
+  if (!allowed) {
+    throw new UntrustedHostError(host);
+  }
+
+  return authority.host;
+}
+
+function parseAuthority(value: string) {
+  if (value.trim() !== value || value.includes("@")) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(`http://${value}`);
+
+    if (
+      !parsed.hostname ||
+      parsed.pathname !== "/" ||
+      parsed.search ||
+      parsed.hash ||
+      parsed.host.toLowerCase() !== value.toLowerCase()
+    ) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function resolveProxyChain(
+  peerAddress: string,
+  forwardedFor: string | readonly string[] | undefined,
+  trustProxy: TrustProxy,
+) {
+  const forwarded = headerValues(forwardedFor);
+  const chain = [...forwarded, peerAddress];
+
+  if (trustProxy === false) {
+    return { clientIp: peerAddress, forwardedDepth: 0 };
+  }
+
+  if ("hops" in trustProxy) {
+    if (!Number.isSafeInteger(trustProxy.hops) || trustProxy.hops < 0) {
+      throw new Error(
+        "Demiurge Node trustProxy hop count must be a non-negative integer.",
+      );
+    }
+
+    const clientHops = Math.min(trustProxy.hops, forwarded.length);
+
+    return {
+      clientIp: chain[chain.length - 1 - clientHops],
+      forwardedDepth: trustProxy.hops,
+    };
+  }
+
+  let index = chain.length - 1;
+  let trustedHops = 0;
+
+  while (
+    index > 0 &&
+    isAddressTrusted(chain[index], trustProxy.ranges)
+  ) {
+    index -= 1;
+    trustedHops += 1;
+  }
+
+  return {
+    clientIp: chain[index],
+    forwardedDepth:
+      trustedHops || (isAddressTrusted(peerAddress, trustProxy.ranges) ? 1 : 0),
+  };
+}
+
+function selectForwardedValue(
+  header: string | readonly string[] | undefined,
+  trustedDepth: number,
+) {
+  if (trustedDepth === 0) {
+    return undefined;
+  }
+
+  const values = headerValues(header);
+
+  if (values.length === 0) {
+    return undefined;
+  }
+
+  return values[Math.max(0, values.length - trustedDepth)];
+}
+
+function headerValues(value: string | readonly string[] | undefined) {
+  return (Array.isArray(value) ? value : [value])
+    .flatMap((item) => item?.split(",") ?? [])
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function isAddressTrusted(address: string, ranges: readonly string[]) {
+  return ranges.some((range) => ipMatchesRange(address, range));
+}
+
+function ipMatchesRange(address: string, range: string) {
+  const [networkValue, prefixValue] = range.split("/");
+  const addressBytes = ipBytes(normalizeIpAddress(address));
+  const networkBytes = ipBytes(normalizeIpAddress(networkValue));
+
+  if (!addressBytes || !networkBytes || addressBytes.length !== networkBytes.length) {
+    if (!networkBytes) {
+      throw new Error(`Demiurge Node trustProxy range "${range}" is invalid.`);
+    }
+
+    return false;
+  }
+
+  const maximumPrefix = addressBytes.length * 8;
+  const prefix = prefixValue === undefined ? maximumPrefix : Number(prefixValue);
+
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > maximumPrefix) {
+    throw new Error(`Demiurge Node trustProxy range "${range}" is invalid.`);
+  }
+
+  for (let bit = 0; bit < prefix; bit += 1) {
+    const mask = 1 << (7 - (bit % 8));
+
+    if ((addressBytes[Math.floor(bit / 8)] & mask) !==
+      (networkBytes[Math.floor(bit / 8)] & mask)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function normalizeIpAddress(address: string | undefined) {
+  if (!address) {
+    return "unknown";
+  }
+
+  return address.startsWith("::ffff:") ? address.slice(7) : address;
+}
+
+function ipBytes(address: string) {
+  const version = isIP(address);
+
+  if (version === 4) {
+    return address.split(".").map(Number);
+  }
+
+  if (version !== 6) {
+    return null;
+  }
+
+  const [left = "", right = ""] = address.split("::");
+  const leftGroups = left ? left.split(":") : [];
+  const rightGroups = right ? right.split(":") : [];
+  const missing = 8 - leftGroups.length - rightGroups.length;
+  const groups = [
+    ...leftGroups,
+    ...Array.from({ length: missing }, () => "0"),
+    ...rightGroups,
+  ];
+
+  return groups.flatMap((group) => {
+    const value = Number.parseInt(group, 16);
+    return [value >> 8, value & 255];
+  });
 }
 
 // Shared by the Node adapter and the Vite dev middleware so a request the

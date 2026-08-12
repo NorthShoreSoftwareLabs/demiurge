@@ -195,6 +195,53 @@ describe("file route conventions", () => {
     expect(match?.path).toEqual({});
   });
 
+  it("rejects dynamic routes with the same runtime shape", () => {
+    expect(() =>
+      unstable_createRouteManifest({
+        "./routes/users/[id].tsx": routeModule({ GET: page(View) }),
+        "./routes/users/[slug].tsx": routeModule({ GET: page(View) }),
+      }),
+    ).toThrow(
+      'Ambiguous routes "./routes/users/[id].tsx" and "./routes/users/[slug].tsx" have the same runtime shape and both match "/users/example".',
+    );
+  });
+
+  it("rejects catchall aliases and route-group collisions", () => {
+    expect(() =>
+      unstable_createRouteManifest({
+        "./routes/docs/[...parts].tsx": routeModule({ GET: page(View) }),
+        "./routes/docs/[...path].tsx": routeModule({ GET: page(View) }),
+      }),
+    ).toThrow('both match "/docs/example"');
+    expect(() =>
+      unstable_createRouteManifest({
+        "./routes/(admin)/settings.tsx": routeModule({ GET: page(View) }),
+        "./routes/(public)/settings.tsx": routeModule({ GET: page(View) }),
+      }),
+    ).toThrow('both match "/settings"');
+  });
+
+  it("uses positional specificity instead of filename order", () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/[org]/settings.tsx": routeModule({ GET: page(View) }),
+      "./routes/users/[page].tsx": routeModule({ GET: page(View) }),
+    });
+
+    expect(
+      unstable_findRouteMatch(manifest.routes, "/users/settings")?.route.file,
+    ).toBe("./routes/users/[page].tsx");
+  });
+
+  it("requires catchall variables to be the final URL segment", () => {
+    expect(() =>
+      unstable_createRouteManifest({
+        "./routes/docs/[...path]/edit.tsx": routeModule({ GET: page(View) }),
+      }),
+    ).toThrow(
+      'Catchall route segment in "./routes/docs/[...path]/edit.tsx" must be the final URL segment.',
+    );
+  });
+
   it("collects concrete static paths for static, dynamic, and catchall page routes", async () => {
     const loadSlugs = vi.fn(async () => ["hello world", "file-routing"]);
     const slugsQuery = query({
@@ -223,6 +270,12 @@ describe("file route conventions", () => {
 
     await expect(unstable_collectStaticRoutePaths(manifest)).resolves.toEqual([
       {
+        file: "./routes/(marketing)/about.tsx",
+        path: {},
+        pattern: "/about",
+        pathname: "/about",
+      },
+      {
         file: "./routes/blog/[slug].tsx",
         path: { slug: "hello world" },
         pattern: "/blog/[slug]",
@@ -233,12 +286,6 @@ describe("file route conventions", () => {
         path: { slug: "file-routing" },
         pattern: "/blog/[slug]",
         pathname: "/blog/file-routing",
-      },
-      {
-        file: "./routes/(marketing)/about.tsx",
-        path: {},
-        pattern: "/about",
-        pathname: "/about",
       },
       {
         file: "./routes/docs/[...path].tsx",

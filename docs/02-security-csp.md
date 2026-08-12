@@ -229,6 +229,37 @@ Tokenless API requests that carry no cookies are unaffected. This keeps bearer
 token, signed request, and other non-cookie authentication flows usable without
 an exemption while protecting browser credential flows by default.
 
+Issue the token from a deliberate same-origin endpoint or document action:
+
+```ts
+import { issueCsrfToken, response } from "demiurge";
+
+export const GET = response(() => {
+  const issued = issueCsrfToken();
+
+  return new Response(JSON.stringify({ token: issued.token }), {
+    headers: {
+      "cache-control": "no-store",
+      "content-type": "application/json",
+      "set-cookie": issued.cookie,
+    },
+  });
+});
+```
+
+The cookie defaults to `csrf-token=<token>; Path=/; SameSite=Lax; Secure`. It is
+intentionally not `HttpOnly`: double-submit clients must read it or receive the
+same token in bootstrap data and copy it into `x-csrf-token`. Tokens contain 256
+bits from Web Crypto and use an unpadded URL-safe base64 representation.
+`createCsrfToken()` and `createCsrfCookie(...)` are also available separately.
+Only local HTTP development should pass `{ secure: false }`.
+
+Reissue the token after login, logout, account switching, or any privilege
+change. Explicit issuance is deliberate: automatically adding `Set-Cookie` to
+every document would make public HTML responses personalized and interfere with
+browser/CDN caching. Token endpoints and responses containing a newly issued
+token should use `Cache-Control: no-store`.
+
 Routes can require validation even before another cookie is present, or replace
 the token names:
 
@@ -249,6 +280,8 @@ Framework responsibilities:
   route policy.
 - Support progressive enhancement for forms.
 - Make same-site cookie settings visible in security audit output.
+- Generate and serialize secure double-submit tokens without requiring apps to
+  hand-roll entropy or cookie attributes.
 
 An endpoint that is intentionally cross-origin can opt out in its route policy:
 
@@ -382,7 +415,8 @@ export const POST = response(({ request }) => report(request));
 The first report endpoint slice accepts CSP report payloads and batched
 Reporting API arrays, calls an optional `onReport` callback once per normalized
 report, rejects non-POST methods with `405`, rejects malformed JSON with `400`,
-and enforces declared `Content-Length` against an optional `maxBodySize`.
+and enforces an optional `maxBodySize` against bytes as they are consumed. A
+declared `Content-Length` above the limit is still rejected before reading.
 
 The first request-limit slice supports helper-attached request body limits:
 
@@ -404,7 +438,9 @@ export const POST = text(({ request }) => request.text(), {
 
 The server and Vite dev handlers reject requests whose declared
 `Content-Length` exceeds the route limit before the handler reads the body.
-Malformed declared lengths on limited routes fail with `400`.
+They also count actual bytes while chunked or understated bodies are consumed
+and return the same `413` when the stream crosses the limit. Malformed declared
+lengths on limited routes fail with `400`.
 Route-level `allowedMethods` additionally returns `405` before the handler runs
 when a route capability exists but policy disallows that method. `HEAD` is
 allowed when `GET` is allowed.
@@ -412,6 +448,20 @@ allowed when `GET` is allowed.
 The first rate-limit slice adds fixed-window helper-attached limits. The default
 server handler uses a per-handler memory store; production adapters can provide
 a shared store through `createRequestHandler({ rateLimitStore, routes })`.
+
+IP keys use connection metadata resolved by the adapter, never raw forwarding
+headers from the Web `Request`. The Node adapter trusts no proxy by default, so
+a directly exposed client cannot rotate `X-Forwarded-For` to evade a limit.
+Configure either an explicit hop count or trusted IP/CIDR ranges on
+`createNodeServer(...)`; the same policy resolves forwarded client address,
+scheme, and host. `allowedHosts` is required and rejects an unexpected direct or
+trusted-forwarded authority with `421` before application code runs.
+
+The built-in memory store is process-local and bounded to 10,000 keys. It
+opportunistically removes expired windows without starting a timer, and evicts
+the oldest remaining key when the ceiling is reached. Raise or lower the ceiling
+with `createMemoryRateLimitStore({ maximumEntries })`; production systems that
+need a global limit across processes must supply a shared `RateLimitStore`.
 Rate-limit rejections return `429` with `Retry-After` and `X-RateLimit-*`
 headers before the handler reads the body.
 
@@ -490,15 +540,19 @@ import { webhook } from "demiurge";
 
 export const POST = webhook.hmac({
   secret: env.WEBHOOK_SECRET,
-  handler: async ({ rawBody }) => {
-    return Response.json({ received: rawBody.length });
+  handler: async ({ rawBody, text }) => {
+    return Response.json({ received: rawBody.length, event: JSON.parse(text()) });
   },
 });
 ```
 
-The helper reads and preserves the raw body, verifies the configured signature
-header before the app handler runs, and marks CSRF disabled for the verified
-webhook route. Provider-specific helpers can build on this primitive.
+The helper verifies the exact request bytes with Web Crypto before the app
+handler runs. `rawBody` is a `Uint8Array`; call `text()` only when the provider's
+payload is documented as text. Hex and padded base64 signatures are supported.
+The conventional algorithm prefix (for example `sha256=`) is recognized
+without confusing base64 padding; set `prefix` for a provider-specific prefix,
+or `false` to disable stripping. The verified route declares its CSRF exemption.
+Provider-specific helpers can build on this primitive.
 
 ## Trusted Types
 

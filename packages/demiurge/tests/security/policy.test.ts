@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   createCorsHeaders,
+  createCsrfCookie,
+  createCsrfToken,
   createMemoryRateLimitStore,
   createSecurityAudit,
   createSecurityHeaders,
@@ -10,6 +12,7 @@ import {
   enforceAllowedMethods,
   enforceRateLimit,
   json,
+  issueCsrfToken,
   mergeRoutePolicies,
   mergeSecurityPolicies,
   parseCookieHeader,
@@ -770,6 +773,34 @@ describe("request security policy", () => {
 });
 
 describe("rate limit policy", () => {
+  it("rejects invalid in-memory store entry limits", () => {
+    expect(() =>
+      createMemoryRateLimitStore({ maximumEntries: 0 }),
+    ).toThrow(
+      "Demiurge rate limit maximumEntries must be a positive integer.",
+    );
+  });
+
+  it("evicts the oldest entry when the in-memory store reaches its ceiling", () => {
+    const store = createMemoryRateLimitStore({ maximumEntries: 2 });
+
+    expect(store.increment("alice", 60_000, 0).count).toBe(1);
+    expect(store.increment("bob", 60_000, 0).count).toBe(1);
+    expect(store.increment("carol", 60_000, 0).count).toBe(1);
+    expect(store.increment("alice", 60_000, 1).count).toBe(1);
+    expect(store.increment("carol", 60_000, 1).count).toBe(2);
+  });
+
+  it("sweeps expired in-memory entries before enforcing the ceiling", () => {
+    const store = createMemoryRateLimitStore({ maximumEntries: 2 });
+
+    expect(store.increment("expired", 10, 0).count).toBe(1);
+    expect(store.increment("active", 100, 0).count).toBe(1);
+    expect(store.increment("new", 100, 10).count).toBe(1);
+    expect(store.increment("active", 100, 10).count).toBe(2);
+    expect(store.increment("expired", 100, 10).count).toBe(1);
+  });
+
   it("does not enforce a rate limit when no policy is configured", () => {
     const store = createMemoryRateLimitStore();
     const request = new Request("https://example.test");
@@ -901,60 +932,18 @@ describe("rate limit policy", () => {
     expect(results[3]?.status).toBe(429);
   });
 
-  it("derives the rate limit key from the first address in x-forwarded-for when using the ip key", () => {
+  it("does not trust caller-controlled forwarding headers for IP rate limits", () => {
     const store = createMemoryRateLimitStore();
     const policy = { key: "ip", limit: 1, window: "1m" } as const;
-    const request = new Request("https://example.test", {
+    const forwarded = new Request("https://example.test", {
       headers: { "x-forwarded-for": "203.0.113.9, 10.0.0.1" },
     });
-
-    expect(enforceRateLimit(policy, request, store, 0)).toBe(null);
-    expect(enforceRateLimit(policy, request, store, 0)?.status).toBe(429);
-  });
-
-  it("falls back to cf-connecting-ip when x-forwarded-for is absent", () => {
-    const store = createMemoryRateLimitStore();
-    const policy = { key: "ip", limit: 1, window: "1m" } as const;
-    const request = new Request("https://example.test", {
+    const cloudflare = new Request("https://example.test", {
       headers: { "cf-connecting-ip": "198.51.100.4" },
     });
 
-    expect(enforceRateLimit(policy, request, store, 0)).toBe(null);
-    expect(enforceRateLimit(policy, request, store, 0)?.status).toBe(429);
-  });
-
-  it("falls back to x-real-ip when neither x-forwarded-for nor cf-connecting-ip are present", () => {
-    const store = createMemoryRateLimitStore();
-    const policy = { key: "ip", limit: 1, window: "1m" } as const;
-    const request = new Request("https://example.test", {
-      headers: { "x-real-ip": "198.51.100.5" },
-    });
-
-    expect(enforceRateLimit(policy, request, store, 0)).toBe(null);
-    expect(enforceRateLimit(policy, request, store, 0)?.status).toBe(429);
-  });
-
-  it("buckets requests with no client IP headers under a shared unknown key", () => {
-    const store = createMemoryRateLimitStore();
-    const policy = { key: "ip", limit: 1, window: "1m" } as const;
-    const requestOne = new Request("https://example.test/one");
-    const requestTwo = new Request("https://example.test/two");
-
-    expect(enforceRateLimit(policy, requestOne, store, 0)).toBe(null);
-    // two unrelated requests without any IP-identifying header share the "unknown" bucket
-    expect(enforceRateLimit(policy, requestTwo, store, 0)?.status).toBe(429);
-  });
-
-  it("treats a blank x-forwarded-for entry as an unknown client", () => {
-    const store = createMemoryRateLimitStore();
-    const policy = { key: "ip", limit: 1, window: "1m" } as const;
-    const blankEntryRequest = new Request("https://example.test", {
-      headers: { "x-forwarded-for": " ,10.0.0.9" },
-    });
-    const noHeaderRequest = new Request("https://example.test");
-
-    expect(enforceRateLimit(policy, blankEntryRequest, store, 0)).toBe(null);
-    expect(enforceRateLimit(policy, noHeaderRequest, store, 0)?.status).toBe(429);
+    expect(enforceRateLimit(policy, forwarded, store, 0)).toBe(null);
+    expect(enforceRateLimit(policy, cloudflare, store, 0)?.status).toBe(429);
   });
 
   it("clamps retry-after and remaining when a custom store returns already-expired state", () => {
@@ -975,6 +964,37 @@ describe("rate limit policy", () => {
 });
 
 describe("CSRF policy helpers", () => {
+  it("issues high-entropy URL-safe tokens and secure readable cookies", () => {
+    const first = issueCsrfToken();
+    const second = createCsrfToken();
+
+    expect(first.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(second).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(second).not.toBe(first.token);
+    expect(first.cookie).toBe(
+      `csrf-token=${first.token}; Path=/; SameSite=Lax; Secure`,
+    );
+    expect(first.cookie).not.toContain("HttpOnly");
+  });
+
+  it("supports a matching custom cookie name and an explicit local HTTP mode", () => {
+    expect(
+      createCsrfCookie("hello world", {
+        cookie: "demo-csrf",
+        secure: false,
+      }),
+    ).toBe("demo-csrf=hello%20world; Path=/; SameSite=Lax");
+  });
+
+  it("rejects invalid CSRF cookie names and empty tokens", () => {
+    expect(() => createCsrfCookie("token", { cookie: "bad=name" })).toThrow(
+      "Demiurge CSRF cookie name is invalid.",
+    );
+    expect(() => createCsrfCookie("")).toThrow(
+      "Demiurge CSRF token must not be empty.",
+    );
+  });
+
   it("parses cookie headers for CSRF validation", () => {
     expect(
       Object.fromEntries(

@@ -168,6 +168,18 @@ Static generation rules:
 
 ## Phase 9: Adapters
 
+- Make `demiurge dev` and `demiurge build` the public build-system contract.
+  Demiurge owns route compilation, client/server boundary enforcement,
+  generated data transports and types, capability validation, and a versioned
+  deployment manifest. Vite remains the internal compiler for module graphs,
+  transforms, HMR, CSS/assets, tree shaking, and chunking; do not build a new
+  JavaScript bundler in core.
+- Keep Vite-specific objects out of application and adapter contracts. Begin
+  with explicit client and server builds, and adopt Vite's Environment API
+  behind a Demiurge-owned compiler abstraction as it stabilizes.
+- Require deployment adapters to consume the stable Demiurge build manifest,
+  so the same build model can target a Node monolith, containers, functions,
+  or edge runtimes without provider details entering route modules.
 - Node adapter with production static assets, client manifest, and framework-
   owned SSR server entry.
 - Edge adapter.
@@ -179,6 +191,17 @@ Static generation rules:
   - WebSocket
   - WebTransport
   - cross-origin isolation headers
+- Add typed deployment profiles that keep one route graph while selecting a
+  runtime (Node/container, Cloud Run, ECS, Lambda/API Gateway, Functions, or
+  edge), state providers, and gateway policies.
+- Keep provider SDKs and generated IaC/config in optional GCP, AWS, Apigee, and
+  other integration packages. Core owns capability validation and portable
+  semantics.
+- Treat gateway quotas and application rate limits as layers: an Apigee/API
+  Gateway adapter may emit policies and trusted identity metadata, while route
+  limits remain available behind the gateway and direct bypass is denied.
+- Validate deployment requirements such as streaming, background lifetime,
+  distributed cache leases, WebSockets, and static output before deployment.
 
 ## Phase 10: Platform Features
 
@@ -186,5 +209,13 @@ Static generation rules:
 - Add font optimization.
 - Add analytics integrations.
 - Add OpenTelemetry/instrumentation.
+- Wire request, server lifecycle, render, action, cache/SWR, webhook, and
+  security events into instrumentation; propagate W3C trace context.
+- Add feature flags and experiments through portable typed semantics plus
+  optional vendor adapters, including sticky assignment, hydration agreement,
+  cache partitions, exposure events, and test overrides.
+- Add secure cookie naming guidance and prefix invariant enforcement for
+  `__Host-` and `__Secure-`, retaining the documented JavaScript-readable CSRF
+  exception.
 - Add web vitals reporting.
 - Add route audit/devtools surface.

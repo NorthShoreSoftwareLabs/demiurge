@@ -1,4 +1,8 @@
-import { parseBodySize } from "./request";
+import {
+  limitRequestBody,
+  parseBodySize,
+  RequestBodyTooLargeError,
+} from "./request";
 
 type MaybePromise<T> = Promise<T> | T;
 
@@ -36,11 +40,19 @@ export function createSecurityReportHandler(
       return bodySizeResponse;
     }
 
+    if (options.maxBodySize !== undefined) {
+      request = limitRequestBody({ maxBodySize: options.maxBodySize }, request);
+    }
+
     let payload: unknown;
 
     try {
       payload = await request.json();
-    } catch {
+    } catch (error) {
+      if (error instanceof RequestBodyTooLargeError) {
+        return new Response("Security report body too large.", { status: 413 });
+      }
+
       return new Response("Invalid security report JSON.", {
         status: 400,
       });
@@ -65,7 +77,7 @@ function enforceReportBodySize(
   options: SecurityReportHandlerOptions,
   request: Request,
 ) {
-  if (!options.maxBodySize) {
+  if (options.maxBodySize === undefined) {
     return null;
   }
 

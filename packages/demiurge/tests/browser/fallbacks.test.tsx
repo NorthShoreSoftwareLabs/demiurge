@@ -79,6 +79,29 @@ describe("browser router fallbacks", () => {
     });
   });
 
+  it("does not let a late loading fallback replace a completed navigation", async () => {
+    const loadingResolver = deferred<Record<string, unknown>>();
+    const Router = createFileRouter({
+      routes: {
+        "./routes/@loading.tsx": vi.fn(() => loadingResolver.promise),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    window.history.replaceState(null, "", "/blog");
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Blog page at /blog")).toBeTruthy();
+    });
+
+    loadingResolver.resolve({ default: RouteLoading });
+    await Promise.resolve();
+
+    expect(screen.queryByText("Route loading")).toBeNull();
+    expect(screen.getByText("Blog page at /blog")).toBeTruthy();
+  });
+
   it("renders inherited @not-found UI for missing routes", async () => {
     window.history.replaceState(null, "", "/blog/missing");
 
@@ -191,6 +214,94 @@ describe("browser router fallbacks", () => {
     });
   });
 
+  it("uses the real origin and reruns navigation data for query changes", async () => {
+    window.history.replaceState(null, "", "/?q=first");
+    const requests: Request[] = [];
+    const Router = createFileRouter({
+      loadNavigationData: async (request) => {
+        requests.push(request);
+        return {
+          data: new URL(request.url).searchParams.get("q"),
+          hasData: true,
+        };
+      },
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page<string, string>({
+            data: () => {
+              throw new Error("Page data must not run in the browser.");
+            },
+            view: QueryPage,
+          }),
+        }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Query: first")).toBeTruthy());
+    fireEvent.click(screen.getByText("Next query"));
+    await waitFor(() => expect(screen.getByText("Query: second")).toBeTruthy());
+
+    expect(requests.map((request) => request.url)).toEqual([
+      "http://localhost:3000/?q=first",
+      "http://localhost:3000/?q=second",
+    ]);
+  });
+
+  it("does not reload route data for a hash-only navigation", async () => {
+    const loadNavigationData = vi.fn(async () => ({ hasData: true }));
+    const scrollIntoView = vi.fn();
+    const Router = createFileRouter({
+      loadNavigationData,
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(HashPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Jump")).toBeTruthy());
+    const section = document.getElementById("section");
+    Object.defineProperty(section, "scrollIntoView", { value: scrollIntoView });
+    fireEvent.click(screen.getByText("Jump"));
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+
+    expect(window.location.hash).toBe("#section");
+    expect(loadNavigationData).toHaveBeenCalledTimes(1);
+  });
+
+  it("cannot commit a superseded navigation after the new route finishes", async () => {
+    const first = deferred<{ hasData: true }>();
+    const second = deferred<{ hasData: true }>();
+    const Router = createFileRouter({
+      loadNavigationData: async (request) => {
+        const pathname = new URL(request.url).pathname;
+        if (pathname === "/first") return first.promise;
+        if (pathname === "/second") return second.promise;
+        return { hasData: true };
+      },
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(HomePage) }),
+        "./routes/first.tsx": routeModule({ GET: page(FirstPage) }),
+        "./routes/second.tsx": routeModule({ GET: page(SecondPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Home")).toBeTruthy());
+
+    window.history.pushState(null, "", "/first");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    window.history.pushState(null, "", "/second");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    second.resolve({ hasData: true });
+    await waitFor(() => expect(screen.getByText("Second page")).toBeTruthy());
+    first.resolve({ hasData: true });
+    await Promise.resolve();
+
+    expect(screen.queryByText("First page")).toBeNull();
+    expect(screen.getByText("Second page")).toBeTruthy();
+  });
+
   it("leaves non-primary link clicks to the browser", async () => {
     const Router = createFileRouter({
       routes: {
@@ -274,6 +385,32 @@ function HomePage(_props: RouteProps) {
 
 function BlogPage({ pathname }: RouteProps) {
   return <p>Blog page at {pathname}</p>;
+}
+
+function QueryPage({ data }: RouteProps<string, string>) {
+  return (
+    <>
+      <p>Query: {data}</p>
+      <Link to="/" search={{ q: "second" }}>Next query</Link>
+    </>
+  );
+}
+
+function HashPage() {
+  return (
+    <>
+      <Link hash="section" to="/">Jump</Link>
+      <div id="section">Section</div>
+    </>
+  );
+}
+
+function FirstPage() {
+  return <p>First page</p>;
+}
+
+function SecondPage() {
+  return <p>Second page</p>;
 }
 
 function BrokenPage(_props: RouteProps): never {

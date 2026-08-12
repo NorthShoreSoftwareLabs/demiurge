@@ -13,7 +13,7 @@ export const HYDRATION_FALLBACK_ATTRIBUTE = "data-demiurge-fallback";
 
 export function serializeInitialRouteData(data: unknown) {
   return escapeJsonScript(
-    JSON.stringify({ data, hasData: data !== undefined }),
+    JSON.stringify({ data, hasData: true }),
   );
 }
 

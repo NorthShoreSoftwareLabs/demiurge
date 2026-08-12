@@ -39,6 +39,7 @@ import {
   unstable_createDevRouteImporters,
   unstable_createDocumentHtml,
   unstable_handleDevRequest,
+  unstable_stripClientPageData,
 } from "demiurge/vite";
 
 function View(_props: RouteProps) {
@@ -71,6 +72,34 @@ function routeModule(module: RouteModule) {
 }
 
 describe("Vite plugin dev request handling", () => {
+  it("strips page data and data-only server imports from client route modules", () => {
+    const source = `
+import { readSecret } from "./secrets.server.js";
+import { page } from "demiurge";
+const View = () => null;
+export const GET = page({
+  data: async () => ({ secret: await readSecret() }),
+  view: View,
+});`;
+    const transformed = unstable_stripClientPageData(source);
+
+    expect(transformed).toContain("data: undefined");
+    expect(transformed).not.toContain("readSecret");
+    expect(transformed).not.toContain("secrets.server");
+    expect(transformed).toContain("view: View");
+  });
+
+  it("rejects server-only imports used by client route code", () => {
+    const source = `
+import { secret } from "./secrets.server.js";
+import { page } from "demiurge";
+export const GET = page({ data: () => secret, view: () => secret });`;
+
+    expect(() => unstable_stripClientPageData(source)).toThrow(
+      /Server-only import "secret" is used by client route code/,
+    );
+  });
+
   it("configures and loads both framework virtual entries", () => {
     const plugin = demiurge({ styles: false }) as PluginHarness;
 
@@ -386,7 +415,7 @@ describe("Vite plugin dev request handling", () => {
     const manifest = unstable_createRouteManifest({
       "./routes/api/webhook.tsx": routeModule({
         POST: webhook.hmac({
-          handler: ({ rawBody }) => Response.json({ rawBody }),
+          handler: ({ text }) => Response.json({ rawBody: text() }),
           secret: "top-secret",
         }),
       }),

@@ -17,7 +17,11 @@ const handler = createHandler({
 });
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 4193);
-const server = createNodeServer({ handler, static: { root } });
+const server = createNodeServer({
+  allowedHosts: [host, "localhost"],
+  handler,
+  static: { root },
+});
 
 server.listen(port, host, () => {
   const address = server.address();

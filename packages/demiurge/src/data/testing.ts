@@ -14,8 +14,10 @@ export async function verifyCacheStoreContract(
   const gammaKey = `${prefix}:gamma`;
   const alphaTag = `${prefix}:tag:alpha`;
   const betaTag = `${prefix}:tag:beta`;
+  const future = Date.now() + 60_000;
   const alpha = {
-    expiresAt: 10_000,
+    expiresAt: future,
+    staleUntil: future + 5_000,
     tags: [alphaTag],
     value: { id: "alpha", revision: 1 },
   } satisfies CacheStoreEntry;
@@ -41,12 +43,14 @@ export async function verifyCacheStoreContract(
     );
 
     await store.set(betaKey, {
-      expiresAt: 20_000,
+      expiresAt: future + 10_000,
+      staleUntil: future + 15_000,
       tags: [betaTag],
       value: "beta",
     });
     await store.set(gammaKey, {
-      expiresAt: 30_000,
+      expiresAt: future + 20_000,
+      staleUntil: future + 25_000,
       tags: [alphaTag, betaTag],
       value: ["gamma"],
     });
@@ -81,6 +85,97 @@ export async function verifyCacheStoreContract(
   }
 }
 
+export async function verifyCacheStoreRefreshContract(
+  createStore: CacheStoreFactory,
+) {
+  const store = await createStore();
+  const prefix = `demiurge-refresh-contract:${Date.now()}:${Math.random()}`;
+  const key = `${prefix}:entry`;
+  const tag = `${prefix}:tag`;
+  const firstToken = `${prefix}:first`;
+  const secondToken = `${prefix}:second`;
+  const leaseExpiresAt = Date.now() + 60_000;
+
+  assert(
+    Boolean(
+      store.acquireRefreshLease &&
+        store.publishRefresh &&
+        store.releaseRefreshLease,
+    ),
+    "SWR support requires acquireRefreshLease(), publishRefresh(), and releaseRefreshLease()",
+  );
+
+  const acquireRefreshLease = store.acquireRefreshLease!;
+  const publishRefresh = store.publishRefresh!;
+  const releaseRefreshLease = store.releaseRefreshLease!;
+  const original = {
+    expiresAt: Date.now() - 1,
+    staleUntil: Date.now() + 120_000,
+    tags: [tag],
+    value: "original",
+  } satisfies CacheStoreEntry;
+  const refreshed = {
+    ...original,
+    expiresAt: Date.now() + 60_000,
+    value: "refreshed",
+  } satisfies CacheStoreEntry;
+
+  try {
+    await store.set(key, original);
+    assert(
+      await acquireRefreshLease(key, firstToken, leaseExpiresAt),
+      "acquireRefreshLease() must acquire an unowned key",
+    );
+    assert(
+      !await acquireRefreshLease(key, secondToken, leaseExpiresAt),
+      "acquireRefreshLease() must exclude a second owner",
+    );
+    assert(
+      !await publishRefresh(key, secondToken, refreshed),
+      "publishRefresh() must reject a non-owner token",
+    );
+    await releaseRefreshLease(key, secondToken);
+    assert(
+      !await acquireRefreshLease(key, secondToken, leaseExpiresAt),
+      "releaseRefreshLease() must not release another owner's lease",
+    );
+    assert(
+      await publishRefresh(key, firstToken, refreshed),
+      "publishRefresh() must atomically publish for the current owner",
+    );
+    assertEntry(
+      await store.get(key),
+      refreshed,
+      "publishRefresh() for the current owner",
+    );
+    assert(
+      await acquireRefreshLease(key, secondToken, leaseExpiresAt),
+      "successful publication must release the refresh lease",
+    );
+    assert(await store.delete(key), "delete() must remove the refreshed entry");
+    assert(
+      !await publishRefresh(key, secondToken, original),
+      "delete() must cancel an in-flight refresh lease",
+    );
+
+    await store.set(key, original);
+    assert(
+      await acquireRefreshLease(key, firstToken, leaseExpiresAt),
+      "a lease must be reusable after deletion",
+    );
+    assert(
+      await store.invalidateTags([tag]) === 1,
+      "invalidateTags() must remove the leased entry",
+    );
+    assert(
+      !await publishRefresh(key, firstToken, refreshed),
+      "tag invalidation must cancel an in-flight refresh lease",
+    );
+  } finally {
+    await store.delete(key);
+  }
+}
+
 function assertEntry(
   actual: CacheStoreEntry | undefined,
   expected: CacheStoreEntry,
@@ -90,6 +185,10 @@ function assertEntry(
   assert(
     actual?.expiresAt === expected.expiresAt,
     `${operation} must preserve expiresAt`,
+  );
+  assert(
+    actual?.staleUntil === expected.staleUntil,
+    `${operation} must preserve staleUntil`,
   );
   assert(
     JSON.stringify(actual?.tags) === JSON.stringify(expected.tags),

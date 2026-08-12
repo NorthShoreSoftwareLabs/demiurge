@@ -38,4 +38,5 @@ export type {
   IdempotencyRequest,
   IdempotencyResult,
   IdempotencyStore,
+  MemoryIdempotencyStoreOptions,
 } from "./idempotency";

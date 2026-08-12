@@ -1,6 +1,63 @@
 import type { CsrfPolicy } from "./types";
 
 const unsafeMethods = new Set(["DELETE", "PATCH", "POST", "PUT"]);
+const cookieNamePattern = /^[!#$%&'*+\-.^_`|~A-Za-z0-9]+$/;
+
+export type CsrfCookieOptions = {
+  cookie?: string;
+  secure?: boolean;
+};
+
+export type IssuedCsrfToken = {
+  cookie: string;
+  token: string;
+};
+
+export function createCsrfToken() {
+  const bytes = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(bytes);
+
+  return btoa(String.fromCharCode(...bytes))
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/, "");
+}
+
+export function createCsrfCookie(
+  token: string,
+  options: CsrfCookieOptions = {},
+) {
+  const cookie = options.cookie ?? "csrf-token";
+
+  if (!cookieNamePattern.test(cookie)) {
+    throw new Error("Demiurge CSRF cookie name is invalid.");
+  }
+
+  if (!token) {
+    throw new Error("Demiurge CSRF token must not be empty.");
+  }
+
+  const attributes = [
+    `${cookie}=${encodeURIComponent(token)}`,
+    "Path=/",
+    "SameSite=Lax",
+  ];
+
+  if (options.secure ?? true) {
+    attributes.push("Secure");
+  }
+
+  return attributes.join("; ");
+}
+
+export function issueCsrfToken(options: CsrfCookieOptions = {}): IssuedCsrfToken {
+  const token = createCsrfToken();
+
+  return {
+    cookie: createCsrfCookie(token, options),
+    token,
+  };
+}
 
 export function enforceCsrfProtection(
   policy: CsrfPolicy | undefined,

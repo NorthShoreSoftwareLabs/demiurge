@@ -21,6 +21,37 @@ describe("typed URL routes", () => {
   it("keeps static routes as real URL strings", () => {
     expect(href("/")).toBe("/");
     expect(href("/blog")).toBe("/blog");
+    expect(href("/blog?test=123#comments")).toBe(
+      "/blog?test=123#comments",
+    );
+  });
+
+  it("builds typed search parameters with repeated-key array semantics", () => {
+    expect(
+      href({
+        hash: "results",
+        search: {
+          empty: "",
+          omitted: undefined,
+          page: 0,
+          published: false,
+          q: ["first", "second", null],
+        },
+        to: "/blog",
+      }),
+    ).toBe(
+      "/blog?empty=&page=0&published=false&q=first&q=second#results",
+    );
+  });
+
+  it("lets structured search and hash override embedded values", () => {
+    expect(
+      href({
+        hash: "new",
+        search: { q: "safe" },
+        to: "/blog?legacy=yes#old",
+      }),
+    ).toBe("/blog?q=safe#new");
   });
 
   it("fills dynamic file route patterns from typed path values", () => {
@@ -54,6 +85,9 @@ describe("typed URL routes", () => {
 
       // @ts-expect-error dynamic patterns require path values
       href({ to: "/blog/[slug]" });
+
+      // @ts-expect-error query/hash suffixes do not bypass dynamic path values
+      href({ to: "/blog/[slug]?preview=true#article" });
 
       // @ts-expect-error path values must match the file route variables
       href({ to: "/blog/[slug]", path: { id: "bad" } });

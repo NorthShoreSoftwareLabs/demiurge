@@ -123,4 +123,28 @@ describe("security report endpoint handler", () => {
     expect(oversizedResponse.status).toBe(413);
     expect(await oversizedResponse.text()).toBe("Security report body too large.");
   });
+
+  it("counts report body bytes when Content-Length is absent", async () => {
+    const handler = createSecurityReportHandler({ maxBodySize: "2b" });
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode("{"));
+        controller.enqueue(encoder.encode("\"x\":1}"));
+        controller.close();
+      },
+    });
+    const response = await handler(
+      new Request("https://app.example.com/reports", {
+        body,
+        duplex: "half",
+        method: "POST",
+      } as RequestInit),
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.text()).resolves.toBe(
+      "Security report body too large.",
+    );
+  });
 });

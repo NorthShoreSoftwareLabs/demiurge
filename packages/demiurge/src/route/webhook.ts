@@ -8,7 +8,8 @@ export type WebhookHmacEncoding = "base64" | "hex";
 export type WebhookHmacAlgorithm = "SHA-256" | "SHA-384" | "SHA-512";
 
 export type WebhookHmacContext = HttpRouteContext & {
-  rawBody: string;
+  rawBody: Uint8Array;
+  text: () => string;
 };
 
 export type WebhookHmacOptions = {
@@ -16,6 +17,7 @@ export type WebhookHmacOptions = {
   encoding?: WebhookHmacEncoding;
   handler: (context: WebhookHmacContext) => MaybePromise<Response>;
   header?: string;
+  prefix?: false | string;
   secret: string;
 };
 
@@ -24,7 +26,7 @@ export const webhook = {
     return {
       kind: "response",
       response: async (context) => {
-        const rawBody = await context.request.text();
+        const rawBody = new Uint8Array(await context.request.arrayBuffer());
         const signature = context.request.headers.get(
           options.header ?? "x-webhook-signature",
         );
@@ -35,9 +37,7 @@ export const webhook = {
           });
         }
 
-        const expectedSignature = await createHmacSignature(rawBody, options);
-
-        if (!constantTimeEqual(normalizeSignature(signature), expectedSignature)) {
+        if (!(await verifyHmacSignature(rawBody, signature, options))) {
           return new Response("Invalid webhook signature.", {
             status: 401,
           });
@@ -46,6 +46,7 @@ export const webhook = {
         return await options.handler({
           ...context,
           rawBody,
+          text: () => new TextDecoder().decode(rawBody),
         });
       },
       security: {
@@ -55,12 +56,24 @@ export const webhook = {
   },
 };
 
-async function createHmacSignature(
-  rawBody: string,
+async function verifyHmacSignature(
+  rawBody: Uint8Array,
+  suppliedSignature: string,
   options: WebhookHmacOptions,
 ) {
   const algorithm = options.algorithm ?? "SHA-256";
   const encoding = options.encoding ?? "hex";
+  const normalized = normalizeSignature(
+    suppliedSignature,
+    algorithm,
+    options.prefix,
+  );
+  const signature = decodeSignature(normalized, encoding);
+
+  if (!signature) {
+    return false;
+  }
+
   const key = await globalThis.crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(options.secret),
@@ -69,53 +82,61 @@ async function createHmacSignature(
       name: "HMAC",
     },
     false,
-    ["sign"],
+    ["verify"],
   );
-  const signature = await globalThis.crypto.subtle.sign(
+  return await globalThis.crypto.subtle.verify(
     "HMAC",
     key,
-    new TextEncoder().encode(rawBody),
+    signature,
+    Uint8Array.from(rawBody).buffer,
   );
-  const bytes = new Uint8Array(signature);
-
-  return encoding === "base64" ? toBase64(bytes) : toHex(bytes);
 }
 
-function normalizeSignature(signature: string) {
-  const separator = signature.indexOf("=");
+function normalizeSignature(
+  signature: string,
+  algorithm: WebhookHmacAlgorithm,
+  configuredPrefix: false | string | undefined,
+) {
+  const trimmed = signature.trim();
+  const prefix =
+    configuredPrefix === undefined
+      ? `${algorithm.toLowerCase().replace("-", "")}=`
+      : configuredPrefix;
 
-  if (separator === -1) {
-    return signature.trim();
+  if (prefix !== false && trimmed.startsWith(prefix)) {
+    return trimmed.slice(prefix.length).trim();
   }
 
-  return signature.slice(separator + 1).trim();
+  return trimmed;
 }
 
-function constantTimeEqual(left: string, right: string) {
-  let diff = left.length ^ right.length;
-  const maxLength = Math.max(left.length, right.length);
+function decodeSignature(value: string, encoding: WebhookHmacEncoding) {
+  if (encoding === "hex") {
+    if (!/^(?:[0-9a-f]{2})+$/i.test(value)) {
+      return null;
+    }
 
-  for (let index = 0; index < maxLength; index += 1) {
-    diff |= left.charCodeAt(index) ^ right.charCodeAt(index);
+    return Uint8Array.from(value.match(/.{2}/g) ?? [], (pair) =>
+      Number.parseInt(pair, 16),
+    );
   }
 
-  return diff === 0;
-}
-
-function toHex(bytes: Uint8Array) {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-function toBase64(bytes: Uint8Array) {
-  let binary = "";
-
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
+  if (
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+      value,
+    )
+  ) {
+    return null;
   }
 
-  if (typeof btoa === "function") {
-    return btoa(binary);
-  }
+  try {
+    const binary =
+      typeof atob === "function"
+        ? atob(value)
+        : Buffer.from(value, "base64").toString("binary");
 
-  return Buffer.from(binary, "binary").toString("base64");
+    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  } catch {
+    return null;
+  }
 }
