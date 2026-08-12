@@ -55,6 +55,16 @@ describe("security policy headers", () => {
     expect(headers.get("permissions-policy")).toBe(
       "camera=(), microphone=(), geolocation=(), payment=()",
     );
+    expect(headers.get("strict-transport-security")).toBe("max-age=31536000");
+  });
+
+  it("does not send strict transport security on a plain HTTP response", () => {
+    const headers = createSecurityHeaders(security.strict(), {
+      nonce: "local-dev",
+      request: new Request("http://localhost:3000/"),
+    });
+
+    expect(headers.has("strict-transport-security")).toBe(false);
   });
 
   it("fails when a nonce-backed CSP is rendered without a nonce", () => {
@@ -547,7 +557,7 @@ describe("CORS policy headers", () => {
     expect(headers.get("access-control-allow-headers")).toBe("x-demo, x-trace");
   });
 
-  it("omits CORS headers when the request has no allowed origin", () => {
+  it("varies allowlist responses even when the request has no allowed origin", () => {
     const noOrigin = createCorsHeaders(
       {
         origins: ["https://app.example.com"],
@@ -569,8 +579,8 @@ describe("CORS policy headers", () => {
       },
     );
 
-    expect([...noOrigin]).toEqual([]);
-    expect([...deniedOrigin]).toEqual([]);
+    expect(Object.fromEntries(noOrigin)).toEqual({ vary: "Origin" });
+    expect(Object.fromEntries(deniedOrigin)).toEqual({ vary: "Origin" });
   });
 
   it("rejects wildcard origins with credentials", () => {
@@ -581,6 +591,43 @@ describe("CORS policy headers", () => {
       }),
     ).toThrow(
       "Demiurge CORS policy cannot use wildcard origins with credentials.",
+    );
+  });
+
+  it("rejects wildcard headers and invalid max ages for credentialed CORS", () => {
+    expect(() =>
+      validateCorsPolicy({
+        credentials: true,
+        headers: ["*"],
+        origins: ["https://app.example.com"],
+      })
+    ).toThrow(
+      "Demiurge credentialed CORS policy must list allowed and exposed headers explicitly.",
+    );
+    expect(() =>
+      validateCorsPolicy({
+        credentials: true,
+        exposeHeaders: ["*"],
+        origins: ["https://app.example.com"],
+      })
+    ).toThrow(
+      "Demiurge credentialed CORS policy must list allowed and exposed headers explicitly.",
+    );
+    expect(() =>
+      validateCorsPolicy({
+        maxAge: -1,
+        origins: "*",
+      })
+    ).toThrow(
+      "Demiurge CORS maxAge must be a non-negative integer number of seconds.",
+    );
+    expect(() =>
+      validateCorsPolicy({
+        maxAge: 1.5,
+        origins: "*",
+      })
+    ).toThrow(
+      "Demiurge CORS maxAge must be a non-negative integer number of seconds.",
     );
   });
 

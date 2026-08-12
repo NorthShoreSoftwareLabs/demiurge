@@ -56,7 +56,10 @@ export async function renderNotFoundResponse(
     securityPolicyRequiresNonce(documentPolicy) ? createCspNonce() : undefined
   );
   const html = renderNotFoundDocument(match, { ...options, nonce });
-  const headers = createSecurityHeaders(documentPolicy ?? {}, { nonce });
+  const headers = createSecurityHeaders(documentPolicy ?? {}, {
+    nonce,
+    request,
+  });
   headers.set("content-type", "text/html; charset=utf-8");
 
   return new Response(

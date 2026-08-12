@@ -70,6 +70,80 @@ describe("static file handler", () => {
     ).toBe("public, max-age=0, must-revalidate");
   });
 
+  it("sends validators and answers matching conditional requests with 304", async () => {
+    const handle = createStaticFileHandler({ root });
+    const initial = await handle(request("/robots.txt"));
+    const etag = initial?.headers.get("etag");
+    const lastModified = initial?.headers.get("last-modified");
+
+    expect(etag).toMatch(/^W\/"[0-9a-f]+-[0-9a-f]+"$/);
+    expect(lastModified).not.toBeNull();
+
+    const byEtag = await handle(request("/robots.txt", {
+      headers: { "if-none-match": `"other", ${etag}` },
+    }));
+    const byDate = await handle(request("/robots.txt", {
+      headers: { "if-modified-since": lastModified! },
+    }));
+
+    for (const response of [byEtag, byDate]) {
+      expect(response?.status).toBe(304);
+      expect(response?.body).toBeNull();
+      expect(response?.headers.get("content-length")).toBeNull();
+      expect(response?.headers.get("etag")).toBe(etag);
+      expect(response?.headers.get("last-modified")).toBe(lastModified);
+    }
+  });
+
+  it("gives If-None-Match precedence over If-Modified-Since", async () => {
+    const handle = createStaticFileHandler({ root });
+    const response = await handle(request("/robots.txt", {
+      headers: {
+        "if-modified-since": "Sun, 06 Nov 2094 08:49:37 GMT",
+        "if-none-match": '"not-the-current-validator"',
+      },
+    }));
+
+    expect(response?.status).toBe(200);
+    await expect(response?.text()).resolves.toBe("User-agent: *");
+  });
+
+  it("serves explicit, open-ended, and suffix byte ranges", async () => {
+    const handle = createStaticFileHandler({ root });
+    const cases = [
+      ["bytes=0-3", "User", "bytes 0-3/13"],
+      ["bytes=5-", "agent: *", "bytes 5-12/13"],
+      ["bytes=-3", ": *", "bytes 10-12/13"],
+    ] as const;
+
+    for (const [range, body, contentRange] of cases) {
+      const response = await handle(request("/robots.txt", {
+        headers: { range },
+      }));
+
+      expect(response?.status).toBe(206);
+      expect(response?.headers.get("accept-ranges")).toBe("bytes");
+      expect(response?.headers.get("content-range")).toBe(contentRange);
+      expect(response?.headers.get("content-length")).toBe(String(body.length));
+      await expect(response?.text()).resolves.toBe(body);
+    }
+  });
+
+  it("answers unsatisfiable and unsupported ranges with 416", async () => {
+    const handle = createStaticFileHandler({ root });
+
+    for (const range of ["bytes=13-20", "bytes=5-4", "bytes=0-1,4-5"]) {
+      const response = await handle(request("/robots.txt", {
+        headers: { range },
+      }));
+
+      expect(response?.status).toBe(416);
+      expect(response?.body).toBeNull();
+      expect(response?.headers.get("content-range")).toBe("bytes */13");
+      expect(response?.headers.get("content-length")).toBeNull();
+    }
+  });
+
   it("accepts a custom immutable predicate", async () => {
     const handle = createStaticFileHandler({
       immutable: (fileName) => fileName.endsWith(".txt"),
@@ -89,6 +163,19 @@ describe("static file handler", () => {
 
     expect(response?.body).toBeNull();
     expect(response?.headers.get("content-length")).toBe("13");
+  });
+
+  it("answers a ranged HEAD with partial response headers and no body", async () => {
+    const handle = createStaticFileHandler({ root });
+    const response = await handle(request("/robots.txt", {
+      headers: { range: "bytes=0-3" },
+      method: "HEAD",
+    }));
+
+    expect(response?.status).toBe(206);
+    expect(response?.body).toBeNull();
+    expect(response?.headers.get("content-range")).toBe("bytes 0-3/13");
+    expect(response?.headers.get("content-length")).toBe("4");
   });
 
   it("resolves content types by extension and falls back to octet-stream", async () => {

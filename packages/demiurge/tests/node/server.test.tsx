@@ -427,6 +427,7 @@ describe("Node adapter", () => {
       expect(html).toContain(
         '<link rel="stylesheet" href="/assets/client-entry.css" />',
       );
+      expect(response.headers.has("strict-transport-security")).toBe(false);
 
       const csp = response.headers.get("content-security-policy");
 

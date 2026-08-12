@@ -40,6 +40,11 @@ const strictHeaders = {
   crossOriginResourcePolicy: "same-origin",
   permissionsPolicy: "camera=(), microphone=(), geolocation=(), payment=()",
   referrerPolicy: "strict-origin-when-cross-origin",
+  strictTransportSecurity: {
+    includeSubDomains: false,
+    maxAge: 31536000,
+    preload: false,
+  },
 } satisfies SecurityHeaderPolicy;
 
 const apiHeaders = {
@@ -195,7 +200,7 @@ export function createSecurityHeaders(
     reportsTrustedTypes ? trustedTypes : undefined,
   );
 
-  applySecurityHeaders(headers, policy.headers);
+  applySecurityHeaders(headers, policy.headers, options);
 
   return headers;
 }
@@ -295,6 +300,7 @@ function setCspDirective(
 function applySecurityHeaders(
   headers: Headers,
   policy: SecurityHeaderPolicy | undefined,
+  options: SecurityHeadersOptions,
 ) {
   if (!policy) {
     return;
@@ -307,7 +313,10 @@ function applySecurityHeaders(
   setHeader(headers, "cross-origin-resource-policy", policy.crossOriginResourcePolicy);
   setHeader(headers, "permissions-policy", policy.permissionsPolicy);
 
-  if (policy.strictTransportSecurity) {
+  if (
+    policy.strictTransportSecurity &&
+    (!options.request || new URL(options.request.url).protocol === "https:")
+  ) {
     headers.set(
       "strict-transport-security",
       renderStrictTransportSecurity(policy.strictTransportSecurity),

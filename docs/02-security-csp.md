@@ -31,15 +31,22 @@ X-Content-Type-Options: nosniff
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Resource-Policy: same-origin
 Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+Strict-Transport-Security: max-age=31536000
 ```
 
 Optional, deployment-dependent headers:
 
 ```http
-Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
 Cross-Origin-Embedder-Policy: require-corp
 Origin-Agent-Cluster: ?1
 ```
+
+The strict preset sends HSTS only for HTTPS requests. Its one-year policy is
+limited to the current host: `includeSubDomains` and `preload` are deliberately
+off because either can break independently deployed subdomains and is difficult
+to reverse after browsers cache it. Applications that control their entire
+domain can opt into those directives by overriding `strictTransportSecurity`.
+Plain-HTTP development responses never carry HSTS.
 
 `COEP: require-corp` plus `COOP: same-origin` enables cross-origin isolation
 for features like `SharedArrayBuffer`, but it can break third-party assets that
@@ -208,7 +215,12 @@ export const POST = json(handler, {
 
 The framework adds CORS headers to actual route responses and generates
 `OPTIONS` preflight responses when the requested method maps to a route
-capability with CORS policy. Wildcard origins with credentials fail closed.
+capability with CORS policy. Allowlist-backed responses always carry
+`Vary: Origin`, including requests with a missing or denied origin, so a shared
+cache cannot reuse the wrong CORS variant. Wildcard origins with credentials
+fail closed. Credentialed policies must also list allowed and exposed headers
+explicitly, and `maxAge` is validated as a non-negative integer number of
+seconds.
 
 ## CSRF
 
@@ -880,24 +892,27 @@ This separates permission to load from the conditional decision to load.
 
 ### Loading Strategies
 
-Initial strategies:
+The 0.1 static-script API intentionally exposes only strategies with behavior
+implemented by the document renderer:
 
 ```ts
 type ScriptStrategy =
   | "beforeInteractive"
   | "afterInteractive"
-  | "idle"
-  | "visible"
-  | "worker";
+  | "module";
 ```
 
-Strategy should imply placement by default:
+These values define deterministic ordering of static body-end contributions:
+`beforeInteractive` first, then `module`, then `afterInteractive`. `module` also
+emits `type="module"`. In 0.1, `afterInteractive` is an ordering category; it
+does not claim that hydration has completed before the browser evaluates a
+classic script. Native `async`, `defer`, and `type` options retain their browser
+semantics.
 
-- `beforeInteractive`: hoisted early.
-- `afterInteractive`: after framework runtime/hydration.
-- `idle`: scheduled after the page settles.
-- `visible`: loaded when the owning component or island becomes visible.
-- `worker`: future worker/off-main-thread loading strategy.
+`idle`, `visible`, and `worker` are deliberately absent until the client script
+runtime can implement their timing guarantees. JavaScript callers that bypass
+the TypeScript union receive an immediate error instead of a silently ordinary
+script tag.
 
 If a component requests head placement during streaming after the head has been
 sent, the framework should warn or fail and suggest moving the script to

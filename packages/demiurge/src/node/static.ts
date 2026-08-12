@@ -82,15 +82,57 @@ export function createStaticFileHandler(
 
     const { file, stats } = opened;
 
+    const etag = createWeakEtag(stats.size, stats.mtimeMs);
+    const lastModified = stats.mtime.toUTCString();
     const headers = new Headers({
+      "accept-ranges": "bytes",
       "cache-control": isImmutable(fileNameOf(filePath))
         ? "public, max-age=31536000, immutable"
         : "public, max-age=0, must-revalidate",
       "content-length": String(stats.size),
       "content-type": contentTypeOf(filePath),
       "cross-origin-resource-policy": "same-origin",
+      etag,
+      "last-modified": lastModified,
       "x-content-type-options": "nosniff",
     });
+
+    if (isNotModified(request, etag, stats.mtimeMs)) {
+      await file.close();
+      headers.delete("content-length");
+      headers.delete("content-type");
+
+      return new Response(null, { headers, status: 304 });
+    }
+
+    const range = parseRange(request.headers.get("range"), stats.size);
+
+    if (range === "unsatisfiable") {
+      await file.close();
+      headers.delete("content-length");
+      headers.delete("content-type");
+      headers.set("content-range", `bytes */${stats.size}`);
+
+      return new Response(null, { headers, status: 416 });
+    }
+
+    if (range) {
+      const contentLength = range.end - range.start + 1;
+      headers.set("content-length", String(contentLength));
+      headers.set("content-range", `bytes ${range.start}-${range.end}/${stats.size}`);
+
+      if (request.method === "HEAD") {
+        await file.close();
+        return new Response(null, { headers, status: 206 });
+      }
+
+      return new Response(
+        Readable.toWeb(
+          file.createReadStream({ end: range.end, start: range.start }),
+        ) as ReadableStream,
+        { headers, status: 206 },
+      );
+    }
 
     if (request.method === "HEAD") {
       await file.close();
@@ -102,6 +144,79 @@ export function createStaticFileHandler(
       { headers },
     );
   };
+}
+
+function createWeakEtag(size: number, mtimeMs: number) {
+  return `W/"${size.toString(16)}-${Math.trunc(mtimeMs).toString(16)}"`;
+}
+
+function isNotModified(request: Request, etag: string, mtimeMs: number) {
+  const ifNoneMatch = request.headers.get("if-none-match");
+
+  // If-None-Match takes precedence over If-Modified-Since. Weak comparison is
+  // correct for GET/HEAD cache validation, so W/ is removed from both sides.
+  if (ifNoneMatch !== null) {
+    return ifNoneMatch.trim() === "*" || ifNoneMatch.split(",").some(
+      (candidate) => weakEtagValue(candidate) === weakEtagValue(etag),
+    );
+  }
+
+  const ifModifiedSince = request.headers.get("if-modified-since");
+
+  if (ifModifiedSince === null) {
+    return false;
+  }
+
+  const since = Date.parse(ifModifiedSince);
+
+  // HTTP dates have one-second precision; compare the file timestamp at the
+  // same precision rather than making a freshly-written file look newer.
+  return Number.isFinite(since) && Math.floor(mtimeMs / 1000) * 1000 <= since;
+}
+
+function weakEtagValue(value: string) {
+  return value.trim().replace(/^W\//i, "");
+}
+
+type ByteRange = { end: number; start: number };
+
+function parseRange(
+  header: string | null,
+  size: number,
+): ByteRange | "unsatisfiable" | null {
+  if (header === null) {
+    return null;
+  }
+
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+
+  if (!match || (!match[1] && !match[2]) || size === 0) {
+    return "unsatisfiable";
+  }
+
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
+      return "unsatisfiable";
+    }
+
+    return { start: Math.max(0, size - suffixLength), end: size - 1 };
+  }
+
+  const start = Number(match[1]);
+  const requestedEnd = match[2] ? Number(match[2]) : size - 1;
+
+  if (
+    !Number.isSafeInteger(start) ||
+    !Number.isSafeInteger(requestedEnd) ||
+    start >= size ||
+    requestedEnd < start
+  ) {
+    return "unsatisfiable";
+  }
+
+  return { start, end: Math.min(requestedEnd, size - 1) };
 }
 
 function resolveFilePath(root: string, prefix: string, pathname: string) {

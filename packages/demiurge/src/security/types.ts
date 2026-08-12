@@ -175,4 +175,5 @@ export type CspHashAlgorithm = "sha256" | "sha384" | "sha512";
 
 export type SecurityHeadersOptions = {
   nonce?: string;
+  request?: Request;
 };
