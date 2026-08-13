@@ -1520,9 +1520,13 @@ describe("Vite plugin document runtime", () => {
       routesDir: "src/pages",
     });
 
-    expect(source).toContain('import.meta.glob(["/src/pages/**/*.{ts,tsx}"])');
+    expect(source).toContain(
+      'import.meta.glob(["/src/pages/**/*.{ts,tsx}"], { eager: true })',
+    );
     expect(source).toContain('const routePrefix = "/src/pages/";');
     expect(source).toContain("export const routes");
+    expect(source).toContain("export const routeModules");
+    expect(source).toContain("routeModules,");
     expect(source).toContain("createRequestHandler");
     expect(source).toContain('lang ?? "en-GB"');
     expect(source).toContain('title ?? "Server app"');
@@ -1811,5 +1815,23 @@ export const GET = json(() => db.widgets.page(2));
 
     plugin.configResolved?.({ command: "build", root } as never);
     await expect(plugin.buildStart?.()).rejects.toThrow(/@not-found\.tsx/);
+  });
+
+  it("fails buildStart for invalid literal route policy", async () => {
+    const root = await scaffold({
+      "@not-found.tsx": "export default function NotFound() { return null; }",
+      "api.ts": `
+import { json } from "@demiurgejs/core";
+export const GET = json({}, {
+  cors: { credentials: true, origins: "*" },
+});`,
+    });
+    const plugin = demiurge() as PluginHarness;
+
+    plugin.configResolved?.({ command: "build", root } as never);
+
+    await expect(plugin.buildStart?.()).rejects.toThrow(
+      /api\.ts export GET: \[cors-invalid\].*wildcard origins/,
+    );
   });
 });

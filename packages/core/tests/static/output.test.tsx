@@ -340,7 +340,7 @@ describe("static output adapter", () => {
         routes,
         ssr: { clientEntry: "/assets/app-a1b2c3d4.js" },
       }),
-    ).rejects.toThrow(/nonce-backed CSP/);
+    ).rejects.toThrow(/nonceInjection/);
     await expect(readFile(join(outDir, "index.html"), "utf8"))
       .resolves.toBe("client shell");
   });

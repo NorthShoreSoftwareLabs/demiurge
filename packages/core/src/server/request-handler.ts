@@ -52,7 +52,9 @@ import {
   enforceRequestSecurity,
   mergeRoutePolicies,
   type RateLimitStore,
+  validateRouteModules,
 } from "../security";
+import type { Adapter } from "../adapter";
 import {
   limitRequestBody,
   RequestBodyTooLargeError,
@@ -69,11 +71,13 @@ export type RequestErrorReporter = (
 ) => void;
 
 export type RequestHandlerOptions = {
+  adapter?: Adapter;
   cacheStore?: RequestCacheStoreOptions;
   onError?: RequestErrorReporter;
   renderPage?: PageRenderer;
   rateLimitStore?: RateLimitStore;
   routes: Record<string, RouteImporter>;
+  routeModules?: Readonly<Record<string, RouteModule>>;
   ssr?: SsrOptions;
 };
 
@@ -119,6 +123,10 @@ const supportedMethods = [
 const defaultRateLimitStore = createMemoryRateLimitStore();
 
 export function createRequestHandler(options: RequestHandlerOptions) {
+  if (options.routeModules) {
+    validateRouteModules(options.routeModules, { adapter: options.adapter });
+  }
+
   const manifest = createRouteManifest(options.routes);
   const rateLimitStore = options.rateLimitStore ?? createMemoryRateLimitStore();
 

@@ -6,6 +6,7 @@ import {
   createMemoryRateLimitStore,
   createSecurityAudit,
   createSecurityHeaders,
+  cspNonce,
   cspHash,
   defineRoutePolicy,
   defineSecurityPolicy,
@@ -90,6 +91,38 @@ describe("security policy headers", () => {
     expect(headers.get("content-security-policy")).toContain(
       "img-src 'self' data: blob: https://images.example.com",
     );
+  });
+
+  it("exports the typed nonce source used by strict CSP", () => {
+    const headers = createSecurityHeaders({
+      csp: {
+        scriptSrc: [cspNonce],
+      },
+    }, { nonce: "typed" });
+
+    expect(cspNonce).toBe("'nonce-{nonce}'");
+    expect(headers.get("content-security-policy")).toBe(
+      "script-src 'nonce-typed'",
+    );
+  });
+
+  it("renders the extended CSP source directives", () => {
+    const headers = createSecurityHeaders({
+      csp: {
+        childSrc: ["'self'"],
+        frameSrc: ["https://frames.example.com"],
+        manifestSrc: ["'self'"],
+        mediaSrc: ["https://media.example.com"],
+        workerSrc: ["'self'", "blob:"],
+      },
+    });
+    const value = headers.get("content-security-policy");
+
+    expect(value).toContain("child-src 'self'");
+    expect(value).toContain("frame-src https://frames.example.com");
+    expect(value).toContain("manifest-src 'self'");
+    expect(value).toContain("media-src https://media.example.com");
+    expect(value).toContain("worker-src 'self' blob:");
   });
 
   it("can disable CSP for API-only policies", () => {
@@ -319,6 +352,54 @@ describe("security policy cascade", () => {
     );
     expect(headers.get("content-security-policy")).toContain(
       "img-src 'self' data: blob: https://images.example.com",
+    );
+  });
+
+  it("lets child policy replace an inherited CSP source directive", () => {
+    const policy = mergeSecurityPolicies(
+      security.static(),
+      {
+        csp: {
+          scriptSrc: { replace: ["https://scripts.example.com"] },
+        },
+      },
+    );
+    const csp = createSecurityHeaders(policy).get("content-security-policy");
+
+    expect(csp).toContain("script-src https://scripts.example.com");
+    expect(csp).not.toContain("script-src 'self'");
+  });
+
+  it("lets child policy remove one inherited CSP directive", () => {
+    const policy = mergeSecurityPolicies(
+      security.static(),
+      {
+        csp: {
+          objectSrc: false,
+        },
+      },
+    );
+    const csp = createSecurityHeaders(policy).get("content-security-policy");
+
+    expect(csp).not.toContain("object-src");
+    expect(csp).toContain("default-src 'self'");
+  });
+
+  it("keeps report URI arrays additive unless child policy replaces them", () => {
+    const additive = mergeSecurityPolicies(
+      { csp: { reportUri: ["/parent-reports"] } },
+      { csp: { reportUri: ["/child-reports"] } },
+    );
+    const replaced = mergeSecurityPolicies(
+      additive,
+      { csp: { reportUri: { replace: ["/final-reports"] } } },
+    );
+
+    expect(createSecurityHeaders(additive).get("content-security-policy")).toBe(
+      "report-uri /parent-reports /child-reports",
+    );
+    expect(createSecurityHeaders(replaced).get("content-security-policy")).toBe(
+      "report-uri /final-reports",
     );
   });
 
@@ -756,6 +837,30 @@ describe("CORS policy headers", () => {
     ).toThrow(
       "Demiurge CORS maxAge must be a non-negative integer number of seconds.",
     );
+  });
+
+  it.each([
+    "https://app.example.com/",
+    "https://app.example.com/path",
+    "https://app.example.com?mode=test",
+    "https://app.example.com#section",
+    "https://user@app.example.com",
+    "https://APP.example.com",
+    "ftp://app.example.com",
+    "not-an-origin",
+  ])("rejects non-canonical CORS origin %s", (origin) => {
+    expect(() => validateCorsPolicy({ origins: [origin] })).toThrow(
+      `Demiurge CORS origin ${JSON.stringify(origin)} must be a canonical HTTP(S) origin without credentials, a path, query, or fragment.`,
+    );
+  });
+
+  it("accepts canonical HTTP and HTTPS CORS origins", () => {
+    expect(() => validateCorsPolicy({
+      origins: [
+        "https://app.example.com",
+        "http://localhost:4173",
+      ],
+    })).not.toThrow();
   });
 
   it("omits the expose-headers header when no headers are configured to expose", () => {

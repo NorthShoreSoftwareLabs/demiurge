@@ -41,6 +41,10 @@ import {
 } from "../node/http";
 import { renderStreamingPageResponse } from "../node/streaming";
 import { createCspNonce } from "../security/policy";
+import {
+  verifyRoutePolicyFile,
+  type StaticPolicyFinding,
+} from "./policy-verification";
 
 export type DemiurgeVitePluginOptions = {
   document?: {
@@ -151,6 +155,11 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
     async buildStart() {
       if (isBuild) {
         await assertRootNotFoundRoute(root, options);
+        const findings = await verifyRoutePolicies(root, options);
+
+        if (findings.length) {
+          throw new Error(formatStaticPolicyFindings(findings));
+        }
       }
 
       if (!options.typedRoutes) {
@@ -160,6 +169,20 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       await generateTypedRoutes(root, options);
     },
     configureServer(server) {
+      const reportPolicyFindings = async () => {
+        const findings = await verifyRoutePolicies(server.config.root, options);
+
+        for (const finding of findings) {
+          server.config.logger.warn(formatStaticPolicyFinding(finding));
+        }
+      };
+      const startPolicyVerification = () => {
+        void reportPolicyFindings().catch(() => {
+          // Vite reports route read and syntax errors through its module pipeline.
+        });
+      };
+
+      startPolicyVerification();
       if (options.typedRoutes) {
         const routesDir = resolve(
           server.config.root,
@@ -171,18 +194,32 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
         server.watcher.on("add", (file) => {
           if (isRouteFile(routesDir, file)) {
             void generateTypedRoutes(server.config.root, options);
+            startPolicyVerification();
           }
         });
         server.watcher.on("change", (file) => {
           if (isRouteFile(routesDir, file)) {
             void generateTypedRoutes(server.config.root, options);
+            startPolicyVerification();
           }
         });
         server.watcher.on("unlink", (file) => {
           if (isRouteFile(routesDir, file)) {
             void generateTypedRoutes(server.config.root, options);
+            startPolicyVerification();
           }
         });
+      } else {
+        const routesDir = resolve(
+          server.config.root,
+          options.routesDir ?? "src/routes",
+        );
+        server.watcher.add(routesDir);
+        for (const event of ["add", "change", "unlink"] as const) {
+          server.watcher.on(event, (file) => {
+            if (isRouteFile(routesDir, file)) startPolicyVerification();
+          });
+        }
       }
 
       server.middlewares.use(async (request, response, next) => {
@@ -604,6 +641,7 @@ export function createServerEntrySource(
 ${createRouteMapSource(routesDir, {
     exportRoutes: true,
     includeServerOnly: true,
+    eagerModules: true,
   })}
 
 export function createHandler(options = {}) {
@@ -612,6 +650,7 @@ export function createHandler(options = {}) {
   return createRequestHandler({
     ...handlerOptions,
     routes,
+    routeModules,
     ssr: {
       clientEntry,
       lang: lang ?? ${JSON.stringify(options.document?.lang)},
@@ -632,13 +671,33 @@ function createRouteMapSource(
   routesDir: string,
   {
     exportRoutes,
+    eagerModules = false,
     includeServerOnly,
-  }: { exportRoutes: boolean; includeServerOnly: boolean },
+  }: {
+    eagerModules?: boolean;
+    exportRoutes: boolean;
+    includeServerOnly: boolean;
+  },
 ) {
   const routesGlobs = toRootAbsoluteGlobs(routesDir, includeServerOnly);
   const routesPrefix = toRootAbsolutePrefix(routesDir);
 
-  return `const routeModules = import.meta.glob(${JSON.stringify(routesGlobs)});
+  return eagerModules
+    ? `const eagerRouteModules = import.meta.glob(${JSON.stringify(routesGlobs)}, { eager: true });
+const routePrefix = ${JSON.stringify(routesPrefix)};
+export const routeModules = Object.fromEntries(
+  Object.entries(eagerRouteModules).map(([file, module]) => [
+    \`./routes/\${file.slice(routePrefix.length)}\`,
+    module,
+  ]),
+);
+${exportRoutes ? "export " : ""}const routes = Object.fromEntries(
+  Object.entries(routeModules).map(([file, module]) => [
+    file,
+    async () => module,
+  ]),
+);`
+    : `const routeModules = import.meta.glob(${JSON.stringify(routesGlobs)});
 const routePrefix = ${JSON.stringify(routesPrefix)};
 ${exportRoutes ? "export " : ""}const routes = Object.fromEntries(
   Object.entries(routeModules).map(([file, load]) => [
@@ -1230,6 +1289,38 @@ async function findRouteFiles(directory: string) {
   return entries
     .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
     .map((entry) => resolve(entry.parentPath, entry.name));
+}
+
+export async function verifyRoutePolicies(
+  root: string,
+  options: DemiurgeVitePluginOptions = {},
+) {
+  const routesDir = resolve(root, options.routesDir ?? "src/routes");
+
+  if (!existsSync(routesDir)) return [];
+  const findings = (await Promise.all(
+    (await findRouteFiles(routesDir)).map(verifyRoutePolicyFile),
+  )).flat();
+
+  return findings.sort((left, right) =>
+    left.file.localeCompare(right.file) ||
+    (left.exportName ?? "").localeCompare(right.exportName ?? "") ||
+    left.code.localeCompare(right.code)
+  );
+}
+
+export function formatStaticPolicyFindings(findings: StaticPolicyFinding[]) {
+  return [
+    "Demiurge found invalid static route policy:",
+    ...findings.map(formatStaticPolicyFinding),
+  ].join("\n");
+}
+
+function formatStaticPolicyFinding(finding: StaticPolicyFinding) {
+  const source = finding.exportName
+    ? `${finding.file} export ${finding.exportName}`
+    : finding.file;
+  return `${source}: [${finding.code}] ${finding.message}`;
 }
 
 function toRouteKey(routesDir: string, file: string) {

@@ -21,7 +21,11 @@ import {
   type RequestErrorReporter,
   type SsrOptions,
 } from "../server";
-import { createMemoryRateLimitStore, cspHash } from "../security";
+import {
+  createMemoryRateLimitStore,
+  cspHash,
+  validateRouteModules,
+} from "../security";
 import {
   CONTENT_HASHED_FILE_NAME_PATTERN,
   IMMUTABLE_FILE_CACHE_CONTROL,
@@ -79,9 +83,24 @@ type PlannedOutput = {
 export async function generateStaticOutput(
   options: GenerateStaticOutputOptions,
 ): Promise<StaticOutputManifest> {
+  const routeModules = Object.fromEntries(
+    await Promise.all(
+      Object.entries(options.routes).map(async ([file, load]) =>
+        [file, await load()] as const
+      ),
+    ),
+  ) satisfies Record<string, RouteModule>;
+  validateRouteModules(routeModules, { adapter: staticAdapter });
+  const routes = Object.fromEntries(
+    Object.entries(routeModules).map(([file, routeModule]) => [
+      file,
+      async () => routeModule,
+    ]),
+  );
+
   const origin = normalizeOrigin(options.origin);
   const outDir = resolve(options.outDir);
-  const manifest = createRouteManifest(options.routes);
+  const manifest = createRouteManifest(routes);
   const routeKinds = await validateStaticRoutes(manifest);
   const paths = await collectStaticRoutePaths(manifest, {
     includeResources: true,

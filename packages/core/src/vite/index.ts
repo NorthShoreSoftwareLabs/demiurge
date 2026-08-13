@@ -8,5 +8,10 @@ export {
   createDevRouteImporters as unstable_createDevRouteImporters,
   handleDevRequest as unstable_handleDevRequest,
   stripClientPageData as unstable_stripClientPageData,
+  verifyRoutePolicies as unstable_verifyRoutePolicies,
+  formatStaticPolicyFindings as unstable_formatStaticPolicyFindings,
 } from "./plugin";
+export {
+  verifyRoutePolicySource as unstable_verifyRoutePolicySource,
+} from "./policy-verification";
 export type { DemiurgeVitePluginOptions } from "./plugin";

@@ -19,6 +19,12 @@ Policy merges root-to-leaf. A route helper may add capability-specific CORS,
 request, or security options. Deliberate relaxations remain visible at the
 route instead of hiding in unrelated global middleware.
 
+CSP source arrays merge additively. Use `{ replace: [...] }` to replace an
+inherited directive. Use `false` to remove one inherited directive.
+
+Use `cspNonce` when a custom policy requires the framework nonce. Use a custom
+source string when the built-in `CspSource` values do not contain the source.
+
 ## Strict documents
 
 `security.strict()` provides a nonce-based Content Security Policy and HSTS on
@@ -60,6 +66,9 @@ Response helpers accept typed CORS declarations. Demiurge validates origins,
 methods, wildcard-plus-credentials combinations, emits preflight responses,
 and applies the resulting headers through the same request pipeline.
 
+A CORS origin must be an absolute HTTP or HTTPS origin. It cannot contain
+credentials, a path, a query, or a fragment.
+
 Route security can also enforce:
 
 - allowed HTTP methods
@@ -84,8 +93,24 @@ headers, static scripts, reporting configuration, and declared third-party
 script dependencies. Audit findings explain policy conflicts. They do not
 replace runtime reports for conditions that only a browser can observe.
 
-Build-time policy verification beyond static output is proposed in
-[RFC 0001](../../rfcs/0001-static-policy-verification.md).
+## Policy verification
+
+The Vite plugin validates literal CORS, rate-limit, and document policy during
+a production build. A finding identifies the route file and export.
+
+The build reads source without running route modules. The build does not guess
+an environment-derived value or a value from a function call.
+
+Generated server entries pass eager modules to `createRequestHandler(...)`.
+The handler validates dynamic policy before it accepts a request. A direct
+adapter can pass `routeModules` and its `adapter` for the same startup check.
+
+Request-time checks remain active after build and startup validation. They
+protect applications that use custom build and startup paths.
+
+See [ADR 0002](../../architecture/decisions/0002-static-policy-verification.md)
+for the accepted boundary. [RFC 0001](../../rfcs/0001-static-policy-verification.md)
+contains the wider proposal and later consumers.
 
 ## Environment validation
 
