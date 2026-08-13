@@ -194,6 +194,11 @@ describe("static output adapter", () => {
     const home = await readFile(join(outDir, "index.html"), "utf8");
 
     expect(homeEntry?.headers["content-security-policy"]).toContain(hash);
+    expect(homeEntry?.headers["content-security-policy"])
+      .not.toContain("'unsafe-inline'");
+    expect(home).toContain(
+      `<script type="application/ld+json">${JSON.stringify(schema)}</script>`,
+    );
     expect(home).not.toContain(" nonce=");
   });
 

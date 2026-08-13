@@ -1,10 +1,18 @@
-import { Link, defineMetadata, page, type RouteProps } from "@demiurgejs/core";
+import {
+  Link,
+  defineMetadata,
+  page,
+  structuredData,
+  type RouteProps,
+} from "@demiurgejs/core";
+import { siteStructuredData } from "../site-structured-data";
 
 type HomeData = {
   output: string[];
 };
 
 export const metadata = defineMetadata({
+  structuredData: [structuredData(siteStructuredData)],
   title: "Production static output",
 });
 

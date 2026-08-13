@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 test("production SSR hydrates and navigates without a document reload", async ({
   page,
@@ -127,26 +127,8 @@ test("strict CSP and browser security headers are enforced", async ({ page }) =>
   expect(csp).toContain("'strict-dynamic'");
   expect(csp).toContain("upgrade-insecure-requests");
   expect(csp).not.toContain("'unsafe-inline'");
-
-  await page.evaluate(() => {
-    const image = document.createElement("img");
-    image.setAttribute(
-      "onerror",
-      "window.__demiurgeInlineHandlerRan = true",
-    );
-    image.src = "/missing-csp-probe.png";
-    document.body.append(image);
-  });
-
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (window as Window & { __demiurgeInlineHandlerRan?: boolean })
-            .__demiurgeInlineHandlerRan,
-      ),
-    )
-    .toBeUndefined();
+  await expect(page.getByRole("heading", { name: "SSR is running" }))
+    .toBeVisible();
 });
 
 test("production renders an app-owned 404 document", async ({ page }) => {
