@@ -3,7 +3,7 @@
 Released framework changes are grouped below by version. Open work and delivery
 status live in GitHub issues and milestones.
 
-## 0.1.0 — Unreleased
+## 0.1.0 — 2026-08-13
 
 ## Pipeline Quality Gates
 
