@@ -117,5 +117,16 @@ The static adapter validates and expands those values, renders page data at
 build time, and writes an app-owned `404.html`. It also emits a deployment
 manifest containing the response headers the host must apply.
 
+The manifest has ordered `fileHeaderRules` for files without a route entry.
+Each `pattern` is an ECMAScript regular expression for the file basename.
+
+The first matching rule supplies the file headers. Content-hashed files use a
+one-year immutable policy. Other files use a revalidating policy.
+
+The host must apply each route entry before it applies the file rules. The
+application controls caching for generated route entries through response
+headers. The host controls validators, range requests, compression, and its
+provider configuration.
+
 Static generation fails on redirects, render errors, response cookies, unsafe
 or colliding output paths, and security policy that depends on a request nonce.

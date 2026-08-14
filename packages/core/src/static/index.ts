@@ -22,6 +22,11 @@ import {
   type SsrOptions,
 } from "../server";
 import { createMemoryRateLimitStore, cspHash } from "../security";
+import {
+  CONTENT_HASHED_FILE_NAME_PATTERN,
+  IMMUTABLE_FILE_CACHE_CONTROL,
+  REVALIDATED_FILE_CACHE_CONTROL,
+} from "../static-files";
 
 const STATIC_MANIFEST_FILE = "demiurge-static-manifest.json";
 
@@ -42,7 +47,13 @@ export type StaticOutputEntry = {
 export type StaticOutputManifest = {
   adapter: "static";
   entries: StaticOutputEntry[];
+  fileHeaderRules: StaticOutputFileHeaderRule[];
   version: 1;
+};
+
+export type StaticOutputFileHeaderRule = {
+  headers: Record<string, string>;
+  pattern: string;
 };
 
 export type GenerateStaticOutputOptions = {
@@ -131,12 +142,26 @@ export async function generateStaticOutput(
   const outputManifest: StaticOutputManifest = {
     adapter: "static",
     entries: pending.map(({ body: _body, ...entry }) => entry),
+    fileHeaderRules: createStaticFileHeaderRules(),
     version: 1,
   };
 
   await writeOutput(outDir, pending, outputManifest);
 
   return outputManifest;
+}
+
+function createStaticFileHeaderRules(): StaticOutputFileHeaderRule[] {
+  return [
+    {
+      headers: { "cache-control": IMMUTABLE_FILE_CACHE_CONTROL },
+      pattern: CONTENT_HASHED_FILE_NAME_PATTERN.source,
+    },
+    {
+      headers: { "cache-control": REVALIDATED_FILE_CACHE_CONTROL },
+      pattern: ".*",
+    },
+  ];
 }
 
 function normalizeOrigin(value: string | undefined) {

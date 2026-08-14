@@ -14,6 +14,9 @@ guide paths, `robots.txt`, `sitemap.xml`, and `404.html`.
 A production host must apply those headers at the matching path. The manifest
 keeps the static adapter independent of a provider configuration format.
 
+Ordered `fileHeaderRules` cover the remaining Vite and `public/` files. Hashed
+files are immutable. Other files must revalidate.
+
 The home page includes structured data. Its exact SHA-256 hash appears in the
 static CSP. The browser test verifies this policy in Chromium.
 

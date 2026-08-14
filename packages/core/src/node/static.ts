@@ -2,6 +2,11 @@ import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
 import { extname, join, relative, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
+import {
+  IMMUTABLE_FILE_CACHE_CONTROL,
+  isContentHashedFileName,
+  REVALIDATED_FILE_CACHE_CONTROL,
+} from "../static-files";
 
 export type StaticFileHandler = (request: Request) => Promise<Response | null>;
 
@@ -36,8 +41,6 @@ const contentTypes: Record<string, string> = {
   ".woff": "font/woff",
   ".woff2": "font/woff2",
 };
-
-const hashedFileName = /-[A-Za-z0-9_-]{8,}\.[A-Za-z0-9]+$/;
 
 // Plain static requests must not access the framework build output. The output
 // includes the SPA shell and the Node configuration manifest. The route pipeline
@@ -83,8 +86,8 @@ export function createStaticFileHandler(
     const headers = new Headers({
       "accept-ranges": "bytes",
       "cache-control": isImmutable(fileNameOf(filePath))
-        ? "public, max-age=31536000, immutable"
-        : "public, max-age=0, must-revalidate",
+        ? IMMUTABLE_FILE_CACHE_CONTROL
+        : REVALIDATED_FILE_CACHE_CONTROL,
       "content-length": String(stats.size),
       "content-type": contentTypeOf(filePath),
       "cross-origin-resource-policy": "same-origin",
@@ -365,7 +368,7 @@ function normalizePrefix(prefix: string | undefined) {
 }
 
 function defaultImmutable(fileName: string) {
-  return hashedFileName.test(fileName);
+  return isContentHashedFileName(fileName);
 }
 
 function defaultExcluded(path: string) {

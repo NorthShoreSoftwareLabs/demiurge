@@ -174,6 +174,20 @@ describe("static output adapter", () => {
       "<urlset></urlset>\n",
     );
     expect(persistedManifest).toEqual(manifest);
+    expect(manifest.fileHeaderRules).toEqual([
+      {
+        headers: {
+          "cache-control": "public, max-age=31536000, immutable",
+        },
+        pattern: "-[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9]+$",
+      },
+      {
+        headers: {
+          "cache-control": "public, max-age=0, must-revalidate",
+        },
+        pattern: ".*",
+      },
+    ]);
     expect(manifest.entries.map((entry) => entry.file)).toEqual([
       "404.html",
       "index.html",
