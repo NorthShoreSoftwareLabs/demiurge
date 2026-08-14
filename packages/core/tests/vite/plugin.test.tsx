@@ -855,7 +855,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     expect(response.body).toContain("/@vite/client");
   });
 
-  it("authorizes only Vite-injected tags under a default-only CSP", async () => {
+  it("preserves an unsafe-inline style policy for Vite development", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-csp-"));
     const routesDir = join(root, "routes");
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
@@ -889,7 +889,12 @@ export const GET = page({ data: () => secret, view: () => secret });`;
         file.endsWith("@policy.ts")
           ? {
             policy: defineRoutePolicy({
-              document: { csp: { defaultSrc: ["'self'"] } },
+              document: {
+                csp: {
+                  defaultSrc: ["'self'"],
+                  styleSrc: ["'self'", "'unsafe-inline'"],
+                },
+              },
             }),
           }
           : { GET: page({ view: InlineDevPage }) }
@@ -933,7 +938,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     expect(viteNonce).toBeTruthy();
     expect(defaultDirective).toBe("default-src 'self'");
     expect(scriptDirective).toBe(` script-src 'self' 'nonce-${viteNonce}'`);
-    expect(styleDirective).toBe(` style-src 'self' 'nonce-${viteNonce}'`);
+    expect(styleDirective).toBe(" style-src 'self' 'unsafe-inline'");
     expect(response.body).toContain(
       `<script type="module" nonce="${viteNonce}">window.__vitePreamble = true;</script>`,
     );

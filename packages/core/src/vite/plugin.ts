@@ -866,12 +866,17 @@ function applyDevDocumentSecurity(response: Response, nonce: string) {
     "script-src",
     source,
   );
-  const withStyleNonce = addCspSource(
-    withScriptNonce,
-    ["style-src-elem", "style-src"],
-    "style-src",
-    source,
-  );
+  const withStyleNonce = allowsUnsafeInline(
+      withScriptNonce,
+      ["style-src-elem", "style-src"],
+    )
+    ? withScriptNonce
+    : addCspSource(
+      withScriptNonce,
+      ["style-src-elem", "style-src"],
+      "style-src",
+      source,
+    );
 
   response.headers.set("content-security-policy", withStyleNonce);
   response.headers.set("cache-control", "private, no-store");
@@ -884,9 +889,7 @@ function addCspSource(
   source: string,
 ) {
   const directives = csp.split(";").map((directive) => directive.trim());
-  const directiveIndex = directives.findIndex((directive) =>
-    directiveNames.includes(directive.split(/\s+/, 1)[0]?.toLowerCase() ?? "")
-  );
+  const directiveIndex = findCspDirectiveIndex(directives, directiveNames);
 
   const defaultDirective = directives.find((directive) =>
     directive.split(/\s+/, 1)[0]?.toLowerCase() === "default-src"
@@ -912,6 +915,38 @@ function addCspSource(
   }
 
   return directives.join("; ");
+}
+
+function allowsUnsafeInline(
+  csp: string,
+  directiveNames: readonly string[],
+) {
+  const directives = csp.split(";").map((directive) => directive.trim());
+  const directiveIndex = findCspDirectiveIndex(directives, directiveNames);
+  const effectiveDirective = directiveIndex === -1
+    ? directives.find((directive) =>
+      directive.split(/\s+/, 1)[0]?.toLowerCase() === "default-src"
+    )
+    : directives[directiveIndex];
+  const sources = effectiveDirective?.split(/\s+/).slice(1) ?? [];
+
+  return sources.includes("'unsafe-inline'") &&
+    !sources.some((source) => /^'(?:nonce-|sha(?:256|384|512)-)/i.test(source));
+}
+
+function findCspDirectiveIndex(
+  directives: readonly string[],
+  directiveNames: readonly string[],
+) {
+  for (const name of directiveNames) {
+    const index = directives.findIndex((directive) =>
+      directive.split(/\s+/, 1)[0]?.toLowerCase() === name
+    );
+
+    if (index !== -1) return index;
+  }
+
+  return -1;
 }
 
 // Both dev middlewares need the manifest for the same request, and building
