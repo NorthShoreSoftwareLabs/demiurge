@@ -25,7 +25,7 @@ const expectedPackage = {
   license: "MIT",
   name: "@demiurgejs/core",
   repository: "git+https://github.com/NorthShoreSoftwareLabs/demiurge.git",
-  version: "0.1.0",
+  version: "0.1.1",
 } as const;
 
 function run(command: string, args: string[], cwd: string) {
@@ -113,7 +113,7 @@ try {
     | undefined;
 
   assert(installedPackage.name === expectedPackage.name, "Packed package has the wrong name.");
-  assert(installedPackage.version === expectedPackage.version, "Packed package is not staged at version 0.1.0.");
+  assert(installedPackage.version === expectedPackage.version, "Packed package has the wrong staged version.");
   assert(installedPackage.license === expectedPackage.license, "Packed package must declare the MIT license.");
   assert(installedPackage.author === expectedPackage.author, "Packed package is missing its author metadata.");
   assert(

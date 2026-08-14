@@ -11,6 +11,18 @@ test("static output hydrates under its hash-based CSP", async ({ page }) => {
   expect(csp).toMatch(/script-src [^;]*'sha256-[A-Za-z0-9+/=]+'/);
   expect(csp).not.toContain("'unsafe-inline'");
   expect(csp).not.toContain("'nonce-");
+  const scriptSource = await page.locator("script[src]").first().getAttribute("src");
+  const scriptResponse = await page.request.get(
+    new URL(scriptSource ?? "", staticOrigin).href,
+  );
+  const publicResponse = await page.request.get(`${staticOrigin}/site.webmanifest`);
+
+  expect(scriptResponse.headers()["cache-control"]).toBe(
+    "public, max-age=31536000, immutable",
+  );
+  expect(publicResponse.headers()["cache-control"]).toBe(
+    "public, max-age=0, must-revalidate",
+  );
   await expect(
     page.getByRole("heading", {
       name: "Built once, served without an application server.",

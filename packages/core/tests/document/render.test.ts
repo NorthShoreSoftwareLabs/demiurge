@@ -141,7 +141,7 @@ describe("renderDocument head metadata", () => {
     expect(html).toContain('<meta name="theme-color" content="#fff" />');
     expect(html).toContain('<link rel="alternate" href="/feed.xml" />');
     expect(html).toContain(
-      '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Checkout"}</script>',
+      '<script type="application/ld+json" data-demiurge-structured-data>{"@context":"https://schema.org","@type":"Article","headline":"Checkout"}</script>',
     );
   });
 

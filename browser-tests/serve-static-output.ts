@@ -11,6 +11,10 @@ type StaticEntry = {
 
 type StaticManifest = {
   entries: StaticEntry[];
+  fileHeaderRules: Array<{
+    headers: Record<string, string>;
+    pattern: string;
+  }>;
 };
 
 const host = "localhost";
@@ -30,10 +34,11 @@ function contentType(pathname: string) {
     ".js": "text/javascript; charset=utf-8",
     ".json": "application/json; charset=utf-8",
     ".svg": "image/svg+xml",
+    ".webmanifest": "application/manifest+json",
   }[extname(pathname)];
 }
 
-function assetFile(pathname: string) {
+function staticFile(pathname: string) {
   const file = resolve(outputRoot, `.${pathname}`);
 
   if (file !== outputRoot && !file.startsWith(`${outputRoot}${sep}`)) {
@@ -41,6 +46,13 @@ function assetFile(pathname: string) {
   }
 
   return file;
+}
+
+function fileRule(pathname: string) {
+  const fileName = pathname.split("/").at(-1) ?? "";
+  return manifest.fileHeaderRules.find((rule) =>
+    new RegExp(rule.pattern).test(fileName)
+  );
 }
 
 const server = createServer(async (request, response) => {
@@ -60,17 +72,25 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    if (pathname.startsWith("/assets/")) {
+    try {
+      const body = await readFile(staticFile(pathname));
       const type = contentType(pathname);
 
       if (type) {
         response.setHeader("content-type", type);
       }
+      for (const [name, value] of Object.entries(fileRule(pathname)?.headers ?? {})) {
+        response.setHeader(name, value);
+      }
       response.writeHead(200);
       response.end(request.method === "HEAD"
         ? undefined
-        : await readFile(assetFile(pathname)));
+        : body);
       return;
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+        throw error;
+      }
     }
 
     const fallback = entries.get("*");

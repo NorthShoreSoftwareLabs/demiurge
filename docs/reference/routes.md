@@ -14,6 +14,7 @@ Files under `src/routes` map to URLs:
 | `blog/[slug].tsx` | `/blog/:slug` |
 | `docs/[...path].tsx` | `/docs/*` |
 | `(marketing)/about.tsx` | `/about` |
+| `robots.txt.ts` | `/robots.txt` |
 
 Parenthesized route groups organize files without adding a URL segment. Dynamic
 segments use `[name]`. A terminal catchall uses `[...name]`. Ambiguous route
@@ -37,6 +38,12 @@ export const POST = json(({ request }) => ({
 
 The browser router only treats a page-compatible `GET` as a navigation target.
 Other capabilities run through the server request pipeline.
+
+A static build emits fixed `text(...)`, `html(...)`, and `json(...)` GET values.
+It keeps a dotted route filename in the output filename.
+
+A static build rejects request-dependent values and request-time methods. The
+diagnostic identifies the route file and the unsupported capability.
 
 Implemented response helpers are:
 

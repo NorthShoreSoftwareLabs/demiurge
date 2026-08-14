@@ -19,4 +19,4 @@ const manifest = await generateStaticOutput({
   },
 });
 
-console.log(`Generated ${manifest.entries.length} static HTML artifacts in dist/.`);
+console.log(`Generated ${manifest.entries.length} static artifacts in dist/.`);

@@ -16,6 +16,7 @@ import {
   page,
   security,
   structuredData,
+  text,
   type LayoutProps,
   type NotFoundProps,
   type RouteMiddleware,
@@ -65,6 +66,14 @@ function PlainPage() {
   return <main>Plain page</main>;
 }
 
+function InlineScriptPage() {
+  return (
+    <main>
+      <script dangerouslySetInnerHTML={{ __html: "window.appInline = true;" }} />
+    </main>
+  );
+}
+
 async function createOutputDirectory() {
   const root = await mkdtemp(join(tmpdir(), "demiurge-static-output-"));
   const outDir = join(root, "dist");
@@ -111,7 +120,14 @@ describe("static output adapter", () => {
   it("renders static and dynamic pages, preserves assets, and emits a 404 and manifest", async () => {
     const { outDir } = await createOutputDirectory();
     const routes = appRoutes({
-      "./routes/api/health.ts": routeModule({}),
+      "./routes/robots.txt.ts": routeModule({
+        GET: text("User-agent: *\nAllow: /\n"),
+      }),
+      "./routes/sitemap.xml.ts": routeModule({
+        GET: text("<urlset></urlset>\n", {
+          headers: { "content-type": "application/xml; charset=utf-8" },
+        }),
+      }),
       "./routes/posts/[slug].tsx": routeModule({
         GET: page({ render: { mode: "static" }, view: Post }),
         paths: async () => [{ slug: "hello world" }, { slug: "second" }],
@@ -151,30 +167,82 @@ describe("static output adapter", () => {
     expect(notFound).toContain('"navigation":"document"');
     expect(await readFile(join(outDir, "assets", "app-a1b2c3d4.js"), "utf8"))
       .toBe("export {};\n");
-    expect(existsSync(join(outDir, "api", "health", "index.html"))).toBe(false);
+    expect(await readFile(join(outDir, "robots.txt"), "utf8")).toBe(
+      "User-agent: *\nAllow: /\n",
+    );
+    expect(await readFile(join(outDir, "sitemap.xml"), "utf8")).toBe(
+      "<urlset></urlset>\n",
+    );
     expect(persistedManifest).toEqual(manifest);
+    expect(manifest.entries.every((entry) => !("kind" in entry))).toBe(true);
+    expect(manifest.fileHeaderRules).toEqual([
+      {
+        headers: {
+          "cache-control": "public, max-age=31536000, immutable",
+        },
+        pattern: "-[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9]+$",
+      },
+      {
+        headers: {
+          "cache-control": "public, max-age=0, must-revalidate",
+        },
+        pattern: ".*",
+      },
+    ]);
     expect(manifest.entries.map((entry) => entry.file)).toEqual([
       "404.html",
       "index.html",
       "posts/hello world/index.html",
       "posts/second/index.html",
+      "robots.txt",
+      "sitemap.xml",
     ]);
+    expect(
+      manifest.entries.find((entry) => entry.file === "sitemap.xml")?.headers["content-type"],
+    ).toBe("application/xml; charset=utf-8");
   });
 
-  it("records static CSP headers and accepts correctly hashed inline scripts", async () => {
+  it("rejects route capabilities that require a runtime adapter", async () => {
+    const dynamic = await createOutputDirectory();
+    const mutation = await createOutputDirectory();
+
+    await expect(
+      generateStaticOutput({
+        outDir: dynamic.outDir,
+        routes: appRoutes({
+          "./routes/request.txt.ts": routeModule({
+            GET: text(({ request }) => request.url),
+          }),
+        }),
+      }),
+    ).rejects.toThrow(
+      /"\.\/routes\/request\.txt\.ts" uses a request-dependent text value/,
+    );
+
+    await expect(
+      generateStaticOutput({
+        outDir: mutation.outDir,
+        routes: appRoutes({
+          "./routes/submit.ts": routeModule({
+            GET: text("ready"),
+            POST: text("accepted"),
+          }),
+        }),
+      }),
+    ).rejects.toThrow(/"\.\/routes\/submit\.ts" exports unsupported methods POST/);
+  });
+
+  it("adds static CSP hashes for framework-rendered structured data", async () => {
     const { outDir } = await createOutputDirectory();
     const schema = {
       "@context": "https://schema.org",
       "@type": "WebSite",
-      name: "Static example",
+      name: "Static </script> example\u2028line\u2029end",
     };
-    const hash = await cspHash(JSON.stringify(schema));
     const routes = appRoutes({
       "./routes/@policy.ts": routeModule({
         policy: defineRoutePolicy({
-          document: security.static({
-            csp: { scriptSrc: ["'self'", hash] },
-          }),
+          document: security.static(),
         }),
       }),
       "./routes/index.tsx": routeModule({
@@ -192,14 +260,70 @@ describe("static output adapter", () => {
     const manifest = await generateStaticOutput({ outDir, routes });
     const homeEntry = manifest.entries.find((entry) => entry.pathname === "/");
     const home = await readFile(join(outDir, "index.html"), "utf8");
+    const structuredDataSource = home.match(
+      /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+    )?.[1];
+    const hash = await cspHash(structuredDataSource ?? "");
 
     expect(homeEntry?.headers["content-security-policy"]).toContain(hash);
     expect(homeEntry?.headers["content-security-policy"])
       .not.toContain("'unsafe-inline'");
-    expect(home).toContain(
-      `<script type="application/ld+json">${JSON.stringify(schema)}</script>`,
-    );
+    expect(home).toContain('<script type="application/ld+json">');
+    expect(home).toContain("\\u003c/script\\u003e");
+    expect(home).toContain("\\u2028");
+    expect(home).toContain("\\u2029");
+    expect(home).not.toContain("data-demiurge-structured-data");
     expect(home).not.toContain(" nonce=");
+  });
+
+  it("rejects application-authored inline scripts without a declared hash", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({ document: security.static() }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: InlineScriptPage }),
+      }),
+    });
+
+    await expect(generateStaticOutput({ outDir, routes })).rejects.toThrow(
+      /inline script without the required CSP hash/,
+    );
+  });
+
+  it("does not add script policy to unrelated CSP headers", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({
+          document: {
+            csp: { baseUri: ["'self'"] },
+            trustedTypes: {
+              mode: "report-only",
+              policies: ["demiurge"],
+              requireFor: ["script"],
+            },
+          },
+        }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: PlainPage }),
+        metadata: defineMetadata({
+          structuredData: [structuredData({ "@type": "WebSite" })],
+        }),
+      }),
+    });
+
+    const manifest = await generateStaticOutput({ outDir, routes });
+    const homeEntry = manifest.entries.find((entry) => entry.pathname === "/");
+
+    expect(homeEntry?.headers["content-security-policy"]).toBe(
+      "base-uri 'self'",
+    );
+    expect(homeEntry?.headers["content-security-policy-report-only"]).toBe(
+      "require-trusted-types-for 'script'; trusted-types demiurge",
+    );
   });
 
   it("rejects nonce-backed CSP because a static nonce cannot be fresh per request", async () => {
@@ -257,7 +381,7 @@ describe("static output adapter", () => {
     );
   });
 
-  it("removes pages generated by the previous static manifest without touching assets", async () => {
+  it("removes generated files from the previous static manifest without touching assets", async () => {
     const { outDir } = await createOutputDirectory();
 
     await generateStaticOutput({
@@ -266,13 +390,18 @@ describe("static output adapter", () => {
         "./routes/old.tsx": routeModule({
           GET: page({ render: { mode: "static" }, view: PlainPage }),
         }),
+        "./routes/retired.txt.ts": routeModule({
+          GET: text("retired"),
+        }),
       }),
     });
     expect(existsSync(join(outDir, "old", "index.html"))).toBe(true);
+    expect(existsSync(join(outDir, "retired.txt"))).toBe(true);
 
     await generateStaticOutput({ outDir, routes: appRoutes() });
 
     expect(existsSync(join(outDir, "old", "index.html"))).toBe(false);
+    expect(existsSync(join(outDir, "retired.txt"))).toBe(false);
     expect(existsSync(join(outDir, "assets", "app-a1b2c3d4.js"))).toBe(true);
   });
 
@@ -313,7 +442,9 @@ describe("static output adapter", () => {
     await expect(
       generateStaticOutput({
         outDir: apiOnly.outDir,
-        routes: { "./routes/api/health.ts": routeModule({}) },
+        routes: {
+          "./routes/api/health.ts": routeModule({ GET: text("healthy") }),
+        },
       }),
     ).rejects.toThrow(/at least one page route/);
     await expect(

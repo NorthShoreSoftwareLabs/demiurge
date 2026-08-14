@@ -1,6 +1,6 @@
 {
   "name": "@demiurgejs/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A React framework for secure routing, server rendering, and framework-managed HTML documents.",
   "license": "MIT",
   "author": "North Shore Software Labs",
@@ -91,5 +91,8 @@
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
     "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "magic-string": "^0.30.21"
   }
 }

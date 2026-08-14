@@ -248,7 +248,9 @@ export async function hydrateFileRouter(options: HydrateFileRouterOptions) {
         navigation: initialData?.navigation ?? options.navigation,
       },
   );
-  const { createRoot, hydrateRoot } = await import("react-dom/client");
+  const { createRoot, hydrateRoot } = resolveReactDomClient(
+    await import("react-dom/client"),
+  );
 
   // Only documents rendered by the framework server carry markup to hydrate.
   // A static shell has an empty root, so hydrating it would mismatch. A
@@ -261,6 +263,34 @@ export async function hydrateFileRouter(options: HydrateFileRouterOptions) {
 
   root.replaceChildren();
   createRoot(root).render(createElement(Router));
+}
+
+type ReactDomClientApi = Pick<
+  typeof import("react-dom/client"),
+  "createRoot" | "hydrateRoot"
+>;
+
+type ReactDomClientModule = Partial<ReactDomClientApi> & {
+  default?: ReactDomClientApi;
+};
+
+export function resolveReactDomClient(module: ReactDomClientModule) {
+  const client = typeof module.createRoot === "function" &&
+      typeof module.hydrateRoot === "function"
+    ? module as ReactDomClientApi
+    : module.default;
+
+  if (
+    !client ||
+    typeof client.createRoot !== "function" ||
+    typeof client.hydrateRoot !== "function"
+  ) {
+    throw new Error(
+      "Demiurge could not load the React DOM client from the Vite module.",
+    );
+  }
+
+  return client;
 }
 
 export function Link<const TTo extends AppHref>(

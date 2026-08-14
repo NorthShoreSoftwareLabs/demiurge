@@ -10,6 +10,22 @@ import {
   type RouteModule,
   type RouteProps,
 } from "@demiurgejs/core";
+import { resolveReactDomClient } from "../../src/browser/file-router";
+
+describe("React DOM client interop", () => {
+  it("accepts named and default-only Vite module shapes", () => {
+    const client = {
+      createRoot: vi.fn(),
+      hydrateRoot: vi.fn(),
+    } as unknown as Pick<
+      typeof import("react-dom/client"),
+      "createRoot" | "hydrateRoot"
+    >;
+
+    expect(resolveReactDomClient(client)).toBe(client);
+    expect(resolveReactDomClient({ default: client })).toBe(client);
+  });
+});
 
 describe("client hydration", () => {
   beforeEach(() => {
