@@ -67,10 +67,18 @@ jobs:
 
       - name: Refuse an unrelated npm package owner
         env:
+          EXPECTED_NPM_OWNER: john_nssl
           PACKAGE_NAME: ${{ steps.version.outputs.package-name }}
         run: |
           if repository=$(npm view "$PACKAGE_NAME" repository.url --json 2>/dev/null); then
             case "$repository" in
+              ""|null)
+                owners=$(npm owner ls "$PACKAGE_NAME")
+                case "$owners" in
+                  *"$EXPECTED_NPM_OWNER"*) ;;
+                  *) echo "npm package $PACKAGE_NAME does not list the expected owner." >&2; exit 1 ;;
+                esac
+                ;;
               *NorthShoreSoftwareLabs/demiurge*) ;;
               *) echo "npm package $PACKAGE_NAME belongs to another repository: $repository" >&2; exit 1 ;;
             esac
