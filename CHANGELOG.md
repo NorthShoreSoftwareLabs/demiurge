@@ -3,16 +3,25 @@
 Released framework changes are grouped below by version. Open work and delivery
 status live in GitHub issues and milestones.
 
-## 0.1.1 — Unreleased
+## 0.1.1 — 2026-08-14
 
+- Development SSR now supports route files that import the `meta` helper and
+  also read `import.meta.env` (#124).
 - The development server now serves the framework client entry. Page apps now
   hydrate on normal pages and application-owned not-found pages (#128).
+- The development server now gives Vite-managed scripts and styles a
+  request-local CSP nonce. Application-authored inline content remains
+  untrusted (#129).
 - SSR builds now use the supported Node 22.13 target by default. Explicit Vite
   build targets remain unchanged (#125).
 - The Vite plugin now disables automatic asset inlining by default. This change
   keeps generated asset URLs compatible with the default CSP (#127).
 - Static output now adds CSP hashes for framework-rendered structured data.
   Application-authored inline scripts still require explicit hashes (#130).
+- Static manifests now declare immutable caching for hashed files. Other files
+  use a revalidating policy (#126).
+- Static output now emits fixed text, HTML, and JSON routes. It rejects routes
+  that require a runtime adapter (#132).
 
 ## 0.1.0 — 2026-08-13
 
