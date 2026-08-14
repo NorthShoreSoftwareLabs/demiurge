@@ -3,6 +3,17 @@
 Released framework changes are grouped below by version. Open work and delivery
 status live in GitHub issues and milestones.
 
+## 0.1.1 — Unreleased
+
+- The development server now serves the framework client entry. Page apps now
+  hydrate on normal pages and application-owned not-found pages (#128).
+- SSR builds now use the supported Node 22.13 target by default. Explicit Vite
+  build targets remain unchanged (#125).
+- The Vite plugin now disables automatic asset inlining by default. This change
+  keeps generated asset URLs compatible with the default CSP (#127).
+- Static output now adds CSP hashes for framework-rendered structured data.
+  Application-authored inline scripts still require explicit hashes (#130).
+
 ## 0.1.0 — 2026-08-13
 
 ## Pipeline Quality Gates
