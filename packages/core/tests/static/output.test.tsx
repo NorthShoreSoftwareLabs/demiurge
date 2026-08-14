@@ -174,6 +174,7 @@ describe("static output adapter", () => {
       "<urlset></urlset>\n",
     );
     expect(persistedManifest).toEqual(manifest);
+    expect(manifest.entries.every((entry) => !("kind" in entry))).toBe(true);
     expect(manifest.fileHeaderRules).toEqual([
       {
         headers: {

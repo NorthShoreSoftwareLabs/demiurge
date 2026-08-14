@@ -239,7 +239,7 @@ async function validateStaticRoutes(manifest: RouteManifest) {
 }
 
 function staticUnsupportedMethods(routeModule: RouteModule) {
-  return (["POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const)
+  return (["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"] as const)
     .filter((method) => routeModule[method] !== undefined);
 }
 
@@ -393,9 +393,10 @@ async function prepareDocumentOutput(
   await validateStaticCsp(entry.pathname, html, response.headers);
 
   return {
-    ...entry,
+    file: entry.file,
     headers: sortedHeaders(response.headers),
     body: html,
+    pathname: entry.pathname,
     status: expectedStatus,
   };
 }
