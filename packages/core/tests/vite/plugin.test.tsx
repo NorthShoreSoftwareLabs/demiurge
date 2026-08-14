@@ -773,7 +773,9 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     expect(response.body).toContain(
       '<script src="https://js.stripe.com/v3/"></script>',
     );
-    expect(response.body).toContain('src="/virtual:demiurge/client-entry"');
+    expect(response.body).toContain(
+      'src="/@id/virtual:demiurge/client-entry"',
+    );
     expect(response.body).toContain("/@vite/client");
   });
 
@@ -814,7 +816,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain("/@vite/client");
-    expect(response.body).toContain("virtual:demiurge/client-entry");
+    expect(response.body).toContain("/@id/virtual:demiurge/client-entry");
     expect(response.body).toContain("Streaming dev");
     expect(response.body).toContain("</html>");
     expect(transformIndexHtml).toHaveBeenCalledOnce();
@@ -862,7 +864,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     );
 
     expect(response.statusCode).toBe(404);
-    expect(response.body).toContain("virtual:demiurge/client-entry");
+    expect(response.body).toContain("/@id/virtual:demiurge/client-entry");
     expect(response.body).toContain('data-demiurge-fallback="not-found"');
     expect(response.body).toContain("404");
     expect(response.body).toContain("No route matched");
@@ -910,7 +912,9 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     expect(response.body).toContain("Hello from the server");
     expect(response.body).toContain('data-demiurge-hydrate=""');
     expect(response.body).toContain('id="__demiurge_data"');
-    expect(response.body).toContain('src="/virtual:demiurge/client-entry"');
+    expect(response.body).toContain(
+      'src="/@id/virtual:demiurge/client-entry"',
+    );
   });
 
   it("includes server-resolved route data in the dev document bootstrap payload", async () => {

@@ -47,6 +47,7 @@ export type DemiurgeVitePluginOptions = {
 };
 
 const CLIENT_ENTRY_ID = "virtual:demiurge/client-entry";
+const DEV_CLIENT_ENTRY_PATH = `/@id/${CLIENT_ENTRY_ID}`;
 const RESOLVED_CLIENT_ENTRY_ID = `\0${CLIENT_ENTRY_ID}`;
 const SERVER_ENTRY_ID = "virtual:demiurge/server-entry";
 const RESOLVED_SERVER_ENTRY_ID = `\0${SERVER_ENTRY_ID}`;
@@ -620,7 +621,7 @@ function createDevRuntimeOptions(
       if (match.render.mode === "streaming") {
         return await renderStreamingPageResponse(match, {
           ...renderOptions,
-          clientEntry: `/${CLIENT_ENTRY_ID}`,
+          clientEntry: DEV_CLIENT_ENTRY_PATH,
           transformDocument: (html) => server.transformIndexHtml("/", html),
         });
       }
@@ -629,7 +630,7 @@ function createDevRuntimeOptions(
         "/",
         renderPageDocument(match, {
           ...renderOptions,
-          clientEntry: `/${CLIENT_ENTRY_ID}`,
+          clientEntry: DEV_CLIENT_ENTRY_PATH,
         }),
       );
 
@@ -671,7 +672,7 @@ async function loadDevManifest(
 
 function createDevSsrOptions(options: DemiurgeVitePluginOptions) {
   return {
-    clientEntry: `/${CLIENT_ENTRY_ID}`,
+    clientEntry: DEV_CLIENT_ENTRY_PATH,
     lang: options.document?.lang,
     title: options.document?.title,
   };

@@ -39,5 +39,12 @@ export default defineConfig({
       timeout: 120_000,
       url: "http://localhost:42178/",
     },
+    {
+      command:
+        "pnpm --filter @demiurge-examples/ssr-page dev --host localhost --port 42179",
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: "http://localhost:42179/",
+    },
   ],
 });
