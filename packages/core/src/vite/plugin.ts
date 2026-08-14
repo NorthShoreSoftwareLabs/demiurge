@@ -2,7 +2,13 @@ import { existsSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join, resolve, relative, sep } from "node:path";
-import { parseAst, type Plugin, type UserConfig, type ViteDevServer } from "vite";
+import {
+  type ConfigEnv,
+  parseAst,
+  type Plugin,
+  type UserConfig,
+  type ViteDevServer,
+} from "vite";
 import { renderDocument } from "../document";
 import type {
   LinkTag,
@@ -59,8 +65,8 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
   return {
     enforce: "post",
     name: "demiurge",
-    config(config) {
-      return createViteConfig(config);
+    config(config, environment) {
+      return createViteConfig(config, environment);
     },
     configResolved(config) {
       root = config.root;
@@ -476,10 +482,15 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function createViteConfig(config: UserConfig): UserConfig {
+function createViteConfig(config: UserConfig, environment: ConfigEnv): UserConfig {
   return {
     appType: "custom",
     build: {
+      ...(environment.isSsrBuild &&
+          config.build?.target === undefined &&
+          config.ssr?.target !== "webworker"
+        ? { target: "node22.13" }
+        : {}),
       rollupOptions: {
         input: config.build?.rollupOptions?.input ?? CLIENT_ENTRY_ID,
       },

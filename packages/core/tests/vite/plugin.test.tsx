@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Readable, Writable } from "node:stream";
+import type { ConfigEnv } from "vite";
 import { describe, expect, it, vi } from "vitest";
 import {
   defineLinks,
@@ -52,7 +53,10 @@ function DevPage({ data }: RouteProps<string, { message: string }>) {
 
 type PluginHarness = {
   buildStart?: (options?: unknown) => void | Promise<void>;
-  config?: (config: Record<string, unknown>) => Record<string, unknown>;
+  config?: (
+    config: Record<string, unknown>,
+    environment: ConfigEnv,
+  ) => Record<string, unknown>;
   configResolved?: (config: {
     command?: string;
     root: string;
@@ -122,17 +126,47 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   it("configures and loads both framework virtual entries", () => {
     const plugin = demiurge({ styles: false }) as PluginHarness;
 
-    expect(plugin.config?.({})).toMatchObject({
+    expect(plugin.config?.({}, {
+      command: "build",
+      isPreview: false,
+      isSsrBuild: false,
+      mode: "production",
+    })).toMatchObject({
       appType: "custom",
       build: { rollupOptions: { input: "virtual:demiurge/client-entry" } },
     });
     expect(
       plugin.config?.({
         build: { rollupOptions: { input: "src/custom-entry.ts" } },
+      }, {
+        command: "build",
+        isPreview: false,
+        isSsrBuild: false,
+        mode: "production",
       }),
     ).toMatchObject({
       build: { rollupOptions: { input: "src/custom-entry.ts" } },
     });
+    expect(plugin.config?.({}, {
+      command: "build",
+      isPreview: false,
+      isSsrBuild: true,
+      mode: "production",
+    })).toMatchObject({
+      build: { target: "node22.13" },
+    });
+    expect(plugin.config?.({ build: { target: "esnext" } }, {
+      command: "build",
+      isPreview: false,
+      isSsrBuild: true,
+      mode: "production",
+    })).not.toHaveProperty("build.target");
+    expect(plugin.config?.({ ssr: { target: "webworker" } }, {
+      command: "build",
+      isPreview: false,
+      isSsrBuild: true,
+      mode: "production",
+    })).not.toHaveProperty("build.target");
 
     expect(plugin.resolveId?.("virtual:demiurge/client-entry")).toBe(
       "\0virtual:demiurge/client-entry",
