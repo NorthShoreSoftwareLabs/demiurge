@@ -486,6 +486,7 @@ function createViteConfig(config: UserConfig, environment: ConfigEnv): UserConfi
   return {
     appType: "custom",
     build: {
+      assetsInlineLimit: config.build?.assetsInlineLimit ?? 0,
       ...(environment.isSsrBuild &&
           config.build?.target === undefined &&
           config.ssr?.target !== "webworker"

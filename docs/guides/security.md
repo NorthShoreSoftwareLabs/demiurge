@@ -33,6 +33,12 @@ Static output uses hash-based policy. `security.static()` and `cspHash(...)`
 describe hashes that remain valid without a request nonce. Static generation
 rejects nonce-dependent output and other policy it cannot deploy safely.
 
+The Vite plugin disables automatic asset inlining by default. This setting
+prevents generated data URLs from conflicting with the default CSP.
+
+An application can set `build.assetsInlineLimit` explicitly. If the application
+enables inlining, add `data:` to each applicable CSP directive.
+
 Trusted Types is explicit because enabling enforcement can break third-party
 code in browsers the application does not control. Report-only policy can send
 violations to `createSecurityReportHandler(...)` before enforcement is enabled.

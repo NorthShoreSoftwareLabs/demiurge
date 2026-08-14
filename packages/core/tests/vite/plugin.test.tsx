@@ -133,7 +133,19 @@ export const GET = page({ data: () => secret, view: () => secret });`;
       mode: "production",
     })).toMatchObject({
       appType: "custom",
-      build: { rollupOptions: { input: "virtual:demiurge/client-entry" } },
+      build: {
+        assetsInlineLimit: 0,
+        rollupOptions: { input: "virtual:demiurge/client-entry" },
+      },
+    });
+    const assetsInlineLimit = () => false;
+    expect(plugin.config?.({ build: { assetsInlineLimit } }, {
+      command: "build",
+      isPreview: false,
+      isSsrBuild: false,
+      mode: "production",
+    })).toMatchObject({
+      build: { assetsInlineLimit },
     });
     expect(
       plugin.config?.({
