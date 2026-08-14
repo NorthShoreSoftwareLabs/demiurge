@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, join, resolve, relative, sep } from "node:path";
+import MagicString from "magic-string";
 import {
   type ConfigEnv,
   parseAst,
@@ -97,8 +98,12 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
     transform: {
       order: "post",
       handler(code, id, transformOptions) {
-        if (transformOptions?.ssr || !isRouteSource(root, options, id)) {
+        if (!isRouteSource(root, options, id)) {
           return null;
+        }
+
+        if (transformOptions?.ssr) {
+          return isBuild ? null : protectSsrImportMeta(code, id);
         }
 
         const transformed = stripClientPageData(code);
@@ -277,6 +282,56 @@ type AstNode = {
   start: number;
   type: string;
 };
+
+// Vite 6 treats the `meta` token in `import.meta` as an imported reference.
+// Give an imported `meta` binding a private name before development SSR runs.
+function protectSsrImportMeta(code: string, id: string) {
+  if (!code.includes("import.meta")) {
+    return null;
+  }
+
+  const ast = parseAst(code) as unknown as AstNode;
+  const declaration = asNodeArray(ast.body).find((node) =>
+    node.type === "ImportDeclaration" &&
+    asNodeArray(node.specifiers).some((specifier) =>
+      asNode(specifier.local)?.type === "Identifier" &&
+      asNode(specifier.local)?.name === "meta"
+    )
+  );
+  const specifier = declaration &&
+    asNodeArray(declaration.specifiers).find((candidate) =>
+      asNode(candidate.local)?.type === "Identifier" &&
+      asNode(candidate.local)?.name === "meta"
+    );
+  const local = specifier && asNode(specifier.local);
+
+  if (!declaration || !specifier || !local) {
+    return null;
+  }
+
+  let alias = "__demiurge_imported_meta__";
+  while (new RegExp(`\\b${alias}\\b`).test(code)) {
+    alias += "_";
+  }
+
+  const editor = new MagicString(code);
+  const imported = asNode(specifier.imported);
+  editor.overwrite(
+    local.start,
+    local.end,
+    imported?.start === local.start ? `meta as ${alias}` : alias,
+  );
+  editor.appendLeft(declaration.end, `\nconst meta = ${alias};`);
+
+  return {
+    code: editor.toString(),
+    map: editor.generateMap({
+      hires: "boundary",
+      includeContent: true,
+      source: id,
+    }),
+  };
+}
 
 // Page data and document contributions are server capabilities. Vite and React
 // first parse TypeScript and JSX. The plugin then removes these capabilities

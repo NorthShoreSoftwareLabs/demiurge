@@ -2,6 +2,7 @@ import {
   Link,
   defineLinks,
   defineMetadata,
+  meta,
   preconnect,
   type LayoutProps,
 } from "@demiurgejs/core";
@@ -9,6 +10,7 @@ import {
 export const links = defineLinks([preconnect("https://api.example.com")]);
 
 export const metadata = defineMetadata({
+  custom: [meta({ content: "Demiurge SSR Page", name: "application-name" })],
   description:
     "A minimal Demiurge example that renders on the server and hydrates on the client.",
   openGraph: {
@@ -22,7 +24,7 @@ export const metadata = defineMetadata({
 
 export default function RootLayout({ children }: LayoutProps) {
   return (
-    <div>
+    <div data-development-mode={String(import.meta.env.DEV)}>
       <header className="site-header">
         <Link className="brand" to="/">
           Demiurge SSR
