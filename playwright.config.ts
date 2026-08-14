@@ -21,16 +21,23 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
-  webServer: {
-    command:
-      "pnpm --filter @demiurgejs/core build && pnpm --filter @demiurge-examples/node-server build && pnpm --filter @demiurge-examples/node-server start",
-    env: {
-      HOST: "localhost",
-      NODE_ENV: "production",
-      PORT: "42177",
+  webServer: [
+    {
+      command: "pnpm --filter @demiurge-examples/node-server start",
+      env: {
+        HOST: "localhost",
+        NODE_ENV: "production",
+        PORT: "42177",
+      },
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: "http://localhost:42177/",
     },
-    reuseExistingServer: false,
-    timeout: 120_000,
-    url: "http://localhost:42177/",
-  },
+    {
+      command: "tsx browser-tests/serve-static-output.ts",
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: "http://localhost:42178/",
+    },
+  ],
 });
