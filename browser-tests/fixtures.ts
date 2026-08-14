@@ -9,7 +9,7 @@ type CspViolation = {
 
 const cspConsolePattern = /content security policy|content-security-policy/i;
 
-export const test = base.extend<{ cspMonitor: void }>({
+export const test = base.extend<{ cspMonitor: CspViolation[] }>({
   cspMonitor: [async ({ page }, use) => {
     const browserViolations: CspViolation[] = [];
     const consoleViolations: string[] = [];
@@ -38,7 +38,7 @@ export const test = base.extend<{ cspMonitor: void }>({
       });
     });
 
-    await use();
+    await use(browserViolations);
 
     expect.soft(consoleViolations, "CSP console violations").toEqual([]);
     expect.soft(browserViolations, "CSP browser events").toEqual([]);

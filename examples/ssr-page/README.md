@@ -14,10 +14,14 @@ into the document head.
 - `/widgets/[id]` (`src/routes/widgets/[id].tsx`) — a dynamic route. The file
   segment `[id]` becomes `path.id` inside the route component. Demiurge uses
   `path` for this, never `params`.
+- `/stream` (`src/routes/stream.tsx`) — a streaming route for development
+  browser verification.
 - `src/routes/@layout.tsx` — the root layout. It defines the site header, the
   navigation, and the `metadata` and `links` that every route under it
   inherits.
 - `src/routes/@not-found.tsx` — the fallback for unmatched paths.
+- `src/routes/@policy.ts` — the strict document policy used in production and
+  development.
 
 ## What to look at, and why
 
@@ -68,4 +72,5 @@ updates the URL and swaps the rendered route without a full page reload.
 The Vite plugin sends page requests through the same route and rendering
 pipeline as the production request handler. Running `pnpm dev` therefore
 shows the server-rendered body and `__demiurge_data` payload in view source,
-while Vite still adds its development client and transforms.
+while Vite still adds its development client and transforms. The root policy
+also verifies Fast Refresh with a strict CSP.

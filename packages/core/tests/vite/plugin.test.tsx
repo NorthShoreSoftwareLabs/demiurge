@@ -51,6 +51,15 @@ function DevPage({ data }: RouteProps<string, { message: string }>) {
   return <main>{data.message}</main>;
 }
 
+function InlineDevPage() {
+  return (
+    <main>
+      <style>{"main { color: green; }"}</style>
+      <script dangerouslySetInnerHTML={{ __html: "window.appInline = true;" }} />
+    </main>
+  );
+}
+
 type PluginHarness = {
   buildStart?: (options?: unknown) => void | Promise<void>;
   config?: (
@@ -194,6 +203,27 @@ export const GET = page({ data: () => secret, view: () => secret });`;
       "createRequestHandler",
     );
     expect(plugin.load?.("unrelated")).toBeNull();
+  });
+
+  it("configures a development-only Vite nonce placeholder", () => {
+    const plugin = demiurge() as PluginHarness;
+    const development = plugin.config?.({}, {
+      command: "serve",
+      isPreview: false,
+      isSsrBuild: false,
+      mode: "development",
+    });
+    const production = plugin.config?.({}, {
+      command: "build",
+      isPreview: false,
+      isSsrBuild: false,
+      mode: "production",
+    });
+
+    expect(development).toMatchObject({
+      html: { cspNonce: expect.stringMatching(/^demiurge-/) },
+    });
+    expect(production).not.toHaveProperty("html.cspNonce");
   });
 
   it("serves HTTP response capabilities", async () => {
@@ -823,6 +853,100 @@ export const GET = page({ data: () => secret, view: () => secret });`;
       'src="/@id/virtual:demiurge/client-entry"',
     );
     expect(response.body).toContain("/@vite/client");
+  });
+
+  it("authorizes only Vite-injected tags under a default-only CSP", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-csp-"));
+    const routesDir = join(root, "routes");
+    const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
+    const developmentConfig = plugin.config?.({}, {
+      command: "serve",
+      isPreview: false,
+      isSsrBuild: false,
+      mode: "development",
+    });
+    const placeholder = (developmentConfig?.html as {
+      cspNonce: string;
+    }).cspNonce;
+    const middleware = createMiddlewareHarness();
+    const transformIndexHtml = vi.fn(async (_url: string, html: string) => {
+      const withViteTags = html.replace(
+        "</head>",
+        `<meta property="csp-nonce" nonce="${placeholder}"><script type="module" nonce="${placeholder}">window.__vitePreamble = true;</script><script type="module" src="/@vite/client" nonce="${placeholder}"></script></head>`,
+      );
+
+      return withViteTags.replace(
+        /<(script|style|link)\b[^>]*>/gi,
+        (tag) => /\snonce(?:\s|=|>)/i.test(tag)
+          ? tag
+          : tag.replace(/>$/, ` nonce="${placeholder}">`),
+      );
+    });
+    const server = {
+      config: { root },
+      middlewares: { use: middleware.use },
+      ssrLoadModule: vi.fn(async (file: string) =>
+        file.endsWith("@policy.ts")
+          ? {
+            policy: defineRoutePolicy({
+              document: { csp: { defaultSrc: ["'self'"] } },
+            }),
+          }
+          : { GET: page({ view: InlineDevPage }) }
+      ),
+      transformIndexHtml,
+      watcher: createWatcherHarness(),
+    };
+
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(join(routesDir, "@policy.ts"), "export {};");
+    await writeFile(join(routesDir, "index.tsx"), "export {};");
+    plugin.configureServer?.(server as never);
+
+    const response = new CapturingResponse();
+    await middleware.handler(
+      requestFor("/", {
+        headers: { accept: "text/html", host: "example.test" },
+      }) as never,
+      response as never,
+      vi.fn(),
+    );
+
+    const csp = String(
+      response.headers.get("content-security-policy") ?? "",
+    );
+    const defaultDirective = csp.split(";").find((directive) =>
+      directive.trim().startsWith("default-src")
+    );
+    const scriptDirective = csp.split(";").find((directive) =>
+      directive.trim().startsWith("script-src")
+    );
+    const styleDirective = csp.split(";").find((directive) =>
+      directive.trim().startsWith("style-src")
+    );
+    const viteNonce = response.body.match(
+      /<meta property="csp-nonce" nonce="([^"]+)">/,
+    )?.[1];
+    const renderedNonces = [...response.body.matchAll(/\snonce="([^"]+)"/g)]
+      .map((match) => match[1]);
+
+    expect(viteNonce).toBeTruthy();
+    expect(defaultDirective).toBe("default-src 'self'");
+    expect(scriptDirective).toBe(` script-src 'self' 'nonce-${viteNonce}'`);
+    expect(styleDirective).toBe(` style-src 'self' 'nonce-${viteNonce}'`);
+    expect(response.body).toContain(
+      `<script type="module" nonce="${viteNonce}">window.__vitePreamble = true;</script>`,
+    );
+    expect(response.body).toContain(
+      `<script type="module" src="/@vite/client" nonce="${viteNonce}"></script>`,
+    );
+    expect(response.body).toContain("<style>main { color: green; }</style>");
+    expect(response.body).toContain(
+      "<script>window.appInline = true;</script>",
+    );
+    expect(response.body).not.toContain(placeholder);
+    expect(response.body).not.toMatch(/nonce="demiurge-/);
+    expect(new Set(renderedNonces)).toEqual(new Set([viteNonce]));
   });
 
   it("streams page routes through Vite's transformed dev shell", async () => {

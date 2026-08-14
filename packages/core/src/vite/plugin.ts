@@ -40,6 +40,7 @@ import {
   writeWebResponse,
 } from "../node/http";
 import { renderStreamingPageResponse } from "../node/streaming";
+import { createCspNonce } from "../security/policy";
 
 export type DemiurgeVitePluginOptions = {
   document?: {
@@ -62,12 +63,13 @@ const DEFAULT_TYPED_ROUTES_OUTPUT = ".demiurge/route-manifest.d.ts";
 export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
   let root = process.cwd();
   let isBuild = false;
+  const viteNoncePlaceholder = `demiurge-${createCspNonce()}`;
 
   return {
     enforce: "post",
     name: "demiurge",
     config(config, environment) {
-      return createViteConfig(config, environment);
+      return createViteConfig(config, environment, viteNoncePlaceholder);
     },
     configResolved(config) {
       root = config.root;
@@ -208,10 +210,14 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
             options.routesDir ?? "src/routes",
           );
           const manifest = await loadDevManifest(server, request, routesDir);
+          const documentSecurity = createDevDocumentSecurity(
+            server,
+            viteNoncePlaceholder,
+          );
           const result = await handleDevRequest(
             manifest,
             webRequest,
-            createDevRuntimeOptions(server, options),
+            createDevRuntimeOptions(options, documentSecurity.transform),
           );
 
           if (result === "next") {
@@ -223,6 +229,7 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
             return;
           }
 
+          applyDevDocumentSecurity(result, documentSecurity.nonce);
           await writeWebResponse(response, result);
         } catch (error) {
           next(error);
@@ -259,14 +266,20 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
 
             warnMissingRootNotFound(manifest, routesDir);
 
-            await writeWebResponse(
-              response,
-              await renderNotFoundResponse(
-                manifest,
-                webRequest,
-                createDevFallbackOptions(server, options),
-              ),
+            const documentSecurity = createDevDocumentSecurity(
+              server,
+              viteNoncePlaceholder,
             );
+            const notFoundResponse = await renderNotFoundResponse(
+              manifest,
+              webRequest,
+              createDevFallbackOptions(options, documentSecurity.transform),
+            );
+            applyDevDocumentSecurity(
+              notFoundResponse,
+              documentSecurity.nonce,
+            );
+            await writeWebResponse(response, notFoundResponse);
           } catch (error) {
             next(error);
           }
@@ -537,7 +550,11 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function createViteConfig(config: UserConfig, environment: ConfigEnv): UserConfig {
+function createViteConfig(
+  config: UserConfig,
+  environment: ConfigEnv,
+  viteNoncePlaceholder: string,
+): UserConfig {
   return {
     appType: "custom",
     build: {
@@ -551,6 +568,9 @@ function createViteConfig(config: UserConfig, environment: ConfigEnv): UserConfi
         input: config.build?.rollupOptions?.input ?? CLIENT_ENTRY_ID,
       },
     },
+    ...(environment.command === "serve"
+      ? { html: { cspNonce: viteNoncePlaceholder } }
+      : {}),
   };
 }
 
@@ -674,13 +694,13 @@ function createStylesImport(
 // client entry, the Vite HTML transform, and a development flag for stack
 // traces. The shared handler makes all security and routing decisions.
 function createDevRuntimeOptions(
-  server: ViteDevServer,
   options: DemiurgeVitePluginOptions,
+  transformDocument: (html: string) => Promise<string>,
 ) {
   return {
     dev: true,
     ssr: createDevSsrOptions(options),
-    transformDocument: (html: string) => server.transformIndexHtml("/", html),
+    transformDocument,
     renderPage: async (
       match: Parameters<PageRenderer>[0],
       renderOptions: Parameters<PageRenderer>[1],
@@ -689,12 +709,11 @@ function createDevRuntimeOptions(
         return await renderStreamingPageResponse(match, {
           ...renderOptions,
           clientEntry: DEV_CLIENT_ENTRY_PATH,
-          transformDocument: (html) => server.transformIndexHtml("/", html),
+          transformDocument,
         });
       }
 
-      const html = await server.transformIndexHtml(
-        "/",
+      const html = await transformDocument(
         renderPageDocument(match, {
           ...renderOptions,
           clientEntry: DEV_CLIENT_ENTRY_PATH,
@@ -706,6 +725,193 @@ function createDevRuntimeOptions(
       });
     },
   };
+}
+
+function createDevDocumentSecurity(
+  server: ViteDevServer,
+  viteNoncePlaceholder: string,
+) {
+  const nonce = createCspNonce();
+  const shieldNonce = createCspNonce();
+
+  return {
+    nonce,
+    transform: async (html: string) => {
+      const shielded = shieldViteNonceTargets(html, shieldNonce);
+      const transformed = await server.transformIndexHtml("/", shielded);
+
+      return replaceNonceAttribute(
+        replaceNonceAttribute(transformed, shieldNonce),
+        viteNoncePlaceholder,
+        nonce,
+      );
+    },
+  };
+}
+
+function shieldViteNonceTargets(html: string, nonce: string) {
+  const lowerHtml = html.toLowerCase();
+  let cursor = 0;
+  let output = "";
+
+  while (cursor < html.length) {
+    const tagStart = html.indexOf("<", cursor);
+
+    if (tagStart === -1) {
+      return output + html.slice(cursor);
+    }
+
+    output += html.slice(cursor, tagStart);
+
+    if (lowerHtml.startsWith("<!--", tagStart)) {
+      const commentEnd = lowerHtml.indexOf("-->", tagStart + 4);
+      const end = commentEnd === -1 ? html.length : commentEnd + 3;
+      output += html.slice(tagStart, end);
+      cursor = end;
+      continue;
+    }
+
+    const name = lowerHtml.slice(tagStart).match(/^<\s*(script|style|link)\b/)?.[1];
+
+    if (!name) {
+      output += "<";
+      cursor = tagStart + 1;
+      continue;
+    }
+
+    const tagEnd = findHtmlTagEnd(html, tagStart);
+
+    if (tagEnd === -1) {
+      return output + html.slice(tagStart);
+    }
+
+    const openingTag = html.slice(tagStart, tagEnd + 1);
+    output += /(?:^|\s)nonce(?:\s|=|>)/i.test(openingTag)
+      ? openingTag
+      : addNonceAttribute(openingTag, nonce);
+    cursor = tagEnd + 1;
+
+    if (name === "script" || name === "style") {
+      const closeStart = lowerHtml.indexOf(`</${name}`, cursor);
+
+      if (closeStart === -1) {
+        return output + html.slice(cursor);
+      }
+
+      output += html.slice(cursor, closeStart);
+      cursor = closeStart;
+    }
+  }
+
+  return output;
+}
+
+function findHtmlTagEnd(html: string, start: number) {
+  let quote: "\"" | "'" | undefined;
+
+  for (let index = start + 1; index < html.length; index++) {
+    const character = html[index];
+
+    if (quote) {
+      if (character === quote) quote = undefined;
+      continue;
+    }
+
+    if (character === "\"" || character === "'") {
+      quote = character;
+    } else if (character === ">") {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function addNonceAttribute(openingTag: string, nonce: string) {
+  const insertion = /\/\s*>$/.test(openingTag)
+    ? openingTag.lastIndexOf("/")
+    : openingTag.length - 1;
+
+  return `${openingTag.slice(0, insertion)} nonce="${nonce}"${openingTag.slice(insertion)}`;
+}
+
+function replaceNonceAttribute(
+  html: string,
+  current: string,
+  replacement?: string,
+) {
+  const pattern = new RegExp(
+    `(\\snonce\\s*=\\s*)(["'])${escapeRegExp(current)}\\2`,
+    "g",
+  );
+
+  return html.replace(
+    pattern,
+    replacement ? `$1"${replacement}"` : "",
+  );
+}
+
+function applyDevDocumentSecurity(response: Response, nonce: string) {
+  const contentType = response.headers.get("content-type");
+  const csp = response.headers.get("content-security-policy");
+
+  if (!contentType?.toLowerCase().startsWith("text/html") || !csp) {
+    return;
+  }
+
+  const source = `'nonce-${nonce}'`;
+  const withScriptNonce = addCspSource(
+    csp,
+    ["script-src-elem", "script-src"],
+    "script-src",
+    source,
+  );
+  const withStyleNonce = addCspSource(
+    withScriptNonce,
+    ["style-src-elem", "style-src"],
+    "style-src",
+    source,
+  );
+
+  response.headers.set("content-security-policy", withStyleNonce);
+  response.headers.set("cache-control", "private, no-store");
+}
+
+function addCspSource(
+  csp: string,
+  directiveNames: readonly string[],
+  fallbackDirectiveName: "script-src" | "style-src",
+  source: string,
+) {
+  const directives = csp.split(";").map((directive) => directive.trim());
+  const directiveIndex = directives.findIndex((directive) =>
+    directiveNames.includes(directive.split(/\s+/, 1)[0]?.toLowerCase() ?? "")
+  );
+
+  const defaultDirective = directives.find((directive) =>
+    directive.split(/\s+/, 1)[0]?.toLowerCase() === "default-src"
+  );
+
+  if (directiveIndex === -1 && !defaultDirective) return csp;
+
+  const [currentName, ...currentSources] =
+    (directiveIndex === -1 ? defaultDirective! : directives[directiveIndex]!)
+      .split(/\s+/);
+  const updatedDirective = [
+    directiveIndex === -1 ? fallbackDirectiveName : currentName!,
+    ...new Set([
+      ...currentSources.filter((current) => current !== "'none'"),
+      source,
+    ]),
+  ].join(" ");
+
+  if (directiveIndex === -1) {
+    directives.push(updatedDirective);
+  } else {
+    directives[directiveIndex] = updatedDirective;
+  }
+
+  return directives.join("; ");
 }
 
 // Both dev middlewares need the manifest for the same request, and building
@@ -746,13 +952,13 @@ function createDevSsrOptions(options: DemiurgeVitePluginOptions) {
 }
 
 function createDevFallbackOptions(
-  server: ViteDevServer,
   options: DemiurgeVitePluginOptions,
+  transformDocument: (html: string) => Promise<string>,
 ) {
   return {
     ...createDevSsrOptions(options),
     dev: true,
-    transformDocument: (html: string) => server.transformIndexHtml("/", html),
+    transformDocument,
   };
 }
 
