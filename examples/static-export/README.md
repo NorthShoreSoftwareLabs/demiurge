@@ -9,10 +9,10 @@ pnpm preview
 ```
 
 The output includes `index.html`, `about/index.html`, both concrete dynamic
-guide paths, and `404.html`. `demiurge-static-manifest.json` records the response
-headers for every artifact. A production host must apply those headers at the
-matching path. The manifest keeps the static adapter independent of a provider
-configuration format.
+guide paths, `robots.txt`, `sitemap.xml`, and `404.html`.
+`demiurge-static-manifest.json` records the response headers for every artifact.
+A production host must apply those headers at the matching path. The manifest
+keeps the static adapter independent of a provider configuration format.
 
 The home page includes structured data. Its exact SHA-256 hash appears in the
 static CSP. The browser test verifies this policy in Chromium.

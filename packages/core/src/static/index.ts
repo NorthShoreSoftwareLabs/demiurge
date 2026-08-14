@@ -14,7 +14,7 @@ import {
   createRouteManifest,
   type RouteManifest,
 } from "../router";
-import type { RouteImporter } from "../route";
+import type { RouteCapability, RouteImporter, RouteModule } from "../route";
 import {
   handleRequestWithManifest,
   renderNotFoundResponse,
@@ -54,7 +54,15 @@ export type GenerateStaticOutputOptions = {
 };
 
 type PendingOutput = StaticOutputEntry & {
-  html: string;
+  body: string;
+};
+
+type OutputKind = "document" | "resource";
+
+type PlannedOutput = {
+  file: string;
+  kind: OutputKind;
+  pathname: string;
 };
 
 export async function generateStaticOutput(
@@ -63,29 +71,44 @@ export async function generateStaticOutput(
   const origin = normalizeOrigin(options.origin);
   const outDir = resolve(options.outDir);
   const manifest = createRouteManifest(options.routes);
-  const paths = await collectStaticRoutePaths(manifest);
+  const routeKinds = await validateStaticRoutes(manifest);
+  const paths = await collectStaticRoutePaths(manifest, {
+    includeResources: true,
+  });
 
-  assertStaticPageApp(manifest, paths.length);
+  assertStaticPageApp(
+    manifest,
+    paths.filter((path) => routeKinds.get(path.file) === "document").length,
+  );
 
-  const outputEntries = planOutputEntries(paths.map((path) => path.pathname));
+  const outputEntries = planOutputEntries(
+    paths.map((path) => ({
+      kind: routeKinds.get(path.file) ?? "resource",
+      pathname: path.pathname,
+    })),
+  );
   const rateLimitStore = createMemoryRateLimitStore();
   const pending: PendingOutput[] = [];
   const ssr = { ...options.ssr, navigation: "document" as const };
 
   for (const entry of outputEntries) {
-    const request = createDocumentRequest(origin, entry.pathname);
+    const request = createStaticRequest(origin, entry.pathname, entry.kind);
     const response = await handleRequestWithManifest(manifest, request, {
       onError: options.onError,
       rateLimitStore,
       ssr,
     });
 
-    pending.push(await prepareOutput(entry, response, 200));
+    pending.push(
+      entry.kind === "document"
+        ? await prepareDocumentOutput(entry, response, 200)
+        : await prepareResourceOutput(entry, response),
+    );
   }
 
   const notFoundResponse = await renderNotFoundResponse(
     manifest,
-    createDocumentRequest(origin, "/404"),
+    createStaticRequest(origin, "/404", "document"),
     {
       ...ssr,
       onError: (error, site) =>
@@ -93,7 +116,7 @@ export async function generateStaticOutput(
     },
   );
   pending.push(
-    await prepareOutput(
+    await prepareDocumentOutput(
       {
         file: "404.html",
         pathname: "*",
@@ -107,7 +130,7 @@ export async function generateStaticOutput(
 
   const outputManifest: StaticOutputManifest = {
     adapter: "static",
-    entries: pending.map(({ html: _html, ...entry }) => entry),
+    entries: pending.map(({ body: _body, ...entry }) => entry),
     version: 1,
   };
 
@@ -159,34 +182,97 @@ function assertStaticPageApp(manifest: RouteManifest, pageCount: number) {
   }
 }
 
-function planOutputEntries(pathnames: string[]) {
+async function validateStaticRoutes(manifest: RouteManifest) {
+  const routeKinds = new Map<string, OutputKind>();
+
+  for (const route of manifest.routes) {
+    const routeModule = await route.load();
+    const unsupportedMethods = staticUnsupportedMethods(routeModule);
+
+    if (unsupportedMethods.length > 0) {
+      throw new Error(
+        `Static route ${JSON.stringify(route.file)} exports unsupported methods ${unsupportedMethods.join(", ")}. Deploy a runtime adapter for request-time methods.`,
+      );
+    }
+
+    if (!routeModule.GET) {
+      throw new Error(
+        `Static route ${JSON.stringify(route.file)} does not export GET and cannot produce an output file.`,
+      );
+    }
+
+    if (routeModule.GET.kind === "page") {
+      routeKinds.set(route.file, "document");
+      continue;
+    }
+
+    assertStaticResource(route.file, routeModule.GET);
+    routeKinds.set(route.file, "resource");
+  }
+
+  return routeKinds;
+}
+
+function staticUnsupportedMethods(routeModule: RouteModule) {
+  return (["POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const)
+    .filter((method) => routeModule[method] !== undefined);
+}
+
+function assertStaticResource(file: string, capability: RouteCapability) {
+  if (
+    (capability.kind === "text" ||
+      capability.kind === "html" ||
+      capability.kind === "json") &&
+    typeof capability.value !== "function"
+  ) {
+    return;
+  }
+
+  const reason = "value" in capability && typeof capability.value === "function"
+    ? `uses a request-dependent ${capability.kind} value`
+    : `uses the ${capability.kind} response helper`;
+
+  throw new Error(
+    `Static route ${JSON.stringify(file)} ${reason} and cannot produce a fixed output file. Use a fixed text, html, or json value, or deploy a runtime adapter.`,
+  );
+}
+
+function planOutputEntries(
+  outputs: Array<{ kind: OutputKind; pathname: string }>,
+) {
   const seenFiles = new Map<string, string>();
   const seenPathnames = new Set<string>();
 
-  return pathnames.map((pathname) => {
+  return outputs.map(({ kind, pathname }) => {
     if (seenPathnames.has(pathname)) {
       throw new Error(`Static output collected duplicate pathname ${JSON.stringify(pathname)}.`);
     }
 
     seenPathnames.add(pathname);
 
-    const file = pathnameToFile(pathname);
+    const file = kind === "document"
+      ? pathnameToDocumentFile(pathname)
+      : pathnameToResourceFile(pathname);
     const portableFile = file.toLocaleLowerCase("en-US");
-    const conflictingPathname = seenFiles.get(portableFile);
+    const conflict = [...seenFiles.entries()].find(([seenFile]) =>
+      seenFile === portableFile ||
+      seenFile.startsWith(`${portableFile}/`) ||
+      portableFile.startsWith(`${seenFile}/`)
+    );
 
-    if (conflictingPathname) {
+    if (conflict) {
       throw new Error(
-        `Static paths ${JSON.stringify(conflictingPathname)} and ${JSON.stringify(pathname)} map to the same portable output file ${JSON.stringify(file)}.`,
+        `Static paths ${JSON.stringify(conflict[1])} and ${JSON.stringify(pathname)} map to the same portable output file or to a file and directory conflict.`,
       );
     }
 
     seenFiles.set(portableFile, pathname);
 
-    return { file, pathname };
+    return { file, kind, pathname };
   });
 }
 
-function pathnameToFile(pathname: string) {
+function pathnameToDocumentFile(pathname: string) {
   if (!pathname.startsWith("/") || pathname.includes("?") || pathname.includes("#")) {
     throw new Error(`Static output received invalid pathname ${JSON.stringify(pathname)}.`);
   }
@@ -211,6 +297,15 @@ function pathnameToFile(pathname: string) {
   return [...segments, "index.html"].join("/");
 }
 
+function pathnameToResourceFile(pathname: string) {
+  if (pathname === "/") {
+    throw new Error("A static resource route cannot own the root pathname.");
+  }
+
+  const documentFile = pathnameToDocumentFile(pathname);
+  return documentFile.slice(0, -"/index.html".length);
+}
+
 function assertPortableSegment(segment: string, pathname: string) {
   const invalidWindowsName = /[<>:"|?*]/.test(segment) ||
     [...segment].some((character) => character.charCodeAt(0) <= 31) ||
@@ -231,13 +326,17 @@ function assertPortableSegment(segment: string, pathname: string) {
   }
 }
 
-function createDocumentRequest(origin: string, pathname: string) {
+function createStaticRequest(
+  origin: string,
+  pathname: string,
+  kind: OutputKind,
+) {
   return new Request(`${origin}${pathname}`, {
-    headers: { accept: "text/html" },
+    headers: { accept: kind === "document" ? "text/html" : "*/*" },
   });
 }
 
-async function prepareOutput(
+async function prepareDocumentOutput(
   entry: { file: string; pathname: string },
   response: Response,
   expectedStatus: 200 | 404,
@@ -271,8 +370,33 @@ async function prepareOutput(
   return {
     ...entry,
     headers: sortedHeaders(response.headers),
-    html,
+    body: html,
     status: expectedStatus,
+  };
+}
+
+async function prepareResourceOutput(
+  entry: PlannedOutput,
+  response: Response,
+): Promise<PendingOutput> {
+  if (response.status !== 200) {
+    throw new Error(
+      `Static output for ${JSON.stringify(entry.pathname)} returned status ${response.status}; expected 200.`,
+    );
+  }
+
+  if (response.headers.has("set-cookie")) {
+    throw new Error(
+      `Static output for ${JSON.stringify(entry.pathname)} attempted to set a cookie. Build artifacts cannot contain per-user response state.`,
+    );
+  }
+
+  return {
+    file: entry.file,
+    headers: sortedHeaders(response.headers),
+    body: await response.text(),
+    pathname: entry.pathname,
+    status: 200,
   };
 }
 
@@ -486,7 +610,7 @@ async function writeOutput(
     for (const entry of entries) {
       const file = resolveContained(staging, entry.file);
       await mkdir(dirname(file), { recursive: true });
-      await writeFile(file, entry.html);
+      await writeFile(file, entry.body);
     }
 
     await writeFile(
@@ -529,7 +653,6 @@ async function readPreviousOutputFiles(outDir: string) {
 
     return value.entries.flatMap((entry) =>
       typeof entry.file === "string" &&
-        entry.file.endsWith(".html") &&
         isSafeRelativeFile(entry.file)
         ? [entry.file]
         : []

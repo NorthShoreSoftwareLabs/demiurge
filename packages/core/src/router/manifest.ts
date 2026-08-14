@@ -402,6 +402,7 @@ export async function loadPageRoute(
 
 export async function collectStaticRoutePaths(
   manifest: RouteManifest,
+  options: { includeResources?: boolean } = {},
 ): Promise<StaticRoutePath[]> {
   const cache = createMemoryCache();
   const paths: StaticRoutePath[] = [];
@@ -409,11 +410,18 @@ export async function collectStaticRoutePaths(
   for (const route of manifest.routes) {
     const routeModule = await route.load();
 
-    if (!routeModule.GET || routeModule.GET.kind !== "page") {
+    if (!routeModule.GET) {
       continue;
     }
 
-    if (routeModule.GET.render.mode !== "static") {
+    if (routeModule.GET.kind !== "page" && !options.includeResources) {
+      continue;
+    }
+
+    if (
+      routeModule.GET.kind === "page" &&
+      routeModule.GET.render.mode !== "static"
+    ) {
       throw new Error(
         `Page route "${route.file}" uses render mode "${routeModule.GET.render.mode}" and cannot be emitted as static output. Set render: { mode: "static" } or deploy a runtime adapter.`,
       );
