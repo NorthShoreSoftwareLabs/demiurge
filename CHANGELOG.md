@@ -9,6 +9,8 @@ status live in GitHub issues and milestones.
   also read `import.meta.env` (#124).
 - The development server now serves the framework client entry. Page apps now
   hydrate on normal pages and application-owned not-found pages (#128).
+- Packed Vite applications now load the optimized React DOM client correctly
+  during development hydration (#133).
 - The development server now gives Vite-managed scripts and styles a
   request-local CSP nonce. Application-authored inline content remains
   untrusted (#129).
