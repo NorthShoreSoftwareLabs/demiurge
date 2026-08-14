@@ -8,6 +8,7 @@ import {
 } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { defineAdapter } from "../adapter";
+import { STRUCTURED_DATA_ATTRIBUTE } from "../document/render";
 import {
   collectStaticRoutePaths,
   createRouteManifest,
@@ -261,7 +262,10 @@ async function prepareOutput(
     );
   }
 
-  const html = await response.text();
+  const html = await coverStructuredDataHashes(
+    await response.text(),
+    response.headers,
+  );
   await validateStaticCsp(entry.pathname, html, response.headers);
 
   return {
@@ -270,6 +274,69 @@ async function prepareOutput(
     html,
     status: expectedStatus,
   };
+}
+
+async function coverStructuredDataHashes(html: string, headers: Headers) {
+  const markerPattern = new RegExp(
+    `(?:^|\\s)${STRUCTURED_DATA_ATTRIBUTE}(?:\\s|$)`,
+  );
+  const elements = findRawTextElements(html, "script")
+    .filter((element) => markerPattern.test(element.attributes));
+
+  if (elements.length === 0) {
+    return html;
+  }
+
+  const hashes = await Promise.all(
+    elements.map((element) => cspHash(element.content)),
+  );
+
+  for (const headerName of [
+    "content-security-policy",
+    "content-security-policy-report-only",
+  ]) {
+    const csp = headers.get(headerName);
+    if (csp) {
+      headers.set(headerName, addScriptHashes(csp, hashes));
+    }
+  }
+
+  return html.replace(
+    new RegExp(`\\s${STRUCTURED_DATA_ATTRIBUTE}(?=\\s|>)`, "g"),
+    "",
+  );
+}
+
+function addScriptHashes(csp: string, hashes: readonly string[]) {
+  const directives = csp.split(";")
+    .map((directive) => directive.trim())
+    .filter(Boolean);
+  const scriptIndex = directives.findIndex((directive) =>
+    directive.split(/\s+/, 1)[0]?.toLowerCase() === "script-src"
+  );
+  const defaultDirective = directives.find((directive) =>
+    directive.split(/\s+/, 1)[0]?.toLowerCase() === "default-src"
+  );
+  const current = scriptIndex === -1 ? defaultDirective : directives[scriptIndex];
+
+  if (!current) {
+    return csp;
+  }
+
+  const sources = current.split(/\s+/).slice(1)
+    .filter((source) => source !== "'none'");
+  const scriptDirective = [
+    "script-src",
+    ...new Set([...sources, ...hashes]),
+  ].join(" ");
+
+  if (scriptIndex === -1) {
+    directives.push(scriptDirective);
+  } else {
+    directives[scriptIndex] = scriptDirective;
+  }
+
+  return directives.join("; ");
 }
 
 async function validateStaticCsp(
@@ -306,7 +373,11 @@ async function validateStaticCsp(
 
   const styleSources = effectiveSources(directives, "style-src");
 
-  if (/\sstyle\s*=/i.test(html) && !styleSources.includes("'unsafe-inline'")) {
+  if (
+    styleSources &&
+    /\sstyle\s*=/i.test(html) &&
+    !styleSources.includes("'unsafe-inline'")
+  ) {
     throw new Error(
       `Static output for ${JSON.stringify(pathname)} contains an inline style attribute that its CSP does not allow. Move the style into a stylesheet or explicitly allow inline styles.`,
     );
@@ -328,16 +399,16 @@ function parseCsp(value: string) {
 }
 
 function effectiveSources(directives: Map<string, string[]>, name: string) {
-  return directives.get(name) ?? directives.get("default-src") ?? [];
+  return directives.get(name) ?? directives.get("default-src");
 }
 
 async function validateInlineElements(
   pathname: string,
   html: string,
   tagName: "script" | "style",
-  sources: string[],
+  sources: string[] | undefined,
 ) {
-  if (sources.includes("'unsafe-inline'")) {
+  if (!sources || sources.includes("'unsafe-inline'")) {
     return;
   }
 

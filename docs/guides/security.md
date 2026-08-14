@@ -33,6 +33,9 @@ Static output uses hash-based policy. `security.static()` and `cspHash(...)`
 describe hashes that remain valid without a request nonce. Static generation
 rejects nonce-dependent output and other policy it cannot deploy safely.
 
+Static generation adds hashes for framework-rendered structured data. An
+application must declare hashes for its other inline scripts.
+
 The Vite plugin disables automatic asset inlining by default. This setting
 prevents generated data URLs from conflicting with the default CSP.
 

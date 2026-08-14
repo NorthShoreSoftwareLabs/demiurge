@@ -65,6 +65,14 @@ function PlainPage() {
   return <main>Plain page</main>;
 }
 
+function InlineScriptPage() {
+  return (
+    <main>
+      <script dangerouslySetInnerHTML={{ __html: "window.appInline = true;" }} />
+    </main>
+  );
+}
+
 async function createOutputDirectory() {
   const root = await mkdtemp(join(tmpdir(), "demiurge-static-output-"));
   const outDir = join(root, "dist");
@@ -161,20 +169,17 @@ describe("static output adapter", () => {
     ]);
   });
 
-  it("records static CSP headers and accepts correctly hashed inline scripts", async () => {
+  it("adds static CSP hashes for framework-rendered structured data", async () => {
     const { outDir } = await createOutputDirectory();
     const schema = {
       "@context": "https://schema.org",
       "@type": "WebSite",
-      name: "Static example",
+      name: "Static </script> example\u2028line\u2029end",
     };
-    const hash = await cspHash(JSON.stringify(schema));
     const routes = appRoutes({
       "./routes/@policy.ts": routeModule({
         policy: defineRoutePolicy({
-          document: security.static({
-            csp: { scriptSrc: ["'self'", hash] },
-          }),
+          document: security.static(),
         }),
       }),
       "./routes/index.tsx": routeModule({
@@ -192,14 +197,70 @@ describe("static output adapter", () => {
     const manifest = await generateStaticOutput({ outDir, routes });
     const homeEntry = manifest.entries.find((entry) => entry.pathname === "/");
     const home = await readFile(join(outDir, "index.html"), "utf8");
+    const structuredDataSource = home.match(
+      /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+    )?.[1];
+    const hash = await cspHash(structuredDataSource ?? "");
 
     expect(homeEntry?.headers["content-security-policy"]).toContain(hash);
     expect(homeEntry?.headers["content-security-policy"])
       .not.toContain("'unsafe-inline'");
-    expect(home).toContain(
-      `<script type="application/ld+json">${JSON.stringify(schema)}</script>`,
-    );
+    expect(home).toContain('<script type="application/ld+json">');
+    expect(home).toContain("\\u003c/script\\u003e");
+    expect(home).toContain("\\u2028");
+    expect(home).toContain("\\u2029");
+    expect(home).not.toContain("data-demiurge-structured-data");
     expect(home).not.toContain(" nonce=");
+  });
+
+  it("rejects application-authored inline scripts without a declared hash", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({ document: security.static() }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: InlineScriptPage }),
+      }),
+    });
+
+    await expect(generateStaticOutput({ outDir, routes })).rejects.toThrow(
+      /inline script without the required CSP hash/,
+    );
+  });
+
+  it("does not add script policy to unrelated CSP headers", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({
+          document: {
+            csp: { baseUri: ["'self'"] },
+            trustedTypes: {
+              mode: "report-only",
+              policies: ["demiurge"],
+              requireFor: ["script"],
+            },
+          },
+        }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: PlainPage }),
+        metadata: defineMetadata({
+          structuredData: [structuredData({ "@type": "WebSite" })],
+        }),
+      }),
+    });
+
+    const manifest = await generateStaticOutput({ outDir, routes });
+    const homeEntry = manifest.entries.find((entry) => entry.pathname === "/");
+
+    expect(homeEntry?.headers["content-security-policy"]).toBe(
+      "base-uri 'self'",
+    );
+    expect(homeEntry?.headers["content-security-policy-report-only"]).toBe(
+      "require-trusted-types-for 'script'; trusted-types demiurge",
+    );
   });
 
   it("rejects nonce-backed CSP because a static nonce cannot be fresh per request", async () => {

@@ -12,6 +12,8 @@ import type {
 } from "./metadata";
 import type { ScriptTag } from "./scripts";
 
+export const STRUCTURED_DATA_ATTRIBUTE = "data-demiurge-structured-data";
+
 export type DocumentBody = {
   data: unknown;
   fallback?: "not-found";
@@ -250,7 +252,9 @@ function renderStructuredDataTag(
   tag: StructuredDataTag,
   nonce: string | undefined,
 ) {
-  return `    <script type="application/ld+json"${renderAttribute("nonce", nonce)}>${escapeJsonScript(JSON.stringify(tag.value))}</script>`;
+  const ownership = nonce ? "" : ` ${STRUCTURED_DATA_ATTRIBUTE}`;
+
+  return `    <script type="application/ld+json"${ownership}${renderAttribute("nonce", nonce)}>${escapeJsonScript(JSON.stringify(tag.value))}</script>`;
 }
 
 function renderMetaTag(tag: DocumentMetadataTag & { kind: "meta" }) {
