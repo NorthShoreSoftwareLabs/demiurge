@@ -45,6 +45,9 @@ export async function createStaticPreviewServer(
   const entries = new Map(
     manifest.entries.map((entry) => [entry.pathname, entry]),
   );
+  const entriesByFile = new Map(
+    manifest.entries.map((entry) => [entry.file, entry]),
+  );
   const rules = manifest.fileHeaderRules.map((rule) => ({
     ...rule,
     expression: new RegExp(rule.pattern),
@@ -82,6 +85,13 @@ export async function createStaticPreviewServer(
       const file = resolvePreviewFile(root, pathname);
       if (file) {
         try {
+          const declaredFile = relative(root, file).split(sep).join("/");
+          const declaredEntry = entriesByFile.get(declaredFile);
+          if (declaredEntry) {
+            await writeEntry(root, declaredEntry, request.method, response);
+            return;
+          }
+
           const body = await readFile(file);
           const type = contentTypes[extname(file).toLowerCase()];
           if (type) response.setHeader("content-type", type);
@@ -255,5 +265,6 @@ function isStringRecord(value: unknown): value is Record<string, string> {
 }
 
 function isMissingFile(error: unknown) {
-  return error instanceof Error && "code" in error && error.code === "ENOENT";
+  return error instanceof Error && "code" in error &&
+    (error.code === "EISDIR" || error.code === "ENOENT");
 }

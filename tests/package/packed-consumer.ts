@@ -199,9 +199,9 @@ try {
     assert(existsSync(join(installedRoot, file)), `Packed tarball is missing ${file}.`);
   }
 
-  mkdirSync(join(scratch, "src", "routes"), { recursive: true });
+  mkdirSync(join(scratch, "app", "src", "routes"), { recursive: true });
   writeFileSync(
-    join(scratch, "src", "routes", "index.tsx"),
+    join(scratch, "app", "src", "routes", "index.tsx"),
     [
       `import { defineRoutePolicy, page, security, type RouteProps } from "@demiurgejs/core";`,
       `export const policy = defineRoutePolicy({`,
@@ -213,12 +213,13 @@ try {
       `  }),`,
       `});`,
       `export const GET = page({`,
+      `  render: { mode: "static" },`,
       `  view: (_props: RouteProps) => <main>packed app</main>,`,
       `});`,
     ].join("\n"),
   );
   writeFileSync(
-    join(scratch, "src", "routes", "@not-found.tsx"),
+    join(scratch, "app", "src", "routes", "@not-found.tsx"),
     [
       `export default function NotFound({ pathname }: { pathname: string }) {`,
       `  return <main>Nothing at {pathname}</main>;`,
@@ -231,7 +232,10 @@ try {
       `import react from "@vitejs/plugin-react";`,
       `import { defineConfig } from "vite";`,
       `import { demiurge } from "@demiurgejs/core/vite";`,
-      `export default defineConfig({ plugins: [demiurge(), react()] });`,
+      `export default defineConfig({`,
+      `  plugins: [demiurge(), react()],`,
+      `  root: "app",`,
+      `});`,
     ].join("\n"),
   );
   writeFileSync(
@@ -248,7 +252,7 @@ try {
           target: "ES2022",
           types: ["node", "vite/client"],
         },
-        include: ["src", "vite.config.ts"],
+        include: ["app/src", "vite.config.ts"],
       },
       null,
       2,
@@ -256,10 +260,22 @@ try {
   );
 
   run("pnpm", ["exec", "tsc", "--noEmit"], scratch);
-  run("pnpm", ["exec", "vite", "build"], scratch);
+  run(
+    "node",
+    [
+      join(installedRoot, "bin", "demiurge.mjs"),
+      "build",
+      "--origin",
+      "https://packed.example.test",
+    ],
+    scratch,
+  );
   assert(
-    existsSync(join(scratch, "dist", "index.html")),
-    "The packed library could not build a clean external Vite app.",
+    existsSync(join(scratch, "app", "dist", "index.html")) &&
+      existsSync(
+        join(scratch, "app", "dist", "demiurge-static-manifest.json"),
+      ),
+    "The packed command could not build a clean external static app.",
   );
 
   console.log("pack artifact and external consumer tests passed");

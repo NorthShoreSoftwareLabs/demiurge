@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { readFile, readdir } from "node:fs/promises";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { InlineConfig } from "vite";
 import type { RouteImporter } from "./route";
@@ -27,7 +27,10 @@ type StaticBuildRuntime = {
   importModule: (specifier: string) => Promise<Record<string, unknown>>;
   now: () => number;
   readText: (file: string) => Promise<string>;
-  root: string;
+  resolveConfig: () => Promise<{
+    publicDir: false | string;
+    root: string;
+  }>;
 };
 
 export function parseCliArguments(
@@ -98,13 +101,18 @@ export async function buildStaticSite(
   options: CliOptions,
   runtime?: StaticBuildRuntime,
 ) {
-  const root = runtime?.root ?? process.cwd();
+  const vite = runtime ? undefined : await import("vite");
+  const config = runtime
+    ? await runtime.resolveConfig()
+    : await vite!.resolveConfig({}, "build", "production");
+  const root = config.root;
   const outDir = resolve(root, options.outDir);
   const serverOutDir = resolve(root, ".demiurge/server");
-  const build = runtime?.build ?? (await import("vite")).build;
+  const build = runtime?.build ?? vite!.build;
+
+  await validateBuildOutputDirectory(root, outDir, config.publicDir);
 
   await build({
-    root,
     build: {
       emptyOutDir: true,
       outDir,
@@ -112,7 +120,6 @@ export async function buildStaticSite(
     },
   });
   await build({
-    root,
     build: {
       copyPublicDir: false,
       emptyOutDir: true,
@@ -150,6 +157,44 @@ export async function buildStaticSite(
   return { manifest, outDir };
 }
 
+export async function validateBuildOutputDirectory(
+  root: string,
+  outDir: string,
+  publicDir: false | string,
+) {
+  const pathFromRoot = relative(root, outDir);
+  if (
+    !pathFromRoot ||
+    pathFromRoot === ".." ||
+    pathFromRoot.startsWith(`..${sep}`) ||
+    isAbsolute(pathFromRoot)
+  ) {
+    throw new Error("The static output directory must be inside the Vite root.");
+  }
+
+  if (publicDir && pathsOverlap(outDir, publicDir)) {
+    throw new Error("The static output directory must not overlap the Vite public directory.");
+  }
+
+  let entries: string[];
+  try {
+    entries = await readdir(outDir);
+  } catch (error) {
+    if (isMissingPath(error)) return;
+    throw error;
+  }
+
+  if (
+    entries.length &&
+    !entries.includes("demiurge-manifest.json") &&
+    !entries.includes("demiurge-static-manifest.json")
+  ) {
+    throw new Error(
+      "The static output directory contains files that a Demiurge build did not create.",
+    );
+  }
+}
+
 export function parseClientManifest(source: string) {
   let value: unknown;
   try {
@@ -179,4 +224,20 @@ function isRouteImporterRecord(
   }
 
   return Object.values(value).every((load) => typeof load === "function");
+}
+
+function pathsOverlap(left: string, right: string) {
+  const fromLeft = relative(left, right);
+  const fromRight = relative(right, left);
+  return isSameOrChildPath(fromLeft) || isSameOrChildPath(fromRight);
+}
+
+function isSameOrChildPath(pathname: string) {
+  return !pathname ||
+    (pathname !== ".." && !pathname.startsWith(`..${sep}`) &&
+      !isAbsolute(pathname));
+}
+
+function isMissingPath(error: unknown) {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }

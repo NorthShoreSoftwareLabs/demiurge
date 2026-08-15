@@ -1,9 +1,13 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { InlineConfig } from "vite";
 import {
   buildStaticSite,
   parseCliArguments,
   parseClientManifest,
+  validateBuildOutputDirectory,
 } from "../src/cli";
 
 describe("Demiurge CLI arguments", () => {
@@ -62,7 +66,13 @@ describe("Demiurge CLI arguments", () => {
       routes: { "./routes/index.tsx": async () => ({}) },
     }));
     const result = await buildStaticSite(
-      parseCliArguments(["build", "--out-dir", "public", "--origin", "https://example.test"]),
+      parseCliArguments([
+        "build",
+        "--out-dir",
+        "output",
+        "--origin",
+        "https://example.test",
+      ]),
       {
         build,
         generate,
@@ -72,7 +82,10 @@ describe("Demiurge CLI arguments", () => {
           clientEntry: "/assets/app.js",
           styles: ["/assets/app.css"],
         }),
-        root: "/application",
+        resolveConfig: async () => ({
+          publicDir: "/application/app/public",
+          root: "/application/app",
+        }),
       },
     );
 
@@ -82,26 +95,27 @@ describe("Demiurge CLI arguments", () => {
     });
     expect(build.mock.calls[1]![0].build).toMatchObject({
       copyPublicDir: false,
-      outDir: "/application/.demiurge/server",
+      outDir: "/application/app/.demiurge/server",
       rollupOptions: {
         input: "virtual:demiurge/server-entry",
         output: { entryFileNames: "server-entry.js" },
       },
       ssr: true,
     });
+    expect(build.mock.calls[0]![0].root).toBeUndefined();
     expect(importModule).toHaveBeenCalledWith(
-      "file:///application/.demiurge/server/server-entry.js?build=42",
+      "file:///application/app/.demiurge/server/server-entry.js?build=42",
     );
     expect(generate).toHaveBeenCalledWith({
       origin: "https://example.test",
-      outDir: "/application/public",
+      outDir: "/application/app/output",
       routes: expect.any(Object),
       ssr: {
         clientEntry: "/assets/app.js",
         styles: ["/assets/app.css"],
       },
     });
-    expect(result.outDir).toBe("/application/public");
+    expect(result.outDir).toBe("/application/app/output");
   });
 
   it("rejects invalid client and server build manifests", async () => {
@@ -120,7 +134,42 @@ describe("Demiurge CLI arguments", () => {
       importModule: async () => ({ routes: [] }),
       now: () => 0,
       readText: async () => JSON.stringify({ clientEntry: "/app.js", styles: [] }),
-      root: "/application",
+      resolveConfig: async () => ({
+        publicDir: "/application/public",
+        root: "/application",
+      }),
     })).rejects.toThrow(/does not export routes/);
+  });
+
+  it("rejects output paths that can remove application files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-cli-output-"));
+    const publicDir = join(root, "public");
+    const sourceDir = join(root, "source-output");
+    const managedDir = join(root, "managed-output");
+
+    try {
+      await mkdir(publicDir);
+      await mkdir(sourceDir);
+      await mkdir(managedDir);
+      await writeFile(join(sourceDir, "application.ts"), "export {};");
+      await writeFile(join(managedDir, "demiurge-manifest.json"), "{}");
+
+      await expect(validateBuildOutputDirectory(root, root, publicDir))
+        .rejects.toThrow(/must be inside/);
+      await expect(
+        validateBuildOutputDirectory(root, join(root, ".."), publicDir),
+      ).rejects.toThrow(/must be inside/);
+      await expect(validateBuildOutputDirectory(root, publicDir, publicDir))
+        .rejects.toThrow(/must not overlap/);
+      await expect(validateBuildOutputDirectory(root, sourceDir, publicDir))
+        .rejects.toThrow(/did not create/);
+      await expect(validateBuildOutputDirectory(root, managedDir, publicDir))
+        .resolves.toBeUndefined();
+      await expect(
+        validateBuildOutputDirectory(root, join(root, "new-output"), false),
+      ).resolves.toBeUndefined();
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 });

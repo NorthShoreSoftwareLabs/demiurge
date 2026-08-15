@@ -116,6 +116,19 @@ describe("static output preview", () => {
     expect(await publicFile.text()).toBe("");
   });
 
+  it("applies route policy to direct generated file URLs", async () => {
+    const origin = await start(await createOutput());
+    const home = await fetch(`${origin}/index.html`);
+    const fallback = await fetch(`${origin}/404.html`);
+
+    expect(home.status).toBe(200);
+    expect(home.headers.get("content-security-policy")).toBe("default-src 'self'");
+    expect(fallback.status).toBe(404);
+    expect(fallback.headers.get("content-security-policy")).toBe(
+      "default-src 'none'",
+    );
+  });
+
   it("rejects unsupported methods and keeps files inside the output root", async () => {
     const origin = await start(await createOutput());
     const post = await fetch(origin, { method: "POST" });
@@ -148,6 +161,13 @@ describe("static output preview", () => {
     const origin = await start(root);
 
     expect((await fetch(`${origin}/missing`)).status).toBe(404);
+  });
+
+  it("uses the manifest fallback for directory requests", async () => {
+    const origin = await start(await createOutput());
+
+    expect((await fetch(`${origin}/assets`)).status).toBe(404);
+    expect((await fetch(`${origin}/assets/`)).status).toBe(404);
   });
 
   it("fails before listening when the manifest format is invalid", async () => {
