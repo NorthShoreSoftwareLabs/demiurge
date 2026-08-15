@@ -2,6 +2,7 @@ import type {
   ContentSecurityPolicy,
   CspHashAlgorithm,
   CspDirectiveValue,
+  ReportingEndpointUrl,
   RoutePolicy,
   RouteSecurityPolicy,
   SecurityHeadersOptions,
@@ -14,6 +15,8 @@ import type {
 
 const nonceToken = "{nonce}";
 
+export const cspNonce = `'nonce-${nonceToken}'` as const;
+
 const strictCsp = {
   baseUri: ["'self'"],
   connectSrc: ["'self'"],
@@ -23,8 +26,8 @@ const strictCsp = {
   frameAncestors: ["'none'"],
   imgSrc: ["'self'", "data:", "blob:"],
   objectSrc: ["'none'"],
-  scriptSrc: [`'nonce-${nonceToken}'`, "'strict-dynamic'"],
-  styleSrc: ["'self'", `'nonce-${nonceToken}'`],
+  scriptSrc: [cspNonce, "'strict-dynamic'"],
+  styleSrc: ["'self'", cspNonce],
   upgradeInsecureRequests: true,
 } satisfies ContentSecurityPolicy;
 
@@ -175,6 +178,10 @@ export function createSecurityHeaders(
   policy: SecurityPolicy,
   options: SecurityHeadersOptions = {},
 ) {
+  if (policy.csp) {
+    validateCspDirectiveValues(policy.csp);
+  }
+
   validateReportingConfiguration(policy);
 
   const headers = new Headers();
@@ -216,9 +223,12 @@ export function securityPolicyRequiresNonce(
     return false;
   }
 
-  return cspDirectiveEntries(policy.csp).some(([, value]) =>
-    Array.isArray(value) && value.some((source) => source.includes(nonceToken))
-  );
+  return cspDirectiveEntries(policy.csp).some(([, value]) => {
+    const resolved = resolveCspDirectiveValue(value);
+
+    return Array.isArray(resolved) &&
+      resolved.some((source) => source.includes(nonceToken));
+  });
 }
 
 export function createCspNonce() {
@@ -286,31 +296,47 @@ function mergeCsp(
   }
 
   if (!base) {
-    return override;
+    return normalizeCsp(override);
   }
 
+  const normalizedBase = normalizeCsp(base);
+  const normalizedOverride = normalizeCsp(override);
   const merged: ContentSecurityPolicy = {
-    ...base,
-    ...override,
+    ...normalizedBase,
+    ...normalizedOverride,
   };
 
   for (const [name, value] of cspDirectiveEntries(override)) {
-    const baseValue = base[name];
+    const baseValue = resolveCspDirectiveValue(
+      normalizedBase[name] as CspDirectiveValue | undefined,
+    );
 
     if (
-      name !== "reportUri" &&
+      !isCspDirectiveReplacement(value) &&
       Array.isArray(baseValue) &&
       Array.isArray(value)
     ) {
-      setCspDirective(merged, name, dedupeSources([...baseValue, ...value]));
+      setCspDirective(
+        merged,
+        name,
+        dedupeSources([...baseValue, ...value]),
+      );
     }
   }
 
-  if (base.reportUri && override.reportUri) {
-    merged.reportUri = [...new Set([...base.reportUri, ...override.reportUri])];
+  return merged;
+}
+
+function normalizeCsp(policy: ContentSecurityPolicy) {
+  const normalized = { ...policy };
+
+  for (const [name, value] of cspDirectiveEntries(policy)) {
+    if (isCspDirectiveReplacement(value)) {
+      setCspDirective(normalized, name, value.replace);
+    }
   }
 
-  return merged;
+  return normalized;
 }
 
 function dedupeSources(sources: readonly string[]) {
@@ -322,11 +348,12 @@ function setCspDirective(
   name: keyof ContentSecurityPolicy,
   value: readonly string[],
 ) {
-  if (
-    name === "reportTo" ||
-    name === "reportUri" ||
-    name === "upgradeInsecureRequests"
-  ) {
+  if (name === "reportTo" || name === "upgradeInsecureRequests") {
+    return;
+  }
+
+  if (name === "reportUri") {
+    policy.reportUri = value as readonly ReportingEndpointUrl[];
     return;
   }
 
@@ -428,18 +455,22 @@ function renderCsp(
       continue;
     }
 
-    if (value === false || value === undefined) {
+    const resolved = resolveCspDirectiveValue(value);
+
+    if (resolved === false || resolved === undefined) {
       continue;
     }
 
     const directiveName = toCspDirectiveName(name);
 
-    if (value === true) {
+    if (resolved === true) {
       directives.push(directiveName);
       continue;
     }
 
-    directives.push(`${directiveName} ${renderCspSources(value, options).join(" ")}`);
+    directives.push(
+      `${directiveName} ${renderCspSources(resolved, options).join(" ")}`,
+    );
   }
 
   const reporting = renderCspReportingDirectives(policy);
@@ -460,8 +491,10 @@ function renderCspReportingDirectives(
 
   const directives: string[] = [];
 
-  if (policy.reportUri?.length) {
-    directives.push(`report-uri ${policy.reportUri.join(" ")}`);
+  const reportUri = resolveCspDirectiveValue(policy.reportUri);
+
+  if (Array.isArray(reportUri) && reportUri.length) {
+    directives.push(`report-uri ${reportUri.join(" ")}`);
   }
 
   if (policy.reportTo) {
@@ -516,9 +549,68 @@ function validateReportingConfiguration(policy: SecurityPolicy) {
     }
   }
 
-  for (const url of csp?.reportUri ?? []) {
+  const reportUris = resolveCspDirectiveValue(csp?.reportUri);
+
+  for (const url of Array.isArray(reportUris) ? reportUris : []) {
     validateReportingEndpointUrl(url, "CSP report-uri target");
   }
+}
+
+function validateCspDirectiveValues(policy: ContentSecurityPolicy) {
+  for (const [name, value] of cspDirectiveEntries(policy)) {
+    const directive = toCspDirectiveName(name);
+
+    if (value === undefined) {
+      continue;
+    }
+
+    if (name === "reportTo") {
+      if (typeof value !== "string") {
+        throw new Error(
+          `Demiurge CSP directive ${JSON.stringify(directive)} must be a string.`,
+        );
+      }
+
+      continue;
+    }
+
+    if (name === "upgradeInsecureRequests") {
+      if (typeof value !== "boolean") {
+        throw new Error(
+          `Demiurge CSP directive ${JSON.stringify(directive)} must be a boolean.`,
+        );
+      }
+
+      continue;
+    }
+
+    const sources = resolveCspDirectiveValue(value);
+
+    if (
+      sources !== false &&
+      (!Array.isArray(sources) ||
+        !sources.every((source) => typeof source === "string"))
+    ) {
+      throw new Error(
+        `Demiurge CSP directive ${JSON.stringify(directive)} must be a source list, false, or a replacement object with a source list.`,
+      );
+    }
+  }
+}
+
+function isCspDirectiveReplacement(
+  value: CspDirectiveValue | undefined,
+): value is Extract<CspDirectiveValue, { replace: readonly string[] }> {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      "replace" in value,
+  );
+}
+
+function resolveCspDirectiveValue(value: CspDirectiveValue | undefined) {
+  return isCspDirectiveReplacement(value) ? value.replace : value;
 }
 
 function validateReportingEndpointName(name: string) {

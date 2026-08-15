@@ -65,7 +65,7 @@ function auditReportOnlyDelivery(
   }
 
   const csp = policy.csp || undefined;
-  const hasLegacyTarget = Boolean(csp?.reportUri?.length);
+  const hasLegacyTarget = Boolean(resolveCspArray(csp?.reportUri)?.length);
   const endpoints = policy.headers?.reportingEndpoints;
   const hasReportingApiTarget = Boolean(
     csp?.reportTo && endpoints && endpoints[csp.reportTo],
@@ -196,7 +196,19 @@ function normalizeScriptDependencyAuditOptions(
 }
 
 function getScriptSources(policy: ContentSecurityPolicy) {
-  return policy.scriptSrc ?? policy.defaultSrc ?? [];
+  return resolveCspArray(policy.scriptSrc) ??
+    resolveCspArray(policy.defaultSrc) ??
+    [];
+}
+
+function resolveCspArray<T extends string>(
+  value: false | readonly T[] | { replace: readonly T[] } | undefined,
+) {
+  if (!value) {
+    return undefined;
+  }
+
+  return "replace" in value ? value.replace : value;
 }
 
 function requiresScriptNonce(sources: readonly CspSource[]) {

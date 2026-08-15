@@ -74,6 +74,28 @@ function InlineScriptPage() {
   );
 }
 
+function InlineStylePage() {
+  return <main style={{ opacity: 0.8 }}>Styled page</main>;
+}
+
+function InlineStyleElementPage() {
+  return (
+    <>
+      <style>{".styled-page { opacity: 0.8; }"}</style>
+      <main className="styled-page">Styled page</main>
+    </>
+  );
+}
+
+function InlineStylesPage() {
+  return (
+    <>
+      <style>{".styled-page { opacity: 0.8; }"}</style>
+      <main className="styled-page" style={{ color: "blue" }}>Styled page</main>
+    </>
+  );
+}
+
 async function createOutputDirectory() {
   const root = await mkdtemp(join(tmpdir(), "demiurge-static-output-"));
   const outDir = join(root, "dist");
@@ -101,6 +123,32 @@ function appRoutes(extra: Record<string, ReturnType<typeof routeModule>> = {}) {
 }
 
 describe("static output adapter", () => {
+  it("limits concurrent route module loading", async () => {
+    const { outDir } = await createOutputDirectory();
+    let active = 0;
+    let maximumActive = 0;
+    const resourceRoutes = Object.fromEntries(
+      Array.from({ length: 20 }, (_, index) => [
+        `./routes/resources/${index}.txt.ts`,
+        async () => {
+          active += 1;
+          maximumActive = Math.max(maximumActive, active);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          active -= 1;
+          return { GET: text(`resource ${index}`) } satisfies RouteModule;
+        },
+      ]),
+    );
+    const routes = {
+      ...appRoutes(),
+      ...resourceRoutes,
+    };
+
+    await generateStaticOutput({ outDir, routes });
+
+    expect(maximumActive).toBe(8);
+  });
+
   it("declares only the static output capability", () => {
     expect(staticAdapter).toEqual({
       capabilities: {
@@ -292,6 +340,125 @@ describe("static output adapter", () => {
     );
   });
 
+  it("accepts style attributes through style-src-attr", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({
+          document: security.static({
+            csp: { styleSrcAttr: ["'unsafe-inline'"] },
+          }),
+        }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: InlineStylePage }),
+      }),
+    });
+
+    const manifest = await generateStaticOutput({ outDir, routes });
+    const homeEntry = manifest.entries.find((entry) => entry.pathname === "/");
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+
+    expect(homeEntry?.headers["content-security-policy"]).toContain(
+      "style-src-attr 'unsafe-inline'",
+    );
+    expect(home).toContain('style="opacity:0.8"');
+  });
+
+  it("rejects style attributes when style-src-attr falls back to style-src", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({ document: security.static() }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: InlineStylePage }),
+      }),
+    });
+
+    await expect(generateStaticOutput({ outDir, routes })).rejects.toThrow(
+      /inline style attribute that its CSP does not allow/,
+    );
+  });
+
+  it("accepts style elements through style-src-elem", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({
+          document: security.static({
+            csp: { styleSrcElem: ["'unsafe-inline'"] },
+          }),
+        }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({
+          render: { mode: "static" },
+          view: InlineStyleElementPage,
+        }),
+      }),
+    });
+
+    const manifest = await generateStaticOutput({ outDir, routes });
+    const homeEntry = manifest.entries.find((entry) => entry.pathname === "/");
+
+    expect(homeEntry?.headers["content-security-policy"]).toContain(
+      "style-src-elem 'unsafe-inline'",
+    );
+  });
+
+  it("allows inline styles when the CSP has no effective style directive", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({
+          document: { csp: { baseUri: ["'self'"] } },
+        }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: InlineStylesPage }),
+      }),
+    });
+
+    await expect(generateStaticOutput({ outDir, routes })).resolves.toBeDefined();
+  });
+
+  it("checks style elements against the style-src fallback", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({
+          document: { csp: { styleSrc: ["'self'"] } },
+        }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: InlineStyleElementPage }),
+      }),
+    });
+
+    await expect(generateStaticOutput({ outDir, routes })).rejects.toThrow(
+      /inline style without the required CSP hash/,
+    );
+  });
+
+  it("checks style attributes against the default-src fallback", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({
+          document: { csp: { defaultSrc: ["'self'"] } },
+        }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: InlineStylePage }),
+      }),
+    });
+
+    await expect(generateStaticOutput({ outDir, routes })).rejects.toThrow(
+      /inline style attribute that its CSP does not allow/,
+    );
+  });
+
   it("does not add script policy to unrelated CSP headers", async () => {
     const { outDir } = await createOutputDirectory();
     const routes = appRoutes({
@@ -340,7 +507,7 @@ describe("static output adapter", () => {
         routes,
         ssr: { clientEntry: "/assets/app-a1b2c3d4.js" },
       }),
-    ).rejects.toThrow(/nonce-backed CSP/);
+    ).rejects.toThrow(/nonceInjection/);
     await expect(readFile(join(outDir, "index.html"), "utf8"))
       .resolves.toBe("client shell");
   });

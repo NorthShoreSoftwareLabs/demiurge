@@ -24,6 +24,7 @@ export {
 } from "./env";
 export {
   createSecurityHeaders,
+  cspNonce,
   cspHash,
   defineRoutePolicy,
   defineSecurityPolicy,
@@ -49,6 +50,8 @@ export {
 export {
   validateUploads,
 } from "./upload";
+export { validateRouteModules } from "./verification";
+export type { RouteModuleVerificationOptions } from "./verification";
 export {
   checkWebSocketOrigin,
   enforceWebSocketOrigin,
@@ -61,7 +64,9 @@ export type {
   CsrfPolicy,
   CspHashAlgorithm,
   CspDirectiveValue,
+  CspDirectiveReplacement,
   CspSource,
+  CspSourceDirective,
   MemoryRateLimitStoreOptions,
   RateLimitKey,
   RateLimitPolicy,

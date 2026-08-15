@@ -11,26 +11,49 @@ export type CspSource =
   | "blob:"
   | "https:"
   | "http:"
-  | string;
+  | (string & {});
 
-export type CspDirectiveValue = readonly CspSource[] | boolean;
+export type CspDirectiveReplacement<Source extends string = CspSource> = {
+  replace: readonly Source[];
+};
+
+export type CspSourceDirective =
+  | readonly CspSource[]
+  | CspDirectiveReplacement
+  | false;
+
+export type CspDirectiveValue =
+  | CspSourceDirective
+  | CspDirectiveReplacement<ReportingEndpointUrl>
+  | readonly ReportingEndpointUrl[]
+  | boolean;
 
 export type ContentSecurityPolicy = {
-  baseUri?: readonly CspSource[];
-  connectSrc?: readonly CspSource[];
-  defaultSrc?: readonly CspSource[];
-  fontSrc?: readonly CspSource[];
-  formAction?: readonly CspSource[];
-  frameAncestors?: readonly CspSource[];
-  imgSrc?: readonly CspSource[];
-  objectSrc?: readonly CspSource[];
+  baseUri?: CspSourceDirective;
+  childSrc?: CspSourceDirective;
+  connectSrc?: CspSourceDirective;
+  defaultSrc?: CspSourceDirective;
+  fontSrc?: CspSourceDirective;
+  formAction?: CspSourceDirective;
+  frameAncestors?: CspSourceDirective;
+  frameSrc?: CspSourceDirective;
+  imgSrc?: CspSourceDirective;
+  manifestSrc?: CspSourceDirective;
+  mediaSrc?: CspSourceDirective;
+  objectSrc?: CspSourceDirective;
   /** Deprecated compatibility targets used alongside `reportTo`. */
-  reportUri?: readonly ReportingEndpointUrl[];
+  reportUri?:
+    | readonly ReportingEndpointUrl[]
+    | CspDirectiveReplacement<ReportingEndpointUrl>
+    | false;
   /** A named member of `headers.reportingEndpoints`. */
   reportTo?: string;
-  scriptSrc?: readonly CspSource[];
-  styleSrc?: readonly CspSource[];
+  scriptSrc?: CspSourceDirective;
+  styleSrc?: CspSourceDirective;
+  styleSrcAttr?: CspSourceDirective;
+  styleSrcElem?: CspSourceDirective;
   upgradeInsecureRequests?: boolean;
+  workerSrc?: CspSourceDirective;
 };
 
 export type ReportingEndpointUrl = `/${string}` | `https://${string}`;

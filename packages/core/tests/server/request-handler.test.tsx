@@ -4,6 +4,7 @@ import {
   createMemoryCacheStore,
   createRequestHandler,
   defineLinks,
+  defineAdapter,
   defineMetadata,
   defineRoutePolicy,
   defineScripts,
@@ -52,6 +53,52 @@ function routeModule(module: RouteModule) {
 }
 
 describe("request handler", () => {
+  it("validates eager route modules during handler construction", () => {
+    const routeModules = {
+      "./routes/api.ts": {
+        POST: json({}, {
+          cors: { credentials: true, origins: "*" },
+        }),
+      },
+    } satisfies Record<string, RouteModule>;
+
+    expect(() =>
+      createRequestHandler({
+        routeModules,
+        routes: Object.fromEntries(
+          Object.entries(routeModules).map(([file, module]) => [
+            file,
+            routeModule(module),
+          ]),
+        ),
+      })
+    ).toThrow(
+      'Route "./routes/api.ts" export POST has an invalid CORS policy.',
+    );
+  });
+
+  it("validates the effective CSP against an explicit adapter", () => {
+    const routeModules = {
+      "./routes/@policy.ts": {
+        policy: defineRoutePolicy({ document: security.strict() }),
+      },
+      "./routes/index.tsx": { GET: page(View) },
+    } satisfies Record<string, RouteModule>;
+
+    expect(() =>
+      createRequestHandler({
+        adapter: defineAdapter({ name: "test-static" }),
+        routeModules,
+        routes: Object.fromEntries(
+          Object.entries(routeModules).map(([file, module]) => [
+            file,
+            routeModule(module),
+          ]),
+        ),
+      })
+    ).toThrow(/nonceInjection/);
+  });
+
   it("returns JSON route responses", async () => {
     const handler = createRequestHandler({
       routes: {

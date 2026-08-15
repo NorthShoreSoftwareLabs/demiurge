@@ -1279,6 +1279,42 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await expect(readTextEventually(outputFile)).resolves.toContain('"/": {};');
   });
 
+  it("collapses a burst of route changes into one policy scan", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-policy-burst-"));
+    const routesDir = join(root, "routes");
+    const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
+    const watcher = createWatcherHarness();
+    const middleware = createMiddlewareHarness();
+    const warn = vi.fn();
+
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(
+      join(routesDir, "api.ts"),
+      `import { json } from "@demiurgejs/core";
+export const GET = json({}, { cors: { credentials: true, origins: "*" } });`,
+    );
+
+    plugin.configureServer?.({
+      config: { logger: { warn }, root },
+      middlewares: { use: middleware.use },
+      ssrLoadModule: vi.fn(),
+      watcher,
+    } as never);
+
+    // The scan on startup reports the one invalid policy.
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
+
+    for (let index = 0; index < 10; index += 1) {
+      watcher.emit("change", join(routesDir, "api.ts"));
+    }
+
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    // Ten events, one rescan.
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
   it("uses default route and typed-output directories in dev", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-defaults-"));
     const routesDir = join(root, "src", "routes");
@@ -1520,9 +1556,13 @@ describe("Vite plugin document runtime", () => {
       routesDir: "src/pages",
     });
 
-    expect(source).toContain('import.meta.glob(["/src/pages/**/*.{ts,tsx}"])');
+    expect(source).toContain(
+      'import.meta.glob(["/src/pages/**/*.{ts,tsx}"], { eager: true })',
+    );
     expect(source).toContain('const routePrefix = "/src/pages/";');
     expect(source).toContain("export const routes");
+    expect(source).toContain("export const routeModules");
+    expect(source).toContain("routeModules,");
     expect(source).toContain("createRequestHandler");
     expect(source).toContain('lang ?? "en-GB"');
     expect(source).toContain('title ?? "Server app"');
@@ -1811,5 +1851,51 @@ export const GET = json(() => db.widgets.page(2));
 
     plugin.configResolved?.({ command: "build", root } as never);
     await expect(plugin.buildStart?.()).rejects.toThrow(/@not-found\.tsx/);
+  });
+
+  it("fails buildStart for invalid literal route policy", async () => {
+    const root = await scaffold({
+      "@not-found.tsx": "export default function NotFound() { return null; }",
+      "api.ts": `
+import { json } from "@demiurgejs/core";
+export const GET = json({}, {
+  cors: { credentials: true, origins: "*" },
+});`,
+    });
+    const plugin = demiurge() as PluginHarness;
+
+    plugin.configResolved?.({ command: "build", root } as never);
+
+    await expect(plugin.buildStart?.()).rejects.toThrow(
+      /api\.ts export GET: \[cors-invalid\].*wildcard origins/,
+    );
+  });
+
+  it("reports the same policy finding in development and build", async () => {
+    const root = await scaffold({
+      "@not-found.tsx": "export default function NotFound() { return null; }",
+      "api.ts": `
+import { json } from "@demiurgejs/core";
+export const GET = json({}, {
+  cors: { credentials: true, origins: "*" },
+});`,
+    });
+    const warn = vi.fn();
+    const devPlugin = demiurge() as PluginHarness;
+    const buildPlugin = demiurge() as PluginHarness;
+
+    devPlugin.configResolved?.({ command: "serve", root });
+    devPlugin.configureServer?.({
+      config: { logger: { warn }, root },
+      middlewares: { use: vi.fn() },
+      ssrLoadModule: vi.fn(),
+      watcher: createWatcherHarness(),
+    } as never);
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
+
+    buildPlugin.configResolved?.({ command: "build", root });
+    await expect(buildPlugin.buildStart?.()).rejects.toThrow(
+      warn.mock.calls[0]![0] as string,
+    );
   });
 });

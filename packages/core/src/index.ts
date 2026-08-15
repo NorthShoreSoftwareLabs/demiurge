@@ -62,6 +62,7 @@ export {
   createSecurityAudit,
   createSecurityHeaders,
   createSecurityReportHandler,
+  cspNonce,
   cspHash,
   EnvValidationError,
   checkWebSocketOrigin,
@@ -85,6 +86,7 @@ export {
   validateEnv,
   validateCorsPolicy,
   validateRateLimitPolicy,
+  validateRouteModules,
   validateUploads,
 } from "./security";
 export {
@@ -276,7 +278,9 @@ export type {
   CsrfPolicy,
   CspHashAlgorithm,
   CspDirectiveValue,
+  CspDirectiveReplacement,
   CspSource,
+  CspSourceDirective,
   EnvSchema,
   EnvSource,
   EnvValidationIssue,
@@ -300,6 +304,7 @@ export type {
   SecurityReportPayload,
   RequestSecurityPolicy,
   RoutePolicy,
+  RouteModuleVerificationOptions,
   RouteSecurityPolicy,
   SecurityHeadersOptions,
   SecurityHeaderPolicy,

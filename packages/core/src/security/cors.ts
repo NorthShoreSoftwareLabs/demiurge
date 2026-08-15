@@ -134,6 +134,12 @@ export function validateCorsPolicy(policy: CorsPolicy) {
     );
   }
 
+  if (policy.origins !== "*") {
+    for (const origin of policy.origins) {
+      validateCorsOrigin(origin);
+    }
+  }
+
   if (
     policy.maxAge !== undefined &&
     (!Number.isSafeInteger(policy.maxAge) || policy.maxAge < 0)
@@ -142,6 +148,29 @@ export function validateCorsPolicy(policy: CorsPolicy) {
       "Demiurge CORS maxAge must be a non-negative integer number of seconds.",
     );
   }
+}
+
+function validateCorsOrigin(origin: string) {
+  let parsed: URL;
+
+  try {
+    parsed = new URL(origin);
+  } catch {
+    throw invalidCorsOrigin(origin);
+  }
+
+  if (
+    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+    parsed.origin !== origin
+  ) {
+    throw invalidCorsOrigin(origin);
+  }
+}
+
+function invalidCorsOrigin(origin: string) {
+  return new Error(
+    `Demiurge CORS origin ${JSON.stringify(origin)} must be a canonical HTTP(S) origin without credentials, a path, query, or fragment.`,
+  );
 }
 
 function resolveAllowedOrigin(policy: CorsPolicy, origin: string) {
