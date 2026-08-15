@@ -9,6 +9,7 @@ export default defineConfig({
   build: {
     lib: {
       entry: {
+        cli: fileURLToPath(new URL("src/cli.ts", import.meta.url)),
         "data/testing": fileURLToPath(
           new URL("src/data/testing.ts", import.meta.url),
         ),

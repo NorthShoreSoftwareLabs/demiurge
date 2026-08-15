@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -42,6 +42,43 @@ function assert(condition: unknown, message: string): asserts condition {
   }
 }
 
+async function startPreview(command: string, args: string[], cwd: string) {
+  const child = spawn(command, args, {
+    cwd,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let errors = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => {
+    errors += chunk;
+  });
+
+  const origin = await new Promise<string>((resolvePromise, reject) => {
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("The packed preview did not start."));
+    }, 10_000);
+    timeout.unref();
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      const match = chunk.match(/(http:\/\/[^\s]+)\./);
+      if (match) {
+        clearTimeout(timeout);
+        resolvePromise(match[1]!);
+      }
+    });
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      clearTimeout(timeout);
+      reject(
+        new Error(`The packed preview exited with code ${code}. ${errors}`),
+      );
+    });
+  });
+
+  return { child, origin };
+}
+
 try {
   run("pnpm", ["pack", "--pack-destination", scratch], packageDir);
 
@@ -61,7 +98,7 @@ try {
 
   assert(
     packedTopLevel.every((entry) =>
-      ["dist", "LICENSE", "package.json", "README.md"].includes(entry),
+      ["bin", "dist", "LICENSE", "package.json", "README.md"].includes(entry),
     ),
     `Packed package contains files outside the explicit artifact contract: ${packedTopLevel.join(", ")}`,
   );
@@ -111,6 +148,9 @@ try {
   const installedPublishConfig = installedPackage.publishConfig as
     | { access?: string; provenance?: boolean }
     | undefined;
+  const installedBin = installedPackage.bin as
+    | { demiurge?: string }
+    | undefined;
 
   assert(installedPackage.name === expectedPackage.name, "Packed package has the wrong name.");
   assert(installedPackage.version === expectedPackage.version, "Packed package has the wrong staged version.");
@@ -126,6 +166,7 @@ try {
   assert(installedRepository.directory === "packages/core", "Packed package must identify its monorepo directory.");
   assert(installedEngines?.node === ">=22.13.0", "Packed package must declare the supported Node runtime.");
   assert(installedPublishConfig?.access === "public" && installedPublishConfig.provenance === true, "Packed package must require public provenance publication.");
+  assert(installedBin?.demiurge === "./bin/demiurge.mjs", "Packed package is missing the Demiurge command.");
   assert(Array.isArray(installedPackage.keywords) && installedPackage.keywords.includes("react"), "Packed package is missing npm discovery keywords.");
 
   const installedReadme = readFileSync(join(installedRoot, "README.md"), "utf8");
@@ -177,8 +218,16 @@ try {
     throw new Error("Packed consumer check did not run to completion.");
   }
 
+  const cliHelp = run(
+    "node",
+    [join(installedRoot, "bin", "demiurge.mjs"), "--help"],
+    scratch,
+  );
+  assert(cliHelp.includes("Build static production output"), "Packed Demiurge command has no build help.");
+
   for (const file of [
     "dist/index.d.ts",
+    "dist/cli.d.ts",
     "dist/data/testing.d.ts",
     "dist/node/index.d.ts",
     "dist/static/index.d.ts",
@@ -187,9 +236,9 @@ try {
     assert(existsSync(join(installedRoot, file)), `Packed tarball is missing ${file}.`);
   }
 
-  mkdirSync(join(scratch, "src", "routes"), { recursive: true });
+  mkdirSync(join(scratch, "app", "src", "routes"), { recursive: true });
   writeFileSync(
-    join(scratch, "src", "routes", "index.tsx"),
+    join(scratch, "app", "src", "routes", "index.tsx"),
     [
       `import { defineRoutePolicy, page, security, type RouteProps } from "@demiurgejs/core";`,
       `export const policy = defineRoutePolicy({`,
@@ -201,12 +250,13 @@ try {
       `  }),`,
       `});`,
       `export const GET = page({`,
+      `  render: { mode: "static" },`,
       `  view: (_props: RouteProps) => <main>packed app</main>,`,
       `});`,
     ].join("\n"),
   );
   writeFileSync(
-    join(scratch, "src", "routes", "@not-found.tsx"),
+    join(scratch, "app", "src", "routes", "@not-found.tsx"),
     [
       `export default function NotFound({ pathname }: { pathname: string }) {`,
       `  return <main>Nothing at {pathname}</main>;`,
@@ -219,7 +269,10 @@ try {
       `import react from "@vitejs/plugin-react";`,
       `import { defineConfig } from "vite";`,
       `import { demiurge } from "@demiurgejs/core/vite";`,
-      `export default defineConfig({ plugins: [demiurge(), react()] });`,
+      `export default defineConfig({`,
+      `  plugins: [demiurge(), react()],`,
+      `  root: "app",`,
+      `});`,
     ].join("\n"),
   );
   writeFileSync(
@@ -236,7 +289,7 @@ try {
           target: "ES2022",
           types: ["node", "vite/client"],
         },
-        include: ["src", "vite.config.ts"],
+        include: ["app/src", "vite.config.ts"],
       },
       null,
       2,
@@ -244,11 +297,50 @@ try {
   );
 
   run("pnpm", ["exec", "tsc", "--noEmit"], scratch);
-  run("pnpm", ["exec", "vite", "build"], scratch);
-  assert(
-    existsSync(join(scratch, "dist", "index.html")),
-    "The packed library could not build a clean external Vite app.",
+  run(
+    "node",
+    [
+      join(installedRoot, "bin", "demiurge.mjs"),
+      "build",
+      "--origin",
+      "https://packed.example.test",
+    ],
+    scratch,
   );
+  assert(
+    existsSync(join(scratch, "app", "dist", "index.html")) &&
+      existsSync(
+        join(scratch, "app", "dist", "demiurge-static-manifest.json"),
+      ),
+    "The packed command could not build a clean external static app.",
+  );
+
+  const preview = await startPreview(
+    "node",
+    [
+      join(installedRoot, "bin", "demiurge.mjs"),
+      "preview",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "0",
+    ],
+    scratch,
+  );
+  try {
+    const response = await fetch(preview.origin);
+    assert(response.status === 200, "The packed preview did not serve the static page.");
+    assert(
+      response.headers.has("content-security-policy"),
+      "The packed preview did not apply the static policy.",
+    );
+  } finally {
+    const exit = new Promise<void>((resolvePromise) => {
+      preview.child.once("exit", () => resolvePromise());
+    });
+    preview.child.kill("SIGTERM");
+    await exit;
+  }
 
   console.log("pack artifact and external consumer tests passed");
 } finally {

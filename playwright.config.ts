@@ -34,7 +34,8 @@ export default defineConfig({
       url: "http://localhost:42177/",
     },
     {
-      command: "tsx browser-tests/serve-static-output.ts",
+      command:
+        "pnpm --filter @demiurge-examples/static-export preview --host localhost --port 42178",
       reuseExistingServer: false,
       timeout: 120_000,
       url: "http://localhost:42178/",

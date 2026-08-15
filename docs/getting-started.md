@@ -58,5 +58,8 @@ Run `vite` for development and `vite build` for a browser build. The framework
 creates the HTML document and browser entry. The application does not need an
 `index.html` or a manual React mount.
 
+For static production output, run `demiurge build`. Run `demiurge preview` to
+serve the output with its declared headers.
+
 Continue with the [route reference](./reference/routes.md). For production SSR,
 follow the [Node deployment guide](./guides/node-deployment.md).

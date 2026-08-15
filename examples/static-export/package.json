@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build --outDir dist && vite build --ssr src/server-entry.ts --outDir .demiurge/server && node export.js",
+    "build": "demiurge build --origin https://static.example.test",
     "dev": "vite",
-    "preview": "vite preview"
+    "preview": "demiurge preview"
   },
   "dependencies": {
     "@demiurgejs/core": "workspace:*",
