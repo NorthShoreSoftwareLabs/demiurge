@@ -45,6 +45,7 @@ import {
   verifyRoutePolicyFile,
   type StaticPolicyFinding,
 } from "./policy-verification";
+import type { VercelStaticDeployment } from "../static";
 
 export type DemiurgeVitePluginOptions = {
   document?: {
@@ -52,10 +53,18 @@ export type DemiurgeVitePluginOptions = {
     title?: string;
   };
   routesDir?: string;
+  static?: {
+    deployment?: VercelStaticDeployment;
+  };
   styles?: false | string;
   typedRoutes?: boolean | {
     outputFile?: string;
   };
+};
+
+export type DemiurgeVitePluginApi = {
+  demiurge: true;
+  staticDeployment?: VercelStaticDeployment;
 };
 
 const CLIENT_ENTRY_ID = "virtual:demiurge/client-entry";
@@ -70,6 +79,10 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
   const viteNoncePlaceholder = `demiurge-${createCspNonce()}`;
 
   return {
+    api: {
+      demiurge: true,
+      staticDeployment: options.static?.deployment,
+    } satisfies DemiurgeVitePluginApi,
     enforce: "post",
     name: "demiurge",
     config(config, environment) {

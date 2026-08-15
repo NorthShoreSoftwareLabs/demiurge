@@ -31,6 +31,7 @@ import {
   type RouteProps,
 } from "@demiurgejs/core";
 import { unstable_createRouteManifest } from "@demiurgejs/core/internal/testing";
+import { vercelStatic } from "@demiurgejs/core/static";
 import {
   demiurge,
   unstable_assertRootNotFoundRoute,
@@ -61,6 +62,7 @@ function InlineDevPage() {
 }
 
 type PluginHarness = {
+  api?: unknown;
   buildStart?: (options?: unknown) => void | Promise<void>;
   config?: (
     config: Record<string, unknown>,
@@ -85,6 +87,16 @@ function routeModule(module: RouteModule) {
 }
 
 describe("Vite plugin dev request handling", () => {
+  it("exposes the selected static deployment to the build command", () => {
+    const deployment = vercelStatic();
+    const plugin = demiurge({ static: { deployment } }) as PluginHarness;
+
+    expect(plugin.api).toEqual({
+      demiurge: true,
+      staticDeployment: deployment,
+    });
+  });
+
   it("strips page data and data-only server imports from client route modules", () => {
     const source = `
 import { readSecret } from "./secrets.server.js";

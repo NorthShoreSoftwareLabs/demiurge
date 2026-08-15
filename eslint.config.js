@@ -8,6 +8,7 @@ export default tseslint.config(
       "**/coverage/**",
       "**/dist/**",
       "**/node_modules/**",
+      "**/.vercel/**",
       "examples/**/.demiurge/**",
     ],
   },

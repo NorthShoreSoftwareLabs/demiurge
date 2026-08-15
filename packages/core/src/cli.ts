@@ -4,9 +4,11 @@ import { pathToFileURL } from "node:url";
 import type { InlineConfig } from "vite";
 import type { RouteImporter } from "./route";
 import {
+  generateVercelStaticOutput,
   generateStaticOutput,
   type GenerateStaticOutputOptions,
   type StaticOutputManifest,
+  type VercelStaticDeployment,
 } from "./static";
 
 type CliEnvironment = Record<string, string | undefined>;
@@ -30,6 +32,10 @@ type StaticBuildRuntime = {
   now: () => number;
   readText: (file: string) => Promise<string>;
   resolveConfig: () => Promise<{
+    plugins?: Array<{
+      api?: unknown;
+      name: string;
+    }>;
     publicDir: false | string;
     root: string;
   }>;
@@ -161,7 +167,17 @@ export async function buildStaticSite(
     ssr: clientManifest,
   });
 
-  return { manifest, outDir };
+  const deployment = findVercelStaticDeployment(config.plugins);
+  const deploymentOutDir = deployment
+    ? await generateVercelStaticOutput({
+      deployment,
+      manifest,
+      outDir,
+      projectRoot: process.cwd(),
+    })
+    : undefined;
+
+  return { deploymentOutDir, manifest, outDir };
 }
 
 export async function resolvePreviewOutputDirectory(
@@ -246,6 +262,27 @@ function isRouteImporterRecord(
   }
 
   return Object.values(value).every((load) => typeof load === "function");
+}
+
+function findVercelStaticDeployment(
+  plugins: ReadonlyArray<{ api?: unknown; name: string }> | undefined,
+): VercelStaticDeployment | undefined {
+  const api = plugins
+    ?.filter((plugin) => plugin.name === "demiurge")
+    .map((plugin) => plugin.api)
+    .find(isDemiurgePluginApi);
+  return api?.staticDeployment;
+}
+
+function isDemiurgePluginApi(value: unknown): value is {
+  demiurge: true;
+  staticDeployment?: VercelStaticDeployment;
+} {
+  return Boolean(value) &&
+    value !== null &&
+    typeof value === "object" &&
+    "demiurge" in value &&
+    value.demiurge === true;
 }
 
 function pathsOverlap(left: string, right: string) {

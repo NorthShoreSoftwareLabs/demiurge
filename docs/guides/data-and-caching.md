@@ -148,3 +148,45 @@ provider configuration.
 
 Static generation fails on redirects, render errors, response cookies, unsafe
 or colliding output paths, and security policy that depends on a request nonce.
+
+## Vercel static output
+
+Select the Vercel static adapter in the Vite configuration:
+
+```ts
+import { vercelStatic } from "@demiurgejs/core/static";
+import { demiurge } from "@demiurgejs/core/vite";
+
+demiurge({
+  static: {
+    deployment: vercelStatic(),
+  },
+});
+```
+
+The build writes [Build Output API version 3](https://vercel.com/docs/build-output-api)
+to `.vercel/output`. It copies the public site to `.vercel/output/static`.
+
+The generated `config.json` applies route security headers before file cache
+rules. It also serves the app-owned fallback with status 404.
+
+Set the Vercel [Framework Preset](https://vercel.com/docs/builds/configure-a-build#framework-preset)
+to `Other`. Do not set an Output Directory override.
+
+An application can override the framework cache defaults with typed Vercel
+cache rules:
+
+```ts
+vercelStatic({
+  cache: [
+    {
+      source: "/videos/:path*",
+      value: "public, max-age=604800",
+    },
+  ],
+});
+```
+
+Vercel reads a root `vercel.json` before the build starts. Keep project settings
+there only when the application needs settings that Build Output API does not
+represent.

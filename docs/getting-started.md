@@ -61,5 +61,8 @@ creates the HTML document and browser entry. The application does not need an
 For static production output, run `demiurge build`. Run `demiurge preview` to
 serve the output with its declared headers.
 
+For Vercel, select `vercelStatic()` in the Vite configuration. The build then
+creates Build Output API artifacts under `.vercel/output`.
+
 Continue with the [route reference](./reference/routes.md). For production SSR,
 follow the [Node deployment guide](./guides/node-deployment.md).

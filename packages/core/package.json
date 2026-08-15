@@ -97,6 +97,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@vercel/routing-utils": "6.5.0",
     "magic-string": "^0.30.21"
   }
 }
