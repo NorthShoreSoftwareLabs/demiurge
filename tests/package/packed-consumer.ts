@@ -61,7 +61,7 @@ try {
 
   assert(
     packedTopLevel.every((entry) =>
-      ["dist", "LICENSE", "package.json", "README.md"].includes(entry),
+      ["bin", "dist", "LICENSE", "package.json", "README.md"].includes(entry),
     ),
     `Packed package contains files outside the explicit artifact contract: ${packedTopLevel.join(", ")}`,
   );
@@ -111,6 +111,9 @@ try {
   const installedPublishConfig = installedPackage.publishConfig as
     | { access?: string; provenance?: boolean }
     | undefined;
+  const installedBin = installedPackage.bin as
+    | { demiurge?: string }
+    | undefined;
 
   assert(installedPackage.name === expectedPackage.name, "Packed package has the wrong name.");
   assert(installedPackage.version === expectedPackage.version, "Packed package has the wrong staged version.");
@@ -126,6 +129,7 @@ try {
   assert(installedRepository.directory === "packages/core", "Packed package must identify its monorepo directory.");
   assert(installedEngines?.node === ">=22.13.0", "Packed package must declare the supported Node runtime.");
   assert(installedPublishConfig?.access === "public" && installedPublishConfig.provenance === true, "Packed package must require public provenance publication.");
+  assert(installedBin?.demiurge === "./bin/demiurge.mjs", "Packed package is missing the Demiurge command.");
   assert(Array.isArray(installedPackage.keywords) && installedPackage.keywords.includes("react"), "Packed package is missing npm discovery keywords.");
 
   const installedReadme = readFileSync(join(installedRoot, "README.md"), "utf8");
@@ -177,8 +181,16 @@ try {
     throw new Error("Packed consumer check did not run to completion.");
   }
 
+  const cliHelp = run(
+    "node",
+    [join(installedRoot, "bin", "demiurge.mjs"), "--help"],
+    scratch,
+  );
+  assert(cliHelp.includes("Build static production output"), "Packed Demiurge command has no build help.");
+
   for (const file of [
     "dist/index.d.ts",
+    "dist/cli.d.ts",
     "dist/data/testing.d.ts",
     "dist/node/index.d.ts",
     "dist/static/index.d.ts",

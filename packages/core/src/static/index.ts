@@ -33,6 +33,9 @@ import {
 
 const STATIC_MANIFEST_FILE = "demiurge-static-manifest.json";
 
+export { createStaticPreviewServer } from "./preview";
+export type { StaticPreviewOptions } from "./preview";
+
 export const staticAdapter = defineAdapter({
   name: "static",
   capabilities: {

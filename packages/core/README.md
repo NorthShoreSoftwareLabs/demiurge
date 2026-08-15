@@ -52,6 +52,9 @@ Run `vite` for development or `vite build` for a browser build. There is no
 `index.html` to write: the framework renders the document and attaches CSP
 nonces to what it emits.
 
+Run `demiurge build` for static production output. Run `demiurge preview` to
+serve that output with the headers in its manifest.
+
 Production SSR uses a separate server build and a runtime adapter. The minimum
 working setup is in the
 [README quickstart](https://github.com/NorthShoreSoftwareLabs/demiurge#deploy),

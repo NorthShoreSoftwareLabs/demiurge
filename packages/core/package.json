@@ -22,7 +22,11 @@
     "node"
   ],
   "type": "module",
+  "bin": {
+    "demiurge": "./bin/demiurge.mjs"
+  },
   "files": [
+    "bin",
     "dist",
     "LICENSE",
     "README.md"

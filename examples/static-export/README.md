@@ -1,12 +1,15 @@
 # Demiurge Static Export
 
-This example builds the browser assets and an SSR route bundle, then runs the
-production static adapter to generate concrete HTML files.
+The framework command builds the browser assets, server routes, and static
+production output.
 
 ```sh
 pnpm build
 pnpm preview
 ```
+
+The preview applies the headers in `demiurge-static-manifest.json`. It shows the
+security policy that a production host must apply.
 
 The output includes `index.html`, `about/index.html`, both concrete dynamic
 guide paths, `robots.txt`, `sitemap.xml`, and `404.html`.

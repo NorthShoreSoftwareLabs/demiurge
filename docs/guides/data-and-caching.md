@@ -107,6 +107,24 @@ boundary.
 
 ## Static generation
 
+Run the framework build command for a static application:
+
+```sh
+demiurge build
+```
+
+Set `SITE_ORIGIN` when route data or document metadata requires the production
+origin. You can also use `--origin` for the same value.
+
+Run the policy-aware preview after the build:
+
+```sh
+demiurge preview
+```
+
+The preview applies route headers and file header rules from the output
+manifest. It does not reproduce provider TLS, compression, or range support.
+
 Dynamic routes export `paths` to enumerate build-time URLs:
 
 ```tsx
