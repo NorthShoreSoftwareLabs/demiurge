@@ -1279,6 +1279,42 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await expect(readTextEventually(outputFile)).resolves.toContain('"/": {};');
   });
 
+  it("collapses a burst of route changes into one policy scan", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-policy-burst-"));
+    const routesDir = join(root, "routes");
+    const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
+    const watcher = createWatcherHarness();
+    const middleware = createMiddlewareHarness();
+    const warn = vi.fn();
+
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(
+      join(routesDir, "api.ts"),
+      `import { json } from "@demiurgejs/core";
+export const GET = json({}, { cors: { credentials: true, origins: "*" } });`,
+    );
+
+    plugin.configureServer?.({
+      config: { logger: { warn }, root },
+      middlewares: { use: middleware.use },
+      ssrLoadModule: vi.fn(),
+      watcher,
+    } as never);
+
+    // The scan on startup reports the one invalid policy.
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
+
+    for (let index = 0; index < 10; index += 1) {
+      watcher.emit("change", join(routesDir, "api.ts"));
+    }
+
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    // Ten events, one rescan.
+    expect(warn).toHaveBeenCalledTimes(2);
+  });
+
   it("uses default route and typed-output directories in dev", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-defaults-"));
     const routesDir = join(root, "src", "routes");
@@ -1832,6 +1868,34 @@ export const GET = json({}, {
 
     await expect(plugin.buildStart?.()).rejects.toThrow(
       /api\.ts export GET: \[cors-invalid\].*wildcard origins/,
+    );
+  });
+
+  it("reports the same policy finding in development and build", async () => {
+    const root = await scaffold({
+      "@not-found.tsx": "export default function NotFound() { return null; }",
+      "api.ts": `
+import { json } from "@demiurgejs/core";
+export const GET = json({}, {
+  cors: { credentials: true, origins: "*" },
+});`,
+    });
+    const warn = vi.fn();
+    const devPlugin = demiurge() as PluginHarness;
+    const buildPlugin = demiurge() as PluginHarness;
+
+    devPlugin.configResolved?.({ command: "serve", root });
+    devPlugin.configureServer?.({
+      config: { logger: { warn }, root },
+      middlewares: { use: vi.fn() },
+      ssrLoadModule: vi.fn(),
+      watcher: createWatcherHarness(),
+    } as never);
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
+
+    buildPlugin.configResolved?.({ command: "build", root });
+    await expect(buildPlugin.buildStart?.()).rejects.toThrow(
+      warn.mock.calls[0]![0] as string,
     );
   });
 });

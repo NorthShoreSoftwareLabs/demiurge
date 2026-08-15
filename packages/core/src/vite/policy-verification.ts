@@ -6,6 +6,7 @@ import {
   security,
   validateCorsPolicy,
   validateRateLimitPolicy,
+  type ContentSecurityPolicy,
   type CorsPolicy,
   type RoutePolicy,
   type RouteSecurityPolicy,
@@ -274,6 +275,10 @@ function validateExtractedRouteModule(
   const findings: StaticPolicyFinding[] = [];
   const availableMethods = new Set(routeModule.declaredMethods);
   if (availableMethods.has("GET")) availableMethods.add("HEAD");
+  // Demiurge answers preflight itself, so a route never exports an OPTIONS
+  // capability to serve one. Listing OPTIONS is a habit carried in from other
+  // CORS configuration, and rejecting it would fail a build over nothing.
+  availableMethods.add("OPTIONS");
 
   for (const [exportName, capability] of Object.entries(
     routeModule.capabilities,
@@ -308,7 +313,7 @@ function validateExtractedRouteModule(
   validateRateLimit(routeModule.policy?.security, file, undefined, findings);
   if (routeModule.policy?.document) {
     try {
-      createSecurityHeaders(routeModule.policy.document, {
+      createSecurityHeaders(toFragmentDocument(routeModule.policy.document), {
         nonce: "build-verification-nonce",
       });
     } catch (error) {
@@ -321,6 +326,32 @@ function validateExtractedRouteModule(
   }
 
   return findings;
+}
+
+// A build reads one file at a time, but policy cascades. A file declaring no
+// reporting endpoints of its own inherits them. Its `csp.reportTo` therefore
+// names a group only the merged policy resolves, which
+// `validateRouteModules(...)` checks during startup. A file declaring its own
+// endpoint map is self-contained. A name outside that map stays a build
+// error, because that is the typo worth catching early.
+function toFragmentDocument(document: SecurityPolicy): SecurityPolicy {
+  const endpoints = document.headers?.reportingEndpoints;
+  const declaresEndpoints = Boolean(
+    endpoints && Object.keys(endpoints).length,
+  );
+  const reportTo = document.csp === false ? undefined : document.csp?.reportTo;
+
+  if (declaresEndpoints || !reportTo) {
+    return document;
+  }
+
+  return {
+    ...document,
+    csp: { ...document.csp as ContentSecurityPolicy, reportTo: undefined },
+    headers: endpoints
+      ? { ...document.headers, reportingEndpoints: undefined }
+      : document.headers,
+  };
 }
 
 function validateRateLimit(

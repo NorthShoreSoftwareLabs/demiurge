@@ -5,6 +5,7 @@ import {
 import {
   createRouteManifest,
   isAttachedFileForRoute,
+  type RouteManifest,
 } from "../router";
 import type {
   HttpMethod,
@@ -52,7 +53,21 @@ export function validateRouteModules(
     }
   }
 
-  validatePagePolicies(modules, options.adapter);
+  // Verification has to build a manifest to resolve the policy cascade.
+  // Returning it lets a caller that needs the same manifest reuse this one
+  // instead of building a second identical copy.
+  const manifest = createRouteManifest(
+    Object.fromEntries(
+      Object.entries(modules).map(([file, routeModule]) => [
+        file,
+        async () => routeModule,
+      ]),
+    ),
+  );
+
+  validatePagePolicies(manifest, modules, options.adapter);
+
+  return manifest;
 }
 
 function validateModulePolicy(file: string, routeModule: RouteModule) {
@@ -63,7 +78,6 @@ function validateModulePolicy(file: string, routeModule: RouteModule) {
       validateRateLimitPolicy(rateLimit);
     });
   }
-
 }
 
 function validateResponseCapability(
@@ -97,6 +111,13 @@ function validateCorsMethods(
   }
 
   for (const method of methods) {
+    // Demiurge answers preflight itself, so a route never exports an OPTIONS
+    // capability to serve one. Listing OPTIONS is a habit carried in from
+    // other CORS configuration, and it changes nothing at request time.
+    if (method === "OPTIONS") {
+      continue;
+    }
+
     if (responseCapabilityForMethod(routeModule, method)) {
       continue;
     }
@@ -125,18 +146,10 @@ function isResponseCapability(
 }
 
 function validatePagePolicies(
+  manifest: RouteManifest,
   modules: Readonly<Record<string, RouteModule>>,
   adapter: Adapter | undefined,
 ) {
-  const manifest = createRouteManifest(
-    Object.fromEntries(
-      Object.entries(modules).map(([file, routeModule]) => [
-        file,
-        async () => routeModule,
-      ]),
-    ),
-  );
-
   for (const route of manifest.routes) {
     const routeModule = modules[route.file];
     const page = routeModule?.GET;

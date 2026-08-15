@@ -254,6 +254,30 @@ export const policy = {
     ).resolves.toEqual([]);
   });
 
+  it("accepts a reportTo name an ancestor policy file defines", async () => {
+    const source = `
+import { defineRoutePolicy } from "@demiurgejs/core";
+export const policy = defineRoutePolicy({
+  document: { csp: { defaultSrc: ["'self'"], reportTo: "default" } },
+});`;
+
+    await expect(
+      unstable_verifyRoutePolicySource(source, "/app/src/routes/admin/@policy.ts"),
+    ).resolves.toEqual([]);
+  });
+
+  it("accepts a CORS OPTIONS method the framework answers itself", async () => {
+    const source = `
+import { json } from "@demiurgejs/core";
+export const GET = json({ ok: true }, {
+  cors: { methods: ["GET", "OPTIONS"], origins: ["https://example.com"] },
+});`;
+
+    await expect(
+      unstable_verifyRoutePolicySource(source, "/app/src/routes/api.ts"),
+    ).resolves.toEqual([]);
+  });
+
   it("validates a security preset inside defineRoutePolicy", async () => {
     const source = `
 import { defineRoutePolicy, security } from "@demiurgejs/core";

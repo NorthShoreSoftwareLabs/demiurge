@@ -35,6 +35,23 @@ The framework-owned document attaches the request nonce to managed scripts,
 JSON-LD, hydration data, and React streaming payloads. A dynamic policy that
 requires a nonce fails closed when no nonce is available.
 
+The strict preset blocks style attributes by default. A nonce cannot authorize
+a style attribute. Use classes and an external stylesheet when possible.
+
+If an application requires React style props, permit style attributes
+explicitly:
+
+```ts
+security.strict({
+  csp: {
+    styleSrcAttr: ["'unsafe-inline'"],
+  },
+});
+```
+
+This directive permits all style attributes. The nonce requirement continues
+to protect style elements.
+
 Static output uses hash-based policy. `security.static()` and `cspHash(...)`
 describe hashes that remain valid without a request nonce. Static generation
 rejects nonce-dependent output and other policy it cannot deploy safely.
@@ -100,6 +117,15 @@ a production build. A finding identifies the route file and export.
 
 The build reads source without running route modules. The build does not guess
 an environment-derived value or a value from a function call.
+
+The build reads one file at a time, so it does not decide a requirement that
+spans the cascade. A policy file that declares no reporting endpoints of its own
+may name an inherited `csp.reportTo` group. A policy file that declares its own
+endpoint map must name a member of that map. Startup validates the merged
+policy either way.
+
+CORS `methods` may list `OPTIONS`. Demiurge answers preflight itself, so no
+route exports an OPTIONS capability to serve one.
 
 Generated server entries pass eager modules to `createRequestHandler(...)`.
 The handler validates dynamic policy before it accepts a request. A direct

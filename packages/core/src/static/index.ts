@@ -11,7 +11,6 @@ import { defineAdapter } from "../adapter";
 import { STRUCTURED_DATA_ATTRIBUTE } from "../document/render";
 import {
   collectStaticRoutePaths,
-  createRouteManifest,
   type RouteManifest,
 } from "../router";
 import type { RouteCapability, RouteImporter, RouteModule } from "../route";
@@ -80,27 +79,49 @@ type PlannedOutput = {
   pathname: string;
 };
 
+const staticRouteLoadConcurrency = 8;
+
+async function loadRouteModules(
+  routes: Readonly<Record<string, RouteImporter>>,
+) {
+  const entries = Object.entries(routes);
+  const modules = new Array<readonly [string, RouteModule]>(entries.length);
+  let next = 0;
+
+  const workers = Array.from(
+    { length: Math.min(staticRouteLoadConcurrency, entries.length) },
+    async () => {
+      while (next < entries.length) {
+        const index = next++;
+        const [file, load] = entries[index]!;
+
+        try {
+          modules[index] = [file, await load()];
+        } catch (error) {
+          throw new Error(
+            `Demiurge could not load route module ${JSON.stringify(file)}.`,
+            { cause: error },
+          );
+        }
+      }
+    },
+  );
+
+  await Promise.all(workers);
+
+  return Object.fromEntries(modules) as Record<string, RouteModule>;
+}
+
 export async function generateStaticOutput(
   options: GenerateStaticOutputOptions,
 ): Promise<StaticOutputManifest> {
-  const routeModules = Object.fromEntries(
-    await Promise.all(
-      Object.entries(options.routes).map(async ([file, load]) =>
-        [file, await load()] as const
-      ),
-    ),
-  ) satisfies Record<string, RouteModule>;
-  validateRouteModules(routeModules, { adapter: staticAdapter });
-  const routes = Object.fromEntries(
-    Object.entries(routeModules).map(([file, routeModule]) => [
-      file,
-      async () => routeModule,
-    ]),
-  );
+  const routeModules = await loadRouteModules(options.routes);
+  const manifest = validateRouteModules(routeModules, {
+    adapter: staticAdapter,
+  });
 
   const origin = normalizeOrigin(options.origin);
   const outDir = resolve(options.outDir);
-  const manifest = createRouteManifest(routes);
   const routeKinds = await validateStaticRoutes(manifest);
   const paths = await collectStaticRoutePaths(manifest, {
     includeResources: true,
@@ -531,21 +552,31 @@ async function validateStaticCsp(
     pathname,
     html,
     "script",
-    effectiveSources(directives, "script-src"),
+    effectiveSources(directives, "script-src", "default-src"),
   );
   await validateInlineElements(
     pathname,
     html,
     "style",
-    effectiveSources(directives, "style-src"),
+    effectiveSources(
+      directives,
+      "style-src-elem",
+      "style-src",
+      "default-src",
+    ),
   );
 
-  const styleSources = effectiveSources(directives, "style-src");
+  const styleAttributeSources = effectiveSources(
+    directives,
+    "style-src-attr",
+    "style-src",
+    "default-src",
+  );
 
   if (
-    styleSources &&
+    styleAttributeSources &&
     /\sstyle\s*=/i.test(html) &&
-    !styleSources.includes("'unsafe-inline'")
+    !styleAttributeSources.includes("'unsafe-inline'")
   ) {
     throw new Error(
       `Static output for ${JSON.stringify(pathname)} contains an inline style attribute that its CSP does not allow. Move the style into a stylesheet or explicitly allow inline styles.`,
@@ -567,8 +598,19 @@ function parseCsp(value: string) {
   return directives;
 }
 
-function effectiveSources(directives: Map<string, string[]>, name: string) {
-  return directives.get(name) ?? directives.get("default-src");
+function effectiveSources(
+  directives: Map<string, string[]>,
+  ...names: string[]
+) {
+  for (const name of names) {
+    const sources = directives.get(name);
+
+    if (sources) {
+      return sources;
+    }
+  }
+
+  return undefined;
 }
 
 async function validateInlineElements(

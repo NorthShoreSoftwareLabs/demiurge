@@ -20,6 +20,10 @@ startup.
 - The extractor does not run route modules.
 - The extractor sends each literal value to the shared runtime validators.
 - An unresolvable value does not cause a build failure.
+- The extractor reads one file, so a requirement spanning the cascade is
+  deferred to startup, which validates the merged policy.
+- Development collapses a burst of watcher events into a single scan and never
+  runs two scans at once.
 - Generated server entries eagerly load route modules for startup validation.
 - Direct adapters can pass eager route modules to `createRequestHandler(...)`.
 - Adapter validation occurs only when the application selects an adapter.
@@ -36,6 +40,8 @@ inherited directive. `false` removes an inherited directive.
 - Static output rejects nonce-dependent policy before it writes output.
 - Generated server entries evaluate route module side effects during startup.
 - Dynamic policy remains outside build-time verification.
+- A `csp.reportTo` group defined by an ancestor policy file fails during
+  startup rather than during the build.
 
 ## Verification
 

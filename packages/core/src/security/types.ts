@@ -50,6 +50,8 @@ export type ContentSecurityPolicy = {
   reportTo?: string;
   scriptSrc?: CspSourceDirective;
   styleSrc?: CspSourceDirective;
+  styleSrcAttr?: CspSourceDirective;
+  styleSrcElem?: CspSourceDirective;
   upgradeInsecureRequests?: boolean;
   workerSrc?: CspSourceDirective;
 };

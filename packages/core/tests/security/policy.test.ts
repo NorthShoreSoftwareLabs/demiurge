@@ -93,6 +93,21 @@ describe("security policy headers", () => {
     );
   });
 
+  it("allows strict documents to permit only inline style attributes", () => {
+    const headers = createSecurityHeaders(
+      security.strict({
+        csp: {
+          styleSrcAttr: ["'unsafe-inline'"],
+        },
+      }),
+      { nonce: "route" },
+    );
+    const value = headers.get("content-security-policy");
+
+    expect(value).toContain("style-src 'self' 'nonce-route'");
+    expect(value).toContain("style-src-attr 'unsafe-inline'");
+  });
+
   it("exports the typed nonce source used by strict CSP", () => {
     const headers = createSecurityHeaders({
       csp: {
@@ -113,6 +128,8 @@ describe("security policy headers", () => {
         frameSrc: ["https://frames.example.com"],
         manifestSrc: ["'self'"],
         mediaSrc: ["https://media.example.com"],
+        styleSrcAttr: ["'unsafe-inline'"],
+        styleSrcElem: ["'self'", "https://styles.example.com"],
         workerSrc: ["'self'", "blob:"],
       },
     });
@@ -122,7 +139,49 @@ describe("security policy headers", () => {
     expect(value).toContain("frame-src https://frames.example.com");
     expect(value).toContain("manifest-src 'self'");
     expect(value).toContain("media-src https://media.example.com");
+    expect(value).toContain("style-src-attr 'unsafe-inline'");
+    expect(value).toContain(
+      "style-src-elem 'self' https://styles.example.com",
+    );
     expect(value).toContain("worker-src 'self' blob:");
+  });
+
+  it.each([
+    { scriptSrc: "'self'" },
+    { scriptSrc: ["'self'", 1] },
+    { scriptSrc: { replace: "'self'" } },
+  ])("rejects a malformed CSP source directive value", (csp) => {
+    expect(() => createSecurityHeaders({
+      csp: csp as never,
+    })).toThrow(
+      'Demiurge CSP directive "script-src" must be a source list, false, or a replacement object with a source list.',
+    );
+  });
+
+  it("names a malformed directive after preset policy merges", () => {
+    const policy = security.static({
+      csp: {
+        styleSrc: { replace: "'self'" } as never,
+      },
+    });
+
+    expect(() => createSecurityHeaders(policy)).toThrow(
+      'Demiurge CSP directive "style-src" must be a source list, false, or a replacement object with a source list.',
+    );
+  });
+
+  it.each([
+    {
+      csp: { reportTo: false },
+      message: 'Demiurge CSP directive "report-to" must be a string.',
+    },
+    {
+      csp: { upgradeInsecureRequests: "yes" },
+      message:
+        'Demiurge CSP directive "upgrade-insecure-requests" must be a boolean.',
+    },
+  ])("rejects a malformed CSP scalar directive", ({ csp, message }) => {
+    expect(() => createSecurityHeaders({ csp: csp as never })).toThrow(message);
   });
 
   it("can disable CSP for API-only policies", () => {

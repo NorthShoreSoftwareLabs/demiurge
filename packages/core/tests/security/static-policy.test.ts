@@ -68,6 +68,28 @@ describe("static route policy verification", () => {
     );
   });
 
+  it("accepts a CORS OPTIONS method the framework answers itself", () => {
+    expect(() =>
+      validateRouteModules({
+        "./routes/api.ts": {
+          GET: json({}, {
+            cors: { methods: ["GET", "OPTIONS"], origins: "*" },
+          }),
+        },
+      })
+    ).not.toThrow();
+  });
+
+  it("returns the manifest it built to resolve the policy cascade", () => {
+    const manifest = validateRouteModules({
+      "./routes/index.tsx": { GET: page(View) },
+    });
+
+    expect(manifest.routes.map((route) => route.file)).toEqual([
+      "./routes/index.tsx",
+    ]);
+  });
+
   it("treats a response GET export as an implicit HEAD capability", () => {
     expect(() =>
       validateRouteModules({

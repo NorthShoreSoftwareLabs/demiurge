@@ -176,13 +176,38 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
           server.config.logger.warn(formatStaticPolicyFinding(finding));
         }
       };
+      // A single editor save can fire several watcher events, and a branch
+      // switch fires one per route file. Collapse a burst into one scan, and
+      // chain scans so two never walk the route tree at the same time.
+      let policyVerificationTimer: ReturnType<typeof setTimeout> | undefined;
+      let policyVerificationRun = Promise.resolve();
+      const runPolicyVerification = () => {
+        policyVerificationRun = policyVerificationRun
+          .then(reportPolicyFindings)
+          .catch(() => {
+            // Vite reports route read and syntax errors through its module pipeline.
+          });
+      };
       const startPolicyVerification = () => {
-        void reportPolicyFindings().catch(() => {
-          // Vite reports route read and syntax errors through its module pipeline.
-        });
+        if (policyVerificationTimer) {
+          clearTimeout(policyVerificationTimer);
+        }
+
+        policyVerificationTimer = setTimeout(() => {
+          policyVerificationTimer = undefined;
+          runPolicyVerification();
+        }, policyVerificationDebounceMs);
+        policyVerificationTimer.unref?.();
       };
 
-      startPolicyVerification();
+      server.httpServer?.once("close", () => {
+        if (policyVerificationTimer) {
+          clearTimeout(policyVerificationTimer);
+          policyVerificationTimer = undefined;
+        }
+      });
+
+      runPolicyVerification();
       if (options.typedRoutes) {
         const routesDir = resolve(
           server.config.root,
@@ -1291,6 +1316,35 @@ async function findRouteFiles(directory: string) {
     .map((entry) => resolve(entry.parentPath, entry.name));
 }
 
+// Every route file is read and parsed. Without a cap, a large route tree opens
+// one descriptor per file at once, which is how this hits EMFILE rather than a
+// CPU limit.
+const policyVerificationConcurrency = 8;
+const policyVerificationDebounceMs = 50;
+
+async function mapWithConcurrency<Item, Result>(
+  items: readonly Item[],
+  limit: number,
+  task: (item: Item) => Promise<Result>,
+) {
+  const results = new Array<Result>(items.length);
+  let next = 0;
+
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (next < items.length) {
+        const index = next++;
+        results[index] = await task(items[index]!);
+      }
+    },
+  );
+
+  await Promise.all(workers);
+
+  return results;
+}
+
 export async function verifyRoutePolicies(
   root: string,
   options: DemiurgeVitePluginOptions = {},
@@ -1298,8 +1352,10 @@ export async function verifyRoutePolicies(
   const routesDir = resolve(root, options.routesDir ?? "src/routes");
 
   if (!existsSync(routesDir)) return [];
-  const findings = (await Promise.all(
-    (await findRouteFiles(routesDir)).map(verifyRoutePolicyFile),
+  const findings = (await mapWithConcurrency(
+    await findRouteFiles(routesDir),
+    policyVerificationConcurrency,
+    verifyRoutePolicyFile,
   )).flat();
 
   return findings.sort((left, right) =>

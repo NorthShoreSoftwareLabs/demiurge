@@ -178,6 +178,10 @@ export function createSecurityHeaders(
   policy: SecurityPolicy,
   options: SecurityHeadersOptions = {},
 ) {
+  if (policy.csp) {
+    validateCspDirectiveValues(policy.csp);
+  }
+
   validateReportingConfiguration(policy);
 
   const headers = new Headers();
@@ -549,6 +553,48 @@ function validateReportingConfiguration(policy: SecurityPolicy) {
 
   for (const url of Array.isArray(reportUris) ? reportUris : []) {
     validateReportingEndpointUrl(url, "CSP report-uri target");
+  }
+}
+
+function validateCspDirectiveValues(policy: ContentSecurityPolicy) {
+  for (const [name, value] of cspDirectiveEntries(policy)) {
+    const directive = toCspDirectiveName(name);
+
+    if (value === undefined) {
+      continue;
+    }
+
+    if (name === "reportTo") {
+      if (typeof value !== "string") {
+        throw new Error(
+          `Demiurge CSP directive ${JSON.stringify(directive)} must be a string.`,
+        );
+      }
+
+      continue;
+    }
+
+    if (name === "upgradeInsecureRequests") {
+      if (typeof value !== "boolean") {
+        throw new Error(
+          `Demiurge CSP directive ${JSON.stringify(directive)} must be a boolean.`,
+        );
+      }
+
+      continue;
+    }
+
+    const sources = resolveCspDirectiveValue(value);
+
+    if (
+      sources !== false &&
+      (!Array.isArray(sources) ||
+        !sources.every((source) => typeof source === "string"))
+    ) {
+      throw new Error(
+        `Demiurge CSP directive ${JSON.stringify(directive)} must be a source list, false, or a replacement object with a source list.`,
+      );
+    }
   }
 }
 
