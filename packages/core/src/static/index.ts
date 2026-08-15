@@ -35,6 +35,18 @@ const STATIC_MANIFEST_FILE = "demiurge-static-manifest.json";
 
 export { createStaticPreviewServer } from "./preview";
 export type { StaticPreviewOptions } from "./preview";
+export {
+  createVercelOutputConfig,
+  generateVercelStaticOutput,
+  vercelStatic,
+} from "./vercel";
+export type {
+  VercelOutputConfig,
+  VercelOutputRoute,
+  VercelStaticDeployment,
+  VercelStaticCacheRule,
+  VercelStaticOptions,
+} from "./vercel";
 
 export const staticAdapter = defineAdapter({
   name: "static",

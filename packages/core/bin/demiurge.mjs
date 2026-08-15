@@ -22,10 +22,13 @@ async function main() {
   }
 
   if (options.command === "build") {
-    const { manifest, outDir } = await buildStaticSite(options);
+    const { deploymentOutDir, manifest, outDir } = await buildStaticSite(options);
     console.log(
       `Demiurge generated ${manifest.entries.length} static artifacts in ${outDir}.`,
     );
+    if (deploymentOutDir) {
+      console.log(`Demiurge generated provider output in ${deploymentOutDir}.`);
+    }
     return;
   }
 

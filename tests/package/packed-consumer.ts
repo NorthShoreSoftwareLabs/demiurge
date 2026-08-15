@@ -268,9 +268,10 @@ try {
     [
       `import react from "@vitejs/plugin-react";`,
       `import { defineConfig } from "vite";`,
+      `import { vercelStatic } from "@demiurgejs/core/static";`,
       `import { demiurge } from "@demiurgejs/core/vite";`,
       `export default defineConfig({`,
-      `  plugins: [demiurge(), react()],`,
+      `  plugins: [demiurge({ static: { deployment: vercelStatic() } }), react()],`,
       `  root: "app",`,
       `});`,
     ].join("\n"),
@@ -313,6 +314,20 @@ try {
         join(scratch, "app", "dist", "demiurge-static-manifest.json"),
       ),
     "The packed command could not build a clean external static app.",
+  );
+  assert(
+    existsSync(join(scratch, ".vercel", "output", "config.json")) &&
+      existsSync(join(scratch, ".vercel", "output", "static", "index.html")) &&
+      !existsSync(
+        join(
+          scratch,
+          ".vercel",
+          "output",
+          "static",
+          "demiurge-static-manifest.json",
+        ),
+      ),
+    "The packed command did not generate clean Vercel provider output.",
   );
 
   const preview = await startPreview(

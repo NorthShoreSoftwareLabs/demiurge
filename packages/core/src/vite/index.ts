@@ -14,4 +14,7 @@ export {
 export {
   verifyRoutePolicySource as unstable_verifyRoutePolicySource,
 } from "./policy-verification";
-export type { DemiurgeVitePluginOptions } from "./plugin";
+export type {
+  DemiurgeVitePluginApi,
+  DemiurgeVitePluginOptions,
+} from "./plugin";

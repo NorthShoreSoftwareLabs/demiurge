@@ -3,5 +3,6 @@ coverage
 test-results
 node_modules
 .demiurge
+.vercel
 .omc
 .DS_Store

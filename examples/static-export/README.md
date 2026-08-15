@@ -20,6 +20,12 @@ keeps the static adapter independent of a provider configuration format.
 Ordered `fileHeaderRules` cover the remaining Vite and `public/` files. Hashed
 files are immutable. Other files must revalidate.
 
+The example selects `vercelStatic()` in `vite.config.ts`. The build also emits
+Vercel Build Output API artifacts under `.vercel/output`.
+
+The example gives `site.webmanifest` a one-hour application cache rule. That
+typed rule overrides the framework revalidation default.
+
 The home page includes structured data. Its exact SHA-256 hash appears in the
 static CSP. The browser test verifies this policy in Chromium.
 
