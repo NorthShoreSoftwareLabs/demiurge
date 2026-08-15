@@ -7,6 +7,7 @@ import {
   buildStaticSite,
   helpText,
   parseCliArguments,
+  resolvePreviewOutputDirectory,
 } from "../dist/cli.js";
 import {
   createStaticPreviewServer,
@@ -28,7 +29,10 @@ async function main() {
     return;
   }
 
-  const server = await createStaticPreviewServer(options);
+  const server = await createStaticPreviewServer({
+    ...options,
+    outDir: await resolvePreviewOutputDirectory(options.outDir),
+  });
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : options.port;
   console.log(`Demiurge serves ${resolve(options.outDir)} at http://${options.host}:${port}.`);

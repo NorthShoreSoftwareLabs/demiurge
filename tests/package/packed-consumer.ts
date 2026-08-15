@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -40,6 +40,43 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+async function startPreview(command: string, args: string[], cwd: string) {
+  const child = spawn(command, args, {
+    cwd,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let errors = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => {
+    errors += chunk;
+  });
+
+  const origin = await new Promise<string>((resolvePromise, reject) => {
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("The packed preview did not start."));
+    }, 10_000);
+    timeout.unref();
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      const match = chunk.match(/(http:\/\/[^\s]+)\./);
+      if (match) {
+        clearTimeout(timeout);
+        resolvePromise(match[1]!);
+      }
+    });
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      clearTimeout(timeout);
+      reject(
+        new Error(`The packed preview exited with code ${code}. ${errors}`),
+      );
+    });
+  });
+
+  return { child, origin };
 }
 
 try {
@@ -277,6 +314,33 @@ try {
       ),
     "The packed command could not build a clean external static app.",
   );
+
+  const preview = await startPreview(
+    "node",
+    [
+      join(installedRoot, "bin", "demiurge.mjs"),
+      "preview",
+      "--host",
+      "127.0.0.1",
+      "--port",
+      "0",
+    ],
+    scratch,
+  );
+  try {
+    const response = await fetch(preview.origin);
+    assert(response.status === 200, "The packed preview did not serve the static page.");
+    assert(
+      response.headers.has("content-security-policy"),
+      "The packed preview did not apply the static policy.",
+    );
+  } finally {
+    const exit = new Promise<void>((resolvePromise) => {
+      preview.child.once("exit", () => resolvePromise());
+    });
+    preview.child.kill("SIGTERM");
+    await exit;
+  }
 
   console.log("pack artifact and external consumer tests passed");
 } finally {

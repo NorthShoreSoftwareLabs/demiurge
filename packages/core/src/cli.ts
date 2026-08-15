@@ -110,7 +110,12 @@ export async function buildStaticSite(
   const serverOutDir = resolve(root, ".demiurge/server");
   const build = runtime?.build ?? vite!.build;
 
-  await validateBuildOutputDirectory(root, outDir, config.publicDir);
+  await validateBuildOutputDirectory(
+    root,
+    outDir,
+    config.publicDir,
+    serverOutDir,
+  );
 
   await build({
     build: {
@@ -157,10 +162,21 @@ export async function buildStaticSite(
   return { manifest, outDir };
 }
 
+export async function resolvePreviewOutputDirectory(
+  outDir: string,
+  resolveConfig?: () => Promise<{ root: string }>,
+) {
+  const config = resolveConfig
+    ? await resolveConfig()
+    : await (await import("vite")).resolveConfig({}, "serve", "production");
+  return resolve(config.root, outDir);
+}
+
 export async function validateBuildOutputDirectory(
   root: string,
   outDir: string,
   publicDir: false | string,
+  serverOutDir: string,
 ) {
   const pathFromRoot = relative(root, outDir);
   if (
@@ -174,6 +190,10 @@ export async function validateBuildOutputDirectory(
 
   if (publicDir && pathsOverlap(outDir, publicDir)) {
     throw new Error("The static output directory must not overlap the Vite public directory.");
+  }
+
+  if (pathsOverlap(outDir, serverOutDir)) {
+    throw new Error("The static output directory must not overlap the framework server directory.");
   }
 
   let entries: string[];

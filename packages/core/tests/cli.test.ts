@@ -7,6 +7,7 @@ import {
   buildStaticSite,
   parseCliArguments,
   parseClientManifest,
+  resolvePreviewOutputDirectory,
   validateBuildOutputDirectory,
 } from "../src/cli";
 
@@ -52,6 +53,12 @@ describe("Demiurge CLI arguments", () => {
   it("returns help without a command", () => {
     expect(parseCliArguments([]).command).toBe("help");
     expect(parseCliArguments(["--help"]).command).toBe("help");
+  });
+
+  it("resolves preview output from the configured Vite root", async () => {
+    await expect(resolvePreviewOutputDirectory("dist", async () => ({
+      root: "/application/app",
+    }))).resolves.toBe("/application/app/dist");
   });
 
   it("runs the client, server, and static build sequence", async () => {
@@ -146,6 +153,7 @@ describe("Demiurge CLI arguments", () => {
     const publicDir = join(root, "public");
     const sourceDir = join(root, "source-output");
     const managedDir = join(root, "managed-output");
+    const serverDir = join(root, ".demiurge", "server");
 
     try {
       await mkdir(publicDir);
@@ -154,19 +162,41 @@ describe("Demiurge CLI arguments", () => {
       await writeFile(join(sourceDir, "application.ts"), "export {};");
       await writeFile(join(managedDir, "demiurge-manifest.json"), "{}");
 
-      await expect(validateBuildOutputDirectory(root, root, publicDir))
+      await expect(validateBuildOutputDirectory(root, root, publicDir, serverDir))
         .rejects.toThrow(/must be inside/);
       await expect(
-        validateBuildOutputDirectory(root, join(root, ".."), publicDir),
+        validateBuildOutputDirectory(
+          root,
+          join(root, ".."),
+          publicDir,
+          serverDir,
+        ),
       ).rejects.toThrow(/must be inside/);
-      await expect(validateBuildOutputDirectory(root, publicDir, publicDir))
+      await expect(
+        validateBuildOutputDirectory(root, publicDir, publicDir, serverDir),
+      )
         .rejects.toThrow(/must not overlap/);
-      await expect(validateBuildOutputDirectory(root, sourceDir, publicDir))
+      await expect(
+        validateBuildOutputDirectory(root, join(root, ".demiurge"), publicDir, serverDir),
+      ).rejects.toThrow(/framework server/);
+      await expect(
+        validateBuildOutputDirectory(root, serverDir, publicDir, serverDir),
+      ).rejects.toThrow(/framework server/);
+      await expect(
+        validateBuildOutputDirectory(root, sourceDir, publicDir, serverDir),
+      )
         .rejects.toThrow(/did not create/);
-      await expect(validateBuildOutputDirectory(root, managedDir, publicDir))
+      await expect(
+        validateBuildOutputDirectory(root, managedDir, publicDir, serverDir),
+      )
         .resolves.toBeUndefined();
       await expect(
-        validateBuildOutputDirectory(root, join(root, "new-output"), false),
+        validateBuildOutputDirectory(
+          root,
+          join(root, "new-output"),
+          false,
+          serverDir,
+        ),
       ).resolves.toBeUndefined();
     } finally {
       await rm(root, { force: true, recursive: true });
