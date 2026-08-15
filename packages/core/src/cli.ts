@@ -11,6 +11,8 @@ import {
 
 type CliEnvironment = Record<string, string | undefined>;
 
+const cliOptionNames = new Set(["--host", "--origin", "--out-dir", "--port"]);
+
 export type CliOptions = {
   command: "build" | "help" | "preview";
   host: string;
@@ -61,7 +63,7 @@ export function parseCliArguments(
   for (let index = 1; index < arguments_.length; index += 1) {
     const argument = arguments_[index]!;
     const [name, inlineValue] = argument.split("=", 2);
-    if (!new Set(["--host", "--origin", "--out-dir", "--port"]).has(name!)) {
+    if (!cliOptionNames.has(name!)) {
       throw new Error(`Unknown option: ${argument}`);
     }
     const value = inlineValue ?? arguments_[++index];
