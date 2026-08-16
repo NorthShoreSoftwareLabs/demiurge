@@ -9,6 +9,7 @@ export type {
   RouteParamsFor,
   RouteConcretePaths,
   RoutePathVars,
+  RouteRequestContexts,
   SearchValue,
   SearchValues,
 } from "./types";

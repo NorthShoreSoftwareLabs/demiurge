@@ -1,15 +1,28 @@
 import type { ComponentType } from "react";
-import type { PageCapability, PageOptions, RouteProps } from "./types";
+import type {
+  PageCapability,
+  PageOptions,
+  RouteProps,
+  RouteRequestContextFor,
+} from "./types";
 
 export function page<const TPath extends string = string>(
   options: ComponentType<RouteProps<TPath>>,
 ): PageCapability<TPath>;
-export function page<const TPath extends string = string, TData = undefined>(
-  options: PageOptions<TPath, TData>,
-): PageCapability<TPath, TData>;
-export function page<const TPath extends string = string, TData = undefined>(
-  options: PageOptions<TPath, TData> | ComponentType<RouteProps<TPath>>,
-): PageCapability<TPath, TData> | PageCapability<TPath> {
+export function page<
+  const TPath extends string = string,
+  TData = undefined,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  options: PageOptions<TPath, TData, TValues>,
+): PageCapability<TPath, TData, TValues>;
+export function page<
+  const TPath extends string = string,
+  TData = undefined,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  options: PageOptions<TPath, TData, TValues> | ComponentType<RouteProps<TPath>>,
+): PageCapability<TPath, TData, TValues> | PageCapability<TPath> {
   if (typeof options === "function") {
     return {
       kind: "page",
@@ -24,5 +37,5 @@ export function page<const TPath extends string = string, TData = undefined>(
     layout: options.layout,
     render: options.render ?? { mode: "ssr" },
     view: options.view,
-  } satisfies PageCapability<TPath, TData>;
+  } as PageCapability<TPath, TData, TValues>;
 }

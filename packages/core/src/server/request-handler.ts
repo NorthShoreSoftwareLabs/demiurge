@@ -310,12 +310,14 @@ async function handleMatchedRoute(
   }
 
   request = limitRequestBody(routeSecurity?.request, request);
+  const requestContext: Record<string, unknown> = {};
 
   if (capability.kind === "page") {
     const context = {
       path: routeMatch.path,
       pathname: url.pathname,
       request,
+      context: requestContext,
       search: url.searchParams,
       url,
     } satisfies HttpRouteContext;
@@ -326,6 +328,7 @@ async function handleMatchedRoute(
     const nonce = securityPolicyRequiresNonce(policy.document)
       ? createCspNonce()
       : undefined;
+    const cache = createRequestCache(options.cacheStore);
     let response: Response;
 
     try {
@@ -340,7 +343,8 @@ async function handleMatchedRoute(
             url.pathname,
             request,
             undefined,
-            createRequestCache(options.cacheStore),
+            cache,
+            { requestContext },
           );
 
           if (match.status !== "ready") {
@@ -426,6 +430,7 @@ async function handleMatchedRoute(
     path: routeMatch.path,
     pathname: url.pathname,
     request,
+    context: requestContext,
     search: url.searchParams,
     url,
   } satisfies HttpRouteContext;

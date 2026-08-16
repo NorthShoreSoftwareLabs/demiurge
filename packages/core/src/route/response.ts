@@ -11,6 +11,7 @@ import type {
   ResponseOptions,
   ResponseCapability,
   RouteValue,
+  RouteRequestContextFor,
   ServerTimingInput,
   ServerTimingMetric,
   ServerSentEvent,
@@ -23,8 +24,12 @@ import type {
 } from "./types";
 import { href, type AppHref, type LinkTarget } from "../routing";
 
-export function json<T>(
-  value: JsonCapability<T>["value"],
+export function json<
+  T,
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  value: JsonCapability<T, TPath, TValues>["value"],
   init?: ResponseOptions,
 ) {
   return {
@@ -34,11 +39,14 @@ export function json<T>(
     timing: normalizeServerTiming(init?.timing),
     value,
     init: withoutRouteOptions(init),
-  } satisfies JsonCapability<T>;
+  } satisfies JsonCapability<T, TPath, TValues>;
 }
 
-export function jsonl(
-  lines: RouteValue<JsonLinesSource>,
+export function jsonl<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  lines: RouteValue<JsonLinesSource, TPath, TValues>,
   init?: ResponseOptions,
 ) {
   return {
@@ -48,10 +56,16 @@ export function jsonl(
     lines,
     security: init?.security,
     timing: normalizeServerTiming(init?.timing),
-  } satisfies JsonLinesCapability;
+  } satisfies JsonLinesCapability<TPath, TValues>;
 }
 
-export function text(value: RouteValue<string>, init?: ResponseOptions) {
+export function text<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  value: RouteValue<string, TPath, TValues>,
+  init?: ResponseOptions,
+) {
   return {
     cors: init?.cors,
     kind: "text",
@@ -59,10 +73,16 @@ export function text(value: RouteValue<string>, init?: ResponseOptions) {
     timing: normalizeServerTiming(init?.timing),
     value,
     init: withoutRouteOptions(init),
-  } satisfies TextCapability;
+  } satisfies TextCapability<TPath, TValues>;
 }
 
-export function html(value: RouteValue<string>, init?: ResponseOptions) {
+export function html<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  value: RouteValue<string, TPath, TValues>,
+  init?: ResponseOptions,
+) {
   return {
     cors: init?.cors,
     kind: "html",
@@ -70,19 +90,25 @@ export function html(value: RouteValue<string>, init?: ResponseOptions) {
     timing: normalizeServerTiming(init?.timing),
     value,
     init: withoutRouteOptions(init),
-  } satisfies HtmlCapability;
+  } satisfies HtmlCapability<TPath, TValues>;
 }
 
 export function redirect<const TTo extends AppHref>(
   to: LinkTarget<TTo>,
   init?: ResponseOptions | number,
 ): RedirectCapability;
-export function redirect(
-  to: RouteValue<string | URL>,
+export function redirect<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  to: RouteValue<string | URL, TPath, TValues>,
   init?: ResponseOptions | number,
-): RedirectCapability;
-export function redirect(
-  to: LinkTarget | RouteValue<string | URL>,
+): RedirectCapability<TPath, TValues>;
+export function redirect<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  to: LinkTarget | RouteValue<string | URL, TPath, TValues>,
   init?: ResponseOptions | number,
 ) {
   const options = typeof init === "number" ? undefined : init;
@@ -94,10 +120,16 @@ export function redirect(
     timing: normalizeServerTiming(options?.timing),
     to: isLinkTargetObject(to) ? href(to) : to,
     init: typeof init === "number" ? { status: init } : withoutRouteOptions(init),
-  } satisfies RedirectCapability;
+  } as RedirectCapability<TPath, TValues>;
 }
 
-export function notFound(body?: RouteValue<string>, init?: ResponseOptions) {
+export function notFound<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  body?: RouteValue<string, TPath, TValues>,
+  init?: ResponseOptions,
+) {
   return {
     cors: init?.cors,
     kind: "not-found",
@@ -105,11 +137,14 @@ export function notFound(body?: RouteValue<string>, init?: ResponseOptions) {
     timing: normalizeServerTiming(init?.timing),
     body,
     init: withoutRouteOptions(init),
-  } satisfies NotFoundCapability;
+  } satisfies NotFoundCapability<TPath, TValues>;
 }
 
-export function response(
-  response: RouteValue<Response>,
+export function response<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  response: RouteValue<Response, TPath, TValues>,
   init?: Pick<ResponseOptions, "cors" | "security" | "timing">,
 ) {
   return {
@@ -118,11 +153,14 @@ export function response(
     response,
     security: init?.security,
     timing: normalizeServerTiming(init?.timing),
-  } satisfies RawResponseCapability;
+  } satisfies RawResponseCapability<TPath, TValues>;
 }
 
-export function stream(
-  body: RouteValue<StreamSource>,
+export function stream<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  body: RouteValue<StreamSource, TPath, TValues>,
   init?: ResponseOptions,
 ) {
   return {
@@ -132,11 +170,14 @@ export function stream(
     kind: "stream",
     security: init?.security,
     timing: normalizeServerTiming(init?.timing),
-  } satisfies StreamCapability;
+  } satisfies StreamCapability<TPath, TValues>;
 }
 
-export function sse(
-  events: RouteValue<ServerSentEventSource>,
+export function sse<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  events: RouteValue<ServerSentEventSource, TPath, TValues>,
   init?: ResponseOptions,
 ) {
   return {
@@ -146,7 +187,7 @@ export function sse(
     kind: "sse",
     security: init?.security,
     timing: normalizeServerTiming(init?.timing),
-  } satisfies ServerSentEventsCapability;
+  } satisfies ServerSentEventsCapability<TPath, TValues>;
 }
 
 export function serverTiming(
@@ -155,9 +196,12 @@ export function serverTiming(
   return metrics;
 }
 
-export async function toResponse(
-  capability: ResponseCapability,
-  context: HttpRouteContext,
+export async function toResponse<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  capability: ResponseCapability<TPath, TValues>,
+  context: HttpRouteContext<TPath, TValues>,
 ) {
   switch (capability.kind) {
     case "json": {
@@ -253,9 +297,13 @@ export async function toResponse(
   }
 }
 
-async function resolveValue<T>(
-  value: RouteValue<T>,
-  context: HttpRouteContext,
+async function resolveValue<
+  T,
+  TPath extends string,
+  TValues extends object,
+>(
+  value: RouteValue<T, TPath, TValues>,
+  context: HttpRouteContext<TPath, TValues>,
 ) {
   if (typeof value !== "function") {
     return value;

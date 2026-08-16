@@ -97,6 +97,7 @@ export {
 export {
   action,
   actionInput,
+  defineMiddleware,
   html,
   httpError,
   HttpError,
@@ -217,6 +218,7 @@ export type {
   RouteParamsFor,
   RouteConcretePaths,
   RoutePathVars,
+  RouteRequestContexts,
 } from "./routing";
 export type { HydrateFileRouterOptions } from "./browser";
 export type { SsrOptions, SsrRenderOptions } from "./server";
@@ -249,6 +251,10 @@ export type {
   RouteDefaultComponent,
   RouteMiddleware,
   RouteMiddlewareNext,
+  MiddlewareContextContribution,
+  MiddlewareContextOf,
+  RouteRequestContextFor,
+  RequestContext,
   RouteModule,
   RouteProps,
   RouteValue,
