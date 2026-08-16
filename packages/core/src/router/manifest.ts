@@ -309,7 +309,10 @@ export async function loadPageRoute(
   request = new Request(`http://demiurge.local${pathname}`),
   initialData?: InitialRouteData,
   cache: Cache = createMemoryCache(),
-  options: { documentContributions?: boolean } = {},
+  options: {
+    documentContributions?: boolean;
+    requestContext?: Record<string, unknown>;
+  } = {},
 ): Promise<PendingRouteMatch> {
   const documentContributions = options.documentContributions ?? true;
   const routeMatch = findRouteMatch(manifest.routes, pathname);
@@ -350,6 +353,7 @@ export async function loadPageRoute(
   const url = new URL(request.url);
   const context = {
     cache,
+    context: options.requestContext ?? {},
     path: routeMatch.path,
     pathname,
     request,

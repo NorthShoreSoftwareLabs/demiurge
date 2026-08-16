@@ -113,9 +113,37 @@ without it so missing URLs never fall through to framework-branded markup.
 
 ## Route context
 
-Route handlers receive the Web `Request`, decoded path variables, URL search
-state, and framework services appropriate to the capability. Dynamic values are
-called `path`, not `params`:
+Server route values and data functions receive the Web `Request`, decoded path
+variables, URL search state, and one mutable request context. Middleware can add
+typed values to that context for later middleware, handlers, and page data.
+
+```ts
+import { defineMiddleware, json } from "@demiurgejs/core";
+
+type AuthContext = { user: { id: string } };
+
+export const middleware = defineMiddleware<AuthContext>(
+  ({ context }, next) => {
+    context.user = { id: "user-1" };
+    return next();
+  },
+);
+
+export const GET = json<{ id: string }, "/account">(
+  ({ context }) => ({ id: context.user.id }),
+);
+```
+
+The framework creates the carrier for each request. Middleware runs in
+root-to-leaf order. A short-circuit response still stops later middleware and
+the route handler.
+
+The generated route declarations intersect the contribution types from each
+ancestor `@middleware.ts` file. A route helper needs its path only.
+
+The framework does not pass request context to browser route props or
+navigation data. Keep context values server-only. Dynamic values are called
+`path`, not `params`:
 
 ```tsx
 export const GET = json(({ path, request }) => ({

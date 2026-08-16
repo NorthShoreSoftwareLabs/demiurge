@@ -9,6 +9,7 @@ import {
 import type { HttpRouteContext } from "@demiurgejs/core";
 
 const context = {
+  context: {},
   path: {},
   pathname: "/checkout",
   request: new Request("https://example.test/checkout?hero=true"),

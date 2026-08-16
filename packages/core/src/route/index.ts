@@ -3,6 +3,7 @@ export {
   actionInput,
 } from "./action";
 export { page } from "./page";
+export { defineMiddleware } from "./middleware";
 export {
   HTTP_ERROR_STATUSES,
   HttpError,
@@ -69,6 +70,11 @@ export type {
   RouteDefaultComponent,
   RouteMiddleware,
   RouteMiddlewareNext,
+  MiddlewareContextContribution,
+  MiddlewareContextOf,
+  RouteRequestContextFor,
+  RouteRequestContexts,
+  RequestContext,
   RouteModule,
   RoutePolicy,
   RouteProps,

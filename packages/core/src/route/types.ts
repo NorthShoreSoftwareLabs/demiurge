@@ -10,6 +10,7 @@ import type {
   PathVarsFor,
   RouteParamsFor,
   RoutePathVars,
+  RouteRequestContexts,
 } from "../routing/types";
 import type {
   CorsPolicy,
@@ -18,29 +19,71 @@ import type {
 } from "../security/types";
 import type { HttpErrorStatus } from "./http-error";
 export type { RoutePolicy } from "../security/types";
+export type { RouteRequestContexts } from "../routing/types";
 
 export type MaybePromise<T> = T | Promise<T>;
 
 export type PathVars = Record<string, string>;
+
+/**
+ * Values that inherited middleware makes available to later server work.
+ *
+ * The carrier is mutable for one request. The framework never serializes it
+ * into browser route props or navigation data.
+ */
+export type RequestContext<TValues extends object = Record<never, never>> =
+  TValues;
+
+export type RouteRequestContextFor<TPath extends string> = TPath extends
+  keyof RouteRequestContexts
+  ? RouteRequestContexts[TPath] extends object
+    ? RouteRequestContexts[TPath]
+    : Record<never, never>
+  : Record<never, never>;
+
+declare const middlewareContextBrand: unique symbol;
+
+export type MiddlewareContextContribution<TValues extends object> = {
+  readonly [middlewareContextBrand]: TValues;
+};
+
+export type MiddlewareContextOf<TMiddleware> = [TMiddleware] extends [
+  MiddlewareContextContribution<infer TValues>,
+]
+  ? TValues
+  : Record<never, never>;
+
+type RequestContextField<TValues extends object> = {
+  context: RequestContext<TValues>;
+};
 
 export type RouteContext<TPath extends string = string> = {
   path: RouteParamsFor<TPath>;
   pathname: string;
 };
 
-export type HttpRouteContext<TPath extends string = string> = RouteContext<TPath> & {
+export type HttpRouteContext<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = RouteContext<TPath> & RequestContextField<TValues> & {
   request: Request;
   search: URLSearchParams;
   url: URL;
 };
 
-export type PageDataContext<TPath extends string = string> =
-  HttpRouteContext<TPath> & {
+export type PageDataContext<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = HttpRouteContext<TPath, TValues> & {
     cache: Cache;
   };
 
-export type PageDataFunction<TPath extends string = string, TData = unknown> = (
-  context: PageDataContext<TPath>,
+export type PageDataFunction<
+  TPath extends string = string,
+  TData = unknown,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = (
+  context: PageDataContext<TPath, TValues>,
 ) => MaybePromise<TData>;
 
 export type StaticPathsContext = {
@@ -58,14 +101,28 @@ export type StaticPathsFunction<TPath extends string = string> = (
 
 export type RouteMiddlewareNext = () => MaybePromise<Response>;
 
-export type RouteMiddleware<TPath extends string = string> = (
-  context: HttpRouteContext<TPath>,
+export type RouteMiddleware<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = (
+  context: HttpRouteContext<TPath, TValues>,
   next: RouteMiddlewareNext,
 ) => MaybePromise<Response>;
 
-export type RouteValue<T> =
+type AnyRouteMiddleware = {
+  bivarianceHack(
+    context: HttpRouteContext<string, object>,
+    next: RouteMiddlewareNext,
+  ): MaybePromise<Response>;
+}["bivarianceHack"];
+
+export type RouteValue<
+  T,
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> =
   | T
-  | ((context: HttpRouteContext) => MaybePromise<T>);
+  | ((context: HttpRouteContext<TPath, TValues>) => MaybePromise<T>);
 
 export type RouteProps<
   TPath extends string = string,
@@ -97,8 +154,9 @@ export type RouteDefaultComponent =
 export type PageCapability<
   TPath extends string = string,
   TData = undefined,
+  TValues extends object = RouteRequestContextFor<TPath>,
 > = {
-  data?: PageDataFunction<TPath, TData>;
+  data?: PageDataFunction<TPath, TData, TValues>;
   kind: "page";
   layout?: false;
   render: PageRenderOptions;
@@ -112,19 +170,27 @@ export type PageRenderOptions = {
 };
 
 export type AnyPageCapability = {
-  data?: PageDataFunction<string, unknown>;
+  data?: {
+    bivarianceHack(
+      context: PageDataContext<string, object>,
+    ): MaybePromise<unknown>;
+  }["bivarianceHack"];
   kind: "page";
   layout?: false;
   render: PageRenderOptions;
   view: unknown;
 };
 
-export type JsonCapability<T = unknown> = {
+export type JsonCapability<
+  T = unknown,
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = {
   cors?: CorsPolicy;
   kind: "json";
   security?: RouteSecurityPolicy;
   timing?: readonly ServerTimingMetric[];
-  value: RouteValue<T>;
+  value: RouteValue<T, TPath, TValues>;
   init?: ResponseInit;
 };
 
@@ -133,55 +199,73 @@ export type JsonLinesSource =
   | AsyncIterable<unknown>
   | ReadableStream<unknown>;
 
-export type JsonLinesCapability = {
+export type JsonLinesCapability<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = {
   cors?: CorsPolicy;
   init?: ResponseInit;
   kind: "jsonl";
-  lines: RouteValue<JsonLinesSource>;
+  lines: RouteValue<JsonLinesSource, TPath, TValues>;
   security?: RouteSecurityPolicy;
   timing?: readonly ServerTimingMetric[];
 };
 
-export type TextCapability = {
+export type TextCapability<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = {
   cors?: CorsPolicy;
   kind: "text";
   security?: RouteSecurityPolicy;
   timing?: readonly ServerTimingMetric[];
-  value: RouteValue<string>;
+  value: RouteValue<string, TPath, TValues>;
   init?: ResponseInit;
 };
 
-export type HtmlCapability = {
+export type HtmlCapability<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = {
   cors?: CorsPolicy;
   kind: "html";
   security?: RouteSecurityPolicy;
   timing?: readonly ServerTimingMetric[];
-  value: RouteValue<string>;
+  value: RouteValue<string, TPath, TValues>;
   init?: ResponseInit;
 };
 
-export type RedirectCapability = {
+export type RedirectCapability<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = {
   cors?: CorsPolicy;
   kind: "redirect";
   security?: RouteSecurityPolicy;
   timing?: readonly ServerTimingMetric[];
-  to: RouteValue<string | URL>;
+  to: RouteValue<string | URL, TPath, TValues>;
   init?: ResponseInit;
 };
 
-export type NotFoundCapability = {
+export type NotFoundCapability<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = {
   cors?: CorsPolicy;
   kind: "not-found";
   security?: RouteSecurityPolicy;
   timing?: readonly ServerTimingMetric[];
-  body?: RouteValue<string>;
+  body?: RouteValue<string, TPath, TValues>;
   init?: ResponseInit;
 };
 
-export type RawResponseCapability = {
+export type RawResponseCapability<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = {
   cors?: CorsPolicy;
   kind: "response";
-  response: RouteValue<Response>;
+  response: RouteValue<Response, TPath, TValues>;
   security?: RouteSecurityPolicy;
   timing?: readonly ServerTimingMetric[];
 };
@@ -193,8 +277,11 @@ export type StreamSource =
   | AsyncIterable<StreamChunk>
   | ReadableStream<StreamChunk>;
 
-export type StreamCapability = {
-  body: RouteValue<StreamSource>;
+export type StreamCapability<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = {
+  body: RouteValue<StreamSource, TPath, TValues>;
   cors?: CorsPolicy;
   init?: ResponseInit;
   kind: "stream";
@@ -215,25 +302,31 @@ export type ServerSentEventSource =
   | AsyncIterable<ServerSentEvent | string>
   | ReadableStream<ServerSentEvent | string>;
 
-export type ServerSentEventsCapability = {
+export type ServerSentEventsCapability<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = {
   cors?: CorsPolicy;
-  events: RouteValue<ServerSentEventSource>;
+  events: RouteValue<ServerSentEventSource, TPath, TValues>;
   init?: ResponseInit;
   kind: "sse";
   security?: RouteSecurityPolicy;
   timing?: readonly ServerTimingMetric[];
 };
 
-export type ResponseCapability =
-  | JsonCapability
-  | JsonLinesCapability
-  | TextCapability
-  | HtmlCapability
-  | RedirectCapability
-  | NotFoundCapability
-  | RawResponseCapability
-  | StreamCapability
-  | ServerSentEventsCapability;
+export type ResponseCapability<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> =
+  | JsonCapability<unknown, TPath, TValues>
+  | JsonLinesCapability<TPath, TValues>
+  | TextCapability<TPath, TValues>
+  | HtmlCapability<TPath, TValues>
+  | RedirectCapability<TPath, TValues>
+  | NotFoundCapability<TPath, TValues>
+  | RawResponseCapability<TPath, TValues>
+  | StreamCapability<TPath, TValues>
+  | ServerSentEventsCapability<TPath, TValues>;
 
 export type RouteCapability = AnyPageCapability | ResponseCapability;
 
@@ -249,8 +342,9 @@ export type HttpMethod =
 export type PageOptions<
   TPath extends string = string,
   TData = undefined,
+  TValues extends object = RouteRequestContextFor<TPath>,
 > = {
-  data?: PageDataFunction<TPath, TData>;
+  data?: PageDataFunction<TPath, TData, TValues>;
   layout?: false;
   render?: PageRenderOptions;
   view: ComponentType<RouteProps<TPath, TData>>;
@@ -286,7 +380,7 @@ export type RouteModule = {
   layout?: false;
   links?: LinkContribution;
   metadata?: Metadata;
-  middleware?: RouteMiddleware;
+  middleware?: AnyRouteMiddleware;
   paths?: StaticPathsFunction;
   policy?: RoutePolicy;
   scripts?: ScriptContribution;

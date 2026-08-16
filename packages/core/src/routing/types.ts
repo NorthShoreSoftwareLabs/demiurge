@@ -10,6 +10,8 @@ export interface RoutePathVars {}
 
 export interface RouteConcretePaths {}
 
+export interface RouteRequestContexts {}
+
 type KnownRoutePath = keyof RoutePathVars & string;
 type KnownConcretePath = RouteConcretePaths[keyof RouteConcretePaths] & string;
 type HasGeneratedRoutes = [KnownRoutePath] extends [never] ? false : true;

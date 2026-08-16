@@ -13,6 +13,7 @@ function createContext(request: Request): HttpRouteContext {
   const url = new URL(request.url);
 
   return {
+    context: {},
     path: {},
     pathname: url.pathname,
     request,

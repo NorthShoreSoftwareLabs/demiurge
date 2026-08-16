@@ -20,6 +20,10 @@ describe("typed route manifest generator", () => {
     await writeFile(join(routesDir, "@layout.tsx"), "export {}");
     await writeFile(join(routesDir, "@loading.tsx"), "export {}");
     await writeFile(join(routesDir, "@middleware.ts"), "export {}");
+    await writeFile(
+      join(routesDir, "(admin)", "@middleware.ts"),
+      "export const middleware = undefined;",
+    );
     await writeFile(join(routesDir, "@not-found.tsx"), "export {}");
     await writeFile(join(routesDir, "@policy.ts"), "export {}");
 
@@ -35,9 +39,33 @@ describe("typed route manifest generator", () => {
     expect(source).not.toContain("@error");
     expect(source).not.toContain("@layout");
     expect(source).not.toContain("@loading");
-    expect(source).not.toContain("@middleware");
     expect(source).not.toContain("@not-found");
     expect(source).not.toContain("@policy");
-    expect(source).not.toContain("(admin)");
+  });
+
+  it("maps each route to the branded contributions from ancestor middleware", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-route-context-"));
+    const routesDir = join(root, "src", "routes");
+    const outputFile = join(root, ".demiurge", "route-manifest.d.ts");
+
+    await mkdir(join(routesDir, "admin"), { recursive: true });
+    await writeFile(join(routesDir, "@middleware.ts"), "export const middleware = root;");
+    await writeFile(
+      join(routesDir, "admin", "@middleware.ts"),
+      "export const middleware = admin;",
+    );
+    await writeFile(join(routesDir, "admin", "index.tsx"), "export {}");
+    await writeFile(join(routesDir, "public.tsx"), "export {}");
+
+    await generateRoutes({ outputFile, routesDir });
+
+    const source = await readFile(outputFile, "utf8");
+
+    expect(source).toContain('typeof import("../src/routes/@middleware")');
+    expect(source).toContain('typeof import("../src/routes/admin/@middleware")');
+    expect(source).toMatch(
+      /"\/admin": __DemiurgeMiddlewareContext\d+ & __DemiurgeMiddlewareContext\d+;/,
+    );
+    expect(source).toMatch(/"\/public": __DemiurgeMiddlewareContext\d+;/);
   });
 });

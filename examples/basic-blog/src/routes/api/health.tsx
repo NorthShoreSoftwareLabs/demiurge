@@ -1,8 +1,9 @@
 import { json, text } from "@demiurgejs/core";
 
-export const GET = json(({ pathname }) => ({
+export const GET = json<{ ok: boolean; pathname: string; requestId: string }, "/api/health">(({ pathname, context }) => ({
   ok: true,
   pathname,
+  requestId: context.requestId,
 }), {
   cors: {
     origins: "*",

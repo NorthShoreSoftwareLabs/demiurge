@@ -11,39 +11,60 @@ import type {
   HttpRouteContext,
   MaybePromise,
   ResponseCapability,
+  RouteRequestContextFor,
   ServerTimingInput,
 } from "./types";
 import { response, toResponse } from "./response";
 
-export type ActionInput<TInput> = (
-  context: HttpRouteContext,
+export type ActionInput<
+  TInput,
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = (
+  context: HttpRouteContext<TPath, TValues>,
 ) => MaybePromise<TInput>;
 
-export type ActionContext<TInput> = HttpRouteContext & {
+export type ActionContext<
+  TInput,
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = HttpRouteContext<TPath, TValues> & {
   input: TInput;
 };
 
-export type ActionIdempotency<TInput> = {
-  key: CacheKey | ((context: ActionContext<TInput>) => CacheKey);
+export type ActionIdempotency<
+  TInput,
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = {
+  key: CacheKey | ((context: ActionContext<TInput, TPath, TValues>) => CacheKey);
   store: IdempotencyStore;
   ttl?: CacheDuration;
 };
 
-export type ActionOptions<TInput> = {
+export type ActionOptions<
+  TInput,
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = {
   cors?: CorsPolicy;
   handler: (
-    context: ActionContext<TInput>,
-  ) => MaybePromise<Response | ResponseCapability>;
-  idempotency?: ActionIdempotency<TInput>;
-  input?: ActionInput<TInput>;
+    context: ActionContext<TInput, TPath, TValues>,
+  ) => MaybePromise<Response | ResponseCapability<TPath, TValues>>;
+  idempotency?: ActionIdempotency<TInput, TPath, TValues>;
+  input?: ActionInput<TInput, TPath, TValues>;
   security?: RouteSecurityPolicy;
   timing?: ServerTimingInput;
 };
 
-export function action<TInput = undefined>(
-  options: ActionOptions<TInput>,
+export function action<
+  TInput = undefined,
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  options: ActionOptions<TInput, TPath, TValues>,
 ) {
-  return response(
+  return response<TPath, TValues>(
     async (context) => {
       const input = options.input
         ? await options.input(context)
@@ -51,7 +72,7 @@ export function action<TInput = undefined>(
       const actionContext = {
         ...context,
         input,
-      } satisfies ActionContext<TInput>;
+      } as unknown as ActionContext<TInput, TPath, TValues>;
       const run = async () => await resolveActionResult(
         await options.handler(actionContext),
         context,
@@ -92,9 +113,12 @@ export const actionInput = {
   },
 };
 
-async function resolveActionResult(
-  result: Response | ResponseCapability,
-  context: HttpRouteContext,
+async function resolveActionResult<
+  TPath extends string,
+  TValues extends object,
+>(
+  result: Response | ResponseCapability<TPath, TValues>,
+  context: HttpRouteContext<TPath, TValues>,
 ) {
   if (result instanceof Response) {
     return result;

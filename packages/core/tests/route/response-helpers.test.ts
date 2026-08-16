@@ -15,6 +15,7 @@ import {
 } from "@demiurgejs/core";
 
 const context: HttpRouteContext = {
+  context: {},
   path: {},
   pathname: "/api/health",
   request: new Request("https://example.test/api/health"),
