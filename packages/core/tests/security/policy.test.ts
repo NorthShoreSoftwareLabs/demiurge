@@ -570,27 +570,27 @@ describe("security policy cascade", () => {
       );
   });
 
-  it("extends the effective default-src fallback when script-src is removed", () => {
-    const policy = mergeRoutePolicies(
-      {
-        document: {
-          csp: {
-            defaultSrc: ["'self'"],
-            scriptSrc: false,
+  it("rejects a script need when the route removes script-src", () => {
+    // A widened default-src would also grant the source to frame-src,
+    // worker-src, media-src, and manifest-src. The framework refuses to make
+    // a script declaration grant more than scripts.
+    expect(() =>
+      mergeRoutePolicies(
+        {
+          document: {
+            csp: {
+              defaultSrc: ["'self'"],
+              scriptSrc: false,
+            },
+          },
+          security: {
+            needs: { script: ["https://cdn.example.com"] },
           },
         },
-        security: {
-          needs: { script: ["https://cdn.example.com"] },
-        },
-      },
+      )
+    ).toThrow(
+      "A route policy declares security.needs.script and sets csp.scriptSrc to false. Set an explicit csp.scriptSrc that includes https://cdn.example.com.",
     );
-
-    expect(policy.document?.csp).toEqual({
-      defaultSrc: ["'self'", "https://cdn.example.com"],
-      scriptSrc: false,
-    });
-    expect(createSecurityHeaders(policy.document!).get("content-security-policy"))
-      .toBe("default-src 'self' https://cdn.example.com");
   });
 
   it("preserves default-src sources when needs adds an explicit script-src", () => {

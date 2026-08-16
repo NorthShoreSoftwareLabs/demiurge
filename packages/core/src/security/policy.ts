@@ -188,6 +188,16 @@ function applyScriptNeeds(
     return document;
   }
 
+  // A removed script-src makes default-src govern scripts. A script need can
+  // then widen only default-src, which also grants the source to frame-src,
+  // worker-src, media-src, and manifest-src. The framework refuses that
+  // silent grant and asks for an explicit script-src instead.
+  if (document.csp.scriptSrc === false) {
+    throw new Error(
+      `A route policy declares security.needs.script and sets csp.scriptSrc to false. Set an explicit csp.scriptSrc that includes ${sources.join(", ")}.`,
+    );
+  }
+
   if (
     document.csp.scriptSrc === undefined &&
     document.csp.defaultSrc === undefined
@@ -195,10 +205,7 @@ function applyScriptNeeds(
     return document;
   }
 
-  const useDefault = document.csp.scriptSrc === false;
-  const directive = useDefault || document.csp.scriptSrc === undefined
-    ? document.csp.defaultSrc
-    : document.csp.scriptSrc;
+  const directive = document.csp.scriptSrc ?? document.csp.defaultSrc;
   const current = resolveCspDirectiveValue(directive) ?? [];
 
   if (!Array.isArray(current)) {
@@ -209,9 +216,7 @@ function applyScriptNeeds(
     ...document,
     csp: {
       ...document.csp,
-      [useDefault ? "defaultSrc" : "scriptSrc"]: [
-        ...new Set([...current, ...sources]),
-      ],
+      scriptSrc: [...new Set([...current, ...sources])],
     },
   };
 }

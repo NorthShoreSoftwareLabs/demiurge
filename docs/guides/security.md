@@ -95,6 +95,14 @@ export const policy = {
 the first declaration for each source. A static `export const scripts` entry
 therefore takes precedence over a managed component with the same source.
 
+A script need adds its sources to `script-src` only. If the route policy does
+not set `script-src`, the framework makes an explicit `script-src` from the
+`default-src` sources and the declared sources. The framework does not change
+`default-src`, because a wider `default-src` also grants the source to
+`frame-src`, `worker-src`, `media-src`, and `manifest-src`. If the route policy
+sets `csp.scriptSrc` to `false`, the framework rejects the policy at startup.
+Set an explicit `csp.scriptSrc` for that route.
+
 The framework hoists managed scripts found before the document head flushes.
 It renders scripts found after the flush at their component position. In
 development, a late `beforeInteractive` script fails and points to
