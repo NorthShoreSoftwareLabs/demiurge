@@ -5,6 +5,7 @@ import {
   defineRoutePolicy,
   page,
   security,
+  Script,
   type RouteModule,
 } from "@demiurgejs/core";
 import { renderNodePageResponse } from "@demiurgejs/core/node";
@@ -38,6 +39,28 @@ function createStreamingPage(value: Promise<string>) {
       <main>
         <h1>Streaming shell</h1>
         <Suspense fallback={<p>Loading value</p>}>
+          <DeferredValue />
+        </Suspense>
+      </main>
+    );
+  };
+}
+
+function createStreamingScriptPage(value: Promise<string>) {
+  function DeferredValue() {
+    return (
+      <>
+        <strong>{use(value)}</strong>
+        <Script src="https://cdn.example.com/late.js" />
+      </>
+    );
+  }
+
+  return function StreamingScriptPage() {
+    return (
+      <main>
+        <h1>Streaming script shell</h1>
+        <Suspense fallback={<p>Loading script</p>}>
           <DeferredValue />
         </Suspense>
       </main>
@@ -171,6 +194,42 @@ describe("streaming page responses", () => {
     expect(scriptTags.every(([, attributes]) =>
       attributes.includes(`nonce="${nonce}"`)
     )).toBe(true);
+  });
+
+  it("renders a late managed script in place after the streaming shell flushes", async () => {
+    const value = deferred<string>();
+    const handler = createRequestHandler({
+      renderPage: renderNodePageResponse,
+      routes: {
+        "./routes/@policy.ts": routeModule({
+          policy: defineRoutePolicy({ document: security.strict() }),
+        }),
+        "./routes/index.tsx": routeModule({
+          GET: page({
+            render: { mode: "streaming" },
+            view: createStreamingScriptPage(value.promise),
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(new Request("https://example.test/"));
+    const reader = response.body!.getReader();
+    const shell = await readUntil(reader, (html) => html.includes("Loading script"));
+
+    expect(shell.html).not.toContain("late.js");
+    value.resolve("Deferred script ready");
+    const html = shell.html + await readRemaining(reader, shell.decoder);
+    const nonce = response.headers
+      .get("content-security-policy")
+      ?.match(/'nonce-([^']+)'/)?.[1];
+
+    expect(html).toContain("Deferred script ready");
+    expect(html).toContain(
+      '<script data-demiurge-script-placement="in-place"',
+    );
+    expect(html.match(/https:\/\/cdn\.example\.com\/late\.js/g)).toHaveLength(1);
+    expect(html).toContain(`nonce="${nonce}"`);
   });
 
   it("turns a shell failure into the normal page error response", async () => {

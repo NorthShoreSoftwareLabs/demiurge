@@ -13,8 +13,10 @@ import {
   cspHash,
   defineMetadata,
   defineRoutePolicy,
+  defineScripts,
   page,
   security,
+  script,
   structuredData,
   text,
   type LayoutProps,
@@ -337,6 +339,144 @@ describe("static output adapter", () => {
 
     await expect(generateStaticOutput({ outDir, routes })).rejects.toThrow(
       /inline script without the required CSP hash/,
+    );
+  });
+
+  it("reports the route, script, and effective script-src for a blocked static script", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({ document: security.static() }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: PlainPage }),
+        scripts: defineScripts([
+          script({ src: "https://cdn.example.com/app.js" }),
+        ]),
+      }),
+    });
+
+    await expect(generateStaticOutput({ outDir, routes })).rejects.toThrow(
+      /Route "\.\/routes\/index\.tsx" export GET declares script "https:\/\/cdn\.example\.com\/app\.js" that violates the effective script-src 'self' policy\./,
+    );
+  });
+
+  it("does not treat unsafe-inline as external script authorization", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({
+          document: security.static({
+            csp: { scriptSrc: ["'unsafe-inline'"] },
+          }),
+        }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: PlainPage }),
+        scripts: defineScripts([
+          script({ src: "https://cdn.example.com/app.js" }),
+        ]),
+      }),
+    });
+
+    await expect(generateStaticOutput({ outDir, routes })).rejects.toThrow(
+      /violates the effective script-src 'self' 'unsafe-inline' policy\./,
+    );
+  });
+
+  it("matches wildcard hosts and exact host-source paths", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({
+          document: security.static({
+            csp: {
+              scriptSrc: ["https://*.example.com/app.js"],
+            },
+          }),
+        }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: PlainPage }),
+        scripts: defineScripts([
+          script({ src: "https://cdn.example.com/app.js" }),
+        ]),
+      }),
+    });
+
+    await expect(generateStaticOutput({ outDir, routes })).resolves.toBeDefined();
+  });
+
+  it("rejects a script outside an exact host-source path", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({
+          document: security.static({
+            csp: { scriptSrc: ["https://cdn.example.com/app.js"] },
+          }),
+        }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: PlainPage }),
+        scripts: defineScripts([
+          script({ src: "https://cdn.example.com/app.js.evil" }),
+        ]),
+      }),
+    });
+
+    await expect(generateStaticOutput({ outDir, routes })).rejects.toThrow(
+      /violates the effective script-src .*https:\/\/cdn\.example\.com\/app\.js policy\./,
+    );
+  });
+
+  it("keeps host sources active when strict-dynamic has no nonce or hash", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({
+          document: security.static({
+            csp: { scriptSrc: ["https://cdn.example.com", "'strict-dynamic'"] },
+          }),
+        }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: PlainPage }),
+        scripts: defineScripts([
+          script({ src: "https://cdn.example.com/app.js" }),
+        ]),
+      }),
+    });
+
+    await expect(generateStaticOutput({ outDir, routes })).resolves.toBeDefined();
+  });
+
+  it("allows a static script source declared through security.needs.script", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({
+          document: security.static(),
+          security: {
+            needs: { script: ["https://cdn.example.com"] },
+          },
+        }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: PlainPage }),
+        scripts: defineScripts([
+          script({ src: "https://cdn.example.com/app.js" }),
+        ]),
+      }),
+    });
+
+    const manifest = await generateStaticOutput({ outDir, routes });
+    const home = await readFile(join(outDir, "index.html"), "utf8");
+    const entry = manifest.entries.find((item) => item.pathname === "/");
+
+    expect(home).toContain('src="https://cdn.example.com/app.js"');
+    expect(entry?.headers["content-security-policy"]).toContain(
+      "script-src 'self' https://cdn.example.com",
     );
   });
 

@@ -539,6 +539,123 @@ describe("security policy cascade", () => {
       maxBodySize: "16kb",
     });
   });
+
+  it("cascades script needs additively and preserves first declaration order", () => {
+    const policy = mergeRoutePolicies(
+      {
+        document: security.static(),
+        security: {
+          needs: {
+            script: ["https://cdn.example.com/root.js", "https://shared.example.com"],
+          },
+        },
+      },
+      {
+        security: {
+          needs: {
+            script: ["https://shared.example.com", "https://cdn.example.com/leaf.js"],
+          },
+        },
+      },
+    );
+
+    expect(policy.security?.needs?.script).toEqual([
+      "https://cdn.example.com/root.js",
+      "https://shared.example.com",
+      "https://cdn.example.com/leaf.js",
+    ]);
+    expect(createSecurityHeaders(policy.document!).get("content-security-policy"))
+      .toContain(
+        "script-src 'self' https://cdn.example.com/root.js https://shared.example.com https://cdn.example.com/leaf.js",
+      );
+  });
+
+  it("extends the effective default-src fallback when script-src is removed", () => {
+    const policy = mergeRoutePolicies(
+      {
+        document: {
+          csp: {
+            defaultSrc: ["'self'"],
+            scriptSrc: false,
+          },
+        },
+        security: {
+          needs: { script: ["https://cdn.example.com"] },
+        },
+      },
+    );
+
+    expect(policy.document?.csp).toEqual({
+      defaultSrc: ["'self'", "https://cdn.example.com"],
+      scriptSrc: false,
+    });
+    expect(createSecurityHeaders(policy.document!).get("content-security-policy"))
+      .toBe("default-src 'self' https://cdn.example.com");
+  });
+
+  it("preserves default-src sources when needs adds an explicit script-src", () => {
+    const policy = mergeRoutePolicies(
+      {
+        document: {
+          csp: { defaultSrc: ["'self'"] },
+        },
+        security: {
+          needs: { script: ["https://cdn.example.com"] },
+        },
+      },
+    );
+
+    expect(policy.document?.csp && policy.document.csp.scriptSrc).toEqual([
+      "'self'",
+      "https://cdn.example.com",
+    ]);
+  });
+
+  it("does not create script-src when the document has no script fallback", () => {
+    const policy = mergeRoutePolicies(
+      {
+        document: { csp: { objectSrc: ["'none'"] } },
+        security: {
+          needs: { script: ["https://cdn.example.com"] },
+        },
+      },
+    );
+
+    expect(policy.document?.csp).toEqual({ objectSrc: ["'none'"] });
+  });
+
+  it("activates strict-dynamic only when a nonce or hash source exists", () => {
+    const scriptTag = script({ src: "https://cdn.example.com/app.js" });
+    const inactive = createSecurityAudit({
+      document: {
+        policy: {
+          csp: {
+            scriptSrc: ["https://cdn.example.com", "'strict-dynamic'"],
+          },
+        },
+        scripts: [scriptTag],
+      },
+    });
+    const active = createSecurityAudit({
+      document: {
+        policy: {
+          csp: {
+            scriptSrc: [
+              "https://cdn.example.com",
+              "'strict-dynamic'",
+              "'nonce-build'",
+            ],
+          },
+        },
+        scripts: [scriptTag],
+      },
+    });
+
+    expect(inactive.findings).toEqual([]);
+    expect(active.findings).toContainEqual(
+      expect.objectContaining({ code: "csp-script-src-blocked" }),
+    );
+  });
 });
 
 describe("security audit output", () => {

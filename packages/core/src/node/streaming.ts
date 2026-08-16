@@ -1,8 +1,10 @@
 import { Transform } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server";
 import { renderDocumentShell } from "../document/render";
+import type { ScriptTag } from "../document/scripts";
 import type { LoadedRouteMatch } from "../router";
 import { createPageRenderTree } from "../server/render-tree";
+import { createPageScriptContext } from "../server/render-tree";
 import {
   renderPageResponse,
   type SsrRenderOptions,
@@ -27,13 +29,14 @@ export async function renderStreamingPageResponse(
     throw options.signal.reason;
   }
 
-  const shell = await createDocumentShell(match, options);
-  const content = createPageRenderTree(match);
+  const scripts = createPageScriptContext(match, options);
+  const content = createPageRenderTree(match, scripts);
 
   return await new Promise<Response>((resolveResponse, rejectResponse) => {
     let completed = false;
     let cancelled = false;
     let responseCommitted = false;
+    let documentSuffix = "";
     let stream = undefined as ReturnType<typeof renderToPipeableStream> | undefined;
     const documentStream = new Transform({
       destroy(error, callback) {
@@ -44,7 +47,7 @@ export async function renderStreamingPageResponse(
         callback(error);
       },
       flush(callback) {
-        callback(null, shell.suffix);
+        callback(null, documentSuffix);
       },
       transform(chunk, _encoding, callback) {
         callback(null, chunk);
@@ -82,14 +85,29 @@ export async function renderStreamingPageResponse(
         rejectResponse(error);
       },
       onShellReady() {
-        responseCommitted = true;
-        documentStream.push(shell.prefix);
-        stream?.pipe(documentStream);
-        resolveResponse(
-          new Response(toWebReadableStream(documentStream), {
-            headers: { "content-type": "text/html; charset=utf-8" },
-          }),
-        );
+        void (async () => {
+          try {
+            const shell = await createDocumentShell(match, {
+              ...options,
+              scripts: scripts.scripts(),
+            });
+            documentSuffix = shell.suffix;
+            scripts.flushHead();
+            documentStream.push(shell.prefix);
+            responseCommitted = true;
+            stream?.pipe(documentStream);
+            resolveResponse(
+              new Response(toWebReadableStream(documentStream), {
+                headers: { "content-type": "text/html; charset=utf-8" },
+              }),
+            );
+          } catch (error) {
+            cleanup();
+            stream?.abort(error);
+            documentStream.destroy();
+            rejectResponse(error);
+          }
+        })();
       },
     });
   });
@@ -165,7 +183,7 @@ function toWebReadableStream(stream: Transform) {
 
 async function createDocumentShell(
   match: LoadedRouteMatch,
-  options: SsrRenderOptions,
+  options: SsrRenderOptions & { scripts?: ScriptTag[] },
 ) {
   const shell = renderDocumentShell({
     body: { data: match.data, navigation: options.navigation },
@@ -174,7 +192,7 @@ async function createDocumentShell(
     links: match.links,
     metadata: match.metadata,
     nonce: options.nonce,
-    scripts: match.scripts,
+    scripts: options.scripts ?? match.scripts,
     styles: options.styles,
     title: options.title,
   });

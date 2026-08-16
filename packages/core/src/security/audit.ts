@@ -216,6 +216,10 @@ function requiresScriptNonce(sources: readonly CspSource[]) {
 }
 
 function allowsScriptSource(sources: readonly CspSource[], src: string) {
+  if (isStrictDynamicActive(sources)) {
+    return false;
+  }
+
   if (sources.includes("*")) {
     return true;
   }
@@ -256,15 +260,30 @@ function sourceMatchesScriptSource(source: CspSource, src: string) {
     const sourceUrl = new URL(source);
     const scriptUrl = new URL(src);
 
+    const hostnameMatches = sourceUrl.hostname.startsWith("*.")
+      ? scriptUrl.hostname.endsWith(sourceUrl.hostname.slice(1)) &&
+        scriptUrl.hostname !== sourceUrl.hostname.slice(2)
+      : scriptUrl.hostname === sourceUrl.hostname;
+    const pathMatches = sourceUrl.pathname === "/" ||
+      sourceUrl.pathname.endsWith("/")
+      ? scriptUrl.pathname.startsWith(sourceUrl.pathname)
+      : scriptUrl.pathname === sourceUrl.pathname;
+
     return (
       scriptUrl.protocol === sourceUrl.protocol &&
-      scriptUrl.hostname === sourceUrl.hostname &&
+      hostnameMatches &&
       scriptUrl.port === sourceUrl.port &&
-      (sourceUrl.pathname === "/" || scriptUrl.pathname.startsWith(sourceUrl.pathname))
+      pathMatches
     );
   } catch {
     return false;
   }
+}
+
+function isStrictDynamicActive(sources: readonly CspSource[]) {
+  return sources.includes("'strict-dynamic'") && sources.some((source) =>
+    source.startsWith("'nonce-") || /^'sha(?:256|384|512)-/.test(source)
+  );
 }
 
 function auditRoutePolicy(

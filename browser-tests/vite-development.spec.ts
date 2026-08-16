@@ -113,7 +113,7 @@ test("the Vite development not-found document hydrates", async ({
   expect(cspMonitor).toEqual([]);
 });
 
-test("Vite development streams under the strict document policy", async ({
+test("Vite development streams and hydrates a late managed script", async ({
   cspMonitor,
   page,
 }) => {
@@ -128,6 +128,14 @@ test("Vite development streams under the strict document policy", async ({
   })).toBeVisible();
   await expect(page.locator("[data-streamed]"))
     .toHaveText("The streamed content is ready.");
+  const streamedScript = page.locator(
+    'script[src="/assets/streamed-conditional.js"]',
+  );
+  await expect(streamedScript).toHaveCount(1);
+  await expect(streamedScript).toHaveAttribute(
+    "data-demiurge-script-placement",
+    "in-place",
+  );
   await expectViteRuntime(
     page,
     (await response?.allHeaders())?.["content-security-policy"],

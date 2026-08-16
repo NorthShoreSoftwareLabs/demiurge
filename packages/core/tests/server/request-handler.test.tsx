@@ -17,6 +17,7 @@ import {
   resolveMetadata,
   response as rawResponse,
   security,
+  Script,
   script,
   serverTiming,
   sse,
@@ -97,6 +98,34 @@ describe("request handler", () => {
         ),
       })
     ).toThrow(/nonceInjection/);
+  });
+
+  it("reports a blocked static script with its route and effective directive", () => {
+    const routeModules = {
+      "./routes/@policy.ts": {
+        policy: defineRoutePolicy({ document: security.static() }),
+      },
+      "./routes/index.tsx": {
+        GET: page({ render: { mode: "ssr" }, view: View }),
+        scripts: defineScripts([
+          script({ src: "https://cdn.example.com/app.js" }),
+        ]),
+      },
+    } satisfies Record<string, RouteModule>;
+
+    expect(() =>
+      createRequestHandler({
+        routeModules,
+        routes: Object.fromEntries(
+          Object.entries(routeModules).map(([file, module]) => [
+            file,
+            routeModule(module),
+          ]),
+        ),
+      })
+    ).toThrow(
+      /Route "\.\/routes\/index\.tsx" export GET declares script "https:\/\/cdn\.example\.com\/app\.js" that violates the effective script-src 'self' policy\./,
+    );
   });
 
   it("returns JSON route responses", async () => {
@@ -1887,6 +1916,64 @@ describe("request handler", () => {
     expect(html).toContain(`<script src="https://cdn.example.com/root.js"></script>`);
     expect(html).toContain(`<script type="module" src="/client-entry.js"></script>`);
     expect(html).toContain("<section>Layout: <main>Hello SSR</main></section>");
+  });
+
+  it("dedupes a managed script against a static declaration and propagates its nonce", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/@policy.ts": routeModule({
+          policy: defineRoutePolicy({
+            document: security.strict(),
+            security: {
+              needs: { script: ["https://cdn.example.com"] },
+            },
+          }),
+        }),
+        "./routes/index.tsx": routeModule({
+          GET: page(() => (
+            <main>
+              <Script
+                src="https://cdn.example.com/app.js"
+                strategy="afterInteractive"
+              />
+            </main>
+          )),
+          scripts: defineScripts([
+            script({
+              id: "declared",
+              src: "https://cdn.example.com/app.js",
+              strategy: "beforeInteractive",
+            }),
+          ]),
+        }),
+      },
+    });
+
+    const response = await handler(new Request("https://example.test/"));
+    const html = await response.text();
+    const csp = response.headers.get("content-security-policy");
+
+    expect(html.match(/https:\/\/cdn\.example\.com\/app\.js/g)).toHaveLength(1);
+    expect(html).toContain('id="declared"');
+    expect(html).toContain('nonce="');
+    expect(csp).toContain("https://cdn.example.com");
+  });
+
+  it("propagates the nonce to an early managed script", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/@policy.ts": routeModule({
+          policy: defineRoutePolicy({ document: security.strict() }),
+        }),
+        "./routes/index.tsx": routeModule({
+          GET: page(() => <Script src="https://cdn.example.com/app.js" />),
+        }),
+      },
+    });
+    const response = await handler(new Request("https://example.test/"));
+    const html = await response.text();
+
+    expect(html).toMatch(/src="https:\/\/cdn\.example\.com\/app\.js" nonce="/);
   });
 
   it("renders a document string directly with renderPageDocument", () => {

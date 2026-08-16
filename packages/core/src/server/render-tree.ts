@@ -1,14 +1,22 @@
 import { createElement, type ReactNode } from "react";
+import {
+  createScriptRenderContext,
+  withScriptContext,
+  type ScriptRenderContext,
+} from "../document/scripts";
 import type { LoadedRouteMatch } from "../router";
 
-export function createPageRenderTree(match: LoadedRouteMatch) {
+export function createPageRenderTree(
+  match: LoadedRouteMatch,
+  scripts?: ScriptRenderContext,
+) {
   const page = createElement(match.page, {
     data: match.data,
     path: match.path,
     pathname: match.pathname,
   });
 
-  return match.layouts.reduceRight<ReactNode>(
+  const tree = match.layouts.reduceRight<ReactNode>(
     (children, Layout) =>
       createElement(Layout, {
         children,
@@ -17,4 +25,17 @@ export function createPageRenderTree(match: LoadedRouteMatch) {
       }),
     page,
   );
+
+  return scripts ? withScriptContext(scripts, tree) : tree;
+}
+
+export function createPageScriptContext(
+  match: LoadedRouteMatch,
+  options: { dev?: boolean; nonce?: string } = {},
+) {
+  return createScriptRenderContext({
+    dev: options.dev,
+    nonce: options.nonce,
+    scripts: match.scripts,
+  });
 }

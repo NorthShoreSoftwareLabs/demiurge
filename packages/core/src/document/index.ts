@@ -24,6 +24,7 @@ export {
 } from "./render";
 export {
   defineScripts,
+  Script,
   resolveScripts,
   script,
 } from "./scripts";
@@ -60,6 +61,7 @@ export type {
 } from "./render";
 export type {
   ScriptContribution,
+  ScriptProps,
   ScriptStrategy,
   ScriptTag,
 } from "./scripts";

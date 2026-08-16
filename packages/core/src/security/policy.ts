@@ -134,16 +134,21 @@ export function mergeSecurityPolicies(
 export function mergeRoutePolicies(
   ...policies: Array<RoutePolicy | false | undefined>
 ) {
-  return policies.reduce<RoutePolicy>((merged, policy) => {
+  const merged = policies.reduce<RoutePolicy>((result, policy) => {
     if (!policy) {
-      return merged;
+      return result;
     }
 
     return {
-      document: mergeSecurityPolicies(merged.document, policy.document),
-      security: mergeRouteSecurityPolicies(merged.security, policy.security),
+      document: mergeSecurityPolicies(result.document, policy.document),
+      security: mergeRouteSecurityPolicies(result.security, policy.security),
     };
   }, {});
+
+  return {
+    ...merged,
+    document: applyScriptNeeds(merged.document, merged.security?.needs?.script),
+  };
 }
 
 export function mergeRouteSecurityPolicies(
@@ -156,10 +161,59 @@ export function mergeRouteSecurityPolicies(
 
     return {
       csrf: policy.csrf ?? merged.csrf,
+      needs: mergeRouteNeeds(merged.needs, policy.needs),
       rateLimit: policy.rateLimit ?? merged.rateLimit,
       request: mergeObject(merged.request, policy.request),
     };
   }, {});
+}
+
+function mergeRouteNeeds(
+  base: RouteSecurityPolicy["needs"],
+  override: RouteSecurityPolicy["needs"],
+) {
+  const scripts = [...new Set([
+    ...(base?.script ?? []),
+    ...(override?.script ?? []),
+  ])];
+
+  return scripts.length > 0 ? { script: scripts } : undefined;
+}
+
+function applyScriptNeeds(
+  document: SecurityPolicy | undefined,
+  sources: readonly string[] | undefined,
+) {
+  if (!document?.csp || !sources || sources.length === 0) {
+    return document;
+  }
+
+  if (
+    document.csp.scriptSrc === undefined &&
+    document.csp.defaultSrc === undefined
+  ) {
+    return document;
+  }
+
+  const useDefault = document.csp.scriptSrc === false;
+  const directive = useDefault || document.csp.scriptSrc === undefined
+    ? document.csp.defaultSrc
+    : document.csp.scriptSrc;
+  const current = resolveCspDirectiveValue(directive) ?? [];
+
+  if (!Array.isArray(current)) {
+    return document;
+  }
+
+  return {
+    ...document,
+    csp: {
+      ...document.csp,
+      [useDefault ? "defaultSrc" : "scriptSrc"]: [
+        ...new Set([...current, ...sources]),
+      ],
+    },
+  };
 }
 
 export async function cspHash(

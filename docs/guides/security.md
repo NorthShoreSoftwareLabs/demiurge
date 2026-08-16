@@ -69,6 +69,38 @@ Trusted Types is explicit because enabling enforcement can break third-party
 code in browsers the application does not control. Report-only policy can send
 violations to `createSecurityReportHandler(...)` before enforcement is enabled.
 
+## Managed scripts
+
+Use `<Script />` when a component conditionally needs an external script:
+
+```tsx
+import { Script } from "@demiurgejs/core";
+
+export function PaymentForm() {
+  return <Script src="https://js.stripe.com/v3/" strategy="afterInteractive" />;
+}
+```
+
+Declare each conditional origin in the route policy:
+
+```ts
+export const policy = {
+  security: {
+    needs: { script: ["https://js.stripe.com"] },
+  },
+};
+```
+
+`security.needs.script` merges from the root to the leaf. The framework keeps
+the first declaration for each source. A static `export const scripts` entry
+therefore takes precedence over a managed component with the same source.
+
+The framework hoists managed scripts found before the document head flushes.
+It renders scripts found after the flush at their component position. In
+development, a late `beforeInteractive` script fails and points to
+`export const scripts`. In production, the framework renders that script in
+place after the flush, so the strategy cannot provide an early-load guarantee.
+
 ## CSRF
 
 Cookie-authenticated unsafe methods receive double-submit CSRF protection by

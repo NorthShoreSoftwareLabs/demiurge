@@ -15,6 +15,10 @@ import {
   HYDRATION_ROOT_ATTRIBUTE,
   renderDocument,
 } from "../../src/document";
+import {
+  createScriptRenderContext,
+  scriptPlacement,
+} from "../../src/document/scripts";
 
 describe("renderDocument static shell", () => {
   it("renders an empty root with no bootstrap data when no body is given", () => {
@@ -171,6 +175,23 @@ describe("renderDocument head metadata", () => {
 });
 
 describe("renderDocument resource hints and static scripts", () => {
+  it("renders pre-flush managed scripts in the document head", () => {
+    const context = createScriptRenderContext({ nonce: "doc-nonce" });
+    const managed = script({ src: "https://cdn.example.com/early.js" });
+    context.register(managed);
+
+    const html = renderDocument({
+      nonce: "doc-nonce",
+      scripts: context.scripts(),
+    });
+
+    expect(html.indexOf("<script src=\"https://cdn.example.com/early.js\"")
+      < html.indexOf("</head>"))
+      .toBe(true);
+    expect(html).toContain('data-demiurge-script-placement="hoisted"');
+    expect(context.scripts()[0]?.[scriptPlacement]).toBe("hoisted");
+  });
+
   it("renders resource-hint links and static script tags with a shared nonce", () => {
     const html = renderDocument({
       links: [

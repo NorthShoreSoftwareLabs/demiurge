@@ -39,6 +39,7 @@ export {
   renderRobots,
   renderSitemap,
   script,
+  Script,
   structuredData,
 } from "./document";
 export { href } from "./routing";
@@ -172,6 +173,7 @@ export type {
   PreconnectOptions,
   PreloadOptions,
   ScriptContribution,
+  ScriptProps,
   ScriptStrategy,
   ScriptTag,
   Sitemap,

@@ -15,6 +15,7 @@ import type {
   RouteModule,
 } from "../route";
 import { validateCorsPolicy } from "./cors";
+import { createSecurityAudit } from "./audit";
 import {
   createSecurityHeaders,
   mergeRoutePolicies,
@@ -175,6 +176,19 @@ function validatePagePolicies(
       page.render.mode,
       effectivePolicy.document,
     );
+    validateStaticRouteScripts(
+      route.file,
+      "GET",
+      effectivePolicy,
+      [
+        ...manifest.layouts
+          .filter((layout) =>
+            isAttachedFileForRoute(layout.fileSegments, route.fileSegments)
+          )
+          .map((layout) => modules[layout.file]?.scripts),
+        routeModule.scripts,
+      ],
+    );
   }
 
   const fallbacks = [
@@ -200,6 +214,55 @@ function validatePagePolicies(
       adapter,
     );
   }
+}
+
+function validateStaticRouteScripts(
+  file: string,
+  exportName: HttpMethod,
+  effectivePolicy: ReturnType<typeof mergeRoutePolicies>,
+  contributions: readonly (RouteModule["scripts"] | undefined)[],
+) {
+  const scripts = contributions.flatMap((contribution) =>
+    Array.isArray(contribution) ? contribution : []
+  );
+
+  if (scripts.length === 0 || !effectivePolicy.document) {
+    return;
+  }
+
+  const nonce = "startup-verification-nonce";
+  const audit = createSecurityAudit({
+    document: {
+      headers: { nonce },
+      policy: effectivePolicy.document,
+      scripts: scripts.map((script) => ({
+        ...script,
+        nonce: securityPolicyRequiresNonce(effectivePolicy.document)
+          ? nonce
+          : script.nonce,
+      })),
+    },
+  });
+  const blocked = audit.findings.find((finding) =>
+    finding.code === "csp-script-src-blocked"
+  );
+
+  if (!blocked) {
+    return;
+  }
+
+  const script = scripts.find((candidate) =>
+    blocked.message.includes(candidate.src)
+  );
+  const csp = createSecurityHeaders(effectivePolicy.document, { nonce })
+    .get("content-security-policy") ?? "";
+  const scriptDirective = csp.split("; ").find((directive) =>
+    directive.startsWith("script-src ")
+  ) ?? "default-src (script-src fallback)";
+
+  throw new Error(
+    `Route ${JSON.stringify(file)} export ${exportName} declares script ${JSON.stringify(script?.src)} that violates the effective ${scriptDirective} policy.`,
+  );
 }
 
 function validateEffectiveDocument(
