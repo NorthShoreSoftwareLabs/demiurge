@@ -9,6 +9,7 @@ import {
 } from "../router";
 import type {
   HttpMethod,
+  PageRenderMode,
   ResponseCapability,
   RouteCapability,
   RouteModule,
@@ -20,6 +21,7 @@ import {
   securityPolicyRequiresNonce,
 } from "./policy";
 import { validateRateLimitPolicy } from "./rate-limit";
+import type { ContentSecurityPolicy, CspDirectiveValue } from "./types";
 
 export type RouteModuleVerificationOptions = {
   adapter?: Adapter;
@@ -168,6 +170,11 @@ function validatePagePolicies(
     );
 
     validateEffectiveDocument(route.file, "GET", effectivePolicy, adapter);
+    validateRenderModePolicy(
+      route.file,
+      page.render.mode,
+      effectivePolicy.document,
+    );
   }
 
   const fallbacks = [
@@ -214,6 +221,115 @@ function validateEffectiveDocument(
   validateWithContext(file, exportName, "effective CSP", () => {
     assertAdapterCapabilities(adapter, ["nonceInjection"]);
   });
+}
+
+function validateRenderModePolicy(
+  file: string,
+  mode: PageRenderMode,
+  policy: ReturnType<typeof mergeRoutePolicies>["document"],
+) {
+  if (mode === "static") {
+    const nonceDirective = findNonceDirective(policy?.csp);
+
+    if (nonceDirective) {
+      throw new Error(
+        `Route ${JSON.stringify(file)} uses render mode "static" with an effective ${nonceDirective} directive that depends on a CSP nonce. Use security.static() for static output or remove the nonce source from the document policy.`,
+      );
+    }
+
+    return;
+  }
+
+  if (mode !== "streaming") {
+    return;
+  }
+
+  const scriptPolicy = findEffectiveScriptPolicy(policy?.csp);
+
+  if (!scriptPolicy || allowsStreamingInlineScripts(scriptPolicy.sources)) {
+    return;
+  }
+
+  throw new Error(
+    `Route ${JSON.stringify(file)} uses render mode "streaming" with an effective ${scriptPolicy.name} directive that does not allow React runtime inline payload scripts. Add a nonce placeholder or allow 'unsafe-inline' without nonce or hash sources.`,
+  );
+}
+
+function findNonceDirective(policy: ContentSecurityPolicy | false | undefined) {
+  if (!policy) {
+    return undefined;
+  }
+
+  for (const [name, value] of Object.entries(policy)) {
+    const sources = resolveCspDirectiveValue(value as CspDirectiveValue);
+
+    if (
+      Array.isArray(sources) &&
+      sources.some((source) => isNonceSource(source))
+    ) {
+      return toCspDirectiveName(name);
+    }
+  }
+
+  return undefined;
+}
+
+function findEffectiveScriptPolicy(policy: ContentSecurityPolicy | false | undefined) {
+  if (!policy) {
+    return undefined;
+  }
+
+  const scriptSources = resolveCspDirectiveValue(policy.scriptSrc);
+
+  if (Array.isArray(scriptSources)) {
+    return { name: "script-src", sources: scriptSources };
+  }
+
+  const defaultSources = resolveCspDirectiveValue(policy.defaultSrc);
+
+  if (Array.isArray(defaultSources)) {
+    return { name: "default-src", sources: defaultSources };
+  }
+
+  return undefined;
+}
+
+function allowsStreamingInlineScripts(sources: readonly string[]) {
+  if (sources.some((source) => isNoncePlaceholder(source))) {
+    return true;
+  }
+
+  return sources.includes("'unsafe-inline'") &&
+    !sources.some((source) => isNonceOrHashSource(source));
+}
+
+function isNonceSource(source: string) {
+  return isNoncePlaceholder(source) || /^'nonce-[^']*'$/i.test(source);
+}
+
+function isNoncePlaceholder(source: string) {
+  return source.includes("{nonce}");
+}
+
+function isNonceOrHashSource(source: string) {
+  return /^'(?:nonce-|sha256-|sha384-|sha512-)/i.test(source);
+}
+
+function resolveCspDirectiveValue(value: CspDirectiveValue | undefined) {
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    "replace" in value
+  ) {
+    return value.replace;
+  }
+
+  return value;
+}
+
+function toCspDirectiveName(name: string) {
+  return name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 }
 
 function validateWithContext(
