@@ -1,3 +1,4 @@
+import { PassThrough } from "node:stream";
 import { Suspense, use } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -9,6 +10,7 @@ import {
   type RouteModule,
 } from "@demiurgejs/core";
 import { renderNodePageResponse } from "@demiurgejs/core/node";
+import { toWebReadableStream } from "../../src/node/streaming";
 
 function routeModule(module: RouteModule) {
   return vi.fn(async () => module);
@@ -440,5 +442,32 @@ describe("streaming page responses", () => {
       }),
       { pathname: "/", site: "page" },
     );
+  });
+});
+
+describe("the Node stream to web stream adapter", () => {
+  it("propagates an underlying stream error to the web stream reader", async () => {
+    const source = new PassThrough();
+    const webStream = toWebReadableStream(source);
+    const reader = webStream.getReader();
+
+    source.destroy(new Error("stream source failed"));
+
+    await expect(reader.read()).rejects.toThrow("stream source failed");
+  });
+
+  it("drops data delivered after the reader cancels", async () => {
+    const source = new PassThrough();
+    const webStream = toWebReadableStream(source);
+    const reader = webStream.getReader();
+
+    source.write("before-cancel");
+    await reader.read();
+
+    await reader.cancel("no longer needed");
+    source.write("after-cancel");
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(source.destroyed).toBe(true);
   });
 });

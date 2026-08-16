@@ -113,7 +113,7 @@ export async function renderStreamingPageResponse(
   });
 }
 
-function toWebReadableStream(stream: Transform) {
+export function toWebReadableStream(stream: Transform) {
   let closed = false;
   let removeListeners = () => {};
 
