@@ -1,0 +1,65 @@
+:root {
+  color: #172033;
+  background: #fffaf4;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+}
+
+.shell {
+  width: min(52rem, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid #e5d8c6;
+}
+
+nav {
+  display: flex;
+  gap: 1rem;
+}
+
+a {
+  color: inherit;
+}
+
+.brand {
+  font-weight: 800;
+  text-decoration: none;
+}
+
+main {
+  padding: 4rem 0;
+}
+
+h1 {
+  max-width: 18ch;
+  font-size: clamp(2.25rem, 7vw, 4.75rem);
+  line-height: 1.05;
+}
+
+.eyebrow {
+  color: #9b3f2f;
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.button {
+  display: inline-block;
+  padding: 0.7rem 1rem;
+  border: 1px solid #202124;
+  border-radius: 4px;
+  background: #202124;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}

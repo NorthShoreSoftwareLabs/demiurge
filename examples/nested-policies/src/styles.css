@@ -1,0 +1,31 @@
+:root {
+  color: #172033;
+  background: #f4f7fb;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.shell {
+  width: min(52rem, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+nav {
+  display: flex;
+  gap: 1rem;
+}
+
+main {
+  padding: 4rem 0;
+}
