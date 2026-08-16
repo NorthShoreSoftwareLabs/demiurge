@@ -180,6 +180,119 @@ describe("static route policy verification", () => {
       .toThrow(/invalid effective CSP policy.*nonceInjection/);
   });
 
+  it("rejects nonce-backed directives for static pages", () => {
+    const modules = {
+      "./routes/@policy.ts": {
+        policy: defineRoutePolicy({
+          document: { csp: { scriptSrc: ["'nonce-{nonce}'"] } },
+        }),
+      },
+      "./routes/index.tsx": {
+        GET: page({ render: { mode: "static" }, view: View }),
+      },
+    } satisfies Record<string, RouteModule>;
+
+    expect(() => validateRouteModules(modules)).toThrow(
+      'Route "./routes/index.tsx" uses render mode "static" with an effective script-src directive that depends on a CSP nonce. Use security.static() for static output or remove the nonce source from the document policy.',
+    );
+  });
+
+  it("accepts static pages when a child replacement removes inherited nonce sources", () => {
+    const modules = {
+      "./routes/@policy.ts": {
+        policy: defineRoutePolicy({
+          document: { csp: { scriptSrc: ["'nonce-{nonce}'"] } },
+        }),
+      },
+      "./routes/index.tsx": {
+        GET: page({
+          render: { mode: "static" },
+          view: View,
+        }),
+        policy: defineRoutePolicy({
+          document: { csp: { scriptSrc: { replace: ["'self'"] } } },
+        }),
+      },
+    } satisfies Record<string, RouteModule>;
+
+    expect(() => validateRouteModules(modules)).not.toThrow();
+  });
+
+  it("uses default-src when streaming has no script-src directive", () => {
+    const modules = {
+      "./routes/@policy.ts": {
+        policy: defineRoutePolicy({
+          document: { csp: { defaultSrc: ["'self'"] } },
+        }),
+      },
+      "./routes/index.tsx": {
+        GET: page({ render: { mode: "streaming" }, view: View }),
+      },
+    } satisfies Record<string, RouteModule>;
+
+    expect(() => validateRouteModules(modules)).toThrow(
+      'Route "./routes/index.tsx" uses render mode "streaming" with an effective default-src directive that does not allow React runtime inline payload scripts.',
+    );
+  });
+
+  it("accepts streaming pages without an effective script directive", () => {
+    const modules = {
+      "./routes/index.tsx": {
+        GET: page({ render: { mode: "streaming" }, view: View }),
+        policy: defineRoutePolicy({
+          document: { csp: { imgSrc: ["'self'"] } },
+        }),
+      },
+    } satisfies Record<string, RouteModule>;
+
+    expect(() => validateRouteModules(modules)).not.toThrow();
+  });
+
+  it("does not treat unsafe-inline as effective when a hash source is present", () => {
+    const modules = {
+      "./routes/index.tsx": {
+        GET: page({ render: { mode: "streaming" }, view: View }),
+        policy: defineRoutePolicy({
+          document: {
+            csp: {
+              scriptSrc: ["'unsafe-inline'", "'sha256-example'"],
+            },
+          },
+        }),
+      },
+    } satisfies Record<string, RouteModule>;
+
+    expect(() => validateRouteModules(modules)).toThrow(
+      /render mode "streaming" with an effective script-src directive.*nonce or hash sources/,
+    );
+  });
+
+  it("accepts an effective unsafe-inline policy for streaming pages", () => {
+    const modules = {
+      "./routes/index.tsx": {
+        GET: page({ render: { mode: "streaming" }, view: View }),
+        policy: defineRoutePolicy({
+          document: { csp: { scriptSrc: ["'unsafe-inline'"] } },
+        }),
+      },
+    } satisfies Record<string, RouteModule>;
+
+    expect(() => validateRouteModules(modules)).not.toThrow();
+  });
+
+  it("accepts a strict nonce placeholder for streaming pages", () => {
+    const modules = {
+      "./routes/@policy.ts": {
+        policy: defineRoutePolicy({ document: security.strict() }),
+      },
+      "./routes/index.tsx": {
+        GET: page({ render: { mode: "streaming" }, view: View }),
+      },
+    } satisfies Record<string, RouteModule>;
+
+    expect(() => validateRouteModules(modules)).not.toThrow();
+  });
+
   it("does not let a page override hide fallback adapter requirements", () => {
     const staticAdapter = defineAdapter({ name: "static" });
     const modules = {
