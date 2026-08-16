@@ -116,6 +116,12 @@ export function Script(props: ScriptProps): ReactNode {
   const scriptTag = script(props);
 
   if (!context) {
+    if (typeof document === "undefined") {
+      throw new Error(
+        `The script ${JSON.stringify(scriptTag.src)} rendered outside a Demiurge document render context. A server render must wrap its component tree with the script render context.`,
+      );
+    }
+
     if (hasExistingScript(scriptTag.src)) {
       return null;
     }

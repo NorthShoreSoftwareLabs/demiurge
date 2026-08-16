@@ -1,6 +1,7 @@
 import { createElement, type ComponentType } from "react";
 import { renderToString } from "react-dom/server";
 import { renderDocument } from "../document";
+import { createScriptRenderContext, withScriptContext } from "../document/scripts";
 import { loadErrorFallback, type RouteManifest } from "../router";
 import type { RouteErrorProps } from "../route";
 import { isHttpError, type HttpErrorStatus } from "../route/http-error";
@@ -128,8 +129,15 @@ async function renderErrorDocument(
   options: ErrorRenderOptions,
 ) {
   const Error = await resolveErrorComponent(manifest, pathname, options);
+  const scripts = createScriptRenderContext({
+    dev: options.dev,
+    nonce: options.nonce,
+  });
   const html = renderToString(
-    createElement(Error, { error, pathname, status: errorStatus(error) }),
+    withScriptContext(
+      scripts,
+      createElement(Error, { error, pathname, status: errorStatus(error) }),
+    ),
   );
 
   return renderDocument({
@@ -137,6 +145,7 @@ async function renderErrorDocument(
     entrySrc: options.clientEntry,
     lang: options.lang,
     nonce: options.nonce,
+    scripts: scripts.scripts(),
     styles: options.styles,
     title: options.title,
   });

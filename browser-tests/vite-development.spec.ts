@@ -136,10 +136,18 @@ test("Vite development streams and hydrates a late managed script", async ({
     "data-demiurge-script-placement",
     "in-place",
   );
-  await expectViteRuntime(
-    page,
-    (await response?.allHeaders())?.["content-security-policy"],
+  await expect.poll(() =>
+    page.evaluate(() =>
+      document.documentElement.dataset.streamedConditionalRan
+    )
+  ).toBe("true");
+  const csp = (await response?.allHeaders())?.["content-security-policy"];
+  const streamedScriptNonce = await streamedScript.evaluate((element) =>
+    (element as HTMLScriptElement).nonce
   );
+  expect(streamedScriptNonce).not.toBe("");
+  expect(csp).toContain(`'nonce-${streamedScriptNonce}'`);
+  await expectViteRuntime(page, csp);
   expect(pageErrors).toEqual([]);
   expect(cspMonitor).toEqual([]);
 });

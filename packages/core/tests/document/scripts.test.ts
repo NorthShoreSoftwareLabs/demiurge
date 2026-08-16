@@ -1,7 +1,10 @@
+import { createElement } from "react";
+import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   defineScripts,
   resolveScripts,
+  Script,
   script,
 } from "@demiurgejs/core";
 import type { HttpRouteContext } from "@demiurgejs/core";
@@ -248,6 +251,16 @@ describe("document scripts", () => {
     });
 
     await expect(resolveScripts([scripts], context)).resolves.toEqual([]);
+  });
+
+  it("rejects a server render that reaches Script without a script render context", () => {
+    expect(() =>
+      renderToString(
+        createElement(Script, { src: "https://cdn.example.com/no-context.js" }),
+      )
+    ).toThrow(
+      'The script "https://cdn.example.com/no-context.js" rendered outside a Demiurge document render context.',
+    );
   });
 
   it("propagates a rejection when a contribution function throws", async () => {
