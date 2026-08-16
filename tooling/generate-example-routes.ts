@@ -9,6 +9,8 @@ const examples = [
   "runtime-server-data",
   "app-owned-fallbacks",
   "static-export",
+  "nested-policies",
+  "metadata-blog",
 ];
 
 for (const example of examples) {
