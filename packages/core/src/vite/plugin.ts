@@ -644,7 +644,10 @@ function createViteConfig(
       },
     },
     ...(environment.command === "serve"
-      ? { html: { cspNonce: viteNoncePlaceholder } }
+      ? {
+          html: { cspNonce: viteNoncePlaceholder },
+          ssr: { external: [PACKAGE_NAME] },
+        }
       : {}),
   };
 }

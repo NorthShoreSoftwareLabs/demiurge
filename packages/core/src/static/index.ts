@@ -639,8 +639,18 @@ async function validateInlineElements(
   }
 
   for (const element of findRawTextElements(html, tagName)) {
-    if (tagName === "script" && /(?:^|\s)src\s*=/i.test(element.attributes)) {
-      continue;
+    if (tagName === "script") {
+      const src = readHtmlAttribute(element.attributes, "src");
+
+      if (src) {
+        if (!allowsStaticScriptSource(sources, src)) {
+          throw new Error(
+            `Static output for ${JSON.stringify(pathname)} contains script ${JSON.stringify(src)} that the effective script-src directive does not allow. Add its origin to security.needs.script or the route CSP policy.`,
+          );
+        }
+
+        continue;
+      }
     }
 
     if (!element.content) {
@@ -655,6 +665,86 @@ async function validateInlineElements(
       );
     }
   }
+}
+
+function readHtmlAttribute(attributes: string, name: string) {
+  const match = attributes.match(
+    new RegExp(`(?:^|\\s)${name}\\s*=\\s*["']([^"']+)["']`, "i"),
+  );
+
+  return match?.[1]?.replaceAll("&amp;", "&");
+}
+
+function allowsStaticScriptSource(
+  sources: string[] | undefined,
+  src: string,
+) {
+  if (!sources) {
+    return true;
+  }
+
+  if (sources.includes("'none'")) {
+    return false;
+  }
+
+  if (
+    sources.includes("'strict-dynamic'") &&
+    sources.some((source) =>
+      source.startsWith("'nonce-") || /^'sha(?:256|384|512)-/.test(source)
+    )
+  ) {
+    return false;
+  }
+
+  if (sources.includes("*")) {
+    return true;
+  }
+
+  if (sources.includes("'self'") && src.startsWith("/") && !src.startsWith("//")) {
+    return true;
+  }
+
+  if (src.startsWith("https:") && sources.includes("https:")) {
+    return true;
+  }
+
+  if (src.startsWith("http:") && sources.includes("http:")) {
+    return true;
+  }
+
+  let scriptUrl: URL;
+  try {
+    scriptUrl = new URL(src, "https://demiurge.invalid");
+  } catch {
+    return false;
+  }
+
+  return sources.some((source) => {
+    if (source.startsWith("'")) {
+      return false;
+    }
+
+    let sourceUrl: URL;
+    try {
+      sourceUrl = new URL(source);
+    } catch {
+      return false;
+    }
+
+    const hostnameMatches = sourceUrl.hostname.startsWith("*.")
+      ? scriptUrl.hostname.endsWith(sourceUrl.hostname.slice(1)) &&
+        scriptUrl.hostname !== sourceUrl.hostname.slice(2)
+      : scriptUrl.hostname === sourceUrl.hostname;
+    const pathMatches = sourceUrl.pathname === "/" ||
+      sourceUrl.pathname.endsWith("/")
+      ? scriptUrl.pathname.startsWith(sourceUrl.pathname)
+      : scriptUrl.pathname === sourceUrl.pathname;
+
+    return scriptUrl.protocol === sourceUrl.protocol &&
+      hostnameMatches &&
+      scriptUrl.port === sourceUrl.port &&
+      pathMatches;
+  });
 }
 
 function findRawTextElements(html: string, tagName: "script" | "style") {

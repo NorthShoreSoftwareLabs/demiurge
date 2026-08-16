@@ -368,6 +368,7 @@ async function handleMatchedRoute(
 
           return await renderPage(match.match, {
             ...options.ssr,
+            dev: options.dev,
             nonce,
             onStreamError: (error) => {
               options.onError?.(error, {

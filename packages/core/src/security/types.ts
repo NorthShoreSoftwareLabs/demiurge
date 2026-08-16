@@ -144,6 +144,9 @@ export type RateLimitStore = {
 
 export type RouteSecurityPolicy = {
   csrf?: CsrfPolicy;
+  needs?: {
+    script?: readonly CspSource[];
+  };
   rateLimit?: RateLimitPolicy;
   request?: RequestSecurityPolicy;
 };

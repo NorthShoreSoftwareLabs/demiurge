@@ -1,10 +1,18 @@
+import { createElement } from "react";
+import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   defineScripts,
   resolveScripts,
+  Script,
   script,
 } from "@demiurgejs/core";
 import type { HttpRouteContext } from "@demiurgejs/core";
+import type { ScriptProps } from "@demiurgejs/core";
+import {
+  createScriptRenderContext,
+  scriptPlacement,
+} from "../../src/document/scripts";
 
 const context = {
   context: {},
@@ -14,6 +22,13 @@ const context = {
   search: new URLSearchParams("payment=true"),
   url: new URL("https://example.test/checkout?payment=true"),
 } satisfies HttpRouteContext;
+
+const managedScriptWithOverride: ScriptProps = {
+  // @ts-expect-error Managed scripts receive the document nonce.
+  nonce: "override",
+  src: "https://cdn.example.com/app.js",
+};
+void managedScriptWithOverride;
 
 describe("document scripts", () => {
   it("defines static script contributions with a default strategy", async () => {
@@ -99,6 +114,54 @@ describe("document scripts", () => {
         strategy: "afterInteractive",
       },
     ]);
+  });
+
+  it("gives a static script precedence over a managed script with the same source", () => {
+    const staticScript = script({
+      id: "declared",
+      src: "https://cdn.example.com/app.js",
+      strategy: "beforeInteractive",
+    });
+    const context = createScriptRenderContext({ scripts: [staticScript] });
+
+    expect(context.register(script({
+      async: true,
+      src: staticScript.src,
+      strategy: "afterInteractive",
+    }))).toBe("skip");
+    expect(context.scripts()).toEqual([staticScript]);
+  });
+
+  it("hoists early managed scripts and renders late scripts in place", () => {
+    const context = createScriptRenderContext({ dev: true });
+    const early = script({ src: "https://cdn.example.com/early.js" });
+
+    expect(context.register(early)).toBe("hoist");
+    expect(context.scripts()).toEqual([
+      { ...early, [scriptPlacement]: "hoisted" },
+    ]);
+  });
+
+  it("reports a late beforeInteractive script in development", () => {
+    const context = createScriptRenderContext({ dev: true });
+    context.flushHead();
+
+    expect(() => context.register(script({
+      src: "https://cdn.example.com/late.js",
+      strategy: "beforeInteractive",
+    }))).toThrow(
+      'Declare it in export const scripts.',
+    );
+  });
+
+  it("renders a late beforeInteractive script in production", () => {
+    const context = createScriptRenderContext();
+    context.flushHead();
+
+    expect(context.register(script({
+      src: "https://cdn.example.com/late.js",
+      strategy: "beforeInteractive",
+    }))).toBe("render");
   });
 
   it("orders the supported strategies beforeInteractive, module, then afterInteractive", async () => {
@@ -188,6 +251,16 @@ describe("document scripts", () => {
     });
 
     await expect(resolveScripts([scripts], context)).resolves.toEqual([]);
+  });
+
+  it("rejects a server render that reaches Script without a script render context", () => {
+    expect(() =>
+      renderToString(
+        createElement(Script, { src: "https://cdn.example.com/no-context.js" }),
+      )
+    ).toThrow(
+      'The script "https://cdn.example.com/no-context.js" rendered outside a Demiurge document render context.',
+    );
   });
 
   it("propagates a rejection when a contribution function throws", async () => {

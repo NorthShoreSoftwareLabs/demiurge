@@ -10,7 +10,7 @@ import type {
   ResolvedMetadata,
   StructuredDataTag,
 } from "./metadata";
-import type { ScriptTag } from "./scripts";
+import { scriptPlacement, type ScriptTag } from "./scripts";
 
 export const STRUCTURED_DATA_ATTRIBUTE = "data-demiurge-structured-data";
 
@@ -61,7 +61,9 @@ export function renderDocumentShell({
 }: RenderDocumentShellOptions) {
   const documentTitle = metadata?.title ?? title;
   const trailingBodyContent = [
-    ...scripts.map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`),
+    ...scripts
+      .filter((scriptTag) => scriptTag[scriptPlacement] !== "hoisted")
+      .map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`),
     renderBootstrapData(body.data, body.navigation),
     ...(entrySrc ? [renderEntryScript(entrySrc, nonce)] : []),
   ].join("\n");
@@ -70,7 +72,7 @@ export function renderDocumentShell({
     prefix: `<!doctype html>
 <html lang="${escapeHtml(lang)}">
   <head>
-${renderHeadTags({ links, metadata, nonce, styles, title: documentTitle })}
+${renderHeadTags({ links, metadata, nonce, scripts, styles, title: documentTitle })}
   </head>
   <body>
 ${renderRootStart(body)}`,
@@ -95,14 +97,16 @@ function renderDocumentWithoutBody({
   const documentTitle = metadata?.title ?? title;
   const bodyContent = [
     renderRootElement(),
-    ...scripts.map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`),
+    ...scripts
+      .filter((scriptTag) => scriptTag[scriptPlacement] !== "hoisted")
+      .map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`),
     ...(entrySrc ? [renderEntryScript(entrySrc, nonce)] : []),
   ].join("\n");
 
   return `<!doctype html>
 <html lang="${escapeHtml(lang)}">
   <head>
-${renderHeadTags({ links, metadata, nonce, styles, title: documentTitle })}
+${renderHeadTags({ links, metadata, nonce, scripts, styles, title: documentTitle })}
   </head>
   <body>
 ${bodyContent}
@@ -139,12 +143,14 @@ function renderHeadTags({
   links,
   metadata,
   nonce,
+  scripts,
   styles,
   title,
 }: {
   links: LinkTag[];
   metadata: ResolvedMetadata | undefined;
   nonce: string | undefined;
+  scripts: ScriptTag[];
   styles: string[];
   title: string;
 }) {
@@ -188,6 +194,9 @@ function renderHeadTags({
       (href) => `    <link rel="stylesheet" href="${escapeHtml(href)}" />`,
     ),
     ...links.map(renderLinkTag),
+    ...scripts
+      .filter((scriptTag) => scriptTag[scriptPlacement] === "hoisted")
+      .map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`),
   ].join("\n");
 }
 
@@ -273,7 +282,7 @@ function renderLinkTag(tag: LinkTag) {
 }
 
 function renderScriptTag(scriptTag: ScriptTag, nonce: string | undefined) {
-  return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("src", scriptTag.src)}${renderAttribute("type", scriptTag.type ?? scriptTypeForStrategy(scriptTag.strategy))}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderAttribute("data-api", scriptTag.dataApi)}${renderAttribute("data-domain", scriptTag.dataDomain)}${renderBooleanAttribute("async", scriptTag.async)}${renderBooleanAttribute("defer", scriptTag.defer)}></script>`;
+  return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("src", scriptTag.src)}${renderAttribute("type", scriptTag.type ?? scriptTypeForStrategy(scriptTag.strategy))}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderAttribute("data-api", scriptTag.dataApi)}${renderAttribute("data-domain", scriptTag.dataDomain)}${renderAttribute("data-demiurge-script-placement", scriptTag[scriptPlacement])}${renderBooleanAttribute("async", scriptTag.async)}${renderBooleanAttribute("defer", scriptTag.defer)}></script>`;
 }
 
 function scriptTypeForStrategy(strategy: ScriptTag["strategy"]) {

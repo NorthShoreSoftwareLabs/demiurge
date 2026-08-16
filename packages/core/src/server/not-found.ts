@@ -1,6 +1,7 @@
 import { createElement, type ComponentType, type ReactNode } from "react";
 import { renderToString } from "react-dom/server";
 import { renderDocument } from "../document";
+import { createScriptRenderContext, withScriptContext } from "../document/scripts";
 import {
   findPoliciesForPath,
   loadNotFoundMatch,
@@ -121,18 +122,23 @@ function renderAttempt(
       }),
     createElement(NotFound, { pathname: match.pathname }),
   );
+  const scripts = createScriptRenderContext({
+    dev: options.dev,
+    nonce: options.nonce,
+  });
 
   return renderDocument({
     body: {
       data: undefined,
       fallback: "not-found",
-      html: renderToString(content),
+      html: renderToString(withScriptContext(scripts, content)),
       navigation: options.navigation,
     },
     entrySrc: options.clientEntry,
     lang: options.lang,
     metadata: match.metadata,
     nonce: options.nonce,
+    scripts: scripts.scripts(),
     styles: options.styles,
     title: options.title,
   });
