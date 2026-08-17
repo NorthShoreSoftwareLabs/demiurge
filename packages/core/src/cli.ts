@@ -7,6 +7,7 @@ import {
   generateVercelStaticOutput,
   generateStaticOutput,
   type GenerateStaticOutputOptions,
+  type StaticFileHeaderPatternRule,
   type StaticOutputManifest,
   type VercelStaticDeployment,
 } from "./static";
@@ -165,6 +166,7 @@ export async function buildStaticSite(
     outDir,
     routes: serverEntry.routes,
     ssr: clientManifest,
+    staticFileHeaders: findStaticFileHeaderPatterns(config.plugins),
   });
 
   const deployment = findVercelStaticDeployment(config.plugins);
@@ -267,16 +269,28 @@ function isRouteImporterRecord(
 function findVercelStaticDeployment(
   plugins: ReadonlyArray<{ api?: unknown; name: string }> | undefined,
 ): VercelStaticDeployment | undefined {
-  const api = plugins
+  return findDemiurgePluginApi(plugins)?.staticDeployment;
+}
+
+function findStaticFileHeaderPatterns(
+  plugins: ReadonlyArray<{ api?: unknown; name: string }> | undefined,
+): readonly StaticFileHeaderPatternRule[] {
+  return findDemiurgePluginApi(plugins)?.staticFileHeaders ?? [];
+}
+
+function findDemiurgePluginApi(
+  plugins: ReadonlyArray<{ api?: unknown; name: string }> | undefined,
+) {
+  return plugins
     ?.filter((plugin) => plugin.name === "demiurge")
     .map((plugin) => plugin.api)
     .find(isDemiurgePluginApi);
-  return api?.staticDeployment;
 }
 
 function isDemiurgePluginApi(value: unknown): value is {
   demiurge: true;
   staticDeployment?: VercelStaticDeployment;
+  staticFileHeaders?: readonly StaticFileHeaderPatternRule[];
 } {
   return Boolean(value) &&
     value !== null &&

@@ -121,6 +121,7 @@ describe("Demiurge CLI arguments", () => {
         clientEntry: "/assets/app.js",
         styles: ["/assets/app.css"],
       },
+      staticFileHeaders: [],
     });
     expect(result.outDir).toBe("/application/app/output");
   });

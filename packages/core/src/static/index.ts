@@ -22,8 +22,12 @@ import {
 } from "../server";
 import {
   createMemoryRateLimitStore,
+  createSecurityHeaders,
   cspHash,
+  mergeSecurityPolicies,
   validateRouteModules,
+  type SecurityHeaderPolicy,
+  type SecurityPolicy,
 } from "../security";
 import {
   CONTENT_HASHED_FILE_NAME_PATTERN,
@@ -74,12 +78,23 @@ export type StaticOutputFileHeaderRule = {
   pattern: string;
 };
 
+// A pattern rule declares the same typed `SecurityHeaderPolicy` as the root
+// and route policies. One header keeps one spelling in every place that
+// declares it. `pattern` is an ECMAScript regular expression tested against
+// the file basename, the same convention as the framework's built-in file
+// header rules.
+export type StaticFileHeaderPatternRule = {
+  headers: SecurityHeaderPolicy;
+  pattern: string;
+};
+
 export type GenerateStaticOutputOptions = {
   onError?: RequestErrorReporter;
   origin?: string;
   outDir: string;
   routes: Record<string, RouteImporter>;
   ssr?: SsrOptions;
+  staticFileHeaders?: readonly StaticFileHeaderPatternRule[];
 };
 
 type PendingOutput = StaticOutputEntry & {
@@ -197,7 +212,10 @@ export async function generateStaticOutput(
   const outputManifest: StaticOutputManifest = {
     adapter: "static",
     entries: pending.map(({ body: _body, ...entry }) => entry),
-    fileHeaderRules: createStaticFileHeaderRules(),
+    fileHeaderRules: await createStaticFileHeaderRules(
+      manifest,
+      options.staticFileHeaders ?? [],
+    ),
     version: 1,
   };
 
@@ -206,17 +224,70 @@ export async function generateStaticOutput(
   return outputManifest;
 }
 
-function createStaticFileHeaderRules(): StaticOutputFileHeaderRule[] {
+async function createStaticFileHeaderRules(
+  manifest: RouteManifest,
+  patternRules: readonly StaticFileHeaderPatternRule[],
+): Promise<StaticOutputFileHeaderRule[]> {
+  const baseline = await loadBaselineFileSecurityPolicy(manifest);
+  const baselineHeaders = renderStaticFileHeaders(baseline);
+
   return [
+    ...patternRules.map((rule) => {
+      assertValidFileHeaderPattern(rule.pattern);
+
+      return {
+        headers: renderStaticFileHeaders(
+          mergeSecurityPolicies(baseline, { headers: rule.headers }),
+        ),
+        pattern: rule.pattern,
+      };
+    }),
     {
-      headers: { "cache-control": IMMUTABLE_FILE_CACHE_CONTROL },
+      headers: {
+        ...baselineHeaders,
+        "cache-control": IMMUTABLE_FILE_CACHE_CONTROL,
+      },
       pattern: CONTENT_HASHED_FILE_NAME_PATTERN.source,
     },
     {
-      headers: { "cache-control": REVALIDATED_FILE_CACHE_CONTROL },
+      headers: {
+        ...baselineHeaders,
+        "cache-control": REVALIDATED_FILE_CACHE_CONTROL,
+      },
       pattern: ".*",
     },
   ];
+}
+
+// The baseline is the full document header set minus the Content Security
+// Policy. It derives from the root `@policy.ts` document policy, the same
+// declaration that governs route documents. CSP is excluded because the
+// framework cannot hash a file it did not render. Trusted Types is excluded
+// with it. A browser reads Trusted Types from the Content-Security-Policy
+// header only.
+async function loadBaselineFileSecurityPolicy(
+  manifest: RouteManifest,
+): Promise<SecurityPolicy> {
+  const rootPolicyRoute = manifest.policies.find(
+    (policy) => policy.fileSegments.length === 0,
+  );
+  const rootModule = await rootPolicyRoute?.load();
+
+  return { headers: rootModule?.policy?.document?.headers };
+}
+
+function renderStaticFileHeaders(policy: SecurityPolicy) {
+  return Object.fromEntries(createSecurityHeaders(policy, {}).entries());
+}
+
+function assertValidFileHeaderPattern(pattern: string) {
+  try {
+    new RegExp(pattern);
+  } catch {
+    throw new Error(
+      `Static file header pattern is not a valid regular expression: ${JSON.stringify(pattern)}.`,
+    );
+  }
 }
 
 function normalizeOrigin(value: string | undefined) {

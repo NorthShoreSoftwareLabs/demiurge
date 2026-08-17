@@ -45,7 +45,10 @@ import {
   verifyRoutePolicyFile,
   type StaticPolicyFinding,
 } from "./policy-verification";
-import type { VercelStaticDeployment } from "../static";
+import type {
+  StaticFileHeaderPatternRule,
+  VercelStaticDeployment,
+} from "../static";
 
 export type DemiurgeVitePluginOptions = {
   document?: {
@@ -55,6 +58,7 @@ export type DemiurgeVitePluginOptions = {
   routesDir?: string;
   static?: {
     deployment?: VercelStaticDeployment;
+    headers?: readonly StaticFileHeaderPatternRule[];
   };
   styles?: false | string;
   typedRoutes?: boolean | {
@@ -65,6 +69,7 @@ export type DemiurgeVitePluginOptions = {
 export type DemiurgeVitePluginApi = {
   demiurge: true;
   staticDeployment?: VercelStaticDeployment;
+  staticFileHeaders?: readonly StaticFileHeaderPatternRule[];
 };
 
 const CLIENT_ENTRY_ID = "virtual:demiurge/client-entry";
@@ -82,6 +87,7 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
     api: {
       demiurge: true,
       staticDeployment: options.static?.deployment,
+      staticFileHeaders: options.static?.headers,
     } satisfies DemiurgeVitePluginApi,
     enforce: "post",
     name: "demiurge",

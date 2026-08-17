@@ -141,6 +141,30 @@ Each `pattern` is an ECMAScript regular expression for the file basename.
 The first matching rule supplies the file headers. Content-hashed files use a
 one-year immutable policy. Other files use a revalidating policy.
 
+Every file rule also carries the security headers of the root document policy.
+The Content Security Policy is excluded because the framework cannot compute
+content hashes for a file it did not render. Trusted Types is excluded with it
+because a browser reads Trusted Types from the Content Security Policy header
+only.
+
+An application declares extra rules for its own file patterns:
+
+```ts
+demiurge({
+  static: {
+    headers: [
+      {
+        headers: { crossOriginResourcePolicy: "cross-origin" },
+        pattern: "\\.woff2$",
+      },
+    ],
+  },
+});
+```
+
+Each declared rule merges over the baseline set and is matched before the
+framework rules.
+
 The host must apply each route entry before it applies the file rules. The
 application controls caching for generated route entries through response
 headers. The host controls validators, range requests, compression, and its
