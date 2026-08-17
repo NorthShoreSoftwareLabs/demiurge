@@ -58,11 +58,18 @@ jobs:
           test "$object_type" = tag
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object_sha" --jq '.verification.verified')" = true
 
-      - name: Require a closed 0.1 milestone
+      - name: Require a closed milestone for this version
         env:
           GH_TOKEN: ${{ github.token }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.package-version }}
         run: |
-          open_p1=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label p1 --milestone "0.1.0 Production ready Node" --limit 100 --json number --jq length)
+          release_version=${PACKAGE_VERSION%%-*}
+          milestone=$(gh api "repos/$GITHUB_REPOSITORY/milestones?state=all&per_page=100" --jq "[.[] | select(.title | startswith(\"$release_version\"))] | .[0].title // \"\"")
+          if [ -z "$milestone" ]; then
+            echo "No milestone starts with $release_version." >&2
+            exit 1
+          fi
+          open_p1=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label p1 --milestone "$milestone" --limit 100 --json number --jq length)
           test "$open_p1" = 0
 
       - name: Refuse an unrelated npm package owner

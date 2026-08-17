@@ -273,11 +273,11 @@ Maintainers and contributors can also read the [architecture records](./architec
 
 ## Status
 
-Demiurge 0.1.0 is prepared on `main` but has not been published. Routing, SSR,
-streaming, static output, the Node adapter, the document pipeline, the cache,
-and the security presets are implemented and tested. The repository includes
-the `npm create demiurge` scaffold. React Server Components and edge adapters
-are not implemented.
+Demiurge 0.1.1 is published. Version 0.2.0 is prepared on `main` and is not
+published. Routing, SSR, streaming, static output, the Vercel build output, the
+Node adapter, the document pipeline, the cache, and the security presets are
+implemented and tested. The repository includes the `npm create demiurge`
+scaffold. React Server Components and edge adapters are not implemented.
 GitHub issues and milestones are the source of truth for delivery status.
 
 ## Working on the framework
