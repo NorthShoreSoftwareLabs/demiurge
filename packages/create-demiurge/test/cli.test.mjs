@@ -16,6 +16,12 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 
 const cli = resolve("bin/create-demiurge.mjs");
+const scaffoldVersion = readPackageVersion("package.json");
+const coreVersion = readPackageVersion("../core/package.json");
+
+function readPackageVersion(path) {
+  return JSON.parse(readFileSync(resolve(path), "utf8")).version;
+}
 
 function withScratch(run) {
   const scratch = mkdtempSync(join(tmpdir(), "create-demiurge-test-"));
@@ -51,7 +57,7 @@ test("creates the complete page application", () => {
 
     const metadata = JSON.parse(readFileSync(join(target, "package.json"), "utf8"));
     assert.equal(metadata.name, "my-page");
-    assert.equal(metadata.dependencies["@demiurgejs/core"], "^0.1.0");
+    assert.equal(metadata.dependencies["@demiurgejs/core"], `^${coreVersion}`);
     assert(!readFileSync(join(target, "src/styles.css"), "utf8").includes("error"));
     assert(!readFileSync(join(target, "src/styles.css"), "utf8").includes("not-found"));
   });
@@ -127,4 +133,11 @@ test("the packed CLI includes and copies both templates", () => {
     assert(!existsSync(join(target, "src/routes/index.tsx")));
     assert(!existsSync(join(target, "src/routes/@not-found.tsx")));
   });
+});
+
+// The release workflow publishes both packages from one version tag. A drifted
+// version would publish a scaffold that names a framework version the release
+// does not contain.
+test("carries the framework version", () => {
+  assert.equal(scaffoldVersion, coreVersion);
 });

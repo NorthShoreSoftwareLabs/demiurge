@@ -39,7 +39,9 @@ jobs:
         run: |
           package_name=$(node -p 'require("./packages/core/package.json").name')
           package_version=$(node -p 'require("./packages/core/package.json").version')
+          scaffold_version=$(node -p 'require("./packages/create-demiurge/package.json").version')
           test "$GITHUB_REF_NAME" = "v$package_version"
+          test "$scaffold_version" = "$package_version"
           dist_tag=latest
           case "$package_version" in
             *-*) dist_tag=next ;;
@@ -134,3 +136,53 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" --generate-notes --title "Demiurge ${{ needs.verify.outputs.package-version }}" --verify-tag
+
+  # The scaffold publishes from the same tag at the same version. It runs after
+  # the framework release so a scaffold registry failure cannot withhold the
+  # framework artifact or the GitHub release. Rerun this job alone to recover.
+  publish-scaffold:
+    name: Publish the scaffold
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node for npm
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse an unrelated npm package owner
+        env:
+          EXPECTED_NPM_OWNER: john_nssl
+        run: |
+          if repository=$(npm view create-demiurge repository.url --json 2>/dev/null); then
+            case "$repository" in
+              ""|null)
+                owners=$(npm owner ls create-demiurge)
+                case "$owners" in
+                  *"$EXPECTED_NPM_OWNER"*) ;;
+                  *) echo "npm package create-demiurge does not list the expected owner." >&2; exit 1 ;;
+                esac
+                ;;
+              *NorthShoreSoftwareLabs/demiurge*) ;;
+              *) echo "npm package create-demiurge belongs to another repository: $repository" >&2; exit 1 ;;
+            esac
+          fi
+
+      - name: Publish the scaffold
+        run: npm publish ./packages/create-demiurge --access public --provenance --tag "${{ needs.verify.outputs.dist-tag }}"

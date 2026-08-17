@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@demiurgejs/core": "^0.1.0",
+    "@demiurgejs/core": "^0.2.0-beta.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
