@@ -239,10 +239,28 @@ describe("Vercel static output", () => {
       vercelStatic(),
     );
 
-    expect(config.routes).toContainEqual({
+    const declaredRule = {
       continue: true,
       headers: { "cross-origin-resource-policy": "cross-origin" },
       src: "^/(?:.*/)?[^/]*(?:\\.woff2)$",
-    });
+    };
+
+    expect(config.routes).toContainEqual(declaredRule);
+
+    // Vercel applies every matching hit-phase rule in order, and a later rule
+    // overrides an earlier header. A declared rule wins the manifest match, so
+    // the translator must emit it after each framework rule.
+    const sourceRoutes = config.routes.flatMap((route) =>
+      "handle" in route ? [] : [route],
+    );
+    const declaredIndex = sourceRoutes.findIndex(
+      (route) => route.src === declaredRule.src,
+    );
+    const catchAllIndex = sourceRoutes.findIndex(
+      (route) => route.src === "^/.*$" && route.continue === true,
+    );
+
+    expect(catchAllIndex).toBeGreaterThanOrEqual(0);
+    expect(declaredIndex).toBeGreaterThan(catchAllIndex);
   });
 });
