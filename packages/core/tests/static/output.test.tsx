@@ -772,4 +772,88 @@ describe("static output adapter", () => {
       }),
     ).rejects.toThrow(/must be an HTTP\(S\) origin/);
   });
+
+  it("adds the root policy's document headers to file rules, excluding CSP", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({ document: security.static() }),
+      }),
+    });
+
+    const manifest = await generateStaticOutput({ outDir, routes });
+    const baselineHeaders = {
+      "cross-origin-opener-policy": "same-origin",
+      "cross-origin-resource-policy": "same-origin",
+      "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "strict-transport-security": "max-age=31536000",
+      "x-content-type-options": "nosniff",
+    };
+
+    expect(manifest.fileHeaderRules).toEqual([
+      {
+        headers: {
+          ...baselineHeaders,
+          "cache-control": "public, max-age=31536000, immutable",
+        },
+        pattern: "-[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9]+$",
+      },
+      {
+        headers: {
+          ...baselineHeaders,
+          "cache-control": "public, max-age=0, must-revalidate",
+        },
+        pattern: ".*",
+      },
+    ]);
+
+    for (const rule of manifest.fileHeaderRules) {
+      expect(rule.headers["content-security-policy"]).toBeUndefined();
+      expect(rule.headers["content-security-policy-report-only"]).toBeUndefined();
+    }
+  });
+
+  it("lets a static file header pattern rule override the baseline for a matching file", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/@policy.ts": routeModule({
+        policy: defineRoutePolicy({ document: security.static() }),
+      }),
+    });
+
+    const manifest = await generateStaticOutput({
+      outDir,
+      routes,
+      staticFileHeaders: [
+        {
+          headers: { crossOriginResourcePolicy: "cross-origin" },
+          pattern: "\\.woff2$",
+        },
+      ],
+    });
+
+    expect(manifest.fileHeaderRules[0]).toEqual({
+      headers: {
+        "cross-origin-opener-policy": "same-origin",
+        "cross-origin-resource-policy": "cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "strict-transport-security": "max-age=31536000",
+        "x-content-type-options": "nosniff",
+      },
+      pattern: "\\.woff2$",
+    });
+    expect(manifest.fileHeaderRules).toHaveLength(3);
+  });
+
+  it("rejects a static file header pattern rule with an invalid pattern", async () => {
+    const { outDir } = await createOutputDirectory();
+
+    await expect(generateStaticOutput({
+      outDir,
+      routes: appRoutes(),
+      staticFileHeaders: [{ headers: {}, pattern: "(" }],
+    })).rejects.toThrow(/not a valid regular expression/);
+  });
 });

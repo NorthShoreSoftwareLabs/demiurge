@@ -211,23 +211,38 @@ describe("Vercel static output", () => {
     }
   });
 
-  it("rejects a missing fallback and untranslatable file patterns", () => {
+  it("rejects a missing fallback and an invalid Vercel cache rule", () => {
     expect(() => createVercelOutputConfig(
       { ...manifest, entries: manifest.entries.filter((entry) => entry.pathname !== "*") },
       vercelStatic(),
     )).toThrow(/fallback/);
-    expect(() => createVercelOutputConfig(
-      {
-        ...manifest,
-        fileHeaderRules: [{ headers: {}, pattern: "^asset" }],
-      },
-      vercelStatic(),
-    )).toThrow(/cannot translate/);
     expect(() => createVercelOutputConfig(
       manifest,
       vercelStatic({
         cache: [{ source: "/videos/(", value: "public, max-age=60" }],
       }),
     )).toThrow(/header rule is not valid/);
+  });
+
+  it("translates a static file header pattern rule to a Vercel route", () => {
+    const config = createVercelOutputConfig(
+      {
+        ...manifest,
+        fileHeaderRules: [
+          {
+            headers: { "cross-origin-resource-policy": "cross-origin" },
+            pattern: "\\.woff2$",
+          },
+          ...manifest.fileHeaderRules,
+        ],
+      },
+      vercelStatic(),
+    );
+
+    expect(config.routes).toContainEqual({
+      continue: true,
+      headers: { "cross-origin-resource-policy": "cross-origin" },
+      src: "^/(?:.*/)?[^/]*(?:\\.woff2)$",
+    });
   });
 });

@@ -59,6 +59,12 @@ rejects nonce-dependent output and other policy it cannot deploy safely.
 Static generation adds hashes for framework-rendered structured data. An
 application must declare hashes for its other inline scripts.
 
+A static build also applies the root document policy's security headers to
+files that have no route entry. Hashed bundles and copied public files receive
+that baseline. The Content Security Policy is not part of it. See
+[Data and caching](./data-and-caching.md) for the file rules and for the
+per-pattern override.
+
 The Vite plugin disables automatic asset inlining by default. This setting
 prevents generated data URLs from conflicting with the default CSP.
 
