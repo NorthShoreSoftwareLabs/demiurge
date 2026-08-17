@@ -73,16 +73,43 @@ provenance, and GitHub Release steps as stable versions. Consumers opt in with:
 pnpm add @demiurgejs/core@next
 ```
 
+## Published packages
+
+One version tag releases two packages at one version:
+
+| Package | Directory | Purpose |
+| --- | --- | --- |
+| `@demiurgejs/core` | `packages/core` | The framework |
+| `create-demiurge` | `packages/create-demiurge` | The `npm create demiurge` scaffold |
+
+The scaffold carries the framework version because its template pins
+`@demiurgejs/core`. A drifted version would scaffold an application against a
+framework release that does not exist. `pnpm test:scaffold` asserts both the
+shared version and the template pin, so a forgotten bump fails the gate.
+
+Set both versions and the template pin together in the release commit. The
+release workflow checks the shared version again before it publishes.
+
+The scaffold publishes in its own job after the framework release. A scaffold
+registry failure therefore cannot withhold the framework artifact or the GitHub
+release. Rerun that job alone to recover.
+
+The `@demiurgejs` scope permits independently versioned adapters or tools in the
+future. Version 0.2 keeps its current subpath exports in one framework package.
+
 ## One-time registry setup
 
-Demiurge publishes from the `@demiurgejs` npm scope. The first package is
-`@demiurgejs/core`. The scope permits independently versioned adapters or tools
-in the future. Version 0.1 keeps its current subpath exports in one package.
+Demiurge publishes from the `@demiurgejs` npm scope and the unscoped
+`create-demiurge` name.
 
 Before the first public release:
 
 1. Create or claim the `@demiurgejs` npm organization and grant the maintainers
    publish access to `@demiurgejs/core`.
+1. Claim the unscoped `create-demiurge` name. npm configures trusted publishing
+   on a package that already exists. Publish the first version from a maintainer
+   account. Then configure trusted publishing for
+   `.github/workflows/release.yml`. The workflow publishes every later version.
 2. Configure npm trusted publishing for this repository and
    `.github/workflows/release.yml`.
 3. Create a protected GitHub environment named `npm`, require maintainer
@@ -100,9 +127,11 @@ metadata points somewhere other than this repository.
    again from GitHub before publishing.
 2. Choose the version using semantic versioning. Stable releases use npm's
    `latest` dist-tag. Prerelease versions containing `-` use `next`.
-3. Set `packages/core/package.json` to that exact version and turn the
-   matching changelog heading from `Unreleased` into the release date. Commit
-   those changes through the normal reviewed branch.
+3. Set `packages/core/package.json` and `packages/create-demiurge/package.json`
+   to that exact version. Set the template pin in
+   `packages/create-demiurge/templates/shared/package.json` to `^` plus that
+   version. Turn the matching changelog heading from `Unreleased` into the
+   release date. Commit those changes through the normal reviewed branch.
 4. From a fresh clone of that commit, run:
 
    ```sh

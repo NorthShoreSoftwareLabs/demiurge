@@ -27,6 +27,8 @@ status live in GitHub issues and milestones.
   policy. An application overrides that baseline for a file pattern (#142).
 - A typed Vercel cache rule now survives the framework file rules. The generated
   output repeats each application rule after them (#145).
+- The release tag now publishes `create-demiurge` at the framework version. The
+  scaffold template pins that version.
 - New examples cover nested route policies (#36) and metadata with generated
   Open Graph output (#42).
 

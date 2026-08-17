@@ -13,6 +13,13 @@ npm create demiurge
 The page template includes the root layout, fallback documents, policy, styles,
 and Vite configuration. The API template does not include page-route files.
 
+The scaffold carries the framework version. A prerelease scaffold publishes
+under the `next` tag:
+
+```sh
+npm create demiurge@next
+```
+
 ## Install
 
 ```sh
