@@ -3,6 +3,31 @@
 Released framework changes are grouped below by version. Open work and delivery
 status live in GitHub issues and milestones.
 
+## 0.2.0 — Unreleased
+
+- `<Script />` renders a script that a component discovers during render. The
+  document hoists a script found before the head flush and gives it the request
+  nonce (#38).
+- Build and startup diagnostics reject a script that the effective policy cannot
+  authorize. A script need adds its sources to `script-src` only (#41).
+- Policy verification rejects a document CSP that the page render mode cannot
+  satisfy. A static page rejects nonce-backed directives (#26).
+- Production builds validate literal route policy. Startup validates eager route
+  modules before the server accepts traffic (#115).
+- Typed CSP directives accept a replacement object and `false` for removal. The
+  published package now matches the documented directive contract (#123).
+- The CSP type supports style attribute directives (#122).
+- Middleware contributes typed values to the route request context. Generated
+  route declarations intersect each ancestor contribution (#34).
+- `demiurge build` owns the static build sequence. `demiurge preview` serves the
+  generated output with its declared route and file headers (#131).
+- The static build writes Vercel Build Output API version 3 artifacts. Route
+  headers keep precedence over file cache rules (#136).
+- Static file header rules now carry the security headers of the root document
+  policy. An application overrides that baseline for a file pattern (#142).
+- New examples cover nested route policies (#36) and metadata with generated
+  Open Graph output (#42).
+
 ## 0.1.1 — 2026-08-14
 
 - Development SSR now supports route files that import the `meta` helper and
