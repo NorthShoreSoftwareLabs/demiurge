@@ -211,6 +211,11 @@ vercelStatic({
 });
 ```
 
+Vercel applies every matching route in order. A later route replaces an earlier
+header of the same name. The generated output therefore repeats each
+application rule after the framework file rules. An application rule keeps the
+last word for a served file.
+
 Vercel reads a root `vercel.json` before the build starts. Keep project settings
 there only when the application needs settings that Build Output API does not
 represent.

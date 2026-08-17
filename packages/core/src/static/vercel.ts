@@ -167,6 +167,12 @@ export function createVercelOutputConfig(
       src: translateFileHeaderPattern(rule.pattern),
     });
   }
+  // Vercel applies every matching route in order, and a later route replaces
+  // an earlier header of the same name. The hit phase runs after the routing
+  // phase, so a framework file rule would replace the cache policy that the
+  // application declared. The application rules repeat here to keep the last
+  // word for a served file.
+  routes.push(...applicationRoutes.map((route) => ({ ...route })));
 
   routes.push({ handle: "error" });
   const fallbackHeaders = withoutContentType(fallback.headers);

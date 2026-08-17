@@ -25,6 +25,8 @@ status live in GitHub issues and milestones.
   headers keep precedence over file cache rules (#136).
 - Static file header rules now carry the security headers of the root document
   policy. An application overrides that baseline for a file pattern (#142).
+- A typed Vercel cache rule now survives the framework file rules. The generated
+  output repeats each application rule after them (#145).
 - New examples cover nested route policies (#36) and metadata with generated
   Open Graph output (#42).
 

@@ -129,6 +129,11 @@ describe("Vercel static output", () => {
         headers: { "cache-control": "public, max-age=31536000, immutable" },
         src: "^/(?:.*/)?[^/]*-[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9]+$",
       },
+      {
+        continue: true,
+        headers: { "cache-control": "public, max-age=604800" },
+        src: "^/videos(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?$",
+      },
       { handle: "error" },
       {
         continue: true,
@@ -262,5 +267,37 @@ describe("Vercel static output", () => {
 
     expect(catchAllIndex).toBeGreaterThanOrEqual(0);
     expect(declaredIndex).toBeGreaterThan(catchAllIndex);
+  });
+
+  it("keeps an application cache rule after every framework file rule", () => {
+    const config = createVercelOutputConfig(
+      manifest,
+      vercelStatic({
+        cache: [{ source: "/site.webmanifest", value: "public, max-age=3600" }],
+      }),
+    );
+
+    // The header a path receives is the header of the last matching route.
+    // Compute that value the way Vercel does, so this test fails if a
+    // framework rule ever lands after the application rule.
+    const matched = config.routes.flatMap((route) =>
+      "handle" in route || !route.headers || !route.src
+        || !new RegExp(route.src).test("/site.webmanifest")
+        ? []
+        : [route.headers],
+    );
+    const effective = new Map<string, string>();
+    for (const headers of matched) {
+      for (const [name, value] of Object.entries(headers)) {
+        effective.set(name, value);
+      }
+    }
+
+    // The framework catch-all rule must match this path too. Without it the
+    // assertion below would pass for the wrong reason.
+    expect(matched).toContainEqual({
+      "cache-control": "public, max-age=0, must-revalidate",
+    });
+    expect(effective.get("cache-control")).toBe("public, max-age=3600");
   });
 });
