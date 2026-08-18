@@ -8,6 +8,7 @@
       "@demiurgejs/core/data/testing": ["src/data/testing.ts"],
       "@demiurgejs/core/edge": ["src/edge/index.ts"],
       "@demiurgejs/core/internal/testing": ["src/internal/testing.ts"],
+      "@demiurgejs/core/kv": ["src/kv/index.ts"],
       "@demiurgejs/core/node": ["src/node/index.ts"],
       "@demiurgejs/core/redis": ["src/redis/index.ts"],
       "@demiurgejs/core/static": ["src/static/index.ts"],

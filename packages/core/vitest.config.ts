@@ -12,6 +12,9 @@ export default defineConfig({
       "@demiurgejs/core/edge": fileURLToPath(
         new URL("./src/edge/index.ts", import.meta.url),
       ),
+      "@demiurgejs/core/kv": fileURLToPath(
+        new URL("./src/kv/index.ts", import.meta.url),
+      ),
       "@demiurgejs/core/node": fileURLToPath(
         new URL("./src/node/index.ts", import.meta.url),
       ),
