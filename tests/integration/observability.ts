@@ -1,6 +1,11 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 
+// A macrotask timer is a minimum delay, not an exact one. The event loop can
+// fire it a fraction of a millisecond early under real scheduling jitter, so
+// this tolerates that instead of asserting a delay no real timer promises.
+const timerJitterToleranceMs = 2;
+
 const exampleRoot = resolve("examples/observability");
 const child = spawn(process.execPath, ["server.js"], {
   cwd: exampleRoot,
@@ -111,7 +116,7 @@ function assertEqual(actual: unknown, expected: unknown, label: string) {
 }
 
 function assertAtLeast(actual: number | undefined, expected: number, label: string) {
-  if (actual === undefined || actual < expected) {
+  if (actual === undefined || actual < expected - timerJitterToleranceMs) {
     throw new Error(
       `${label} expected at least ${expected}, received ${JSON.stringify(actual)}.`,
     );
