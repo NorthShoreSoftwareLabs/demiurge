@@ -288,6 +288,7 @@ consumer would.
 | [`static-export`](./examples/static-export) | Prerendering, dynamic `paths`, deployment headers |
 | [`sse-feed`](./examples/sse-feed) | `sse(...)` headers and browser `EventSource` reconnect |
 | [`webhook-security`](./examples/webhook-security) | `webhook.hmac(...)` signature checks against the raw body |
+| [`observability`](./examples/observability) | `serverTiming(...)` metrics in a real `Server-Timing` response header |
 
 ## Documentation
 
