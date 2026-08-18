@@ -59,6 +59,7 @@ const manifest: StaticOutputManifest = {
       pattern: ".*",
     },
   ],
+  origin: "https://example.test",
   version: 1,
 };
 
@@ -87,6 +88,11 @@ describe("Vercel static output", () => {
       version: 3,
     });
     expect(config.routes).toEqual([
+      {
+        continue: true,
+        headers: { "access-control-allow-origin": "https://example.test" },
+        src: "^/.*$",
+      },
       { continue: true, dest: "/about", src: "^/about/index\\.html/?$" },
       { continue: true, dest: "/", src: "^/index\\.html/?$" },
       {
@@ -299,5 +305,61 @@ describe("Vercel static output", () => {
       "cache-control": "public, max-age=0, must-revalidate",
     });
     expect(effective.get("cache-control")).toBe("public, max-age=3600");
+  });
+
+  it("reflects a declared Vercel CORS policy in access-control-allow-origin", () => {
+    const config = createVercelOutputConfig(
+      manifest,
+      vercelStatic({ cors: { origins: ["https://app.example.test"] } }),
+    );
+
+    expect(config.routes[0]).toEqual({
+      continue: true,
+      headers: {
+        "access-control-allow-origin": "https://app.example.test",
+      },
+      src: "^/.*$",
+    });
+  });
+
+  it("reflects a wildcard Vercel CORS policy", () => {
+    const config = createVercelOutputConfig(
+      manifest,
+      vercelStatic({ cors: { origins: "*" } }),
+    );
+
+    expect(config.routes[0]).toEqual({
+      continue: true,
+      headers: { "access-control-allow-origin": "*" },
+      src: "^/.*$",
+    });
+  });
+
+  it("falls back to the build origin without a declared CORS policy", () => {
+    const config = createVercelOutputConfig(manifest, vercelStatic());
+
+    expect(config.routes[0]).toEqual({
+      continue: true,
+      headers: {
+        "access-control-allow-origin": "https://example.test",
+      },
+      src: "^/.*$",
+    });
+  });
+
+  it("rejects a Vercel CORS policy that declares more than one origin", () => {
+    expect(() => createVercelOutputConfig(
+      manifest,
+      vercelStatic({
+        cors: { origins: ["https://a.example.test", "https://b.example.test"] },
+      }),
+    )).toThrow(/must declare the wildcard origin or exactly one origin/);
+  });
+
+  it("rejects Vercel static output with no CORS policy and no build origin", () => {
+    expect(() => createVercelOutputConfig(
+      { ...manifest, origin: undefined },
+      vercelStatic(),
+    )).toThrow(/requires a build origin/);
   });
 });

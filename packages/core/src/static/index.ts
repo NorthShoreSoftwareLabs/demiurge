@@ -70,6 +70,11 @@ export type StaticOutputManifest = {
   adapter: "static";
   entries: StaticOutputEntry[];
   fileHeaderRules: StaticOutputFileHeaderRule[];
+  // The normalized build origin. The Vercel static generator falls back to
+  // this value for `access-control-allow-origin` when the deployment
+  // declares no CORS policy of its own. A manifest that a caller builds by
+  // hand, such as a static preview fixture, can omit this field.
+  origin?: string;
   version: 1;
 };
 
@@ -216,6 +221,7 @@ export async function generateStaticOutput(
       manifest,
       options.staticFileHeaders ?? [],
     ),
+    origin,
     version: 1,
   };
 

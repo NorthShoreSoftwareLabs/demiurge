@@ -132,6 +132,11 @@ and applies the resulting headers through the same request pipeline.
 A CORS origin must be an absolute HTTP or HTTPS origin. It cannot contain
 credentials, a path, a query, or a fragment.
 
+Static output has no request pipeline, so route-level CORS declarations do
+not apply to it. The Vercel static adapter declares `access-control-allow-origin`
+separately. See [Access-Control-Allow-Origin](./data-and-caching.md#access-control-allow-origin)
+in the data and caching guide.
+
 Route security can also enforce:
 
 - allowed HTTP methods
