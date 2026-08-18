@@ -58,5 +58,16 @@ export default defineConfig({
       timeout: 120_000,
       url: "http://localhost:42180/",
     },
+    {
+      command: "pnpm --filter @demiurge-examples/conditional-script start",
+      env: {
+        HOST: "localhost",
+        NODE_ENV: "production",
+        PORT: "42181",
+      },
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: "http://localhost:42181/",
+    },
   ],
 });
