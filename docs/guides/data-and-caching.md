@@ -100,6 +100,56 @@ The Redis store passes both conformance contracts from
 from the framework's point of view. `staleWhileRevalidate` coordination works
 the same way, backed by Redis key expiration instead of an in-process Map.
 
+## KV store
+
+`createKvCacheStore(...)` from `@demiurgejs/core/kv` shares `public`,
+`private`, and `build` entries across an edge deployment where Redis is
+usually not reachable. This is the store the edge adapter's `cacheStore`
+option is for. Most edge runtimes offer a key-value store instead of a Redis
+connection, so this store targets that shape rather than a specific vendor.
+
+The store is written against `EdgeKvNamespace`, a small interface this
+framework defines and documents in `@demiurgejs/core/kv`. It is modeled on
+the binding API Cloudflare Workers KV exposes, because that shape is the one
+most other edge KV providers already copy. This is an adapter for that
+documented shape, not a dependency on any vendor SDK. Pass a connected
+client the application already constructed and bound:
+
+```ts
+import { createKvCacheStore } from "@demiurgejs/core/kv";
+
+const store = createKvCacheStore({ namespace: env.CACHE_KV });
+```
+
+A Deno KV or Vercel Edge Config client needs a small wrapper first if it
+does not already match this shape.
+
+### Consistency caveat
+
+A KV store gives up two things Redis's Lua scripts provide: cross-key
+atomicity and a compare-and-swap primitive. `set()`, `delete()`, and
+`publishRefresh()` each run as several sequential operations rather than one
+atomic script. A reader racing with one of these calls can briefly see a
+partially updated entry.
+
+Tag invalidation stores tag membership as key-prefixed entries and uses
+`list()` plus bulk delete to invalidate a tag, the usual KV pattern for this.
+`list()` on a real KV store is typically eventually consistent. A membership
+entry written just before a matching `invalidateTags()` call may not appear
+on that call yet.
+
+`acquireRefreshLease()` and `publishRefresh()` implement single-writer
+coordination with a get-then-write pattern, not a real compare-and-swap. Two
+isolates racing to acquire the same lease can both succeed. The worst case is
+redundant refresh work, the same failure mode `staleWhileRevalidate` already
+tolerates when no coordination exists at all. Do not rely on this store for
+exclusive-execution correctness beyond that. Prefer the Redis store where a
+stronger guarantee matters.
+
+The KV store passes both conformance contracts from
+`@demiurgejs/core/data/testing`, verified against a minimal in-memory fake of
+`EdgeKvNamespace` used only in the framework's own tests.
+
 ## Invalidation
 
 `createInvalidation(...)` invalidates explicit keys or tags and reports stable
