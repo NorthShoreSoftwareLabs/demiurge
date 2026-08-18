@@ -39,7 +39,10 @@ import {
   writeNotImplemented,
   writeWebResponse,
 } from "../node/http";
+import { createImageOptimizer } from "../node/image";
 import { renderStreamingPageResponse } from "../node/streaming";
+import { parseImageVariantPath } from "../platform/image-url";
+import type { ImagePolicy } from "../platform/images";
 import { createCspNonce } from "../security/policy";
 import {
   verifyRoutePolicyFile,
@@ -55,6 +58,9 @@ export type DemiurgeVitePluginOptions = {
     lang?: string;
     title?: string;
   };
+  // The image policy that the application passes to `planImageTransform` and
+  // to `Image`. The development server serves the optimizer path from it.
+  images?: ImagePolicy;
   routesDir?: string;
   static?: {
     deployment?: VercelStaticDeployment;
@@ -68,6 +74,7 @@ export type DemiurgeVitePluginOptions = {
 
 export type DemiurgeVitePluginApi = {
   demiurge: true;
+  images?: ImagePolicy;
   staticDeployment?: VercelStaticDeployment;
   staticFileHeaders?: readonly StaticFileHeaderPatternRule[];
 };
@@ -86,6 +93,7 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
   return {
     api: {
       demiurge: true,
+      images: options.images,
       staticDeployment: options.static?.deployment,
       staticFileHeaders: options.static?.headers,
     } satisfies DemiurgeVitePluginApi,
@@ -266,6 +274,8 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
         }
       }
 
+      const optimizeImage = createDevImageOptimizer(server, options);
+
       server.middlewares.use(async (request, response, next) => {
         try {
           let webRequest: Request;
@@ -284,6 +294,13 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
             }
 
             throw error;
+          }
+
+          const image = await optimizeImage(webRequest);
+
+          if (image) {
+            await writeWebResponse(response, image);
+            return;
           }
 
           const routesDir = resolve(
@@ -794,6 +811,28 @@ function createStylesImport(
   return existsSync(resolvedStylesFile)
     ? `import ${JSON.stringify(`/${stylesFile.replace(/^\/+/, "")}`)};`
     : "";
+}
+
+// Development serves the same image URLs that production serves. A static
+// loader path describes its own transform, so the same optimizer answers
+// both loaders without any build output.
+export function createDevImageOptimizer(
+  server: ViteDevServer,
+  options: DemiurgeVitePluginOptions,
+) {
+  const publicDir = server.config.publicDir;
+  const optimizerPath = options.images?.optimizerPath ?? "/_demiurge/image";
+
+  if (!publicDir) {
+    return async () => null;
+  }
+
+  return createImageOptimizer({
+    policy: options.images,
+    resolveVariant: (pathname) =>
+      parseImageVariantPath(pathname, optimizerPath),
+    root: publicDir,
+  });
 }
 
 // Development renders through the production pipeline. It adds the virtual

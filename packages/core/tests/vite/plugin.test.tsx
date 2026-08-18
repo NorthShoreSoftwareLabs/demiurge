@@ -2,14 +2,17 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { Readable, Writable } from "node:stream";
+import sharp from "sharp";
 import type { ConfigEnv } from "vite";
 import { describe, expect, it, vi } from "vitest";
 import {
+  defineImages,
   defineLinks,
   defineMetadata,
   defineRoutePolicy,
   defineScripts,
   json,
+  Image,
   jsonl,
   link,
   meta,
@@ -964,6 +967,76 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     expect(response.body).not.toContain(placeholder);
     expect(response.body).not.toMatch(/nonce="demiurge-/);
     expect(new Set(renderedNonces)).toEqual(new Set([viteNonce]));
+  });
+
+  it("serves the image variants that a development page renders", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-images-"));
+    const routesDir = join(root, "routes");
+    const publicDir = join(root, "public");
+    const plugin = demiurge({
+      images: defineImages({ loader: "static" }),
+      routesDir: "routes",
+    }) as PluginHarness;
+    const middleware = createMiddlewareHarness();
+    const server = {
+      config: { publicDir, root },
+      middlewares: { use: middleware.use },
+      ssrLoadModule: vi.fn(async () => ({
+        GET: page({
+          view: () => (
+            <main>
+              <Image
+                alt="Hero"
+                format="webp"
+                height={50}
+                policy={defineImages({ loader: "static" })}
+                src="/hero.png"
+                width={100}
+                widths={[100]}
+              />
+            </main>
+          ),
+        }),
+      })),
+      transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
+      watcher: createWatcherHarness(),
+    };
+
+    await mkdir(routesDir, { recursive: true });
+    await mkdir(publicDir, { recursive: true });
+    await writeFile(join(routesDir, "index.tsx"), "export {}");
+    await writeFile(
+      join(publicDir, "hero.png"),
+      await sharp({
+        create: { background: "#204080", channels: 3, height: 100, width: 200 },
+      }).png().toBuffer(),
+    );
+    plugin.configureServer?.(server as never);
+
+    const document = new CapturingResponse();
+    await middleware.handler(
+      requestFor("/", {
+        headers: { accept: "text/html", host: "example.test" },
+      }) as never,
+      document as never,
+      vi.fn(),
+    );
+
+    const variantPath = document.body.match(
+      /src="(\/_demiurge\/image\/[^"]+\.webp)"/,
+    )?.[1];
+
+    expect(variantPath).toBeTruthy();
+
+    const image = new CapturingResponse();
+    await middleware.handler(
+      requestFor(variantPath!, { headers: { host: "example.test" } }) as never,
+      image as never,
+      vi.fn(),
+    );
+
+    expect(image.statusCode).toBe(200);
+    expect(image.headers.get("content-type")).toBe("image/webp");
   });
 
   it("streams page routes through Vite's transformed dev shell", async () => {

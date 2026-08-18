@@ -74,5 +74,8 @@ has an optional peer dependency on `@vercel/routing-utils`. Install it in the
 application that calls `vercelStatic()`. A deployment that never imports
 `@demiurgejs/core/static` does not need it.
 
+To optimize an image, follow the [image guide](./guides/images.md). It covers
+the static build shape and the request-time optimizer.
+
 Continue with the [route reference](./reference/routes.md). For production SSR,
 follow the [Node deployment guide](./guides/node-deployment.md).

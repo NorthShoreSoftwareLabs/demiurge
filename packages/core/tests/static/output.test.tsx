@@ -8,10 +8,13 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cspHash,
+  defineImages,
   defineMetadata,
+  Image,
   defineRoutePolicy,
   defineScripts,
   page,
@@ -92,6 +95,41 @@ function InlineStylesPage() {
       <style>{".styled-page { opacity: 0.8; }"}</style>
       <main className="styled-page" style={{ color: "blue" }}>Styled page</main>
     </>
+  );
+}
+
+const staticImages = defineImages({ loader: "static" });
+
+function GalleryPage() {
+  return (
+    <main>
+      <Image
+        alt="Hero"
+        format="webp"
+        height={200}
+        policy={staticImages}
+        src="/images/hero.png"
+        width={400}
+      />
+    </main>
+  );
+}
+
+function OptimizedGalleryPage() {
+  return (
+    <main>
+      <Image alt="Hero" height={200} src="/images/hero.png" width={400} />
+    </main>
+  );
+}
+
+async function writeSourceImage(outDir: string) {
+  await mkdir(join(outDir, "images"), { recursive: true });
+  await writeFile(
+    join(outDir, "images", "hero.png"),
+    await sharp({
+      create: { background: "#204080", channels: 3, height: 400, width: 800 },
+    }).png().toBuffer(),
   );
 }
 
@@ -837,5 +875,72 @@ describe("static output adapter", () => {
       routes: appRoutes(),
       staticFileHeaders: [{ headers: {}, pattern: "(" }],
     })).rejects.toThrow(/not a valid regular expression/);
+  });
+
+  it("emits every image variant that a page planned with the static loader", async () => {
+    const { outDir } = await createOutputDirectory();
+    await writeSourceImage(outDir);
+
+    const manifest = await generateStaticOutput({
+      outDir,
+      routes: appRoutes({
+        "./routes/gallery.tsx": routeModule({
+          GET: page({ render: { mode: "static" }, view: GalleryPage }),
+        }),
+      }),
+    });
+
+    expect(manifest.imageFiles).toHaveLength(2);
+
+    for (const file of manifest.imageFiles!) {
+      expect(file).toMatch(/^_demiurge\/image\/images\/hero\.png\.w\d+\.webp$/);
+      await expect(sharp(await readFile(join(outDir, file))).metadata())
+        .resolves.toMatchObject({ format: "webp" });
+    }
+
+    const gallery = await readFile(
+      join(outDir, "gallery", "index.html"),
+      "utf8",
+    );
+
+    for (const file of manifest.imageFiles!) {
+      expect(gallery).toContain(`/${file}`);
+    }
+
+    expect(manifest.entries.some((entry) => entry.file.startsWith("_demiurge/")))
+      .toBe(false);
+  });
+
+  it("removes an image variant that the application no longer plans", async () => {
+    const { outDir } = await createOutputDirectory();
+    await writeSourceImage(outDir);
+    const routes = appRoutes({
+      "./routes/gallery.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: GalleryPage }),
+      }),
+    });
+
+    const first = await generateStaticOutput({ outDir, routes });
+    const second = await generateStaticOutput({ outDir, routes: appRoutes() });
+
+    expect(second.imageFiles).toEqual([]);
+
+    for (const file of first.imageFiles!) {
+      expect(existsSync(join(outDir, file))).toBe(false);
+    }
+  });
+
+  it("stops the build when a page plans an image for a runtime optimizer", async () => {
+    const { outDir } = await createOutputDirectory();
+    await writeSourceImage(outDir);
+
+    await expect(generateStaticOutput({
+      outDir,
+      routes: appRoutes({
+        "./routes/gallery.tsx": routeModule({
+          GET: page({ render: { mode: "static" }, view: OptimizedGalleryPage }),
+        }),
+      }),
+    })).rejects.toThrow("references the request-time image optimizer");
   });
 });

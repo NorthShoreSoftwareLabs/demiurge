@@ -2,6 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { InlineConfig } from "vite";
+import type { ImagePolicy } from "./platform";
 import type { RouteImporter } from "./route";
 import {
   generateVercelStaticOutput,
@@ -162,6 +163,7 @@ export async function buildStaticSite(
   }
 
   const manifest = await (runtime?.generate ?? generateStaticOutput)({
+    images: findImagePolicy(config.plugins),
     origin: options.origin,
     outDir,
     routes: serverEntry.routes,
@@ -272,6 +274,12 @@ function findVercelStaticDeployment(
   return findDemiurgePluginApi(plugins)?.staticDeployment;
 }
 
+function findImagePolicy(
+  plugins: ReadonlyArray<{ api?: unknown; name: string }> | undefined,
+): ImagePolicy | undefined {
+  return findDemiurgePluginApi(plugins)?.images;
+}
+
 function findStaticFileHeaderPatterns(
   plugins: ReadonlyArray<{ api?: unknown; name: string }> | undefined,
 ): readonly StaticFileHeaderPatternRule[] {
@@ -289,6 +297,7 @@ function findDemiurgePluginApi(
 
 function isDemiurgePluginApi(value: unknown): value is {
   demiurge: true;
+  images?: ImagePolicy;
   staticDeployment?: VercelStaticDeployment;
   staticFileHeaders?: readonly StaticFileHeaderPatternRule[];
 } {

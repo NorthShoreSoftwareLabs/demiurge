@@ -22,6 +22,11 @@ export {
   validateNodeOriginPolicy,
   writeWebResponse,
 } from "./http";
+export { createImageOptimizer } from "./image";
+export type {
+  ImageOptimizerFetch,
+  ImageOptimizerOptions,
+} from "./image";
 export { createStaticFileHandler } from "./static";
 export {
   renderNodePageResponse,

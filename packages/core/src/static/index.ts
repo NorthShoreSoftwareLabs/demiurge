@@ -34,6 +34,8 @@ import {
   IMMUTABLE_FILE_CACHE_CONTROL,
   REVALIDATED_FILE_CACHE_CONTROL,
 } from "../static-files";
+import type { ImagePolicy } from "../platform/images";
+import { assertNoOptimizerImages, emitImageVariants } from "./images";
 
 const STATIC_MANIFEST_FILE = "demiurge-static-manifest.json";
 
@@ -70,6 +72,10 @@ export type StaticOutputManifest = {
   adapter: "static";
   entries: StaticOutputEntry[];
   fileHeaderRules: StaticOutputFileHeaderRule[];
+  // Optimized image files that the build emitted. They are plain output
+  // files rather than route entries. A host therefore serves them with the
+  // framework file header rules and no route rule of their own.
+  imageFiles?: string[];
   // The normalized build origin. The Vercel static generator falls back to
   // this value for `access-control-allow-origin` when the deployment
   // declares no CORS policy of its own. A manifest that a caller builds by
@@ -94,6 +100,9 @@ export type StaticFileHeaderPatternRule = {
 };
 
 export type GenerateStaticOutputOptions = {
+  // The image policy that the application declared in the Vite plugin. The
+  // build reads it to find and validate the variants it must emit.
+  images?: ImagePolicy;
   onError?: RequestErrorReporter;
   origin?: string;
   outDir: string;
@@ -104,6 +113,11 @@ export type GenerateStaticOutputOptions = {
 
 type PendingOutput = StaticOutputEntry & {
   body: string;
+};
+
+type PendingAsset = {
+  body: Uint8Array;
+  file: string;
 };
 
 type OutputKind = "document" | "resource";
@@ -212,7 +226,18 @@ export async function generateStaticOutput(
     ),
   );
 
+  const documents = pending.map((entry) => entry.body);
+
+  assertNoOptimizerImages(documents, options.images);
+
+  const images = await emitImageVariants({
+    documents,
+    outDir,
+    policy: options.images,
+  });
+
   pending.sort((left, right) => left.file.localeCompare(right.file));
+  images.sort((left, right) => left.file.localeCompare(right.file));
 
   const outputManifest: StaticOutputManifest = {
     adapter: "static",
@@ -221,11 +246,12 @@ export async function generateStaticOutput(
       manifest,
       options.staticFileHeaders ?? [],
     ),
+    imageFiles: images.map((image) => image.file),
     origin,
     version: 1,
   };
 
-  await writeOutput(outDir, pending, outputManifest);
+  await writeOutput(outDir, pending, images, outputManifest);
 
   return outputManifest;
 }
@@ -869,6 +895,7 @@ function sortedHeaders(headers: Headers) {
 async function writeOutput(
   outDir: string,
   entries: PendingOutput[],
+  assets: PendingAsset[],
   manifest: StaticOutputManifest,
 ) {
   const parent = dirname(outDir);
@@ -876,10 +903,10 @@ async function writeOutput(
   const staging = await mkdtemp(join(parent, ".demiurge-static-"));
 
   try {
-    for (const entry of entries) {
-      const file = resolveContained(staging, entry.file);
+    for (const output of [...entries, ...assets]) {
+      const file = resolveContained(staging, output.file);
       await mkdir(dirname(file), { recursive: true });
-      await writeFile(file, entry.body);
+      await writeFile(file, output.body);
     }
 
     await writeFile(
@@ -891,7 +918,9 @@ async function writeOutput(
     await mkdir(outDir, { recursive: true });
     await cp(staging, outDir, { recursive: true, force: true });
 
-    const currentFiles = new Set(entries.map((entry) => entry.file));
+    const currentFiles = new Set(
+      [...entries, ...assets].map((output) => output.file),
+    );
 
     for (const file of previousFiles) {
       if (!currentFiles.has(file)) {
@@ -909,6 +938,7 @@ async function readPreviousOutputFiles(outDir: string) {
     const value = JSON.parse(source) as {
       adapter?: unknown;
       entries?: Array<{ file?: unknown }>;
+      imageFiles?: unknown;
       version?: unknown;
     };
 
@@ -920,11 +950,13 @@ async function readPreviousOutputFiles(outDir: string) {
       return [];
     }
 
-    return value.entries.flatMap((entry) =>
-      typeof entry.file === "string" &&
-        isSafeRelativeFile(entry.file)
-        ? [entry.file]
-        : []
+    const imageFiles = Array.isArray(value.imageFiles) ? value.imageFiles : [];
+
+    return [
+      ...value.entries.map((entry) => entry.file),
+      ...imageFiles,
+    ].flatMap((file) =>
+      typeof file === "string" && isSafeRelativeFile(file) ? [file] : []
     );
   } catch {
     return [];
