@@ -69,5 +69,26 @@ export default defineConfig({
       timeout: 120_000,
       url: "http://localhost:42181/",
     },
+    {
+      command: "pnpm --filter @demiurge-examples/cors-api start",
+      env: {
+        HOST: "localhost",
+        NODE_ENV: "production",
+        PORT: "42182",
+      },
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: "http://localhost:42182/",
+    },
+    {
+      command: "pnpm --filter @demiurge-examples/cors-api start:client",
+      env: {
+        HOST: "localhost",
+        PORT: "42183",
+      },
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: "http://localhost:42183/",
+    },
   ],
 });

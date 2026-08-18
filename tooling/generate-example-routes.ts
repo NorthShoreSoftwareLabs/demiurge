@@ -17,6 +17,7 @@ const examples = [
   "webhook-security",
   "cache-invalidation",
   "conditional-script",
+  "cors-api",
 ];
 
 for (const example of examples) {

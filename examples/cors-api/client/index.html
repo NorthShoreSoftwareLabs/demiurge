@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Demiurge CORS client</title>
+  </head>
+  <body>
+    <main>
+      <h1>Cross-origin CORS client</h1>
+      <section>
+        <h2>Simple GET (no preflight)</h2>
+        <pre data-testid="greeting-result">pending</pre>
+      </section>
+      <section>
+        <h2>Non-simple POST (preflight)</h2>
+        <pre data-testid="echo-result">pending</pre>
+        <p data-testid="echo-response-token">pending</p>
+      </section>
+    </main>
+    <script>
+      const API_ORIGIN = "http://localhost:42182";
+
+      async function loadGreeting() {
+        const result = document.querySelector('[data-testid="greeting-result"]');
+
+        try {
+          const response = await fetch(`${API_ORIGIN}/api/greeting`);
+          const body = await response.json();
+          result.textContent = JSON.stringify(body);
+        } catch (error) {
+          result.textContent = `error: ${error.message}`;
+        }
+      }
+
+      async function sendEcho() {
+        const result = document.querySelector('[data-testid="echo-result"]');
+        const responseToken = document.querySelector(
+          '[data-testid="echo-response-token"]',
+        );
+
+        try {
+          const response = await fetch(`${API_ORIGIN}/api/echo`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "content-type": "application/json",
+              "x-demo-token": "browser-secret",
+            },
+            body: JSON.stringify({ message: "hello from a different origin" }),
+          });
+          const body = await response.json();
+          result.textContent = JSON.stringify(body);
+          responseToken.textContent =
+            response.headers.get("x-demo-response-token") ?? "missing";
+        } catch (error) {
+          result.textContent = `error: ${error.message}`;
+        }
+      }
+
+      loadGreeting();
+      sendEcho();
+    </script>
+  </body>
+</html>
