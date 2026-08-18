@@ -15,6 +15,7 @@
     "examples/admin-route-group/.demiurge/route-manifest.d.ts",
     "examples/redis-cache-adapter/.demiurge/route-manifest.d.ts",
     "examples/webhook-security/.demiurge/route-manifest.d.ts",
+    "examples/cache-invalidation/.demiurge/route-manifest.d.ts",
     "tests/integration",
     "tests/package",
     "tooling"

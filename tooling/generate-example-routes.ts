@@ -15,6 +15,7 @@ const examples = [
   "admin-route-group",
   "redis-cache-adapter",
   "webhook-security",
+  "cache-invalidation",
 ];
 
 for (const example of examples) {
