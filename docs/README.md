@@ -13,6 +13,7 @@ that exists in the current source tree. Planned work and delivery status live in
 - [Data and caching](./guides/data-and-caching.md)
 - [Errors and not-found](./guides/errors-and-not-found.md)
 - [Node deployment](./guides/node-deployment.md)
+- [Edge deployment](./guides/edge-deployment.md)
 
 ## Maintainers
 

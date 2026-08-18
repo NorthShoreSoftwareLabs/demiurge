@@ -19,7 +19,8 @@
     "router",
     "ssr",
     "vite",
-    "node"
+    "node",
+    "edge"
   ],
   "type": "module",
   "bin": {
@@ -55,6 +56,10 @@
     "./node": {
       "types": "./dist/node/index.d.ts",
       "default": "./dist/node/index.js"
+    },
+    "./edge": {
+      "types": "./dist/edge/index.d.ts",
+      "default": "./dist/edge/index.js"
     },
     "./static": {
       "types": "./dist/static/index.d.ts",

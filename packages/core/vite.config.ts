@@ -26,6 +26,9 @@ export default defineConfig({
         "node/index": fileURLToPath(
           new URL("src/node/index.ts", import.meta.url),
         ),
+        "edge/index": fileURLToPath(
+          new URL("src/edge/index.ts", import.meta.url),
+        ),
         "static/index": fileURLToPath(
           new URL("src/static/index.ts", import.meta.url),
         ),

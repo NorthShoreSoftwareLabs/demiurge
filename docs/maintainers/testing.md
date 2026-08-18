@@ -37,16 +37,17 @@ per capability, and it fails when a capability is declared true without a probe
 that proves the behavior. A probe that proves a capability the adapter declares
 false fails the same way.
 
-The Node and static adapters both run it, in
-`packages/core/tests/node/adapter-contract.test.tsx` and
+The Node, edge, and static adapters all run it, in
+`packages/core/tests/node/adapter-contract.test.tsx`,
+`packages/core/tests/edge/adapter-contract.test.tsx`, and
 `packages/core/tests/static/adapter-contract.test.tsx`.
 
 To run it against a new adapter, add one test that calls the suite:
 
 ```ts
 await verifyAdapterContract(edgeAdapter, {
-  nonceInjection: () => fetch(`${origin}/nonce`),
-  streaming: () => fetch(`${origin}/`),
+  nonceInjection: () => handler(new Request(`${origin}/nonce`)),
+  streaming: () => handler(new Request(`${origin}/`)),
 });
 ```
 

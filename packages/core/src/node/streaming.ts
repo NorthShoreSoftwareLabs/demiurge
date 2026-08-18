@@ -1,16 +1,13 @@
 import { Transform } from "node:stream";
 import { renderToPipeableStream } from "react-dom/server";
-import { renderDocumentShell } from "../document/render";
-import type { ScriptTag } from "../document/scripts";
 import type { LoadedRouteMatch } from "../router";
+import { createDocumentShell } from "../server/document-shell";
 import { createPageRenderTree } from "../server/render-tree";
 import { createPageScriptContext } from "../server/render-tree";
 import {
   renderPageResponse,
   type SsrRenderOptions,
 } from "../server/ssr";
-
-const streamRootMarker = '<template data-demiurge-stream-root=""></template>';
 
 export function renderNodePageResponse(
   match: LoadedRouteMatch,
@@ -179,44 +176,4 @@ export function toWebReadableStream(stream: Transform) {
       removeListeners = cleanup;
     },
   });
-}
-
-async function createDocumentShell(
-  match: LoadedRouteMatch,
-  options: SsrRenderOptions & { scripts?: ScriptTag[] },
-) {
-  const shell = renderDocumentShell({
-    body: { data: match.data, navigation: options.navigation },
-    entrySrc: options.clientEntry,
-    lang: options.lang,
-    links: match.links,
-    metadata: match.metadata,
-    nonce: options.nonce,
-    scripts: options.scripts ?? match.scripts,
-    styles: options.styles,
-    title: options.title,
-  });
-
-  if (!options.transformDocument) {
-    return shell;
-  }
-
-  const transformed = await options.transformDocument(
-    `${shell.prefix}${streamRootMarker}${shell.suffix}`,
-  );
-  const markerIndex = transformed.indexOf(streamRootMarker);
-
-  if (
-    markerIndex === -1 ||
-    transformed.indexOf(streamRootMarker, markerIndex + streamRootMarker.length) !== -1
-  ) {
-    throw new Error(
-      "Demiurge streaming document transform must preserve the root marker exactly once.",
-    );
-  }
-
-  return {
-    prefix: transformed.slice(0, markerIndex),
-    suffix: transformed.slice(markerIndex + streamRootMarker.length),
-  };
 }

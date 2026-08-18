@@ -240,10 +240,37 @@ adapter independent of any one provider's configuration format. The build fails
 on redirects, render errors, response cookies, unsafe output paths, or CSP that
 depends on a fixed nonce.
 
-Edge adapters are planned. `defineAdapter` and `assertAdapterCapabilities`
-already let a build reject a target that cannot provide something the app uses.
-`@demiurgejs/core/adapter/testing` holds the contract behind those flags. Every
-adapter runs the same suite and proves each capability it declares.
+### Edge
+
+`@demiurgejs/core/edge` runs the same request pipeline on a Web-platform
+runtime. It streams through a Web `ReadableStream` and serves static assets from
+a bundled asset map instead of a filesystem. It also refuses to fall back to an
+in-memory cache or rate limit store:
+
+```js
+import { createEdgeRequestHandler } from "@demiurgejs/core/edge";
+import { createHandler, routes } from "./dist/server/server-entry.js";
+
+const handler = createEdgeRequestHandler({
+  assets: { assets: bundledAssets },
+  cacheStore: "unavailable",
+  clientIp: (request) => request.headers.get("x-real-ip"),
+  rateLimitStore: "unavailable",
+  routes,
+});
+
+export default { fetch: handler };
+```
+
+`cacheStore` and `rateLimitStore` are mandatory. An edge deployment runs many
+isolates, so an in-memory store counts one client in several buckets. See
+[Edge deployment](./docs/guides/edge-deployment.md) for the declared capability
+set and the failure each option produces.
+
+`defineAdapter` and `assertAdapterCapabilities` let a build reject a target that
+cannot provide something the app uses. `@demiurgejs/core/adapter/testing` holds
+the contract behind those flags. Every adapter runs the same suite and proves
+each capability it declares.
 
 ## Examples
 
@@ -270,6 +297,7 @@ consumer would.
 - [Data and caching](./docs/guides/data-and-caching.md)
 - [Errors and not-found behavior](./docs/guides/errors-and-not-found.md)
 - [Node deployment](./docs/guides/node-deployment.md)
+- [Edge deployment](./docs/guides/edge-deployment.md)
 
 Maintainers and contributors can also read the [architecture records](./architecture/README.md),
 [open RFCs](./rfcs/README.md), and [contribution guide](./CONTRIBUTING.md).
