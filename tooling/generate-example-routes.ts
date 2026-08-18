@@ -14,6 +14,7 @@ const examples = [
   "sse-feed",
   "admin-route-group",
   "redis-cache-adapter",
+  "webhook-security",
 ];
 
 for (const example of examples) {
