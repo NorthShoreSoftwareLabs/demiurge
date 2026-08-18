@@ -16,6 +16,7 @@ const examples = [
   "redis-cache-adapter",
   "webhook-security",
   "cache-invalidation",
+  "conditional-script",
 ];
 
 for (const example of examples) {
