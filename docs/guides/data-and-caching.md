@@ -219,3 +219,22 @@ last word for a served file.
 Vercel reads a root `vercel.json` before the build starts. Keep project settings
 there only when the application needs settings that Build Output API does not
 represent.
+
+### Access-Control-Allow-Origin
+
+Vercel adds `access-control-allow-origin: *` to every static response on its
+own. The generated `config.json` states an explicit value instead, so this
+platform default never reaches a deployment undeclared.
+
+Without a declared CORS policy, the value matches the build origin, the same
+origin the CLI reads from `--origin` or `SITE_ORIGIN`:
+
+```ts
+vercelStatic({
+  cors: { origins: ["https://app.example.com"] },
+});
+```
+
+A static response cannot vary this header by request, so a declared policy
+must resolve to a single origin or the wildcard origin `"*"`. Declare
+`cors.origins` as the wildcard string or as an array with exactly one origin.

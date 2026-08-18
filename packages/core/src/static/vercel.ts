@@ -13,6 +13,8 @@ import {
   type Header,
   type Route,
 } from "@vercel/routing-utils";
+import { validateCorsPolicy } from "../security";
+import type { CorsPolicy } from "../security";
 import { CONTENT_HASHED_FILE_NAME_PATTERN } from "../static-files";
 import type {
   StaticOutputEntry,
@@ -29,11 +31,13 @@ export type VercelStaticCacheRule = {
 
 export type VercelStaticOptions = {
   cache?: VercelStaticCacheRule[];
+  cors?: CorsPolicy;
 };
 
 export type VercelStaticDeployment = {
   adapter: "vercel";
   cache: VercelStaticCacheRule[];
+  cors?: CorsPolicy;
 };
 
 export type VercelOutputRoute = Route;
@@ -56,6 +60,7 @@ export function vercelStatic(
       source: rule.source,
       value: rule.value,
     })) ?? [],
+    cors: options.cors,
   };
 }
 
@@ -117,7 +122,19 @@ export function createVercelOutputConfig(
   }
 
   const applicationRoutes = transformApplicationCache(deployment.cache);
-  const routes: Route[] = [];
+  const corsOrigin = resolveVercelCorsOrigin(deployment.cors, manifest.origin);
+  // Vercel adds `access-control-allow-origin: *` to every static response on
+  // its own. This route states an explicit value instead, so a policy the
+  // application never declared never reaches a deployed response. It comes
+  // first so every later route in the sequence keeps it, the same pattern
+  // the file header rules use for the cache policy.
+  const routes: Route[] = [
+    {
+      continue: true,
+      headers: { "access-control-allow-origin": corsOrigin },
+      src: "^/.*$",
+    },
+  ];
 
   for (const entry of manifest.entries) {
     if (entry.pathname === "*") continue;
@@ -273,6 +290,39 @@ function transformApplicationCache(cache: VercelStaticCacheRule[]) {
     );
   }
   return transformed.routes;
+}
+
+// A static response cannot vary `access-control-allow-origin` by request, so
+// this resolves the declared policy to the single value the Vercel output
+// can serve. A declared policy always wins. Without one, the value falls
+// back to the build origin so a stray platform wildcard never survives.
+function resolveVercelCorsOrigin(
+  cors: CorsPolicy | undefined,
+  origin: string | undefined,
+): string {
+  if (cors) {
+    validateCorsPolicy(cors);
+
+    if (cors.origins === "*") {
+      return "*";
+    }
+
+    if (cors.origins.length === 1) {
+      return cors.origins[0]!;
+    }
+
+    throw new Error(
+      "A Vercel static CORS policy must declare the wildcard origin or exactly one origin. A static response cannot vary access-control-allow-origin by request.",
+    );
+  }
+
+  if (!origin) {
+    throw new Error(
+      "Vercel static output requires a build origin to emit access-control-allow-origin. Pass --origin, set SITE_ORIGIN, or declare a Vercel CORS policy.",
+    );
+  }
+
+  return origin;
 }
 
 function validateVercelDeployment(deployment: VercelStaticDeployment) {
