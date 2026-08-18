@@ -19,6 +19,7 @@ const examples = [
   "conditional-script",
   "cors-api",
   "observability",
+  "cloud-run",
 ];
 
 for (const example of examples) {

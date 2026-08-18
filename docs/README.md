@@ -15,6 +15,7 @@ that exists in the current source tree. Planned work and delivery status live in
 - [Images](./guides/images.md)
 - [Node deployment](./guides/node-deployment.md)
 - [Edge deployment](./guides/edge-deployment.md)
+- [Cloud Run deployment](./guides/cloud-run-deployment.md)
 
 ## Maintainers
 

@@ -19,6 +19,7 @@
     "examples/conditional-script/.demiurge/route-manifest.d.ts",
     "examples/cors-api/.demiurge/route-manifest.d.ts",
     "examples/observability/.demiurge/route-manifest.d.ts",
+    "examples/cloud-run/.demiurge/route-manifest.d.ts",
     "tests/integration",
     "tests/package",
     "tooling"
