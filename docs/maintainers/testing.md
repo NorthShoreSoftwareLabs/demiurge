@@ -29,6 +29,37 @@ Unit tests live beside the package rather than in the repository-level `tests`
 directory. The repository-level tests deliberately exercise built examples or a
 packed artifact and therefore cross package boundaries.
 
+## Adapter contract suite
+
+`verifyAdapterContract` from `@demiurgejs/core/adapter/testing` is the shared
+proof that every adapter runs against itself. It takes an adapter and one probe
+per capability, and it fails when a capability is declared true without a probe
+that proves the behavior. A probe that proves a capability the adapter declares
+false fails the same way.
+
+The Node and static adapters both run it, in
+`packages/core/tests/node/adapter-contract.test.tsx` and
+`packages/core/tests/static/adapter-contract.test.tsx`.
+
+To run it against a new adapter, add one test that calls the suite:
+
+```ts
+await verifyAdapterContract(edgeAdapter, {
+  nonceInjection: () => fetch(`${origin}/nonce`),
+  streaming: () => fetch(`${origin}/`),
+});
+```
+
+Each probe should deploy the adapter the way an application does, then return
+the result the contract reads. A response probe returns a `Response`. The
+background probe returns a host with `shutdown` and `waitUntil`. The static
+probe writes into the directory it is given. An upgrade probe returns the
+handshake status and headers.
+
+Run it with `pnpm test`. The suite itself is covered by
+`packages/core/tests/adapter/contract.test.ts`, which proves that a deliberate
+violation of each capability fails.
+
 ## Commands
 
 ```sh
@@ -55,6 +86,7 @@ retains traces and screenshots according to `playwright.config.ts`.
 - Add a production integration probe when behavior depends on a real server,
   process boundary, cache lifetime, or built artifact.
 - Add a browser test when only a browser can prove the behavior.
+- Run a new adapter through the shared adapter contract suite.
 - Extend packed-consumer verification when package metadata, exports,
   declarations, peer dependencies, or supported Node versions change.
 

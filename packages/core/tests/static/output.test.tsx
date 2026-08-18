@@ -25,10 +25,7 @@ import {
   type RouteModule,
   type RouteProps,
 } from "@demiurgejs/core";
-import {
-  generateStaticOutput,
-  staticAdapter,
-} from "@demiurgejs/core/static";
+import { generateStaticOutput } from "@demiurgejs/core/static";
 
 const temporaryRoots: string[] = [];
 
@@ -149,22 +146,6 @@ describe("static output adapter", () => {
     await generateStaticOutput({ outDir, routes });
 
     expect(maximumActive).toBe(8);
-  });
-
-  it("declares only the static output capability", () => {
-    expect(staticAdapter).toEqual({
-      capabilities: {
-        backgroundLifetime: false,
-        crossOriginIsolationHeaders: false,
-        nonceInjection: false,
-        sharedCache: false,
-        staticOutput: true,
-        streaming: false,
-        webSocket: false,
-        webTransport: false,
-      },
-      name: "static",
-    });
   });
 
   it("renders static and dynamic pages, preserves assets, and emits a 404 and manifest", async () => {

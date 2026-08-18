@@ -242,6 +242,8 @@ depends on a fixed nonce.
 
 Edge adapters are planned. `defineAdapter` and `assertAdapterCapabilities`
 already let a build reject a target that cannot provide something the app uses.
+`@demiurgejs/core/adapter/testing` holds the contract behind those flags. Every
+adapter runs the same suite and proves each capability it declares.
 
 ## Examples
 

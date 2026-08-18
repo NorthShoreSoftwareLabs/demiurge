@@ -4,6 +4,7 @@
     "baseUrl": ".",
     "paths": {
       "@demiurgejs/core": ["src/index.ts"],
+      "@demiurgejs/core/adapter/testing": ["src/adapter/testing.ts"],
       "@demiurgejs/core/data/testing": ["src/data/testing.ts"],
       "@demiurgejs/core/internal/testing": ["src/internal/testing.ts"],
       "@demiurgejs/core/node": ["src/node/index.ts"],
