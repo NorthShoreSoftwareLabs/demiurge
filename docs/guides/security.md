@@ -143,6 +143,7 @@ Route security can also enforce:
 - request-body and upload limits
 - fixed-window rate limits with replaceable storage
 - webhook HMAC verification against exact request bytes
+  ([`examples/webhook-security`](../../examples/webhook-security))
 - WebSocket origin checks
 
 The Node adapter ignores forwarded identity headers until the application
