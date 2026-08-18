@@ -11,6 +11,7 @@ const examples = [
   "static-export",
   "nested-policies",
   "metadata-blog",
+  "sse-feed",
 ];
 
 for (const example of examples) {

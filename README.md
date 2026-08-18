@@ -257,6 +257,7 @@ consumer would.
 | [`runtime-server-data`](./examples/runtime-server-data) | Cache scopes against a live HTTP source |
 | [`app-owned-fallbacks`](./examples/app-owned-fallbacks) | Nested loading, not-found, and error ownership |
 | [`static-export`](./examples/static-export) | Prerendering, dynamic `paths`, deployment headers |
+| [`sse-feed`](./examples/sse-feed) | `sse(...)` headers and browser `EventSource` reconnect |
 
 ## Documentation
 

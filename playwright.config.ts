@@ -47,5 +47,16 @@ export default defineConfig({
       timeout: 120_000,
       url: "http://localhost:42179/",
     },
+    {
+      command: "pnpm --filter @demiurge-examples/sse-feed start",
+      env: {
+        HOST: "localhost",
+        NODE_ENV: "production",
+        PORT: "42180",
+      },
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: "http://localhost:42180/",
+    },
   ],
 });
