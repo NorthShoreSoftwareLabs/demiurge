@@ -1,0 +1,21 @@
+{
+  "name": "@demiurge-examples/observability",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build --outDir dist/client && vite build --ssr src/server-entry.ts --outDir dist/server",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@demiurgejs/core": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.7"
+  }
+}

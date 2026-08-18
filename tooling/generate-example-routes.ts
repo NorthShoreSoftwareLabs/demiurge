@@ -18,6 +18,7 @@ const examples = [
   "cache-invalidation",
   "conditional-script",
   "cors-api",
+  "observability",
 ];
 
 for (const example of examples) {
