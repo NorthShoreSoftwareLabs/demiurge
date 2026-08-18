@@ -1,0 +1,42 @@
+:root {
+  color: #18202a;
+  background: #f5f7fa;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.site-shell {
+  width: min(44rem, calc(100% - 2rem));
+  margin: 0 auto;
+}
+
+header {
+  padding: 1.25rem 0;
+  border-bottom: 1px solid #ccd3dc;
+  color: #315b48;
+  font-weight: 700;
+}
+
+main {
+  padding: 3rem 0;
+}
+
+[data-connections] {
+  color: #725b18;
+}
+
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.feed li {
+  padding: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+  border-left: 4px solid #287a5b;
+  background: #ffffff;
+}
