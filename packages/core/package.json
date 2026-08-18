@@ -73,11 +73,15 @@
     "provenance": true
   },
   "peerDependencies": {
+    "@vercel/routing-utils": "6.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "vite": "^6.0.7"
   },
   "peerDependenciesMeta": {
+    "@vercel/routing-utils": {
+      "optional": true
+    },
     "vite": {
       "optional": true
     }
@@ -87,6 +91,7 @@
     "@types/node": "^22.13.0",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "@vercel/routing-utils": "6.5.0",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/coverage-v8": "^4.1.10",
     "jsdom": "^30.0.1",
@@ -97,7 +102,6 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@vercel/routing-utils": "6.5.0",
     "magic-string": "^0.30.21"
   }
 }

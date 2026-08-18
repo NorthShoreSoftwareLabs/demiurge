@@ -95,7 +95,10 @@ registry failure therefore cannot withhold the framework artifact or the GitHub
 release. Rerun that job alone to recover.
 
 The `@demiurgejs` scope permits independently versioned adapters or tools in the
-future. Version 0.2 keeps its current subpath exports in one framework package.
+future. Versions 0.2 and 0.3 keep their current subpath exports in one
+framework package. See
+[ADR 0006](../../architecture/decisions/0006-single-package-optional-adapter-dependencies.md)
+for host-specific dependencies within that one package.
 
 ## One-time registry setup
 
