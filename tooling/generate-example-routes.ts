@@ -13,6 +13,7 @@ const examples = [
   "metadata-blog",
   "sse-feed",
   "admin-route-group",
+  "redis-cache-adapter",
 ];
 
 for (const example of examples) {
