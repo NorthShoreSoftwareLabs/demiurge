@@ -15,6 +15,9 @@ export default defineConfig({
       "@demiurgejs/core/node": fileURLToPath(
         new URL("./src/node/index.ts", import.meta.url),
       ),
+      "@demiurgejs/core/redis": fileURLToPath(
+        new URL("./src/redis/index.ts", import.meta.url),
+      ),
       "@demiurgejs/core/static": fileURLToPath(
         new URL("./src/static/index.ts", import.meta.url),
       ),

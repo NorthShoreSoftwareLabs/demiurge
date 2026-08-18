@@ -63,6 +63,43 @@ entry while one lease owner refreshes it. Publication is owner-only and
 invalidation cancels obsolete refresh work. Node graceful shutdown drains
 tracked refresh work up to its configured deadline.
 
+## Redis store
+
+`createRedisCacheStore(...)` from `@demiurgejs/core/redis` shares `public`,
+`private`, and `build` entries across every process talking to the same
+Redis database. This is the gap the memory store leaves open. A memory store
+keeps its entries in one process. A second instance, or a redeploy, starts
+from an empty cache and never sees the first instance's tag invalidations.
+
+Pass an [ioredis](https://github.com/redis/ioredis) client the application
+already constructed and connected:
+
+```ts
+import { createRedisCacheStore } from "@demiurgejs/core/redis";
+import { Redis } from "ioredis";
+
+const store = createRedisCacheStore({ client: new Redis(process.env.REDIS_URL) });
+```
+
+The store owns none of the client's connection lifecycle. TLS, Sentinel,
+retry policy, and shutdown stay the application's decision, the same way an
+edge deployment's shared stores stay explicit rather than framework-managed.
+
+`ioredis` is an optional peer dependency. Only an application that constructs
+a Redis store installs it, the same rule ADR 0006 states for a host adapter
+dependency.
+
+Tag invalidation runs as one atomic Lua script per write. A tag deleted by one
+process is invisible to every other process reading the same database
+immediately after. `keyPrefix` scopes one store's entry, tag, and lease keys
+away from other Redis use in the same database. Two Demiurge deployments that
+share a database need distinct prefixes.
+
+The Redis store passes both conformance contracts from
+`@demiurgejs/core/data/testing`. It behaves identically to the memory store
+from the framework's point of view. `staleWhileRevalidate` coordination works
+the same way, backed by Redis key expiration instead of an in-process Map.
+
 ## Invalidation
 
 `createInvalidation(...)` invalidates explicit keys or tags and reports stable

@@ -61,6 +61,10 @@
       "types": "./dist/edge/index.d.ts",
       "default": "./dist/edge/index.js"
     },
+    "./redis": {
+      "types": "./dist/redis/index.d.ts",
+      "default": "./dist/redis/index.js"
+    },
     "./static": {
       "types": "./dist/static/index.d.ts",
       "default": "./dist/static/index.js"
@@ -83,6 +87,7 @@
   },
   "peerDependencies": {
     "@vercel/routing-utils": "6.5.0",
+    "ioredis": "^5.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sharp": "^0.35.0",
@@ -90,6 +95,9 @@
   },
   "peerDependenciesMeta": {
     "@vercel/routing-utils": {
+      "optional": true
+    },
+    "ioredis": {
       "optional": true
     },
     "sharp": {
@@ -107,6 +115,7 @@
     "@vercel/routing-utils": "6.5.0",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/coverage-v8": "^4.1.10",
+    "ioredis": "^5.4.1",
     "jsdom": "^30.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
