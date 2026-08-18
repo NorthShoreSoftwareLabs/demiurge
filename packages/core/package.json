@@ -85,10 +85,14 @@
     "@vercel/routing-utils": "6.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sharp": "^0.35.0",
     "vite": "^6.0.7"
   },
   "peerDependenciesMeta": {
     "@vercel/routing-utils": {
+      "optional": true
+    },
+    "sharp": {
       "optional": true
     },
     "vite": {
@@ -106,6 +110,7 @@
     "jsdom": "^30.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sharp": "^0.35.3",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
     "vitest": "^4.1.10"

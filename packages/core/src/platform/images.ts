@@ -1,3 +1,14 @@
+import {
+  createImageOptimizerUrl,
+  createImageVariantPath,
+  defaultImageOptimizerPath,
+  type ImageVariantDescriptor,
+} from "./image-url";
+
+// `optimizer` points every variant at a request-time endpoint. `static`
+// points every variant at a file that the static build emits.
+export type ImageLoader = "optimizer" | "static";
+
 export type ImageFormat = "auto" | "avif" | "webp" | "jpeg" | "png";
 
 export type RemoteImagePattern = {
@@ -8,6 +19,7 @@ export type RemoteImagePattern = {
 };
 
 export type ImagePolicy = {
+  loader?: ImageLoader;
   local?: boolean;
   optimizerPath?: string;
   remote?: readonly (string | RemoteImagePattern)[];
@@ -49,8 +61,6 @@ export type ImageTransformPlan = {
   width: number;
 };
 
-const defaultOptimizerPath = "/_demiurge/image";
-
 export function defineImages(policy: ImagePolicy): ImagePolicy {
   return policy;
 }
@@ -74,20 +84,25 @@ export function planImageTransform(
   validateImageQuality(options.quality);
 
   const format = options.format ?? "auto";
+  const loader = policy.loader ?? "optimizer";
+  const optimizerPath = policy.optimizerPath ?? defaultImageOptimizerPath;
   const widths = normalizeVariantWidths(options.width, options.widths);
   const variants = widths.map((width) => {
     const height = Math.round((options.height / options.width) * width);
+    const descriptor: ImageVariantDescriptor = {
+      format,
+      quality: options.quality,
+      sourceKind: source.kind,
+      src: source.kind === "remote" ? source.src : options.src,
+      width,
+    };
 
     return {
       format,
       height,
-      src: createOptimizerUrl({
-        format,
-        optimizerPath: policy.optimizerPath ?? defaultOptimizerPath,
-        quality: options.quality,
-        src: options.src,
-        width,
-      }),
+      src: loader === "static"
+        ? createImageVariantPath(descriptor, optimizerPath)
+        : createImageOptimizerUrl(descriptor, optimizerPath),
       width,
     };
   });
@@ -207,31 +222,75 @@ function normalizeVariantWidths(width: number, widths: readonly number[] | undef
   return uniqueWidths.sort((left, right) => left - right);
 }
 
-function createOptimizerUrl({
-  format,
-  optimizerPath,
-  quality,
-  src,
-  width,
-}: {
-  format: ImageFormat;
-  optimizerPath: string;
-  quality: number | undefined;
-  src: string;
-  width: number;
-}) {
-  const params = new URLSearchParams({
-    src,
-    w: String(width),
-  });
+export type ImageRequestRejection = {
+  reason: string;
+  status: 400 | 403;
+};
 
-  if (quality !== undefined) {
-    params.set("q", String(quality));
+export type ImageRequestResult =
+  | { descriptor: ImageVariantDescriptor; ok: true }
+  | { ok: false; rejection: ImageRequestRejection };
+
+const imageFormats = new Set<ImageFormat>([
+  "avif",
+  "jpeg",
+  "png",
+  "webp",
+]);
+
+// The runtime optimizer reads a query that any client can write. It repeats
+// the policy check that the planner made, so an unallowed source never
+// reaches the file system or the network.
+export function parseImageOptimizerRequest(
+  url: URL,
+  policy: ImagePolicy = {},
+): ImageRequestResult {
+  const src = url.searchParams.get("src");
+
+  if (!src) {
+    return reject(400, "The image request must declare a src parameter.");
   }
 
-  if (format !== "auto") {
-    params.set("f", format);
+  const source = classifyImageSource(src, policy);
+
+  if (!source) {
+    return reject(403, "The image policy does not allow this image source.");
   }
 
-  return `${optimizerPath}?${params.toString()}`;
+  const width = Number(url.searchParams.get("w"));
+
+  if (!Number.isInteger(width) || width <= 0) {
+    return reject(400, "The image width must be a positive integer.");
+  }
+
+  const rawQuality = url.searchParams.get("q");
+  const quality = rawQuality === null ? undefined : Number(rawQuality);
+
+  if (
+    quality !== undefined &&
+    (!Number.isInteger(quality) || quality < 1 || quality > 100)
+  ) {
+    return reject(400, "The image quality must be an integer from 1 through 100.");
+  }
+
+  const rawFormat = url.searchParams.get("f");
+
+  if (rawFormat !== null && !imageFormats.has(rawFormat as ImageFormat)) {
+    return reject(400, "The image format is not supported.");
+  }
+
+  return {
+    descriptor: {
+      format: (rawFormat as ImageFormat | null) ?? "auto",
+      quality,
+      sourceKind: source.kind,
+      src: source.src,
+      width,
+    },
+    ok: true,
+  };
+}
+
+function reject(status: 400 | 403, reason: string): ImageRequestResult {
+  return { ok: false, rejection: { reason, status } };
 }

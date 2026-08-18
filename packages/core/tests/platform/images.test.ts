@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   defineImages,
   isAllowedImageSource,
+  parseImageOptimizerRequest,
   planImageTransform,
 } from "@demiurgejs/core";
 
@@ -306,6 +307,132 @@ describe("image transform planning", () => {
     expect(plan.source).toEqual({
       kind: "remote",
       src: "https://images.example.com/hero.png",
+    });
+  });
+
+  it("plans build output paths when the policy selects the static loader", () => {
+    const plan = planImageTransform(
+      {
+        alt: "Hero",
+        format: "webp",
+        height: 300,
+        src: "/images/hero.png",
+        width: 400,
+        widths: [400, 800],
+      },
+      defineImages({ loader: "static" }),
+    );
+
+    expect(plan.variants.map((variant) => variant.src)).toEqual([
+      "/_demiurge/image/images/hero.png.w400.webp",
+      "/_demiurge/image/images/hero.png.w800.webp",
+    ]);
+
+    expect(plan.src).toBe(plan.variants[0]!.src);
+    expect(plan.srcSet).toBe(
+      plan.variants.map((variant) => `${variant.src} ${variant.width}w`)
+        .join(", "),
+    );
+  });
+
+  it("refuses a remote source under the static loader", () => {
+    expect(() =>
+      planImageTransform(
+        {
+          alt: "Hero",
+          height: 300,
+          src: "https://images.example.com/hero.png",
+          width: 400,
+        },
+        defineImages({
+          loader: "static",
+          remote: ["https://images.example.com"],
+        }),
+      )
+    ).toThrow("A static image loader can only emit a local image.");
+  });
+});
+
+describe("image optimizer requests", () => {
+  function parse(search: string, policy = defineImages({})) {
+    return parseImageOptimizerRequest(
+      new URL(`https://example.test/_demiurge/image${search}`),
+      policy,
+    );
+  }
+
+  it("reads a complete optimizer query", () => {
+    expect(parse("?src=%2Fimages%2Fhero.png&w=800&q=70&f=avif")).toEqual({
+      descriptor: {
+        format: "avif",
+        quality: 70,
+        sourceKind: "local",
+        src: "/images/hero.png",
+        width: 800,
+      },
+      ok: true,
+    });
+  });
+
+  it("defaults the format to auto and leaves the quality undefined", () => {
+    const result = parse("?src=%2Fimages%2Fhero.png&w=800");
+
+    expect(result.ok && result.descriptor).toEqual({
+      format: "auto",
+      quality: undefined,
+      sourceKind: "local",
+      src: "/images/hero.png",
+      width: 800,
+    });
+  });
+
+  it("normalizes an allowed remote source", () => {
+    const result = parse(
+      "?src=https%3A%2F%2Fimages.example.com%3A443%2Fhero.png&w=100",
+      defineImages({ remote: ["https://images.example.com"] }),
+    );
+
+    expect(result.ok && result.descriptor.src).toBe(
+      "https://images.example.com/hero.png",
+    );
+    expect(result.ok && result.descriptor.sourceKind).toBe("remote");
+  });
+
+  it("rejects a request that the policy or the parameters do not allow", () => {
+    expect(parse("?w=100")).toEqual({
+      ok: false,
+      rejection: {
+        reason: "The image request must declare a src parameter.",
+        status: 400,
+      },
+    });
+    expect(parse("?src=https%3A%2F%2Fevil.test%2Fa.png&w=100")).toEqual({
+      ok: false,
+      rejection: {
+        reason: "The image policy does not allow this image source.",
+        status: 403,
+      },
+    });
+    expect(parse("?src=%2Fa.png")).toEqual({
+      ok: false,
+      rejection: {
+        reason: "The image width must be a positive integer.",
+        status: 400,
+      },
+    });
+    expect(parse("?src=%2Fa.png&w=100&q=0")).toEqual({
+      ok: false,
+      rejection: {
+        reason: "The image quality must be an integer from 1 through 100.",
+        status: 400,
+      },
+    });
+    expect(parse("?src=%2Fa.png&w=100&f=gif")).toEqual({
+      ok: false,
+      rejection: {
+        reason: "The image format is not supported.",
+        status: 400,
+      },
     });
   });
 });

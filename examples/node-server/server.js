@@ -4,7 +4,12 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createMemoryCacheStore } from "@demiurgejs/core";
-import { createNodeServer, renderNodePageResponse } from "@demiurgejs/core/node";
+import {
+  createImageOptimizer,
+  createNodeServer,
+  createStaticFileHandler,
+  renderNodePageResponse,
+} from "@demiurgejs/core/node";
 import { createHandler } from "./dist/server/server-entry.js";
 
 const root = fileURLToPath(new URL("dist/client", import.meta.url));
@@ -38,6 +43,12 @@ const port = Number(process.env.PORT ?? 4173);
 const allowedHosts = (process.env.ALLOWED_HOSTS ?? `${host},localhost`)
   .split(",")
   .map((value) => value.trim());
+// The optimizer owns the framework image path. Every other path falls
+// through to the plain static file handler, and then to the route pipeline.
+const optimizeImage = createImageOptimizer({ root });
+const serveFile = createStaticFileHandler({ root });
+const serveStatic = async (request) =>
+  (await optimizeImage(request)) ?? serveFile(request);
 const handler = (request) => {
   if (new URL(request.url).pathname === "/.well-known/ready") {
     return new Response(server?.isReady() ? "ready" : "draining", {
@@ -59,8 +70,13 @@ server = createNodeServer({
     },
     signals: ["SIGINT", "SIGTERM"],
   },
-  static: { root },
+  static: serveStatic,
 });
 server.listen(port, host, () => {
-  console.log(`Demiurge Node server listening on http://${host}:${port}`);
+  // Port 0 asks the operating system for a free port. Log the bound port so
+  // a caller can reach the server.
+  const address = server.address();
+  console.log(
+    `Demiurge Node server listening on http://${host}:${address.port}`,
+  );
 });

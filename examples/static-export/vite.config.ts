@@ -2,6 +2,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { vercelStatic } from "@demiurgejs/core/static";
 import { demiurge } from "@demiurgejs/core/vite";
+import { images } from "./src/images";
 
 export default defineConfig({
   plugins: [
@@ -10,6 +11,7 @@ export default defineConfig({
       document: {
         title: "Demiurge Static Export",
       },
+      images,
       static: {
         deployment: vercelStatic({
           cache: [{

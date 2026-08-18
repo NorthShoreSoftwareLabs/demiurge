@@ -26,6 +26,11 @@ Vercel Build Output API artifacts under `.vercel/output`.
 The example gives `site.webmanifest` a one-hour application cache rule. That
 typed rule overrides the framework revalidation default.
 
+The home page renders an `Image` with the static image loader. The build reads
+the variant paths back out of the rendered document. It writes one resized
+WebP file for each variant under `dist/_demiurge/image`. A static host serves
+those files, so no rewrite rule and no application server is required.
+
 The home page includes structured data. Its exact SHA-256 hash appears in the
 static CSP. The browser test verifies this policy in Chromium.
 

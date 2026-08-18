@@ -31,6 +31,11 @@ intentionally limited to one Node process. A deployment with multiple replicas
 should inject a shared Redis or KV implementation that passes
 `@demiurgejs/core/data/testing`'s contract.
 
+`/hero` renders an `Image` with the request-time optimizer. `server.js`
+composes `createImageOptimizer(...)` in front of the static file handler. The
+optimizer resizes and reencodes each variant on request. It negotiates AVIF or
+WebP from the `accept` header. It answers a repeat request with an entity tag.
+
 The client build emits `dist/client/demiurge-manifest.json`. `server.js` reads
 its hashed entry and stylesheet paths and passes them to the generated
 `createHandler(...)`. The SSR build compiles `src/server-entry.ts` to

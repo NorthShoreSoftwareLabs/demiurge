@@ -20,7 +20,7 @@
     "typecheck": "pnpm generate:routes && pnpm --filter @demiurgejs/core typecheck && pnpm typecheck:consumers",
     "typecheck:consumers": "tsc --noEmit -p tsconfig.json",
     "test:pack": "tsx tests/package/packed-consumer.ts",
-    "test:examples": "tsx tests/integration/runtime-server-data.ts && tsx tests/integration/app-owned-fallbacks.ts && tsx tests/integration/nested-policies.ts && tsx tests/integration/metadata-blog.ts",
+    "test:examples": "tsx tests/integration/runtime-server-data.ts && tsx tests/integration/app-owned-fallbacks.ts && tsx tests/integration/nested-policies.ts && tsx tests/integration/metadata-blog.ts && tsx tests/integration/node-images.ts",
     "verify": "pnpm lint && pnpm --filter @demiurgejs/core build && pnpm typecheck && pnpm coverage && pnpm test:scaffold && pnpm build:examples && pnpm test:examples && pnpm test:browser && pnpm test:pack"
   },
   "devDependencies": {
