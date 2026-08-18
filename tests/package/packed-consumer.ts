@@ -122,6 +122,7 @@ try {
     [
       "add",
       tarballPath,
+      "@vercel/routing-utils@6.5.0",
       "react@^19.0.0",
       "react-dom@^19.0.0",
       "vite@^6.0.7",
@@ -355,6 +356,55 @@ try {
     });
     preview.child.kill("SIGTERM");
     await exit;
+  }
+
+  const nodeOnlyScratch = mkdtempSync(join(tmpdir(), "demiurge-pack-node-"));
+  try {
+    writeFileSync(
+      join(nodeOnlyScratch, "package.json"),
+      JSON.stringify(
+        {
+          name: "demiurge-pack-node-consumer",
+          private: true,
+          type: "module",
+          version: "0.0.0",
+        },
+        null,
+        2,
+      ),
+    );
+    run(
+      "pnpm",
+      [
+        "add",
+        tarballPath,
+        "react@^19.0.0",
+        "react-dom@^19.0.0",
+      ],
+      nodeOnlyScratch,
+    );
+    assert(
+      !existsSync(
+        join(nodeOnlyScratch, "node_modules", "@vercel", "routing-utils"),
+      ),
+      "A Node-only consumer must not install @vercel/routing-utils.",
+    );
+    writeFileSync(
+      join(nodeOnlyScratch, "check.js"),
+      [
+        `import { createNodeServer, nodeAdapter } from "@demiurgejs/core/node";`,
+        `if (nodeAdapter.name !== "node" || typeof createNodeServer !== "function") {`,
+        `  throw new Error("Expected the packed Node adapter contract without the Vercel peer.");`,
+        `}`,
+        `console.log("node-only pack consumer ok");`,
+      ].join("\n"),
+    );
+    const nodeOnlyOutput = run("node", ["check.js"], nodeOnlyScratch);
+    if (!nodeOnlyOutput.includes("node-only pack consumer ok")) {
+      throw new Error("Node-only packed consumer check did not run to completion.");
+    }
+  } finally {
+    rmSync(nodeOnlyScratch, { force: true, recursive: true });
   }
 
   console.log("pack artifact and external consumer tests passed");

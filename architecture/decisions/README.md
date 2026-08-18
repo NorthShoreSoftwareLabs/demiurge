@@ -8,3 +8,4 @@ after the implementing issue closes. They describe decisions, not task status.
 - [ADR 0003: Framework-owned static commands](./0003-framework-owned-static-commands.md)
 - [ADR 0004: Provider-specific static output](./0004-provider-owned-static-output.md)
 - [ADR 0005: Static file security headers](./0005-static-file-security-headers.md)
+- [ADR 0006: Single package with optional adapter dependencies](./0006-single-package-optional-adapter-dependencies.md)

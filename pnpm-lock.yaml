@@ -213,6 +213,9 @@ importers:
       '@demiurgejs/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@vercel/routing-utils':
+        specifier: 6.5.0
+        version: 6.5.0
       react:
         specifier: ^19.0.0
         version: 19.2.8
@@ -260,9 +263,6 @@ importers:
 
   packages/core:
     dependencies:
-      '@vercel/routing-utils':
-        specifier: 6.5.0
-        version: 6.5.0
       magic-string:
         specifier: ^0.30.21
         version: 0.30.21
@@ -279,6 +279,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.0.2
         version: 19.2.4(@types/react@19.2.18)
+      '@vercel/routing-utils':
+        specifier: 6.5.0
+        version: 6.5.0
       '@vitejs/plugin-react':
         specifier: ^4.3.4
         version: 4.7.0(vite@6.4.3)
@@ -1664,7 +1667,6 @@ packages:
       path-to-regexp-updated: /path-to-regexp@6.3.0
     optionalDependencies:
       ajv: 6.15.0
-    dev: false
 
   /@vitejs/plugin-react@4.7.0(vite@6.4.3):
     resolution: {integrity: sha512-gUu9hwfWvvEDBBmgtAowQCojwZmJ5mcLn3aufeCsitijs3+f2NsrPtlAWIR6OPiqljl96GVCUbLe0HyqIpVaoA==}
@@ -2484,11 +2486,9 @@ packages:
 
   /path-to-regexp@6.1.0:
     resolution: {integrity: sha512-h9DqehX3zZZDCEm+xbfU0ZmwCGFCAAraPJWMXJ4+v32NjZJilVg3k1TcKsRgIb8IQ/izZSaydDc1OhJCZvs2Dw==}
-    dev: false
 
   /path-to-regexp@6.3.0:
     resolution: {integrity: sha512-Yhpw4T9C6hPpgPeA28us07OJeqZ5EzQTkbfwuhsUg0c237RomFoETJgmp2sa3F/41gfLE6G5cqcYwznmeEeOlQ==}
-    dev: false
 
   /pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}

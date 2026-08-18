@@ -69,7 +69,10 @@ For static production output, run `demiurge build`. Run `demiurge preview` to
 serve the output with its declared headers.
 
 For Vercel, select `vercelStatic()` in the Vite configuration. The build then
-creates Build Output API artifacts under `.vercel/output`.
+creates Build Output API artifacts under `.vercel/output`. `vercelStatic()`
+has an optional peer dependency on `@vercel/routing-utils`. Install it in the
+application that calls `vercelStatic()`. A deployment that never imports
+`@demiurgejs/core/static` does not need it.
 
 Continue with the [route reference](./reference/routes.md). For production SSR,
 follow the [Node deployment guide](./guides/node-deployment.md).
