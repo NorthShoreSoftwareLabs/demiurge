@@ -12,6 +12,7 @@ const examples = [
   "nested-policies",
   "metadata-blog",
   "sse-feed",
+  "admin-route-group",
 ];
 
 for (const example of examples) {
