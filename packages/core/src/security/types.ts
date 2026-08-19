@@ -142,11 +142,19 @@ export type RateLimitStore = {
   ) => RateLimitResult;
 };
 
+/**
+ * Sources a route needs beyond its inherited policy. Each entry widens one
+ * directive only, so a need never grants a source to an unrelated directive.
+ */
+export type RouteSecurityNeeds = {
+  connect?: readonly CspSource[];
+  img?: readonly CspSource[];
+  script?: readonly CspSource[];
+};
+
 export type RouteSecurityPolicy = {
   csrf?: CsrfPolicy;
-  needs?: {
-    script?: readonly CspSource[];
-  };
+  needs?: RouteSecurityNeeds;
   rateLimit?: RateLimitPolicy;
   request?: RequestSecurityPolicy;
 };

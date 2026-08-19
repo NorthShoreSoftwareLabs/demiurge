@@ -17,6 +17,7 @@ const examples = [
   "webhook-security",
   "cache-invalidation",
   "conditional-script",
+  "analytics-csp",
   "cors-api",
   "observability",
   "cloud-run",

@@ -32,6 +32,9 @@ status live in GitHub issues and milestones.
   output repeats each application rule after them (#145).
 - The release tag now publishes `create-demiurge` at the framework version. The
   scaffold template pins that version.
+- Typed analytics integrations emit managed script contributions and declare
+  the CSP directives they need. Build and startup diagnostics name the missing
+  directive when a route wires only one half (#68).
 - Declared fonts are now self-hosted. The build and the Node handler publish
   each font file and one `@font-face` stylesheet, and `fontSources` derives the
   `font-src` value from the declaration (#67).

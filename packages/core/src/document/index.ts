@@ -66,6 +66,7 @@ export type {
 } from "./render";
 export type {
   ScriptContribution,
+  ScriptCspNeeds,
   ScriptProps,
   ScriptStrategy,
   ScriptTag,

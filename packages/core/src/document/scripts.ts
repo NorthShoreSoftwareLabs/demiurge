@@ -32,14 +32,26 @@ const SCRIPT_STRATEGIES = new Set<ScriptStrategy>([
 
 export const scriptPlacement = Symbol("demiurge.scriptPlacement");
 
+/**
+ * Directives a script needs at runtime beyond its own `script-src` entry. A
+ * beacon or an API call needs `connect-src`. A tracking pixel needs `img-src`.
+ * The build reads these and fails when the effective policy omits a source.
+ */
+export type ScriptCspNeeds = {
+  connect?: readonly string[];
+  img?: readonly string[];
+};
+
 export type ScriptTag = {
   async?: boolean;
+  crossOrigin?: "anonymous" | "use-credentials";
   dataApi?: string;
   dataDomain?: string;
   defer?: boolean;
   id?: string;
   integrity?: string;
   kind: "script";
+  needs?: ScriptCspNeeds;
   nonce?: string;
   purpose?: string;
   referrerPolicy?: ReferrerPolicy;
@@ -185,6 +197,7 @@ function renderScriptElement(scriptTag: ScriptTag, nonce?: string) {
 
   return createElement("script", {
     async: scriptTag.async,
+    crossOrigin: scriptTag.crossOrigin,
     "data-api": scriptTag.dataApi,
     "data-domain": scriptTag.dataDomain,
     "data-demiurge-script-placement": scriptTag[scriptPlacement],

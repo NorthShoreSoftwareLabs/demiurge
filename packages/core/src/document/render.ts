@@ -293,7 +293,7 @@ function renderScriptTag(scriptTag: ScriptTag, nonce: string | undefined) {
     return renderDeferredScriptTag(scriptTag, nonce);
   }
 
-  return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("src", scriptTag.src)}${renderAttribute("type", scriptTag.type ?? scriptTypeForStrategy(scriptTag.strategy))}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderAttribute("data-api", scriptTag.dataApi)}${renderAttribute("data-domain", scriptTag.dataDomain)}${renderAttribute("data-demiurge-script-placement", scriptTag[scriptPlacement])}${renderBooleanAttribute("async", scriptTag.async)}${renderBooleanAttribute("defer", scriptTag.defer)}></script>`;
+  return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("src", scriptTag.src)}${renderAttribute("type", scriptTag.type ?? scriptTypeForStrategy(scriptTag.strategy))}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("crossorigin", scriptTag.crossOrigin)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderAttribute("data-api", scriptTag.dataApi)}${renderAttribute("data-domain", scriptTag.dataDomain)}${renderAttribute("data-demiurge-script-placement", scriptTag[scriptPlacement])}${renderBooleanAttribute("async", scriptTag.async)}${renderBooleanAttribute("defer", scriptTag.defer)}></script>`;
 }
 
 // An idle or worker script must not run while the browser parses the document.
@@ -303,7 +303,7 @@ function renderDeferredScriptTag(
   scriptTag: ScriptTag,
   nonce: string | undefined,
 ) {
-  return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("type", DEFERRED_SCRIPT_TYPE)}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderAttribute("data-api", scriptTag.dataApi)}${renderAttribute("data-domain", scriptTag.dataDomain)}${renderAttribute(DEFERRED_SCRIPT_ATTRIBUTE, scriptTag.strategy)}${renderAttribute(DEFERRED_SCRIPT_SRC_ATTRIBUTE, scriptTag.src)}${renderAttribute(DEFERRED_SCRIPT_TYPE_ATTRIBUTE, scriptTag.type)}${renderAttribute("data-demiurge-script-placement", scriptTag[scriptPlacement])}></script>`;
+  return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("type", DEFERRED_SCRIPT_TYPE)}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("crossorigin", scriptTag.crossOrigin)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderAttribute("data-api", scriptTag.dataApi)}${renderAttribute("data-domain", scriptTag.dataDomain)}${renderAttribute(DEFERRED_SCRIPT_ATTRIBUTE, scriptTag.strategy)}${renderAttribute(DEFERRED_SCRIPT_SRC_ATTRIBUTE, scriptTag.src)}${renderAttribute(DEFERRED_SCRIPT_TYPE_ATTRIBUTE, scriptTag.type)}${renderAttribute("data-demiurge-script-placement", scriptTag[scriptPlacement])}></script>`;
 }
 
 function scriptTypeForStrategy(strategy: ScriptTag["strategy"]) {

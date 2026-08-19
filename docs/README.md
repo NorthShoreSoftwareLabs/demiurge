@@ -14,6 +14,7 @@ that exists in the current source tree. Planned work and delivery status live in
 - [Errors and not-found](./guides/errors-and-not-found.md)
 - [Images](./guides/images.md)
 - [Fonts](./guides/fonts.md)
+- [Analytics and observability](./guides/analytics.md)
 - [Node deployment](./guides/node-deployment.md)
 - [Edge deployment](./guides/edge-deployment.md)
 - [Cloud Run deployment](./guides/cloud-run-deployment.md)

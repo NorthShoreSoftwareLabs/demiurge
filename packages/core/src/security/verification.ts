@@ -22,6 +22,7 @@ import {
   securityPolicyRequiresNonce,
 } from "./policy";
 import { validateRateLimitPolicy } from "./rate-limit";
+import type { ScriptTag } from "../document";
 import type { ContentSecurityPolicy, CspDirectiveValue } from "./types";
 
 export type RouteModuleVerificationOptions = {
@@ -248,6 +249,12 @@ function validateStaticRouteScripts(
   );
 
   if (!blocked) {
+    validateScriptCspNeeds(
+      file,
+      exportName,
+      effectivePolicy.document.csp,
+      scripts,
+    );
     return;
   }
 
@@ -263,6 +270,113 @@ function validateStaticRouteScripts(
   throw new Error(
     `Route ${JSON.stringify(file)} export ${exportName} declares script ${JSON.stringify(script?.src)} that violates the effective ${scriptDirective} policy.`,
   );
+}
+
+// A vendor script also talks to its own backend. The script tag declares the
+// directives that traffic needs. A route that contributes the script without
+// widening the matching directive fails here, rather than failing silently in
+// a browser the application does not own.
+const scriptNeedDirectives = [
+  { directive: "connectSrc", name: "connect-src", need: "connect" },
+  { directive: "imgSrc", name: "img-src", need: "img" },
+] as const;
+
+function validateScriptCspNeeds(
+  file: string,
+  exportName: HttpMethod,
+  csp: ContentSecurityPolicy | false | undefined,
+  scripts: readonly ScriptTag[],
+) {
+  if (!csp) {
+    return;
+  }
+
+  for (const scriptTag of scripts) {
+    for (const { directive, name, need } of scriptNeedDirectives) {
+      const required = scriptTag.needs?.[need] ?? [];
+
+      if (required.length === 0) {
+        continue;
+      }
+
+      const allowed = resolveCspDirectiveValue(csp[directive]) ??
+        resolveCspDirectiveValue(csp.defaultSrc);
+
+      // No directive and no default-src means the policy places no limit on
+      // this resource type, so there is nothing left to satisfy.
+      if (allowed === undefined) {
+        continue;
+      }
+
+      for (const source of required) {
+        if (Array.isArray(allowed) && cspSourceListAllows(allowed, source)) {
+          continue;
+        }
+
+        throw new Error(
+          `Route ${JSON.stringify(file)} export ${exportName} declares script ${JSON.stringify(scriptTag.src)} that needs ${name} ${source}, which the effective policy does not allow. Add ${source} to security.needs.${need} or to csp.${directive} for this route.`,
+        );
+      }
+    }
+  }
+}
+
+function cspSourceListAllows(sources: readonly string[], required: string) {
+  if (sources.includes("'none'")) {
+    return false;
+  }
+
+  if (sources.includes("*") || sources.includes(required)) {
+    return true;
+  }
+
+  if (required.startsWith("'")) {
+    return false;
+  }
+
+  return sources.some((source) => cspSourceMatchesOrigin(source, required));
+}
+
+function cspSourceMatchesOrigin(source: string, required: string) {
+  if (source.startsWith("'")) {
+    return false;
+  }
+
+  let requiredUrl: URL;
+
+  try {
+    requiredUrl = new URL(required);
+  } catch {
+    return false;
+  }
+
+  if (source === `${requiredUrl.protocol}`) {
+    return true;
+  }
+
+  let sourceUrl: URL;
+
+  try {
+    sourceUrl = new URL(source);
+  } catch {
+    return false;
+  }
+
+  if (
+    sourceUrl.protocol !== requiredUrl.protocol ||
+    sourceUrl.port !== requiredUrl.port
+  ) {
+    return false;
+  }
+
+  if (sourceUrl.hostname.startsWith("*.")) {
+    const suffix = sourceUrl.hostname.slice(1);
+
+    return requiredUrl.hostname.endsWith(suffix) &&
+      requiredUrl.hostname !== sourceUrl.hostname.slice(2);
+  }
+
+  return sourceUrl.hostname === requiredUrl.hostname;
 }
 
 function validateEffectiveDocument(

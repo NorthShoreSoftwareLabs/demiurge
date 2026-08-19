@@ -97,6 +97,12 @@ export const policy = {
 };
 ```
 
+A need declares one directive at a time. `security.needs.connect` and
+`security.needs.img` widen `connect-src` and `img-src` the same way, which is
+what an analytics beacon or a tracking pixel requires. See the
+[analytics guide](./analytics.md) for the typed vendor integrations built on
+these declarations.
+
 `security.needs.script` merges from the root to the leaf. The framework keeps
 the first declaration for each source. A static `export const scripts` entry
 therefore takes precedence over a managed component with the same source.

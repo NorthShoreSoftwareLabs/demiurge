@@ -70,6 +70,17 @@ export default defineConfig({
       url: "http://localhost:42181/",
     },
     {
+      command: "pnpm --filter @demiurge-examples/analytics-csp start",
+      env: {
+        HOST: "localhost",
+        NODE_ENV: "production",
+        PORT: "42184",
+      },
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: "http://localhost:42184/",
+    },
+    {
       command: "pnpm --filter @demiurge-examples/cors-api start",
       env: {
         HOST: "localhost",

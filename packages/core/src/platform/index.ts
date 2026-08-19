@@ -42,8 +42,14 @@ export type {
 export { analytics } from "./analytics";
 export type {
   AnalyticsConsent,
+  AnalyticsIntegration,
+  AnalyticsProvider,
+  OpenTelemetryAnalytics,
+  OpenTelemetryAnalyticsOptions,
   PlausibleAnalytics,
   PlausibleAnalyticsOptions,
+  SentryAnalytics,
+  SentryAnalyticsOptions,
 } from "./analytics";
 export { defineInstrumentation } from "./observability";
 export type {

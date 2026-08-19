@@ -81,6 +81,7 @@ export type {
   ScriptDependencyAuditOptions,
   RequestSecurityPolicy,
   RoutePolicy,
+  RouteSecurityNeeds,
   RouteSecurityPolicy,
   SecurityHeadersOptions,
   SecurityHeaderPolicy,
