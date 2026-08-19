@@ -115,6 +115,55 @@ development, a late `beforeInteractive` script fails and points to
 `export const scripts`. In production, the framework renders that script in
 place after the flush, so the strategy cannot provide an early-load guarantee.
 
+## Script strategies
+
+Five strategies describe when a script runs. The document orders them in the
+same sequence.
+
+| Strategy | Loading behaviour |
+| --- | --- |
+| `beforeInteractive` | A parser-blocking tag that runs before hydration. |
+| `module` | A `type="module"` tag, deferred and run in module scope. |
+| `afterInteractive` | A tag the browser fetches while it parses the document. |
+| `idle` | A tag the client runtime adds during a browser idle period. |
+| `worker` | A source the client runtime hands to the `Worker` constructor. |
+
+`idle` and `worker` are deferred strategies. The document renders an inert
+placeholder for them, with no `src` attribute, so parsing never fetches the
+source. The client entry starts each placeholder after it hands the document to
+React. An `idle` script then waits for `requestIdleCallback`, and falls back to
+a macrotask in a browser without it. The loaded script goes into the head and
+keeps the identity, integrity, and type the route declared.
+
+A `worker` script never runs on the main thread and never becomes a document
+script. The runtime constructs a `Worker` from the source, and the application
+reads the handle with `getScriptWorker(src)`. Every worker starts before React
+runs a route effect, so a route can read its handle on mount.
+
+```tsx
+export const scripts = defineScripts([
+  script({ id: "report", src: "/vendor/report", strategy: "worker" }),
+]);
+
+const worker = getScriptWorker("/vendor/report");
+```
+
+The `worker` strategy is client-only, which is a real limit rather than a gap.
+A server render, a static export, and an edge runtime have no `Worker`
+constructor and no DOM to start one in. The runtime reports that case instead of
+loading the source on the main thread.
+
+The `Worker` constructor also needs a same-origin source and a policy that
+allows it. Browsers resolve `worker-src` through `child-src` and `script-src`,
+and the strict preset sets `script-src` to a nonce with `strict-dynamic`. That
+combination refuses a worker URL. Declare `csp.workerSrc` on the route policy:
+
+```ts
+export const policy = defineRoutePolicy({
+  document: security.strict({ csp: { workerSrc: ["'self'"] } }),
+});
+```
+
 ## CSRF
 
 Cookie-authenticated unsafe methods receive double-submit CSRF protection by

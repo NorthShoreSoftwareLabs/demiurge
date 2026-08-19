@@ -2,19 +2,32 @@ import {
   createContext,
   createElement,
   useContext,
+  useEffect,
   type ReactNode,
 } from "react";
 import type { HttpRouteContext, MaybePromise } from "../route";
+import {
+  DEFERRED_SCRIPT_ATTRIBUTE,
+  DEFERRED_SCRIPT_SRC_ATTRIBUTE,
+  DEFERRED_SCRIPT_TYPE,
+  DEFERRED_SCRIPT_TYPE_ATTRIBUTE,
+  isDeferredScriptStrategy,
+  startDeferredScripts,
+} from "./deferred-scripts";
 
 export type ScriptStrategy =
   | "afterInteractive"
   | "beforeInteractive"
-  | "module";
+  | "idle"
+  | "module"
+  | "worker";
 
 const SCRIPT_STRATEGIES = new Set<ScriptStrategy>([
   "afterInteractive",
   "beforeInteractive",
+  "idle",
   "module",
+  "worker",
 ]);
 
 export const scriptPlacement = Symbol("demiurge.scriptPlacement");
@@ -115,6 +128,15 @@ export function Script(props: ScriptProps): ReactNode {
   const context = useContext(ScriptContext);
   const scriptTag = script(props);
 
+  // A deferred strategy renders an inert placeholder. The client entry starts
+  // the placeholders it finds at hydration. A component that mounts later needs
+  // its own start, so the effect covers that case.
+  useEffect(() => {
+    if (isDeferredScriptStrategy(scriptTag.strategy)) {
+      startDeferredScripts();
+    }
+  });
+
   if (!context) {
     if (typeof document === "undefined") {
       throw new Error(
@@ -145,6 +167,22 @@ export function Script(props: ScriptProps): ReactNode {
 }
 
 function renderScriptElement(scriptTag: ScriptTag, nonce?: string) {
+  if (isDeferredScriptStrategy(scriptTag.strategy)) {
+    return createElement("script", {
+      "data-api": scriptTag.dataApi,
+      [DEFERRED_SCRIPT_ATTRIBUTE]: scriptTag.strategy,
+      "data-demiurge-script-placement": scriptTag[scriptPlacement],
+      [DEFERRED_SCRIPT_SRC_ATTRIBUTE]: scriptTag.src,
+      [DEFERRED_SCRIPT_TYPE_ATTRIBUTE]: scriptTag.type,
+      "data-domain": scriptTag.dataDomain,
+      id: scriptTag.id,
+      integrity: scriptTag.integrity,
+      nonce: scriptTag.nonce ?? nonce,
+      referrerPolicy: scriptTag.referrerPolicy,
+      type: DEFERRED_SCRIPT_TYPE,
+    });
+  }
+
   return createElement("script", {
     async: scriptTag.async,
     "data-api": scriptTag.dataApi,
@@ -192,13 +230,19 @@ export function script(options: Omit<ScriptTag, "kind" | "strategy"> & {
 
   if (!SCRIPT_STRATEGIES.has(strategy)) {
     throw new Error(
-      `Unsupported script strategy ${JSON.stringify(strategy)}. Demiurge 0.1 supports "beforeInteractive", "module", and "afterInteractive"; deferred, visibility-triggered, and worker loading require a future client script runtime.`,
+      `Unsupported script strategy ${JSON.stringify(strategy)}. Demiurge supports "beforeInteractive", "module", "afterInteractive", "idle", and "worker".`,
     );
   }
 
   if (strategy === "module" && options.type && options.type !== "module") {
     throw new Error(
       'The "module" script strategy cannot be combined with type="text/javascript".',
+    );
+  }
+
+  if (strategy === "worker" && (options.async || options.defer)) {
+    throw new Error(
+      'The "worker" script strategy runs off the main thread, so it cannot be combined with async or defer.',
     );
   }
 
@@ -284,5 +328,9 @@ function scriptStrategyOrder(strategy: ScriptStrategy) {
     return 1;
   }
 
-  return 2;
+  if (strategy === "afterInteractive") {
+    return 2;
+  }
+
+  return strategy === "idle" ? 3 : 4;
 }

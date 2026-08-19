@@ -26,6 +26,7 @@ export {
   defineRobots,
   defineScripts,
   defineSitemap,
+  getScriptWorker,
   link,
   meta,
   modulePreload,
@@ -40,6 +41,7 @@ export {
   renderSitemap,
   script,
   Script,
+  startDeferredScripts,
   structuredData,
 } from "./document";
 export { href } from "./routing";
@@ -160,6 +162,7 @@ export type {
   MemoryIdempotencyStoreOptions,
 } from "./data";
 export type {
+  DeferredScriptStrategy,
   DocumentMetadataTag,
   LinkTag,
   LinkContribution,

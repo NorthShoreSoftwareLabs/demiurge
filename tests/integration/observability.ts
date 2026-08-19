@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 
-// A macrotask timer is a minimum delay, not an exact one. The event loop can
-// fire it a fraction of a millisecond early under real scheduling jitter, so
-// this tolerates that instead of asserting a delay no real timer promises.
+// A macrotask timer is a minimum delay, not an exact one. Real scheduling
+// jitter can fire it a fraction of a millisecond early, so this tolerates
+// that instead of asserting a delay no real timer promises.
 const timerJitterToleranceMs = 2;
 
 const exampleRoot = resolve("examples/observability");

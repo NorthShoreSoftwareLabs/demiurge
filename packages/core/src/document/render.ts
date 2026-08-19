@@ -10,6 +10,13 @@ import type {
   ResolvedMetadata,
   StructuredDataTag,
 } from "./metadata";
+import {
+  DEFERRED_SCRIPT_ATTRIBUTE,
+  DEFERRED_SCRIPT_SRC_ATTRIBUTE,
+  DEFERRED_SCRIPT_TYPE,
+  DEFERRED_SCRIPT_TYPE_ATTRIBUTE,
+  isDeferredScriptStrategy,
+} from "./deferred-scripts";
 import { scriptPlacement, type ScriptTag } from "./scripts";
 
 export const STRUCTURED_DATA_ATTRIBUTE = "data-demiurge-structured-data";
@@ -282,7 +289,21 @@ function renderLinkTag(tag: LinkTag) {
 }
 
 function renderScriptTag(scriptTag: ScriptTag, nonce: string | undefined) {
+  if (isDeferredScriptStrategy(scriptTag.strategy)) {
+    return renderDeferredScriptTag(scriptTag, nonce);
+  }
+
   return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("src", scriptTag.src)}${renderAttribute("type", scriptTag.type ?? scriptTypeForStrategy(scriptTag.strategy))}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderAttribute("data-api", scriptTag.dataApi)}${renderAttribute("data-domain", scriptTag.dataDomain)}${renderAttribute("data-demiurge-script-placement", scriptTag[scriptPlacement])}${renderBooleanAttribute("async", scriptTag.async)}${renderBooleanAttribute("defer", scriptTag.defer)}></script>`;
+}
+
+// An idle or worker script must not run while the browser parses the document.
+// The placeholder carries an inert type and keeps the source in a data
+// attribute, so nothing fetches it until the client runtime asks for it.
+function renderDeferredScriptTag(
+  scriptTag: ScriptTag,
+  nonce: string | undefined,
+) {
+  return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("type", DEFERRED_SCRIPT_TYPE)}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderAttribute("data-api", scriptTag.dataApi)}${renderAttribute("data-domain", scriptTag.dataDomain)}${renderAttribute(DEFERRED_SCRIPT_ATTRIBUTE, scriptTag.strategy)}${renderAttribute(DEFERRED_SCRIPT_SRC_ATTRIBUTE, scriptTag.src)}${renderAttribute(DEFERRED_SCRIPT_TYPE_ATTRIBUTE, scriptTag.type)}${renderAttribute("data-demiurge-script-placement", scriptTag[scriptPlacement])}></script>`;
 }
 
 function scriptTypeForStrategy(strategy: ScriptTag["strategy"]) {

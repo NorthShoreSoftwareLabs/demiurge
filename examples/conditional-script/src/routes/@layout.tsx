@@ -8,6 +8,7 @@ export default function RootLayout({ children }: LayoutProps) {
         <nav>
           <Link to="/">Home</Link>
           <Link to="/dashboard">Dashboard</Link>
+          <Link to="/strategies">Strategies</Link>
         </nav>
       </header>
       {children}

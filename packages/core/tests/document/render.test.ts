@@ -237,6 +237,37 @@ describe("renderDocument resource hints and static scripts", () => {
       '<script src="https://cdn.example.com/explicit.js" nonce="script-nonce"></script>',
     );
   });
+
+  it("renders an idle script as an inert placeholder that carries no src", () => {
+    const html = renderDocument({
+      nonce: "doc-nonce",
+      scripts: [
+        script({
+          id: "idle-tag",
+          integrity: "sha384-idle",
+          src: "/vendor/idle-tag",
+          strategy: "idle",
+        }),
+      ],
+    });
+
+    expect(html).toContain(
+      '<script id="idle-tag" type="text/demiurge-script" nonce="doc-nonce" integrity="sha384-idle" data-demiurge-script="idle" data-demiurge-script-src="/vendor/idle-tag"></script>',
+    );
+    expect(html).not.toContain('<script src="/vendor/idle-tag"');
+  });
+
+  it("renders a worker script as an inert placeholder that keeps its module type", () => {
+    const html = renderDocument({
+      scripts: [
+        script({ src: "/vendor/worker-task", strategy: "worker", type: "module" }),
+      ],
+    });
+
+    expect(html).toContain(
+      '<script type="text/demiurge-script" data-demiurge-script="worker" data-demiurge-script-src="/vendor/worker-task" data-demiurge-script-type="module"></script>',
+    );
+  });
 });
 
 describe("renderDocument HTML escaping", () => {
