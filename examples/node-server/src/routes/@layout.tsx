@@ -1,8 +1,14 @@
 import {
   Link,
+  defineLinks,
   defineMetadata,
+  fontLinks,
   type LayoutProps,
 } from "@demiurgejs/core";
+import { fonts } from "../fonts";
+
+// The stylesheet and the preload both point at the self-hosted font handler.
+export const links = defineLinks(fontLinks(fonts));
 
 export const metadata = defineMetadata({
   description: "A production Node runtime example for Demiurge.",

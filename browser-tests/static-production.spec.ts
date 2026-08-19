@@ -49,6 +49,39 @@ test("static output hydrates under its hash-based CSP", async ({ page }) => {
     .toBeVisible();
 });
 
+test("the self-hosted font loads under the static CSP", async ({ page }) => {
+  const response = await page.goto(staticOrigin);
+  const csp = response?.headers()["content-security-policy"] ?? "";
+
+  expect(csp).toContain("font-src 'self'");
+  expect(csp).not.toContain("fonts.gstatic.com");
+  await expect(page.locator('link[rel="preload"][as="font"]')).toHaveAttribute(
+    "href",
+    "/_demiurge/font/inter-100-900-normal.woff2",
+  );
+
+  const stylesheet = await page.request.get(
+    `${staticOrigin}/_demiurge/font/fonts.css`,
+  );
+  const fontFile = await page.request.get(
+    `${staticOrigin}/_demiurge/font/inter-100-900-normal.woff2`,
+  );
+
+  expect(stylesheet.status()).toBe(200);
+  expect(await stylesheet.text()).toContain(
+    'url("/_demiurge/font/inter-100-900-normal.woff2")',
+  );
+  expect(fontFile.status()).toBe(200);
+  expect(fontFile.headers()["content-type"]).toBe("font/woff2");
+  await expect.poll(async () =>
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+
+      return document.fonts.check('16px "Inter"');
+    })
+  ).toBe(true);
+});
+
 test("static fallback keeps the generated security headers", async ({ page }) => {
   const response = await page.goto(`${staticOrigin}/missing-browser-route`);
   const headers = response?.headers() ?? {};

@@ -39,8 +39,10 @@ import {
   writeNotImplemented,
   writeWebResponse,
 } from "../node/http";
+import { createFontAssetHandler } from "../node/font";
 import { createImageOptimizer } from "../node/image";
 import { renderStreamingPageResponse } from "../node/streaming";
+import type { FontContribution } from "../platform/fonts";
 import { parseImageVariantPath } from "../platform/image-url";
 import type { ImagePolicy } from "../platform/images";
 import { createCspNonce } from "../security/policy";
@@ -58,6 +60,9 @@ export type DemiurgeVitePluginOptions = {
     lang?: string;
     title?: string;
   };
+  // The fonts that the application self-hosts. The development server serves
+  // the same URLs that the build publishes.
+  fonts?: FontContribution;
   // The image policy that the application passes to `planImageTransform` and
   // to `Image`. The development server serves the optimizer path from it.
   images?: ImagePolicy;
@@ -74,6 +79,7 @@ export type DemiurgeVitePluginOptions = {
 
 export type DemiurgeVitePluginApi = {
   demiurge: true;
+  fonts?: FontContribution;
   images?: ImagePolicy;
   staticDeployment?: VercelStaticDeployment;
   staticFileHeaders?: readonly StaticFileHeaderPatternRule[];
@@ -93,6 +99,7 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
   return {
     api: {
       demiurge: true,
+      fonts: options.fonts,
       images: options.images,
       staticDeployment: options.static?.deployment,
       staticFileHeaders: options.static?.headers,
@@ -275,6 +282,10 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       }
 
       const optimizeImage = createDevImageOptimizer(server, options);
+      const serveFont = createFontAssetHandler({
+        fonts: options.fonts,
+        root: server.config.root,
+      });
 
       server.middlewares.use(async (request, response, next) => {
         try {
@@ -294,6 +305,13 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
             }
 
             throw error;
+          }
+
+          const font = await serveFont(webRequest);
+
+          if (font) {
+            await writeWebResponse(response, font);
+            return;
           }
 
           const image = await optimizeImage(webRequest);

@@ -114,8 +114,11 @@ describe("Demiurge CLI arguments", () => {
       "file:///application/app/.demiurge/server/server-entry.js?build=42",
     );
     expect(generate).toHaveBeenCalledWith({
+      fonts: undefined,
+      images: undefined,
       origin: "https://example.test",
       outDir: "/application/app/output",
+      root: "/application/app",
       routes: expect.any(Object),
       ssr: {
         clientEntry: "/assets/app.js",

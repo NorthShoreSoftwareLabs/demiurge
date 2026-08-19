@@ -5,12 +5,13 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createMemoryCacheStore } from "@demiurgejs/core";
 import {
+  createFontAssetHandler,
   createImageOptimizer,
   createNodeServer,
   createStaticFileHandler,
   renderNodePageResponse,
 } from "@demiurgejs/core/node";
-import { createHandler } from "./dist/server/server-entry.js";
+import { createHandler, fonts } from "./dist/server/server-entry.js";
 
 const root = fileURLToPath(new URL("dist/client", import.meta.url));
 const manifest = JSON.parse(
@@ -43,12 +44,18 @@ const port = Number(process.env.PORT ?? 4173);
 const allowedHosts = (process.env.ALLOWED_HOSTS ?? `${host},localhost`)
   .split(",")
   .map((value) => value.trim());
-// The optimizer owns the framework image path. Every other path falls
-// through to the plain static file handler, and then to the route pipeline.
+// The font handler and the optimizer own the two framework asset paths. Every
+// other path falls through to the plain static file handler, and then to the
+// route pipeline.
+const serveFont = createFontAssetHandler({
+  fonts,
+  root: fileURLToPath(new URL(".", import.meta.url)),
+});
 const optimizeImage = createImageOptimizer({ root });
 const serveFile = createStaticFileHandler({ root });
 const serveStatic = async (request) =>
-  (await optimizeImage(request)) ?? serveFile(request);
+  (await serveFont(request)) ?? (await optimizeImage(request)) ??
+    serveFile(request);
 const handler = (request) => {
   if (new URL(request.url).pathname === "/.well-known/ready") {
     return new Response(server?.isReady() ? "ready" : "draining", {
