@@ -22,6 +22,8 @@ export {
   validateNodeOriginPolicy,
   writeWebResponse,
 } from "./http";
+export { createFontAssetHandler } from "./font";
+export type { FontAssetHandlerOptions } from "./font";
 export { createImageOptimizer } from "./image";
 export type {
   ImageOptimizerFetch,

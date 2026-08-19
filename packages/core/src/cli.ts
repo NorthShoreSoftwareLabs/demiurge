@@ -2,7 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { InlineConfig } from "vite";
-import type { ImagePolicy } from "./platform";
+import type { FontContribution, ImagePolicy } from "./platform";
 import type { RouteImporter } from "./route";
 import {
   generateVercelStaticOutput,
@@ -163,9 +163,11 @@ export async function buildStaticSite(
   }
 
   const manifest = await (runtime?.generate ?? generateStaticOutput)({
+    fonts: findFontContribution(config.plugins),
     images: findImagePolicy(config.plugins),
     origin: options.origin,
     outDir,
+    root,
     routes: serverEntry.routes,
     ssr: clientManifest,
     staticFileHeaders: findStaticFileHeaderPatterns(config.plugins),
@@ -274,6 +276,12 @@ function findVercelStaticDeployment(
   return findDemiurgePluginApi(plugins)?.staticDeployment;
 }
 
+function findFontContribution(
+  plugins: ReadonlyArray<{ api?: unknown; name: string }> | undefined,
+): FontContribution | undefined {
+  return findDemiurgePluginApi(plugins)?.fonts;
+}
+
 function findImagePolicy(
   plugins: ReadonlyArray<{ api?: unknown; name: string }> | undefined,
 ): ImagePolicy | undefined {
@@ -297,6 +305,7 @@ function findDemiurgePluginApi(
 
 function isDemiurgePluginApi(value: unknown): value is {
   demiurge: true;
+  fonts?: FontContribution;
   images?: ImagePolicy;
   staticDeployment?: VercelStaticDeployment;
   staticFileHeaders?: readonly StaticFileHeaderPatternRule[];

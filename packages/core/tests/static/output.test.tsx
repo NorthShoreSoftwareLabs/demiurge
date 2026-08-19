@@ -12,11 +12,13 @@ import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cspHash,
+  defineFonts,
   defineImages,
   defineMetadata,
   Image,
   defineRoutePolicy,
   defineScripts,
+  font,
   page,
   security,
   script,
@@ -926,6 +928,46 @@ describe("static output adapter", () => {
     expect(second.imageFiles).toEqual([]);
 
     for (const file of first.imageFiles!) {
+      expect(existsSync(join(outDir, file))).toBe(false);
+    }
+  });
+
+  it("publishes every declared font and removes a font the application drops", async () => {
+    const { outDir, root } = await createOutputDirectory();
+    await mkdir(join(root, "fonts"), { recursive: true });
+    await writeFile(
+      join(root, "fonts", "brand.woff2"),
+      new Uint8Array([1, 2, 3]),
+    );
+
+    const manifest = await generateStaticOutput({
+      fonts: defineFonts([
+        font.local({ name: "Brand Sans", src: "fonts/brand.woff2" }),
+      ]),
+      outDir,
+      root,
+      routes: appRoutes(),
+    });
+
+    expect(manifest.fontFiles).toEqual([
+      "_demiurge/font/brand-sans-400-normal.woff2",
+      "_demiurge/font/fonts.css",
+    ]);
+    await expect(
+      readFile(join(outDir, "_demiurge", "font", "fonts.css"), "utf8"),
+    ).resolves.toContain(
+      'url("/_demiurge/font/brand-sans-400-normal.woff2")',
+    );
+
+    const second = await generateStaticOutput({
+      outDir,
+      root,
+      routes: appRoutes(),
+    });
+
+    expect(second.fontFiles).toEqual([]);
+
+    for (const file of manifest.fontFiles!) {
       expect(existsSync(join(outDir, file))).toBe(false);
     }
   });

@@ -10,3 +10,4 @@ after the implementing issue closes. They describe decisions, not task status.
 - [ADR 0005: Static file security headers](./0005-static-file-security-headers.md)
 - [ADR 0006: Single package with optional adapter dependencies](./0006-single-package-optional-adapter-dependencies.md)
 - [ADR 0007: Self-describing image variant paths](./0007-self-describing-image-variants.md)
+- [ADR 0008: Declared self-hosted fonts](./0008-declared-self-hosted-fonts.md)

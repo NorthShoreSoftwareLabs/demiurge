@@ -34,6 +34,8 @@ import {
   IMMUTABLE_FILE_CACHE_CONTROL,
   REVALIDATED_FILE_CACHE_CONTROL,
 } from "../static-files";
+import { resolveFontAssets } from "../platform/font-assets";
+import type { FontContribution } from "../platform/fonts";
 import type { ImagePolicy } from "../platform/images";
 import { assertNoOptimizerImages, emitImageVariants } from "./images";
 
@@ -72,6 +74,9 @@ export type StaticOutputManifest = {
   adapter: "static";
   entries: StaticOutputEntry[];
   fileHeaderRules: StaticOutputFileHeaderRule[];
+  // Self-hosted font files and the stylesheet that declares them. They are
+  // plain output files as well, so the framework file header rules cover them.
+  fontFiles?: string[];
   // Optimized image files that the build emitted. They are plain output
   // files rather than route entries. A host therefore serves them with the
   // framework file header rules and no route rule of their own.
@@ -100,12 +105,18 @@ export type StaticFileHeaderPatternRule = {
 };
 
 export type GenerateStaticOutputOptions = {
+  // The font declaration that the application passed to the Vite plugin. The
+  // build reads every source it names and publishes the file from this origin.
+  fonts?: FontContribution;
   // The image policy that the application declared in the Vite plugin. The
   // build reads it to find and validate the variants it must emit.
   images?: ImagePolicy;
   onError?: RequestErrorReporter;
   origin?: string;
   outDir: string;
+  // The project directory that a local font source resolves against. A font
+  // file therefore does not have to sit in the public directory.
+  root?: string;
   routes: Record<string, RouteImporter>;
   ssr?: SsrOptions;
   staticFileHeaders?: readonly StaticFileHeaderPatternRule[];
@@ -235,9 +246,17 @@ export async function generateStaticOutput(
     outDir,
     policy: options.images,
   });
+  // The font set is a declaration rather than a render result, so the build
+  // publishes every font the application declared. A document reaches them
+  // through the stylesheet that `fontLinks` adds.
+  const fonts = await resolveFontAssets({
+    fonts: options.fonts,
+    root: options.root ?? process.cwd(),
+  });
 
   pending.sort((left, right) => left.file.localeCompare(right.file));
   images.sort((left, right) => left.file.localeCompare(right.file));
+  fonts.sort((left, right) => left.file.localeCompare(right.file));
 
   const outputManifest: StaticOutputManifest = {
     adapter: "static",
@@ -246,12 +265,13 @@ export async function generateStaticOutput(
       manifest,
       options.staticFileHeaders ?? [],
     ),
+    fontFiles: fonts.map((asset) => asset.file),
     imageFiles: images.map((image) => image.file),
     origin,
     version: 1,
   };
 
-  await writeOutput(outDir, pending, images, outputManifest);
+  await writeOutput(outDir, pending, [...images, ...fonts], outputManifest);
 
   return outputManifest;
 }
@@ -938,6 +958,7 @@ async function readPreviousOutputFiles(outDir: string) {
     const value = JSON.parse(source) as {
       adapter?: unknown;
       entries?: Array<{ file?: unknown }>;
+      fontFiles?: unknown;
       imageFiles?: unknown;
       version?: unknown;
     };
@@ -950,10 +971,12 @@ async function readPreviousOutputFiles(outDir: string) {
       return [];
     }
 
+    const fontFiles = Array.isArray(value.fontFiles) ? value.fontFiles : [];
     const imageFiles = Array.isArray(value.imageFiles) ? value.imageFiles : [];
 
     return [
       ...value.entries.map((entry) => entry.file),
+      ...fontFiles,
       ...imageFiles,
     ].flatMap((file) =>
       typeof file === "string" && isSafeRelativeFile(file) ? [file] : []

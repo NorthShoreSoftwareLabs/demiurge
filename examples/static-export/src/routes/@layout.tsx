@@ -1,4 +1,14 @@
-import { Link, defineMetadata, type LayoutProps } from "@demiurgejs/core";
+import {
+  Link,
+  defineLinks,
+  defineMetadata,
+  fontLinks,
+  type LayoutProps,
+} from "@demiurgejs/core";
+import { fonts } from "../fonts";
+
+// The stylesheet and the preload both point at files that the build wrote.
+export const links = defineLinks(fontLinks(fonts));
 
 export const metadata = defineMetadata({
   description: "A production static export built with Demiurge.",

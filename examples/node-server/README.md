@@ -36,6 +36,13 @@ composes `createImageOptimizer(...)` in front of the static file handler. The
 optimizer resizes and reencodes each variant on request. It negotiates AVIF or
 WebP from the `accept` header. It answers a repeat request with an entity tag.
 
+The site declares Inter in `src/fonts.ts` and self-hosts it. `server.js`
+composes `createFontAssetHandler(...)` in front of the static file handler. The
+handler serves the font file and one `@font-face` stylesheet from
+`/_demiurge/font`, and `fontSources(fonts)` keeps `font-src` at `'self'`. Inter
+ships under the SIL Open Font License, and `fonts/inter-latin.LICENSE.txt`
+carries that license.
+
 The client build emits `dist/client/demiurge-manifest.json`. `server.js` reads
 its hashed entry and stylesheet paths and passes them to the generated
 `createHandler(...)`. The SSR build compiles `src/server-entry.ts` to

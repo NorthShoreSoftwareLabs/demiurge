@@ -18,10 +18,23 @@ export type {
 export { Image } from "./image";
 export type { ImageProps } from "./image";
 export type { ImageVariantDescriptor } from "./image-url";
-export { defineFonts, font, fontPreloadLinks, renderFontFaceCss } from "./fonts";
+export {
+  defaultFontPath,
+  defineFonts,
+  font,
+  fontAssetFileName,
+  fontAssetUrl,
+  fontLinks,
+  fontMediaType,
+  fontPreloadLinks,
+  fontSources,
+  fontStylesheetUrl,
+  renderFontFaceCss,
+} from "./fonts";
 export type {
   FontContribution,
   FontDefinition,
+  FontFormat,
   FontStyle,
   GoogleFontOptions,
   LocalFontOptions,
