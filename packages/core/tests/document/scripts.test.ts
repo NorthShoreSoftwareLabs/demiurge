@@ -12,6 +12,7 @@ import type { ScriptProps } from "@demiurgejs/core";
 import {
   createScriptRenderContext,
   scriptPlacement,
+  withScriptContext,
 } from "../../src/document/scripts";
 
 const context = {
@@ -164,14 +165,16 @@ describe("document scripts", () => {
     }))).toBe("render");
   });
 
-  it("orders the supported strategies beforeInteractive, module, then afterInteractive", async () => {
+  it("orders every supported strategy from earliest to latest", async () => {
     const scripts = await resolveScripts(
       [
         [
+          script({ src: "/worker.js", strategy: "worker" }),
           script({
             src: "https://cdn.example.com/after.js",
             strategy: "afterInteractive",
           }),
+          script({ src: "/idle.js", strategy: "idle" }),
           script({ src: "https://cdn.example.com/module.js", strategy: "module" }),
           script({
             src: "https://cdn.example.com/before.js",
@@ -186,16 +189,27 @@ describe("document scripts", () => {
       "https://cdn.example.com/before.js",
       "https://cdn.example.com/module.js",
       "https://cdn.example.com/after.js",
+      "/idle.js",
+      "/worker.js",
     ]);
   });
 
-  it("rejects strategies whose client loading runtime is not implemented", () => {
+  it("rejects a strategy that is not a supported name", () => {
     expect(() =>
       script({
-        src: "https://cdn.example.com/idle.js",
-        strategy: "idle" as never,
+        src: "https://cdn.example.com/lazy.js",
+        strategy: "whenVisible" as never,
       }),
-    ).toThrow(/Unsupported script strategy "idle"/);
+    ).toThrow(/Unsupported script strategy "whenVisible"/);
+  });
+
+  it("rejects a worker strategy combined with a main-thread loading flag", () => {
+    expect(() =>
+      script({ async: true, src: "/worker.js", strategy: "worker" }),
+    ).toThrow(/cannot be combined with async or defer/);
+    expect(() =>
+      script({ defer: true, src: "/worker.js", strategy: "worker" }),
+    ).toThrow(/cannot be combined with async or defer/);
   });
 
   it("rejects a module strategy that is overridden with a classic script type", () => {
@@ -251,6 +265,24 @@ describe("document scripts", () => {
     });
 
     await expect(resolveScripts([scripts], context)).resolves.toEqual([]);
+  });
+
+  it("renders a late idle Script as an inert placeholder in the streamed body", () => {
+    const renderContext = createScriptRenderContext({ nonce: "doc-nonce" });
+    renderContext.flushHead();
+
+    const html = renderToString(
+      withScriptContext(
+        renderContext,
+        createElement(Script, { src: "/vendor/idle-tag", strategy: "idle" }),
+      ),
+    );
+
+    expect(html).toContain('type="text/demiurge-script"');
+    expect(html).toContain('data-demiurge-script="idle"');
+    expect(html).toContain('data-demiurge-script-src="/vendor/idle-tag"');
+    expect(html).toContain('nonce="doc-nonce"');
+    expect(html).not.toContain('src="/vendor/idle-tag"></script>');
   });
 
   it("rejects a server render that reaches Script without a script render context", () => {

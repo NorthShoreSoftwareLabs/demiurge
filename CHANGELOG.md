@@ -10,6 +10,9 @@ status live in GitHub issues and milestones.
   nonce (#38).
 - Build and startup diagnostics reject a script that the effective policy cannot
   authorize. A script need adds its sources to `script-src` only (#41).
+- The `idle` and `worker` script strategies now carry real loading behaviour.
+  The document renders an inert placeholder, and the client entry starts it
+  after hydration. Read a worker handle with `getScriptWorker(src)` (#40).
 - Policy verification rejects a document CSP that the page render mode cannot
   satisfy. A static page rejects nonce-backed directives (#26).
 - Production builds validate literal route policy. Startup validates eager route

@@ -6,6 +6,10 @@ export {
   serializeInitialRouteData,
 } from "./hydration";
 export {
+  getScriptWorker,
+  startDeferredScripts,
+} from "./deferred-scripts";
+export {
   defineLinks,
   modulePreload,
   preconnect,
@@ -37,6 +41,7 @@ export {
   renderRobots,
   renderSitemap,
 } from "./seo";
+export type { DeferredScriptStrategy } from "./deferred-scripts";
 export type { InitialRouteData } from "./hydration";
 export type {
   LinkContribution,

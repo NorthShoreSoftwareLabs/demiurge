@@ -15,6 +15,7 @@ import {
   HYDRATION_FALLBACK_ATTRIBUTE,
   HYDRATION_ROOT_ATTRIBUTE,
   readInitialRouteData,
+  startDeferredScripts,
   type InitialRouteData,
 } from "../document";
 import {
@@ -258,11 +259,13 @@ export async function hydrateFileRouter(options: HydrateFileRouterOptions) {
   // layouts the server resolved from being torn down on the client.
   if (hydratable && root.hasAttribute(HYDRATION_ROOT_ATTRIBUTE)) {
     hydrateRoot(root, createElement(Router));
+    startDeferredScripts();
     return;
   }
 
   root.replaceChildren();
   createRoot(root).render(createElement(Router));
+  startDeferredScripts();
 }
 
 type ReactDomClientApi = Pick<

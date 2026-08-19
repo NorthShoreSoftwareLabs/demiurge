@@ -77,6 +77,33 @@ describe("Script rendered without a script render context in a browser", () => {
     await unmount();
   });
 
+  it("renders an idle strategy as a placeholder and schedules it on mount", async () => {
+    const idleCallbacks: IdleRequestCallback[] = [];
+    Object.assign(window, {
+      requestIdleCallback: (callback: IdleRequestCallback) =>
+        idleCallbacks.push(callback),
+    });
+
+    const { container, unmount } = await renderScript({
+      src: "/vendor/idle-tag",
+      strategy: "idle",
+    });
+
+    expect(container.querySelector("script")?.getAttribute("type")).toBe(
+      "text/demiurge-script",
+    );
+    expect(idleCallbacks).toHaveLength(1);
+
+    idleCallbacks[0]?.({ didTimeout: false, timeRemaining: () => 0 });
+
+    expect(document.querySelector('script[src="/vendor/idle-tag"]'))
+      .not.toBeNull();
+
+    document.querySelector('script[src="/vendor/idle-tag"]')?.remove();
+    Reflect.deleteProperty(window, "requestIdleCallback");
+    await unmount();
+  });
+
   it("picks up the nonce from an existing script", async () => {
     const existing = document.createElement("script");
     existing.src = "https://cdn.example.com/vite-client.js";
