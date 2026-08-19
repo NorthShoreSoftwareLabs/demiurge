@@ -4,6 +4,7 @@ import type {
   CspDirectiveValue,
   ReportingEndpointUrl,
   RoutePolicy,
+  RouteSecurityNeeds,
   RouteSecurityPolicy,
   SecurityHeadersOptions,
   SecurityHeaderPolicy,
@@ -147,7 +148,7 @@ export function mergeRoutePolicies(
 
   return {
     ...merged,
-    document: applyScriptNeeds(merged.document, merged.security?.needs?.script),
+    document: applyPolicyNeeds(merged.document, merged.security?.needs),
   };
 }
 
@@ -168,56 +169,89 @@ export function mergeRouteSecurityPolicies(
   }, {});
 }
 
+// Each need widens exactly one directive. The pairing lives here so a
+// diagnostic can name both the declared need and the directive it targets.
+const routeNeedDirectives = [
+  { directive: "connectSrc", need: "connect" },
+  { directive: "imgSrc", need: "img" },
+  { directive: "scriptSrc", need: "script" },
+] as const satisfies readonly {
+  directive: keyof ContentSecurityPolicy;
+  need: keyof RouteSecurityNeeds;
+}[];
+
 function mergeRouteNeeds(
   base: RouteSecurityPolicy["needs"],
   override: RouteSecurityPolicy["needs"],
 ) {
-  const scripts = [...new Set([
-    ...(base?.script ?? []),
-    ...(override?.script ?? []),
-  ])];
+  const merged: { -readonly [Key in keyof RouteSecurityNeeds]: string[] } = {};
 
-  return scripts.length > 0 ? { script: scripts } : undefined;
+  for (const { need } of routeNeedDirectives) {
+    const sources = [...new Set([
+      ...(base?.[need] ?? []),
+      ...(override?.[need] ?? []),
+    ])];
+
+    if (sources.length > 0) {
+      merged[need] = sources;
+    }
+  }
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
-function applyScriptNeeds(
+function applyPolicyNeeds(
   document: SecurityPolicy | undefined,
-  sources: readonly string[] | undefined,
+  needs: RouteSecurityNeeds | undefined,
 ) {
-  if (!document?.csp || !sources || sources.length === 0) {
+  if (!document?.csp || !needs) {
     return document;
   }
 
-  // A removed script-src makes default-src govern scripts. A script need can
-  // then widen only default-src, which also grants the source to frame-src,
-  // worker-src, media-src, and manifest-src. The framework refuses that
-  // silent grant and asks for an explicit script-src instead.
-  if (document.csp.scriptSrc === false) {
+  let csp = document.csp;
+
+  for (const { directive, need } of routeNeedDirectives) {
+    csp = applyPolicyNeed(csp, directive, need, needs[need]);
+  }
+
+  return csp === document.csp ? document : { ...document, csp };
+}
+
+function applyPolicyNeed(
+  csp: ContentSecurityPolicy,
+  directive: keyof ContentSecurityPolicy,
+  need: keyof RouteSecurityNeeds,
+  sources: readonly string[] | undefined,
+) {
+  if (!sources || sources.length === 0) {
+    return csp;
+  }
+
+  // A removed directive makes default-src govern that resource type. A need
+  // could then widen only default-src, which also grants the source to every
+  // other fetch directive. The framework refuses that silent grant and asks
+  // for an explicit directive instead.
+  if (csp[directive] === false) {
     throw new Error(
-      `A route policy declares security.needs.script and sets csp.scriptSrc to false. Set an explicit csp.scriptSrc that includes ${sources.join(", ")}.`,
+      `A route policy declares security.needs.${need} and sets csp.${directive} to false. Set an explicit csp.${directive} that includes ${sources.join(", ")}.`,
     );
   }
 
-  if (
-    document.csp.scriptSrc === undefined &&
-    document.csp.defaultSrc === undefined
-  ) {
-    return document;
+  if (csp[directive] === undefined && csp.defaultSrc === undefined) {
+    return csp;
   }
 
-  const directive = document.csp.scriptSrc ?? document.csp.defaultSrc;
-  const current = resolveCspDirectiveValue(directive) ?? [];
+  const current = resolveCspDirectiveValue(
+    (csp[directive] ?? csp.defaultSrc) as CspDirectiveValue | undefined,
+  ) ?? [];
 
   if (!Array.isArray(current)) {
-    return document;
+    return csp;
   }
 
   return {
-    ...document,
-    csp: {
-      ...document.csp,
-      scriptSrc: [...new Set([...current, ...sources])],
-    },
+    ...csp,
+    [directive]: [...new Set([...current, ...sources])],
   };
 }
 
