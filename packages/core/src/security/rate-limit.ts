@@ -2,6 +2,7 @@ import type {
   MemoryRateLimitStoreOptions,
   RateLimitKey,
   RateLimitPolicy,
+  RateLimitResult,
   RateLimitStore,
 } from "./types";
 import { getRequestConnectionMetadata } from "../server/request-metadata";
@@ -19,9 +20,18 @@ type MemoryRateLimitEntry = {
 
 const defaultMaximumEntries = 10_000;
 
+// The memory store has no I/O to await, so its `increment` stays
+// synchronous even though the shared `RateLimitStore` interface also allows
+// an async store (Redis, a KV service) to return a promise. This narrower
+// return type lets callers that specifically hold a memory store keep using
+// the result without an `await`.
+export type MemoryRateLimitStore = {
+  increment: (key: string, windowMs: number, now: number) => RateLimitResult;
+};
+
 export function createMemoryRateLimitStore(
   options: MemoryRateLimitStoreOptions = {},
-): RateLimitStore {
+): MemoryRateLimitStore {
   const maximumEntries = options.maximumEntries ?? defaultMaximumEntries;
 
   if (!Number.isSafeInteger(maximumEntries) || maximumEntries <= 0) {
@@ -92,7 +102,7 @@ function evictOldestEntry(entries: Map<string, MemoryRateLimitEntry>) {
   }
 }
 
-export function enforceRateLimit(
+export async function enforceRateLimit(
   policy: RateLimitPolicy | undefined,
   request: Request,
   store: RateLimitStore,
@@ -106,7 +116,7 @@ export function enforceRateLimit(
 
   const windowMs = parseRateLimitWindow(policy.window);
   const key = rateLimitStoreKey(policy, request);
-  const result = store.increment(key, windowMs, now);
+  const result = await store.increment(key, windowMs, now);
   const remaining = Math.max(0, policy.limit - result.count);
   const headers = new Headers({
     "retry-after": String(Math.ceil(Math.max(0, result.resetAt - now) / 1000)),

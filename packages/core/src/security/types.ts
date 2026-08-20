@@ -135,11 +135,14 @@ export type MemoryRateLimitStoreOptions = {
 };
 
 export type RateLimitStore = {
+  // A store backed by real I/O (Redis, a KV service) cannot count and expire
+  // atomically without a round trip, so this may return a promise. The
+  // in-memory store stays synchronous because it has no I/O to await.
   increment: (
     key: string,
     windowMs: number,
     now: number,
-  ) => RateLimitResult;
+  ) => RateLimitResult | Promise<RateLimitResult>;
 };
 
 /**
