@@ -15,6 +15,7 @@ export {
   createMemoryIdempotencyStore,
   runIdempotentMutation,
 } from "./idempotency";
+export { createTieredCacheStore } from "./tiered";
 export type {
   Cache,
   CacheDuration,
@@ -34,6 +35,7 @@ export type {
   MemoryCacheOptions,
   MemoryCacheStoreOptions,
 } from "./cache";
+export type { TieredCacheStoreOptions } from "./tiered";
 export type {
   IdempotencyRequest,
   IdempotencyResult,
