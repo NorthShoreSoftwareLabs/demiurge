@@ -14,7 +14,7 @@ import {
   verifyCacheStoreContract,
   verifyCacheStoreRefreshContract,
 } from "../../src/data/testing";
-import type { CacheStoreEntry } from "../../src/data/cache";
+import type { CacheStore, CacheStoreEntry } from "../../src/data/cache";
 
 // These tests run against a real `redis-server` binary for `l2`, consistent
 // with the rest of the cache store suite. A mock l2 can't prove the tiered
@@ -199,6 +199,46 @@ describe.skipIf(!hasRedisServer)("createTieredCacheStore", () => {
     expect(
       await l1.acquireRefreshLease!("post:5", "owner-b", leaseExpiresAt),
     ).toBe(true);
+  });
+
+  it("rejects SWR coordination when l2 does not support it", async () => {
+    const l1 = createMemoryCacheStore();
+    // A plain object satisfying only the required CacheStore members, none
+    // of the optional lease/refresh coordination methods.
+    const l2: CacheStore = {
+      async delete() {
+        return false;
+      },
+      async get() {
+        return undefined;
+      },
+      async invalidateTags() {
+        return 0;
+      },
+      async set() {},
+    };
+    const store = createTieredCacheStore({ l1, l2 });
+
+    await expect(
+      store.acquireRefreshLease!("post:5", "owner-a", Date.now() + 60_000),
+    ).rejects.toThrow(
+      "Demiurge tiered cache store requires l2 to support acquireRefreshLease for staleWhileRevalidate.",
+    );
+    await expect(
+      store.publishRefresh!("post:5", "owner-a", {
+        expiresAt: null,
+        staleUntil: Date.now() + 60_000,
+        tags: [],
+        value: "fresh",
+      }),
+    ).rejects.toThrow(
+      "Demiurge tiered cache store requires l2 to support publishRefresh for staleWhileRevalidate.",
+    );
+    await expect(
+      store.releaseRefreshLease!("post:5", "owner-a"),
+    ).rejects.toThrow(
+      "Demiurge tiered cache store requires l2 to support releaseRefreshLease for staleWhileRevalidate.",
+    );
   });
 
   it("does not see a tag invalidation from another replica until l1 catches up", async () => {
