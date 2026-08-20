@@ -302,7 +302,7 @@ describe("Node HTTP bridge", () => {
     ).toThrow(UntrustedHostError);
   });
 
-  it("feeds only the resolved peer identity to IP rate limiting", () => {
+  it("feeds only the resolved peer identity to IP rate limiting", async () => {
     const store = createMemoryRateLimitStore();
     const policy = { key: "ip", limit: 1, window: "1m" } as const;
     const direct = (spoofedIp: string) =>
@@ -317,13 +317,13 @@ describe("Node HTTP bridge", () => {
         { allowedHosts: ["example.test"] },
       );
 
-    expect(enforceRateLimit(policy, direct("203.0.113.1"), store, 0)).toBe(null);
+    expect(await enforceRateLimit(policy, direct("203.0.113.1"), store, 0)).toBe(null);
     expect(
-      enforceRateLimit(policy, direct("203.0.113.2"), store, 0)?.status,
+      (await enforceRateLimit(policy, direct("203.0.113.2"), store, 0))?.status,
     ).toBe(429);
   });
 
-  it("reads X-Forwarded-For right-to-left for a trusted hop count", () => {
+  it("reads X-Forwarded-For right-to-left for a trusted hop count", async () => {
     const store = createMemoryRateLimitStore();
     const policy = { key: "ip", limit: 1, window: "1m" } as const;
     const proxied = (spoofedLeftmost: string) =>
@@ -341,9 +341,9 @@ describe("Node HTTP bridge", () => {
         },
       );
 
-    expect(enforceRateLimit(policy, proxied("192.0.2.1"), store, 0)).toBe(null);
+    expect(await enforceRateLimit(policy, proxied("192.0.2.1"), store, 0)).toBe(null);
     expect(
-      enforceRateLimit(policy, proxied("192.0.2.2"), store, 0)?.status,
+      (await enforceRateLimit(policy, proxied("192.0.2.2"), store, 0))?.status,
     ).toBe(429);
   });
 

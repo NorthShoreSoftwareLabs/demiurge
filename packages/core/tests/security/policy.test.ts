@@ -1327,31 +1327,31 @@ describe("rate limit policy", () => {
     );
   });
 
-  it("evicts the oldest entry when the in-memory store reaches its ceiling", () => {
+  it("evicts the oldest entry when the in-memory store reaches its ceiling", async () => {
     const store = createMemoryRateLimitStore({ maximumEntries: 2 });
 
-    expect(store.increment("alice", 60_000, 0).count).toBe(1);
-    expect(store.increment("bob", 60_000, 0).count).toBe(1);
-    expect(store.increment("carol", 60_000, 0).count).toBe(1);
-    expect(store.increment("alice", 60_000, 1).count).toBe(1);
-    expect(store.increment("carol", 60_000, 1).count).toBe(2);
+    expect((await store.increment("alice", 60_000, 0)).count).toBe(1);
+    expect((await store.increment("bob", 60_000, 0)).count).toBe(1);
+    expect((await store.increment("carol", 60_000, 0)).count).toBe(1);
+    expect((await store.increment("alice", 60_000, 1)).count).toBe(1);
+    expect((await store.increment("carol", 60_000, 1)).count).toBe(2);
   });
 
-  it("sweeps expired in-memory entries before enforcing the ceiling", () => {
+  it("sweeps expired in-memory entries before enforcing the ceiling", async () => {
     const store = createMemoryRateLimitStore({ maximumEntries: 2 });
 
-    expect(store.increment("expired", 10, 0).count).toBe(1);
-    expect(store.increment("active", 100, 0).count).toBe(1);
-    expect(store.increment("new", 100, 10).count).toBe(1);
-    expect(store.increment("active", 100, 10).count).toBe(2);
-    expect(store.increment("expired", 100, 10).count).toBe(1);
+    expect((await store.increment("expired", 10, 0)).count).toBe(1);
+    expect((await store.increment("active", 100, 0)).count).toBe(1);
+    expect((await store.increment("new", 100, 10)).count).toBe(1);
+    expect((await store.increment("active", 100, 10)).count).toBe(2);
+    expect((await store.increment("expired", 100, 10)).count).toBe(1);
   });
 
-  it("does not enforce a rate limit when no policy is configured", () => {
+  it("does not enforce a rate limit when no policy is configured", async () => {
     const store = createMemoryRateLimitStore();
     const request = new Request("https://example.test");
 
-    expect(enforceRateLimit(undefined, request, store, 0)).toBe(null);
+    expect(await enforceRateLimit(undefined, request, store, 0)).toBe(null);
   });
 
   it("parses rate limit windows", () => {
@@ -1389,10 +1389,10 @@ describe("rate limit policy", () => {
       },
     });
 
-    expect(enforceRateLimit(policy, request, store, 0)).toBe(null);
-    expect(enforceRateLimit(policy, request, store, 1)).toBe(null);
+    expect(await enforceRateLimit(policy, request, store, 0)).toBe(null);
+    expect(await enforceRateLimit(policy, request, store, 1)).toBe(null);
 
-    const response = enforceRateLimit(policy, request, store, 2);
+    const response = await enforceRateLimit(policy, request, store, 2);
 
     expect(response?.status).toBe(429);
     expect(response?.headers.get("retry-after")).toBe("60");
@@ -1420,7 +1420,7 @@ describe("rate limit policy", () => {
     );
   });
 
-  it("resets the counter once the fixed window boundary has passed", () => {
+  it("resets the counter once the fixed window boundary has passed", async () => {
     const store = createMemoryRateLimitStore();
     const policy = {
       key: { header: "x-user-id" },
@@ -1431,14 +1431,14 @@ describe("rate limit policy", () => {
       headers: { "x-user-id": "demo" },
     });
 
-    expect(enforceRateLimit(policy, request, store, 0)).toBe(null);
-    expect(enforceRateLimit(policy, request, store, 999)?.status).toBe(429);
+    expect(await enforceRateLimit(policy, request, store, 0)).toBe(null);
+    expect((await enforceRateLimit(policy, request, store, 999))?.status).toBe(429);
     // exactly at resetAt the window has elapsed, so the counter rolls over
-    expect(enforceRateLimit(policy, request, store, 1000)).toBe(null);
-    expect(enforceRateLimit(policy, request, store, 1000)?.status).toBe(429);
+    expect(await enforceRateLimit(policy, request, store, 1000)).toBe(null);
+    expect((await enforceRateLimit(policy, request, store, 1000))?.status).toBe(429);
   });
 
-  it("tracks rate limit keys independently per requester", () => {
+  it("tracks rate limit keys independently per requester", async () => {
     const store = createMemoryRateLimitStore();
     const policy = {
       key: { header: "x-user-id" },
@@ -1452,13 +1452,13 @@ describe("rate limit policy", () => {
       headers: { "x-user-id": "bob" },
     });
 
-    expect(enforceRateLimit(policy, requestAlice, store, 0)).toBe(null);
-    expect(enforceRateLimit(policy, requestAlice, store, 0)?.status).toBe(429);
+    expect(await enforceRateLimit(policy, requestAlice, store, 0)).toBe(null);
+    expect((await enforceRateLimit(policy, requestAlice, store, 0))?.status).toBe(429);
     // bob's key is unaffected by alice having exhausted her own limit
-    expect(enforceRateLimit(policy, requestBob, store, 0)).toBe(null);
+    expect(await enforceRateLimit(policy, requestBob, store, 0)).toBe(null);
   });
 
-  it("counts requests arriving in the same instant toward the same limit", () => {
+  it("counts requests arriving in the same instant toward the same limit", async () => {
     const store = createMemoryRateLimitStore();
     const policy = {
       key: { header: "x-user-id" },
@@ -1470,15 +1470,15 @@ describe("rate limit policy", () => {
     });
     const now = 1_000;
 
-    const results = [1, 2, 3, 4].map(() =>
-      enforceRateLimit(policy, request, store, now),
+    const results = await Promise.all(
+      [1, 2, 3, 4].map(() => enforceRateLimit(policy, request, store, now)),
     );
 
     expect(results.slice(0, 3)).toEqual([null, null, null]);
     expect(results[3]?.status).toBe(429);
   });
 
-  it("does not trust caller-controlled forwarding headers for IP rate limits", () => {
+  it("does not trust caller-controlled forwarding headers for IP rate limits", async () => {
     const store = createMemoryRateLimitStore();
     const policy = { key: "ip", limit: 1, window: "1m" } as const;
     const forwarded = new Request("https://example.test", {
@@ -1488,11 +1488,11 @@ describe("rate limit policy", () => {
       headers: { "cf-connecting-ip": "198.51.100.4" },
     });
 
-    expect(enforceRateLimit(policy, forwarded, store, 0)).toBe(null);
-    expect(enforceRateLimit(policy, cloudflare, store, 0)?.status).toBe(429);
+    expect(await enforceRateLimit(policy, forwarded, store, 0)).toBe(null);
+    expect((await enforceRateLimit(policy, cloudflare, store, 0))?.status).toBe(429);
   });
 
-  it("clamps retry-after and remaining when a custom store returns already-expired state", () => {
+  it("clamps retry-after and remaining when a custom store returns already-expired state", async () => {
     const misbehavingStore = {
       increment: () => ({ count: 5, resetAt: -1_000 }),
     };
@@ -1501,7 +1501,7 @@ describe("rate limit policy", () => {
       headers: { "x-user-id": "demo" },
     });
 
-    const response = enforceRateLimit(policy, request, misbehavingStore, 0);
+    const response = await enforceRateLimit(policy, request, misbehavingStore, 0);
 
     expect(response?.status).toBe(429);
     expect(response?.headers.get("retry-after")).toBe("0");

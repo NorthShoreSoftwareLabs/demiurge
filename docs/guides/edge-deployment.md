@@ -106,9 +106,13 @@ createEdgeRequestHandler({
 });
 ```
 
-A shared store must pass the conformance contract in
-`@demiurgejs/core/data/testing`. Redis and KV backed stores are tracked
-separately and do not ship yet.
+A shared cache store must pass the conformance contract in
+`@demiurgejs/core/data/testing`. `createKvRateLimitStore` from
+`@demiurgejs/core/kv` implements `rateLimitStore` against an edge KV
+namespace. Plain KV has no compare-and-swap, so its increment is a
+get-then-write and can undercount under concurrent requests in a narrow
+window. A Redis-backed rate limit store is tracked separately and does not
+ship yet.
 
 Pass `"unavailable"` when the deployment has none:
 

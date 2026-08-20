@@ -167,11 +167,14 @@ export type MemoryRateLimitStoreOptions = {
 };
 
 export type RateLimitStore = {
+  // Synchronous for the in-memory store, which never leaves the isolate.
+  // A store backed by real network I/O (KV, Redis) returns a Promise
+  // instead. `enforceRateLimit` awaits the result either way.
   increment: (
     key: string,
     windowMs: number,
     now: number,
-  ) => RateLimitResult;
+  ) => RateLimitResult | Promise<RateLimitResult>;
 };
 
 /**
