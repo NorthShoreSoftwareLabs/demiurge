@@ -38,8 +38,35 @@ status live in GitHub issues and milestones.
 - Declared fonts are now self-hosted. The build and the Node handler publish
   each font file and one `@font-face` stylesheet, and `fontSources` derives the
   `font-src` value from the declaration (#67).
+- Host adapters stay subpath exports of `@demiurgejs/core`. `@vercel/routing-utils`
+  is now an optional peer dependency, so a Node-only deployment does not install
+  it (#149).
+- The Vercel output now declares `access-control-allow-origin` ahead of every
+  other rule. The platform default no longer survives undeclared (#143).
+- `verifyAdapterContract(adapter, probes)` checks a host adapter against its own
+  capability declaration. A capability declared without a probe fails, and a
+  probe for an undeclared capability also fails (#75).
+- The edge adapter serves requests on a Web-standard runtime. It declares
+  streaming, nonce injection, and cross-origin isolation headers, and it requires
+  an explicit cache store (#73).
+- Image optimization now reaches delivery. `<Image />` plans a transform, the
+  static build writes each variant file, and `createImageOptimizer` serves a
+  request-time variant (#66).
+- `createRedisCacheStore` implements the cache store contract against `ioredis`.
+  Each write path runs as one Lua script, so a shared cache survives a deploy and
+  spans instances (#45).
+- `createKvCacheStore` implements the same contract against an edge KV namespace.
+  Tag membership uses marker keys, because a generic KV store has no cross-key
+  transaction (#46).
+- A Cloud Run deployment guide covers the container shape, the port contract, and
+  the health check. `examples/cloud-run` builds and runs a container image (#76).
 - New examples cover nested route policies (#36) and metadata with generated
   Open Graph output (#42).
+- Further examples cover server-sent events (#64), an admin route group (#37),
+  and a Redis cache store (#51).
+- More examples cover webhook signature verification (#32), tag invalidation
+  (#50), conditional script loading (#43), a cross-origin API (#31), and
+  `Server-Timing` output (#72).
 
 ## 0.1.1 — 2026-08-14
 
