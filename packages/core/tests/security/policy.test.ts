@@ -108,6 +108,25 @@ describe("security policy headers", () => {
     expect(value).toContain("style-src-attr 'unsafe-inline'");
   });
 
+  it("allows strict documents to split script-src into elem/attr directives", () => {
+    const headers = createSecurityHeaders(
+      security.strict({
+        csp: {
+          scriptSrcAttr: ["'none'"],
+          scriptSrcElem: ["'self'", "https://scripts.example.com"],
+        },
+      }),
+      { nonce: "route" },
+    );
+    const value = headers.get("content-security-policy");
+
+    expect(value).toContain("script-src 'nonce-route' 'strict-dynamic'");
+    expect(value).toContain("script-src-attr 'none'");
+    expect(value).toContain(
+      "script-src-elem 'self' https://scripts.example.com",
+    );
+  });
+
   it("exports the typed nonce source used by strict CSP", () => {
     const headers = createSecurityHeaders({
       csp: {
@@ -128,6 +147,8 @@ describe("security policy headers", () => {
         frameSrc: ["https://frames.example.com"],
         manifestSrc: ["'self'"],
         mediaSrc: ["https://media.example.com"],
+        scriptSrcAttr: ["'none'"],
+        scriptSrcElem: ["'self'", "https://scripts.example.com"],
         styleSrcAttr: ["'unsafe-inline'"],
         styleSrcElem: ["'self'", "https://styles.example.com"],
         workerSrc: ["'self'", "blob:"],
@@ -139,6 +160,10 @@ describe("security policy headers", () => {
     expect(value).toContain("frame-src https://frames.example.com");
     expect(value).toContain("manifest-src 'self'");
     expect(value).toContain("media-src https://media.example.com");
+    expect(value).toContain("script-src-attr 'none'");
+    expect(value).toContain(
+      "script-src-elem 'self' https://scripts.example.com",
+    );
     expect(value).toContain("style-src-attr 'unsafe-inline'");
     expect(value).toContain(
       "style-src-elem 'self' https://styles.example.com",
@@ -180,8 +205,52 @@ describe("security policy headers", () => {
       message:
         'Demiurge CSP directive "upgrade-insecure-requests" must be a boolean.',
     },
+    {
+      csp: { sandbox: "allow-scripts" },
+      message:
+        'Demiurge CSP directive "sandbox" must be a boolean or a list of sandbox tokens.',
+    },
+    {
+      csp: { sandbox: ["allow-scripts", 1] },
+      message:
+        'Demiurge CSP directive "sandbox" must be a boolean or a list of sandbox tokens.',
+    },
   ])("rejects a malformed CSP scalar directive", ({ csp, message }) => {
     expect(() => createSecurityHeaders({ csp: csp as never })).toThrow(message);
+  });
+
+  it("does not include sandbox in the strict or static presets", () => {
+    const strict = createSecurityHeaders(security.strict(), { nonce: "n" });
+    const staticHeaders = createSecurityHeaders(security.static());
+
+    expect(strict.get("content-security-policy")).not.toContain("sandbox");
+    expect(staticHeaders.get("content-security-policy")).not.toContain(
+      "sandbox",
+    );
+  });
+
+  it("renders a bare sandbox directive when a route opts in with no tokens", () => {
+    const headers = createSecurityHeaders(
+      security.strict({
+        csp: { sandbox: true },
+      }),
+      { nonce: "route" },
+    );
+
+    expect(headers.get("content-security-policy")).toContain("sandbox");
+    expect(headers.get("content-security-policy")).not.toContain("sandbox ");
+  });
+
+  it("renders a sandbox directive with explicit tokens", () => {
+    const headers = createSecurityHeaders({
+      csp: {
+        sandbox: ["allow-scripts", "allow-same-origin"],
+      },
+    });
+
+    expect(headers.get("content-security-policy")).toBe(
+      "sandbox allow-scripts allow-same-origin",
+    );
   });
 
   it("can disable CSP for API-only policies", () => {
@@ -427,6 +496,28 @@ describe("security policy cascade", () => {
 
     expect(csp).toContain("script-src https://scripts.example.com");
     expect(csp).not.toContain("script-src 'self'");
+  });
+
+  it("merges sandbox tokens additively from parent to child", () => {
+    const policy = mergeSecurityPolicies(
+      { csp: { sandbox: ["allow-scripts"] } },
+      { csp: { sandbox: ["allow-same-origin", "allow-scripts"] } },
+    );
+
+    expect(createSecurityHeaders(policy).get("content-security-policy")).toBe(
+      "sandbox allow-scripts allow-same-origin",
+    );
+  });
+
+  it("lets a route policy declare sandbox on top of a strict/static preset", () => {
+    const policy = mergeSecurityPolicies(
+      security.static(),
+      { csp: { sandbox: ["allow-scripts"] } },
+    );
+    const csp = createSecurityHeaders(policy).get("content-security-policy");
+
+    expect(csp).toContain("sandbox allow-scripts");
+    expect(csp).toContain("script-src 'self'");
   });
 
   it("lets child policy remove one inherited CSP directive", () => {
