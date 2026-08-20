@@ -99,6 +99,9 @@ jobs:
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Install Redis
+        run: sudo apt-get update && sudo apt-get install -y redis-server
+
       - name: Run clean-checkout verification
         run: pnpm verify
 
