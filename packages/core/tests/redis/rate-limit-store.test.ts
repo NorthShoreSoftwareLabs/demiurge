@@ -12,7 +12,7 @@ import { createRedisRateLimitStore } from "@demiurgejs/core/redis";
 // These tests run against a real `redis-server` binary rather than a mock,
 // the same way `packages/core/tests/redis/store.test.ts` does. Atomic
 // cross-instance counting is this store's entire value over the memory
-// store. A mock that only replays one process's idea of Redis cannot prove
+// store. A mock only replays one process's idea of Redis. It can't prove
 // two ioredis clients racing to increment the same key still get correct,
 // non-overlapping counts. `hasRedisServer` gates the suite instead of
 // failing CI on a machine without the binary on PATH.

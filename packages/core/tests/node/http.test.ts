@@ -317,9 +317,7 @@ describe("Node HTTP bridge", () => {
         { allowedHosts: ["example.test"] },
       );
 
-    expect(await enforceRateLimit(policy, direct("203.0.113.1"), store, 0)).toBe(
-      null,
-    );
+    expect(await enforceRateLimit(policy, direct("203.0.113.1"), store, 0)).toBe(null);
     expect(
       (await enforceRateLimit(policy, direct("203.0.113.2"), store, 0))?.status,
     ).toBe(429);
@@ -343,9 +341,7 @@ describe("Node HTTP bridge", () => {
         },
       );
 
-    expect(await enforceRateLimit(policy, proxied("192.0.2.1"), store, 0)).toBe(
-      null,
-    );
+    expect(await enforceRateLimit(policy, proxied("192.0.2.1"), store, 0)).toBe(null);
     expect(
       (await enforceRateLimit(policy, proxied("192.0.2.2"), store, 0))?.status,
     ).toBe(429);

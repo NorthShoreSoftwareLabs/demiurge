@@ -18,11 +18,11 @@ const defaultKeyPrefix = "demiurge:ratelimit:";
 
 // KEYS[1] counter key. ARGV[1] window in ms.
 //
-// INCR and PEXPIRE run inside one script, so two instances racing to
-// increment the same key never both observe count 1: Redis executes the
-// whole script as a single atomic step. The window's reset time comes from
-// Redis's own clock (TIME), not the caller-supplied `now`, because the
-// counter's TTL is authoritative once several processes share it -- a
+// INCR and PEXPIRE run inside one script. Redis executes the whole script
+// as a single atomic step, so two instances racing to increment the same
+// key never both observe count 1. The window's reset time comes from
+// Redis's own clock (TIME), not the caller-supplied `now`. The counter's
+// TTL is authoritative once several processes share it, and a
 // client-supplied timestamp could disagree with the server that expires the
 // key. TIME is deterministic across replication because Redis rewrites the
 // script's effects rather than replaying non-deterministic commands.

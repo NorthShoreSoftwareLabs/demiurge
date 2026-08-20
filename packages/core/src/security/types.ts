@@ -22,8 +22,32 @@ export type CspSourceDirective =
   | CspDirectiveReplacement
   | false;
 
+export type CspSandboxToken =
+  | "allow-downloads"
+  | "allow-forms"
+  | "allow-modals"
+  | "allow-orientation-lock"
+  | "allow-pointer-lock"
+  | "allow-popups"
+  | "allow-popups-to-escape-sandbox"
+  | "allow-presentation"
+  | "allow-same-origin"
+  | "allow-scripts"
+  | "allow-top-navigation"
+  | "allow-top-navigation-by-user-activation"
+  | "allow-top-navigation-to-custom-protocols"
+  | (string & {});
+
+/**
+ * `true` renders a bare `sandbox` (the maximally restrictive sandbox). An
+ * array renders `sandbox <tokens>`, relaxing only the listed capabilities.
+ * `false` omits the directive.
+ */
+export type CspSandboxDirective = readonly CspSandboxToken[] | boolean;
+
 export type CspDirectiveValue =
   | CspSourceDirective
+  | CspSandboxDirective
   | CspDirectiveReplacement<ReportingEndpointUrl>
   | readonly ReportingEndpointUrl[]
   | boolean;
@@ -48,7 +72,15 @@ export type ContentSecurityPolicy = {
     | false;
   /** A named member of `headers.reportingEndpoints`. */
   reportTo?: string;
+  /**
+   * Not part of any preset. A route that renders content it does not
+   * control (user-generated HTML, a rendered comment body, an embed) opts
+   * into this explicitly rather than inheriting it from `strict`/`static`.
+   */
+  sandbox?: CspSandboxDirective;
   scriptSrc?: CspSourceDirective;
+  scriptSrcAttr?: CspSourceDirective;
+  scriptSrcElem?: CspSourceDirective;
   styleSrc?: CspSourceDirective;
   styleSrcAttr?: CspSourceDirective;
   styleSrcElem?: CspSourceDirective;
@@ -135,9 +167,9 @@ export type MemoryRateLimitStoreOptions = {
 };
 
 export type RateLimitStore = {
-  // A store backed by real I/O (Redis, a KV service) cannot count and expire
-  // atomically without a round trip, so this may return a promise. The
-  // in-memory store stays synchronous because it has no I/O to await.
+  // Synchronous for the in-memory store, which never leaves the isolate.
+  // A store backed by real network I/O (KV, Redis) returns a Promise
+  // instead. `enforceRateLimit` awaits the result either way.
   increment: (
     key: string,
     windowMs: number,

@@ -556,7 +556,12 @@ function renderCsp(
 
     const directiveName = toCspDirectiveName(name);
 
-    if (resolved === true) {
+    // A bare `sandbox` (no tokens) is the maximally restrictive form, same
+    // as an empty token list, so both render as the directive name alone.
+    if (
+      resolved === true ||
+      (name === "sandbox" && Array.isArray(resolved) && resolved.length === 0)
+    ) {
       directives.push(directiveName);
       continue;
     }
@@ -671,6 +676,20 @@ function validateCspDirectiveValues(policy: ContentSecurityPolicy) {
       if (typeof value !== "boolean") {
         throw new Error(
           `Demiurge CSP directive ${JSON.stringify(directive)} must be a boolean.`,
+        );
+      }
+
+      continue;
+    }
+
+    if (name === "sandbox") {
+      if (
+        typeof value !== "boolean" &&
+        (!Array.isArray(value) ||
+          !value.every((token) => typeof token === "string"))
+      ) {
+        throw new Error(
+          `Demiurge CSP directive ${JSON.stringify(directive)} must be a boolean or a list of sandbox tokens.`,
         );
       }
 

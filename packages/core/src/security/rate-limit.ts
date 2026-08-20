@@ -21,10 +21,10 @@ type MemoryRateLimitEntry = {
 const defaultMaximumEntries = 10_000;
 
 // The memory store has no I/O to await, so its `increment` stays
-// synchronous even though the shared `RateLimitStore` interface also allows
-// an async store (Redis, a KV service) to return a promise. This narrower
-// return type lets callers that specifically hold a memory store keep using
-// the result without an `await`.
+// synchronous. The shared `RateLimitStore` interface also allows an async
+// store (Redis, a KV service) to return a promise. This narrower return
+// type lets callers that specifically hold a memory store keep using the
+// result without an `await`.
 export type MemoryRateLimitStore = {
   increment: (key: string, windowMs: number, now: number) => RateLimitResult;
 };
@@ -64,11 +64,16 @@ export function createMemoryRateLimitStore(
 
         entries.set(key, next);
         nextExpiration = Math.min(nextExpiration, next.resetAt);
-        return next;
+        // A copy of the stored entry, not the entry itself. `increment()`
+        // can return before its caller reads the result, because
+        // `enforceRateLimit` awaits it. A later call for the same key
+        // would otherwise keep mutating the object an earlier caller is
+        // still holding.
+        return { count: next.count, resetAt: next.resetAt };
       }
 
       existing.count += 1;
-      return existing;
+      return { count: existing.count, resetAt: existing.resetAt };
     },
   };
 }
