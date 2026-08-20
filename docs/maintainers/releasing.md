@@ -156,6 +156,32 @@ metadata points somewhere other than this repository.
    git push origin v0.1.0
    ```
 
+   `scripts/release-tag.sh <version>` runs steps 5 and 6 as one command. It
+   refuses to touch a tag with an existing GitHub release, cleans up a failed
+   prior attempt, and watches the workflow to completion:
+
+   ```sh
+   scripts/release-tag.sh 0.2.0-beta.2
+   ```
+
+   Tag signing needs a working local signer. GPG through `pinentry-curses` or
+   `pinentry-tty` depends on the terminal's controlling TTY and gpg-agent
+   state. That dependency is a common source of a signing step that cancels
+   or hangs. SSH-based signing avoids it:
+
+   ```sh
+   git config --global gpg.format ssh
+   git config --global user.signingkey ~/.ssh/id_ed25519.pub
+   git config --global gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers
+   echo "<your-github-email> $(cat ~/.ssh/id_ed25519.pub)" >> ~/.ssh/allowed_signers
+   ```
+
+   Then register that key on GitHub as a **Signing Key** (not an
+   Authentication Key), at Settings → SSH and GPG keys → New SSH key. GitHub
+   verifies an SSH-signed tag the same way it verifies a GPG-signed one. The
+   release workflow's `Require a verified annotated tag` step does not care
+   which signature type produced `verification.verified: true`.
+
 6. Approve the protected `npm` environment after the release workflow has
    passed its verification job. The workflow verifies the tag signature,
    publishes with Sigstore provenance, and creates a GitHub release only after
