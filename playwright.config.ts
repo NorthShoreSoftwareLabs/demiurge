@@ -21,85 +21,15 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
-  webServer: [
-    {
-      command: "pnpm --filter @demiurge-examples/node-server start",
-      env: {
-        HOST: "localhost",
-        NODE_ENV: "production",
-        PORT: "42177",
-      },
-      reuseExistingServer: false,
-      timeout: 120_000,
-      url: "http://localhost:42177/",
-    },
-    {
-      command:
-        "pnpm --filter @demiurge-examples/static-export preview --host localhost --port 42178",
-      reuseExistingServer: false,
-      timeout: 120_000,
-      url: "http://localhost:42178/",
-    },
-    {
-      command:
-        "pnpm --filter @demiurge-examples/ssr-page dev --host localhost --port 42179",
-      reuseExistingServer: false,
-      timeout: 120_000,
-      url: "http://localhost:42179/",
-    },
-    {
-      command: "pnpm --filter @demiurge-examples/sse-feed start",
-      env: {
-        HOST: "localhost",
-        NODE_ENV: "production",
-        PORT: "42180",
-      },
-      reuseExistingServer: false,
-      timeout: 120_000,
-      url: "http://localhost:42180/",
-    },
-    {
-      command: "pnpm --filter @demiurge-examples/conditional-script start",
-      env: {
-        HOST: "localhost",
-        NODE_ENV: "production",
-        PORT: "42181",
-      },
-      reuseExistingServer: false,
-      timeout: 120_000,
-      url: "http://localhost:42181/",
-    },
-    {
-      command: "pnpm --filter @demiurge-examples/analytics-csp start",
-      env: {
-        HOST: "localhost",
-        NODE_ENV: "production",
-        PORT: "42184",
-      },
-      reuseExistingServer: false,
-      timeout: 120_000,
-      url: "http://localhost:42184/",
-    },
-    {
-      command: "pnpm --filter @demiurge-examples/cors-api start",
-      env: {
-        HOST: "localhost",
-        NODE_ENV: "production",
-        PORT: "42182",
-      },
-      reuseExistingServer: false,
-      timeout: 120_000,
-      url: "http://localhost:42182/",
-    },
-    {
-      command: "pnpm --filter @demiurge-examples/cors-api start:client",
-      env: {
-        HOST: "localhost",
-        PORT: "42183",
-      },
-      reuseExistingServer: false,
-      timeout: 120_000,
-      url: "http://localhost:42183/",
-    },
-  ],
+  // Playwright boots the entries of a `webServer` array one at a time, costing
+  // about a second per server before the first test runs. The eight servers
+  // these tests need have distinct ports and no shared state.
+  // `tooling/browser-test-servers.ts` starts them all at once, then opens
+  // port 42176 once every one of them answers.
+  webServer: {
+    command: "tsx tooling/browser-test-servers.ts",
+    reuseExistingServer: false,
+    timeout: 120_000,
+    url: "http://localhost:42176/",
+  },
 });
