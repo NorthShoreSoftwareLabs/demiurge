@@ -26,6 +26,11 @@ type MaybePromise<T> = T | Promise<T>;
 export type CacheRequest<TResult> = {
   fn: () => MaybePromise<TResult>;
   key: CacheKey;
+  // TTL for a negative entry (the loader called `cacheNotFound()`), kept
+  // separate from `ttl` because "this doesn't currently exist" tends to
+  // change sooner than "this currently exists." Falls back to `ttl` when
+  // omitted.
+  notFoundTtl?: CacheDuration;
   scope?: CacheScope;
   staleWhileRevalidate?: CacheDuration;
   tags?: readonly CacheTag[];
@@ -35,6 +40,7 @@ export type CacheRequest<TResult> = {
 export type QueryDefinition<TArgs extends readonly unknown[], TResult> = {
   fn: (...args: TArgs) => MaybePromise<TResult>;
   key: (...args: TArgs) => CacheKey;
+  notFoundTtl?: CacheDuration;
   scope?: CacheScope;
   staleWhileRevalidate?: CacheDuration;
   tags?: (...args: TArgs) => readonly CacheTag[];
@@ -59,6 +65,10 @@ export type CacheNamespace = {
 
 export type CacheStoreEntry = {
   expiresAt: number | null;
+  // Present and true only for a negative entry: a stored record of a
+  // loader reporting `cacheNotFound()` instead of a real result. `value`
+  // then holds the CacheNotFoundError message (or undefined), not a result.
+  negative?: boolean;
   staleUntil: number | null;
   tags: readonly string[];
   value: unknown;
@@ -154,11 +164,38 @@ export function query<TArgs extends readonly unknown[], TResult>(
   return (...args) => ({
     fn: () => definition.fn(...args),
     key: definition.key(...args),
+    notFoundTtl: definition.notFoundTtl,
     scope: definition.scope,
     staleWhileRevalidate: definition.staleWhileRevalidate,
     tags: definition.tags?.(...args),
     ttl: definition.ttl,
   });
+}
+
+// The framework's route/data layer already signals "this doesn't exist" by
+// throwing a specific error class (`HttpError` with a 404 status) rather
+// than returning a sentinel value. `CacheNotFoundError` follows the same
+// convention at the cache layer: a `fn` passed to `cache.get()` throws it
+// (typically via `cacheNotFound()`) to report a negative result the cache
+// should still store. `data/` sits below `route/` in the package's
+// dependency order, so this stays independent of `HttpError` — callers
+// that need an HTTP response translate `CacheNotFoundError` into
+// `httpError(404)` themselves.
+export class CacheNotFoundError extends Error {
+  constructor(message?: string) {
+    super(message ?? "Not found");
+    this.name = "CacheNotFoundError";
+  }
+}
+
+export function cacheNotFound(message?: string): never {
+  throw new CacheNotFoundError(message);
+}
+
+export function isCacheNotFoundError(
+  error: unknown,
+): error is CacheNotFoundError {
+  return error instanceof CacheNotFoundError;
 }
 
 export function tag(id: string): CacheTag {
@@ -202,6 +239,12 @@ export function createCache(options: CreateCacheOptions): Cache {
         existing &&
         (existing.expiresAt === null || existing.expiresAt > now())
       ) {
+        if (existing.negative) {
+          throw new CacheNotFoundError(
+            typeof existing.value === "string" ? existing.value : undefined,
+          );
+        }
+
         return existing.value as TResult;
       }
 
@@ -242,22 +285,31 @@ export function createCache(options: CreateCacheOptions): Cache {
       }
 
       const state = { invalidated: false };
-      const value = Promise.resolve().then(request.fn).then(async (result) => {
-        if (!state.invalidated) {
-          await options.store.set(key, {
-            expiresAt: storeExpirationTime(now(), request.ttl),
-            staleUntil: storeStaleTime(
-              now(),
-              request.ttl,
-              request.staleWhileRevalidate,
-            ),
-            tags,
-            value: result,
-          });
-        }
+      const value = Promise.resolve().then(request.fn).then(
+        async (result) => {
+          if (!state.invalidated) {
+            await options.store.set(key, {
+              expiresAt: storeExpirationTime(now(), request.ttl),
+              staleUntil: storeStaleTime(
+                now(),
+                request.ttl,
+                request.staleWhileRevalidate,
+              ),
+              tags,
+              value: result,
+            });
+          }
 
-        return result;
-      });
+          return result;
+        },
+        async (error) => {
+          if (!state.invalidated && error instanceof CacheNotFoundError) {
+            await options.store.set(key, negativeStoreEntry(now(), request, tags, error));
+          }
+
+          throw error;
+        },
+      );
       const pending: PendingStoreEntry = {
         promise: value,
         state,
@@ -644,7 +696,15 @@ async function getRequestValue<TResult>(
     return await value;
   } catch (error) {
     if (entries.get(key) === entry) {
-      entries.delete(key);
+      // A negative result stays cached, the same as a positive one, just
+      // under its own (usually shorter) TTL — it re-throws on every hit
+      // until it expires.
+      if (error instanceof CacheNotFoundError) {
+        entry.expiresAt = now() +
+          parseCacheDuration(request.notFoundTtl ?? request.ttl);
+      } else {
+        entries.delete(key);
+      }
     }
 
     throw error;
@@ -670,6 +730,25 @@ function serializeStoreTag(
 function storeExpirationTime(now: number, ttl: CacheDuration | undefined) {
   const duration = parseCacheDuration(ttl);
   return Number.isFinite(duration) ? now + duration : null;
+}
+
+function negativeStoreEntry<TResult>(
+  now: number,
+  request: CacheRequest<TResult>,
+  tags: readonly string[],
+  error: CacheNotFoundError,
+): CacheStoreEntry {
+  const notFoundTtl = request.notFoundTtl ?? request.ttl;
+
+  return {
+    expiresAt: storeExpirationTime(now, notFoundTtl),
+    negative: true,
+    // Negative entries do not participate in stale-while-revalidate: they
+    // expire outright and recompute on the next request.
+    staleUntil: storeStaleTime(now, notFoundTtl, undefined),
+    tags,
+    value: error.message,
+  };
 }
 
 function storeStaleTime(
@@ -749,6 +828,15 @@ async function refreshStaleEntry<TResult>(options: {
       value: result,
     });
   } catch (error) {
+    if (error instanceof CacheNotFoundError) {
+      await options.refreshStore.publishRefresh(
+        options.key,
+        options.token,
+        negativeStoreEntry(options.now(), options.request, options.tags, error),
+      );
+      return;
+    }
+
     if (options.onBackgroundError) {
       options.onBackgroundError(error);
     } else {
