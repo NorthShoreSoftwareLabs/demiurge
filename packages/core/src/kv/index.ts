@@ -6,3 +6,5 @@ export type {
   EdgeKvPutOptions,
   KvCacheStoreOptions,
 } from "./store";
+export { createKvRateLimitStore } from "./rate-limit-store";
+export type { KvRateLimitStoreOptions } from "./rate-limit-store";

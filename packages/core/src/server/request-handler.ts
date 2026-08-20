@@ -281,7 +281,7 @@ async function handleMatchedRoute(
     return applyCorsHeaders(csrfResponse, getCapabilityCors(capability), request);
   }
 
-  const rateLimitResponse = enforceRateLimit(
+  const rateLimitResponse = await enforceRateLimit(
     routeSecurity?.rateLimit,
     request,
     options.rateLimitStore ?? defaultRateLimitStore,

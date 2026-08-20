@@ -54,11 +54,16 @@ export function createMemoryRateLimitStore(
 
         entries.set(key, next);
         nextExpiration = Math.min(nextExpiration, next.resetAt);
-        return next;
+        // A copy of the stored entry, not the entry itself. `increment()`
+        // can return before its caller reads the result, because
+        // `enforceRateLimit` awaits it. A later call for the same key
+        // would otherwise keep mutating the object an earlier caller is
+        // still holding.
+        return { count: next.count, resetAt: next.resetAt };
       }
 
       existing.count += 1;
-      return existing;
+      return { count: existing.count, resetAt: existing.resetAt };
     },
   };
 }
@@ -92,7 +97,7 @@ function evictOldestEntry(entries: Map<string, MemoryRateLimitEntry>) {
   }
 }
 
-export function enforceRateLimit(
+export async function enforceRateLimit(
   policy: RateLimitPolicy | undefined,
   request: Request,
   store: RateLimitStore,
@@ -106,7 +111,7 @@ export function enforceRateLimit(
 
   const windowMs = parseRateLimitWindow(policy.window);
   const key = rateLimitStoreKey(policy, request);
-  const result = store.increment(key, windowMs, now);
+  const result = await store.increment(key, windowMs, now);
   const remaining = Math.max(0, policy.limit - result.count);
   const headers = new Headers({
     "retry-after": String(Math.ceil(Math.max(0, result.resetAt - now) / 1000)),

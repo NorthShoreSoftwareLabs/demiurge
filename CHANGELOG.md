@@ -58,6 +58,9 @@ status live in GitHub issues and milestones.
 - `createKvCacheStore` implements the same contract against an edge KV namespace.
   Tag membership uses marker keys, because a generic KV store has no cross-key
   transaction (#46).
+- `createKvRateLimitStore` implements `RateLimitStore` against an edge KV
+  namespace. A plain KV store has no compare-and-swap, so the increment is a
+  get-then-write and can undercount under concurrent requests (#172).
 - A Cloud Run deployment guide covers the container shape, the port contract, and
   the health check. `examples/cloud-run` builds and runs a container image (#76).
 - New examples cover nested route policies (#36) and metadata with generated
