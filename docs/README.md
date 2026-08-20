@@ -27,5 +27,5 @@ that exists in the current source tree. Planned work and delivery status live in
 
 Framework rationale is separate from user documentation. See the
 [architecture overview](../architecture/README.md), accepted
-[decisions](../architecture/decisions/README.md), and open
-[RFCs](../rfcs/README.md).
+[decisions](../architecture/decisions/README.md), and open design
+discussions tracked as [GitHub Issues](https://github.com/NorthShoreSoftwareLabs/demiurge/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-decision).

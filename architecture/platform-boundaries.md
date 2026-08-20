@@ -59,6 +59,7 @@ choosing them for the application.
 
 ## Proposed capabilities
 
-Substantial unsettled designs belong in `rfcs/`. Delivery work and priorities
-belong in GitHub issues and milestones. Architecture documents should be changed
-only when the boundary itself changes.
+Substantial unsettled designs belong in GitHub Issues, labeled
+`needs-decision`. Delivery work and priorities belong in GitHub issues and
+milestones. Architecture documents should be changed only when the boundary
+itself changes.
