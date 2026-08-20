@@ -1,7 +1,7 @@
 import type { CacheStore } from "./cache";
 
 export type TieredCacheStoreOptions = {
-  // The per-process layer. Reads hit this first; writes populate it last so
+  // The per-process layer. Reads hit this first. Writes populate it last so
   // a caller never observes a value in `l1` before it is durable in `l2`.
   l1: CacheStore;
   // The shared, source-of-truth layer other replicas also read and write.
@@ -12,19 +12,20 @@ export type TieredCacheStoreOptions = {
 };
 
 // Layers any two `CacheStore` implementations into one `CacheStore`. The
-// combinator does not know or care which concrete stores it wraps: `l1` is
-// typically a per-process store (e.g. `createMemoryCacheStore`) and `l2` a
-// shared one (e.g. `createRedisCacheStore`/`createKvCacheStore`), but any
-// pair works, including two shared stores.
+// combinator does not know or care which concrete stores it wraps. `l1` is
+// typically a per-process store, such as `createMemoryCacheStore`. `l2` is
+// typically a shared one, such as `createRedisCacheStore` or
+// `createKvCacheStore`. Any pair works, including two shared stores.
 //
-// Staleness trade-off: because `l1` is local to one process, a write or tag
-// invalidation issued against `l2` by another replica is invisible to this
-// process's `l1` until that key's own TTL/staleUntil expires it out of
-// `l1` locally. This process keeps serving its last-known `l1` value for
-// that key in the meantime. This is the same category of caveat already
-// documented on the KV store for its own eventual consistency: correctness
-// here comes from `l2` remaining the source of truth and every write path
-// going through it, not from `l1` staying perfectly in sync.
+// Staleness trade-off: `l1` is local to one process. A write or tag
+// invalidation issued against `l2` by another replica is invisible to
+// this process's `l1`. It stays invisible until that key's own
+// TTL/staleUntil expires it out of `l1` locally. This process keeps
+// serving its last-known `l1` value for that key in the meantime. The KV
+// store documents the same category of caveat for its own eventual
+// consistency. Correctness here comes from `l2` remaining the source of
+// truth and every write path going through it, not from `l1` staying
+// perfectly in sync.
 export function createTieredCacheStore(
   options: TieredCacheStoreOptions,
 ): CacheStore {

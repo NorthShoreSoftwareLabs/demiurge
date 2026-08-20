@@ -17,7 +17,7 @@ import {
 import type { CacheStoreEntry } from "../../src/data/cache";
 
 // These tests run against a real `redis-server` binary for `l2`, consistent
-// with the rest of the cache store suite: a mock l2 can't prove the tiered
+// with the rest of the cache store suite. A mock l2 can't prove the tiered
 // store actually treats a shared backend as the source of truth.
 const hasRedisServer = spawnSync("redis-server", ["--version"]).status === 0;
 const port = 22_000 + (process.pid % 10_000);
@@ -191,7 +191,7 @@ describe.skipIf(!hasRedisServer)("createTieredCacheStore", () => {
     expect(
       await store.acquireRefreshLease!("post:5", "owner-a", leaseExpiresAt),
     ).toBe(true);
-    // The lease lives only in l2; l1 (a bare memory store) never learns
+    // The lease lives only in l2. l1 (a bare memory store) never learns
     // about it.
     expect(
       await l2.acquireRefreshLease!("post:5", "owner-b", leaseExpiresAt),
@@ -202,7 +202,7 @@ describe.skipIf(!hasRedisServer)("createTieredCacheStore", () => {
   });
 
   it("does not see a tag invalidation from another replica until l1 catches up", async () => {
-    // This documents the staleness trade-off: l1 is per-process, so an
+    // This documents the staleness trade-off. l1 is per-process. An
     // invalidation issued directly against l2 (standing in for another
     // replica) is invisible to this process's l1 copy until l1's own
     // TTL/staleUntil evicts it.
