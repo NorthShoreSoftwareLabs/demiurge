@@ -302,7 +302,7 @@ consumer would.
 - [Edge deployment](./docs/guides/edge-deployment.md)
 
 Maintainers and contributors can also read the [architecture records](./architecture/README.md),
-[open RFCs](./rfcs/README.md), and [contribution guide](./CONTRIBUTING.md).
+[open design discussions](https://github.com/NorthShoreSoftwareLabs/demiurge/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-decision), and [contribution guide](./CONTRIBUTING.md).
 
 ## Status
 

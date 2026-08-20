@@ -242,8 +242,8 @@ Request-time checks remain active after build and startup validation. They
 protect applications that use custom build and startup paths.
 
 See [ADR 0002](../../architecture/decisions/0002-static-policy-verification.md)
-for the accepted boundary. [RFC 0001](../../rfcs/0001-static-policy-verification.md)
-contains the wider proposal and later consumers.
+for the accepted boundary. [Issue #184](https://github.com/NorthShoreSoftwareLabs/demiurge/issues/184)
+carries the wider proposal's open decisions and later consumers.
 
 ## Environment validation
 
