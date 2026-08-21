@@ -10,6 +10,7 @@ that exists in the current source tree. Planned work and delivery status live in
 - [Getting started](./getting-started.md)
 - [Route reference](./reference/routes.md)
 - [Security guide](./guides/security.md)
+- [Route audit panel](./guides/devtools.md)
 - [Data and caching](./guides/data-and-caching.md)
 - [Errors and not-found](./guides/errors-and-not-found.md)
 - [Images](./guides/images.md)

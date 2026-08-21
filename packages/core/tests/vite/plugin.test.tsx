@@ -6,9 +6,11 @@ import sharp from "sharp";
 import type { ConfigEnv } from "vite";
 import { describe, expect, it, vi } from "vitest";
 import {
+  createRequestHandler,
   defineImages,
   defineLinks,
   defineMetadata,
+  defineMiddleware,
   defineRoutePolicy,
   defineScripts,
   json,
@@ -17,6 +19,7 @@ import {
   link,
   meta,
   modulePreload,
+  notFound,
   page,
   preconnect,
   preload,
@@ -28,8 +31,10 @@ import {
   sse,
   stream,
   structuredData,
+  tag,
   text,
   webhook,
+  type Cache,
   type RouteModule,
   type RouteProps,
 } from "@demiurgejs/core";
@@ -44,7 +49,10 @@ import {
   unstable_createDevRouteImporters,
   unstable_createDocumentHtml,
   unstable_handleDevRequest,
+  unstable_isRouteAuditEnabled,
+  unstable_ROUTE_AUDIT_PATH,
   unstable_stripClientPageData,
+  type RouteAudit,
 } from "@demiurgejs/core/vite";
 
 function View(_props: RouteProps) {
@@ -1482,6 +1490,302 @@ export const GET = json({}, { cors: { credentials: true, origins: "*" } });`,
     expect(response.body).toContain("/api");
     expect(response.body).toContain("<pre>");
     expect(response.body).toContain("plugin.test.tsx");
+  });
+});
+
+describe("the development route audit panel", () => {
+  async function scaffoldAuditServer(
+    options: { devtools?: boolean } = {},
+  ) {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-audit-"));
+    const routesDir = join(root, "routes");
+    const plugin = demiurge({
+      ...options,
+      routesDir: "routes",
+    }) as PluginHarness;
+    const middleware = createMiddlewareHarness();
+    const server = {
+      config: { root },
+      middlewares: { use: middleware.use },
+      ssrLoadModule: vi.fn(async (file: string) => {
+        if (file.endsWith("@policy.ts")) {
+          return {
+            policy: defineRoutePolicy({
+              document: security.strict(),
+              security: { rateLimit: false },
+            }),
+          };
+        }
+
+        if (file.endsWith("@layout.tsx")) {
+          return {
+            default: View,
+            metadata: defineMetadata({ title: "Audit layout title" }),
+          };
+        }
+
+        if (file.endsWith("@middleware.ts")) {
+          return {
+            middleware: defineMiddleware(async (_context, next) => await next()),
+          };
+        }
+
+        if (file.endsWith("health.tsx")) {
+          return {
+            GET: json(
+              { ok: true },
+              {
+                cors: { origins: ["https://app.example.test"] },
+                security: {
+                  rateLimit: { key: () => "audit", limit: 5, window: "1m" },
+                },
+              },
+            ),
+          };
+        }
+
+        return {
+          GET: page({
+            data: async ({ cache }: { cache: Cache }) =>
+              await cache.get({
+                fn: () => ({ message: "cached message" }),
+                key: ["posts", "hello"],
+                scope: "public",
+                tags: [tag("posts")],
+                ttl: "5m",
+              }),
+            view: DevPage,
+          }),
+          scripts: defineScripts([
+            script({ src: "https://cdn.example.com/tracker.js" }),
+            script({
+              integrity: "sha384-audit",
+              purpose: "Product measurement",
+              src: "https://cdn.example.com/measure.js",
+            }),
+          ]),
+        };
+      }),
+      transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
+      watcher: createWatcherHarness(),
+    };
+
+    await mkdir(join(routesDir, "blog"), { recursive: true });
+    await mkdir(join(routesDir, "api"), { recursive: true });
+    await writeFile(join(routesDir, "@policy.ts"), "export {};");
+    await writeFile(join(routesDir, "@layout.tsx"), "export {};");
+    await writeFile(join(routesDir, "@middleware.ts"), "export {};");
+    await writeFile(join(routesDir, "api", "health.tsx"), "export {};");
+    await writeFile(join(routesDir, "blog", "[slug].tsx"), "export {};");
+    plugin.configureServer?.(server as never);
+
+    return { middleware, root };
+  }
+
+  async function auditResponse(
+    middleware: ReturnType<typeof createMiddlewareHarness>,
+    url: string,
+  ) {
+    const response = new CapturingResponse();
+    const next = vi.fn();
+
+    await middleware.handler(
+      requestFor(url, {
+        headers: { accept: "text/html", host: "example.test" },
+      }) as never,
+      response as never,
+      next,
+    );
+
+    return { next, response };
+  }
+
+  it("renders the matched route, policy, scripts, and cache reads", async () => {
+    const { middleware } = await scaffoldAuditServer();
+    const { next, response } = await auditResponse(
+      middleware,
+      "/_demiurge/audit?path=/blog/hello",
+    );
+
+    expect(next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("content-security-policy")).toBe(
+      "default-src 'none'; base-uri 'none'; form-action 'self'; style-src 'unsafe-inline'",
+    );
+    expect(response.headers.get("x-robots-tag")).toBe("noindex");
+    expect(response.body).toContain("Demiurge route audit");
+    expect(response.body).toContain("/blog/[slug]");
+    expect(response.body).toContain("blog/[slug].tsx");
+    expect(response.body).toContain("@layout.tsx");
+    expect(response.body).toContain("@policy.ts");
+    expect(response.body).toContain("slug = hello");
+    expect(response.body).toContain("Audit layout title");
+    expect(response.body).toContain("https://cdn.example.com/tracker.js");
+    expect(response.body).toContain("script-purpose-missing");
+    expect(response.body).toContain("content-security-policy");
+    expect(response.body).toContain("posts");
+    expect(response.body).toContain("private, no-store");
+  });
+
+  it("reports the same audit as JSON", async () => {
+    const { middleware } = await scaffoldAuditServer();
+    const { response } = await auditResponse(
+      middleware,
+      "/_demiurge/audit?path=/blog/hello&format=json",
+    );
+
+    expect(response.headers.get("content-type")).toContain("application/json");
+
+    const report = JSON.parse(response.body) as RouteAudit;
+
+    expect(report.kind).toBe("page");
+    expect(report.method).toBe("GET");
+    expect(report.route?.pattern).toBe("/blog/[slug]");
+    expect(report.route?.params).toEqual({ slug: "hello" });
+    expect(report.route?.render).toBe("ssr");
+    expect(report.route?.layouts).toHaveLength(1);
+    expect(report.route?.policies).toHaveLength(1);
+    expect(report.audit.headers["content-security-policy"]).toContain(
+      "'strict-dynamic'",
+    );
+    expect(report.cacheControl).toBe("private, no-store");
+    expect(report.cacheReads).toEqual([
+      {
+        key: expect.stringContaining("posts"),
+        scope: "public",
+        staleWhileRevalidate: undefined,
+        tags: ["posts"],
+        ttl: "5m",
+      },
+    ]);
+    const tracker = report.scripts.find((item) =>
+      item.src === "https://cdn.example.com/tracker.js"
+    );
+
+    expect(tracker?.nonce).toEqual(expect.any(String));
+    expect(tracker?.findings.map((finding) => finding.code)).toContain(
+      "script-purpose-missing",
+    );
+  });
+
+  it("names the middleware and the layout that the route inherits", async () => {
+    const { middleware } = await scaffoldAuditServer();
+    const { response } = await auditResponse(
+      middleware,
+      "/_demiurge/audit?path=/blog/hello&format=json",
+    );
+    const report = JSON.parse(response.body) as RouteAudit;
+
+    expect(report.route?.middlewares).toEqual([
+      expect.stringContaining("@middleware.ts"),
+    ]);
+    expect(report.route?.layouts).toEqual([
+      expect.stringContaining("@layout.tsx"),
+    ]);
+    expect(report.scripts).toHaveLength(2);
+    expect(
+      report.scripts.find((item) =>
+        item.src === "https://cdn.example.com/measure.js"
+      )?.findings,
+    ).toEqual([]);
+  });
+
+  it("audits a resource route and keeps a policy function readable", async () => {
+    const { middleware } = await scaffoldAuditServer();
+    const { response } = await auditResponse(
+      middleware,
+      "/_demiurge/audit?path=/api/health",
+    );
+
+    expect(response.body).toContain("No contributed scripts.");
+    expect(response.body).toContain("No document metadata.");
+    expect(response.body).toContain("The request read no cache entry.");
+    expect(response.body).toContain("[function]");
+    expect(response.body).toContain("https://app.example.test");
+
+    const json = await auditResponse(
+      middleware,
+      "/_demiurge/audit?path=/api/health&format=json",
+    );
+    const report = JSON.parse(json.response.body) as RouteAudit;
+
+    expect(report.kind).toBe("resource");
+    expect(report.audit.route?.cors?.origins).toEqual([
+      "https://app.example.test",
+    ]);
+    expect(report.cacheControl).toBeUndefined();
+  });
+
+  it("reports a path that matches no route", async () => {
+    const { middleware } = await scaffoldAuditServer();
+    const { response } = await auditResponse(
+      middleware,
+      "/_demiurge/audit?path=/missing",
+    );
+
+    expect(response.body).toContain("No route matches /missing.");
+    expect(response.body).toContain("No findings.");
+
+    const json = await auditResponse(
+      middleware,
+      "/_demiurge/audit?path=/missing&format=json",
+    );
+    const report = JSON.parse(json.response.body) as RouteAudit;
+
+    expect(report.kind).toBe("unmatched");
+    expect(report.route).toBeUndefined();
+    expect(report.scripts).toEqual([]);
+  });
+
+  it("reports a malformed path as an unmatched path", async () => {
+    const { middleware } = await scaffoldAuditServer();
+    const { response } = await auditResponse(
+      middleware,
+      "/_demiurge/audit?path=/blog/%E0%A4%A&format=json",
+    );
+    const report = JSON.parse(response.body) as RouteAudit;
+
+    expect(report.kind).toBe("unmatched");
+  });
+
+  it("removes the panel when the application disables devtools", async () => {
+    const { middleware } = await scaffoldAuditServer({ devtools: false });
+    const { next } = await auditResponse(middleware, "/_demiurge/audit");
+
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("removes the panel in a production environment", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    try {
+      expect(unstable_isRouteAuditEnabled({})).toBe(false);
+
+      const { middleware } = await scaffoldAuditServer();
+      const { next } = await auditResponse(middleware, "/_demiurge/audit");
+
+      expect(next).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("keeps the audit path out of the production request handler", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "/src/routes/index.tsx": async () => ({ GET: page({ view: View }) }),
+        "/src/routes/@not-found.tsx": async () => ({
+          GET: notFound({ body: "Missing" }),
+        }),
+      },
+    });
+    const response = await handler(
+      new Request(`http://example.test${unstable_ROUTE_AUDIT_PATH}`),
+    );
+
+    expect(response.status).toBe(404);
   });
 });
 

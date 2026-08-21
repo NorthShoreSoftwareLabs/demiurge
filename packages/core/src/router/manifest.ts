@@ -789,7 +789,7 @@ export function isRouteGroupSegment(segment: string) {
   return segment.startsWith("(") && segment.endsWith(")");
 }
 
-function toRoutePattern(routeSegments: string[]) {
+export function toRoutePattern(routeSegments: string[]) {
   if (routeSegments.length === 0) {
     return "/";
   }

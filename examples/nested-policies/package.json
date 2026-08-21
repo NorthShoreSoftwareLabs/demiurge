@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build --outDir dist/client && vite build --ssr src/server-entry.ts --outDir dist/server",
+    "dev": "vite",
     "start": "node server.js"
   },
   "dependencies": {

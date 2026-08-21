@@ -1,6 +1,7 @@
 export {
   createRequestHandler,
   handleRequestWithManifest,
+  loadInheritedRoutePolicy,
 } from "./request-handler";
 export { renderPageDocument, renderPageResponse } from "./ssr";
 export {
