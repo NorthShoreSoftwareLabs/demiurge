@@ -100,6 +100,30 @@ framework package. See
 [ADR 0006](../../architecture/decisions/0006-single-package-optional-adapter-dependencies.md)
 for host-specific dependencies within that one package.
 
+## Release metadata check
+
+`pnpm release:check -- v0.2.0` validates the release metadata of one tag. Run it
+locally before you create the tag. The release workflow runs the same command
+after verification and before publication.
+
+The check fails when one of these conditions is true:
+
+- The tag is not exactly `v` plus the version in `packages/core/package.json`.
+- The package name is not `@demiurgejs/core`.
+- The package repository metadata does not identify
+  `NorthShoreSoftwareLabs/demiurge` and `packages/core`.
+- The root `CHANGELOG.md` has no heading for the version.
+- A stable version still carries the `Unreleased` marker.
+- A tracked file changed during release verification.
+
+A prerelease belongs to a release line that is still open. Therefore, the
+heading of a prerelease can be the exact version or the release line, and it can
+keep the `Unreleased` marker. The version `0.2.0-beta.2` accepts a `0.2.0`
+heading. A stable version requires its own dated heading.
+
+`pnpm test:tooling` runs the unit tests for these rules. `pnpm test:pack` stays
+authoritative for tarball contents and external-consumer behavior.
+
 ## One-time registry setup
 
 Demiurge publishes from the `@demiurgejs` npm scope and the unscoped
@@ -141,6 +165,7 @@ metadata points somewhere other than this repository.
    corepack enable
    pnpm install --frozen-lockfile
    pnpm verify
+   pnpm release:check -- v0.1.0
    npm pack --dry-run --json ./packages/core
    ```
 

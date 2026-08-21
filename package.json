@@ -14,14 +14,16 @@
     "lint": "eslint . && pnpm lint:writing",
     "lint:writing": "tsx tooling/check-writing.ts",
     "coverage": "pnpm --filter @demiurgejs/core coverage",
-    "test": "pnpm --filter @demiurgejs/core test && pnpm test:scaffold",
+    "release:check": "tsx tooling/release-check.ts",
+    "test": "pnpm --filter @demiurgejs/core test && pnpm test:scaffold && pnpm test:tooling",
     "test:scaffold": "pnpm --filter create-demiurge test",
+    "test:tooling": "tsx tests/tooling/release-check.ts && tsx tests/tooling/pr-title.ts",
     "test:browser": "pnpm build:browser-tests && playwright test",
     "typecheck": "pnpm generate:routes && pnpm --filter @demiurgejs/core typecheck && pnpm typecheck:consumers",
     "typecheck:consumers": "tsc --noEmit -p tsconfig.json",
     "test:pack": "tsx tests/package/packed-consumer.ts",
     "test:examples": "tsx tooling/run-integration-tests.ts",
-    "verify": "pnpm lint && pnpm --filter @demiurgejs/core build && pnpm typecheck && pnpm coverage && pnpm test:scaffold && pnpm build:examples && pnpm test:examples && pnpm test:browser && pnpm test:pack"
+    "verify": "pnpm lint && pnpm --filter @demiurgejs/core build && pnpm typecheck && pnpm coverage && pnpm test:scaffold && pnpm test:tooling && pnpm build:examples && pnpm test:examples && pnpm test:browser && pnpm test:pack"
   },
   "devDependencies": {
     "@demiurgejs/core": "workspace:*",
