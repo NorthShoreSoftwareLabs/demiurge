@@ -74,6 +74,10 @@ status live in GitHub issues and milestones.
 - More examples cover webhook signature verification (#32), tag invalidation
   (#50), conditional script loading (#43), a cross-origin API (#31), and
   `Server-Timing` output (#72).
+- A route can declare an opt-in Fetch Metadata resource-isolation policy with
+  `security.fetchMetadata`. Demiurge denies a disallowed cross-site request
+  before the route body runs and adds a `Vary` field for each `Sec-Fetch-*`
+  header that the decision read (#114).
 
 ## 0.1.1 — 2026-08-14
 

@@ -178,6 +178,53 @@ default. Use `issueCsrfToken(...)`, `createCsrfToken(...)`, and
 an explicit, auditable exemption when another authentication model makes CSRF
 inapplicable.
 
+## Fetch Metadata resource isolation
+
+A browser sends `Sec-Fetch-Site`, `Sec-Fetch-Mode`, and `Sec-Fetch-Dest` with
+each request. Demiurge always gives these headers to a route handler. A route
+can also make the framework read them and refuse the request.
+
+The policy is opt-in. A route that does not declare it keeps its behavior.
+
+```ts
+import { json } from "@demiurgejs/core";
+
+export const GET = json(readReport, {
+  security: {
+    fetchMetadata: true,
+  },
+});
+```
+
+Declare `fetchMetadata` in an `@policy.ts` file to guard a whole route group.
+
+Demiurge rejects a request before the route body runs. It applies these rules:
+
+- A request without `Sec-Fetch-Site` is allowed. An old browser and a
+  server-to-server client send no Fetch Metadata.
+- `same-origin` and `none` are allowed. `none` identifies a request that the
+  user started, such as a bookmark.
+- `same-site` is denied until the application sets `allowSameSite`. Another
+  team or an attacker can control a sibling subdomain.
+- A safe top-level navigation is allowed, so a person can enter the site from
+  a link on another site. Set `allowNavigation: false` to deny it.
+- Every other cross-site request receives status 403.
+
+Two options make an intentional cross-origin resource explicit:
+
+- `allowCrossSite` allows every cross-site request. Use it for a CORS API.
+- `allowedDestinations` allows the listed `Sec-Fetch-Dest` values, for example
+  `["image"]` for a public image endpoint.
+
+A CORS preflight is exempt, because it carries no application data.
+
+Demiurge adds a deduplicated `Vary` field for each `Sec-Fetch-*` header that
+the decision read. A shared cache needs that field. Otherwise the cache can
+give one client the response of another client.
+
+The policy is defense in depth. It does not replace a CSRF token or a CORS
+policy. Keep `csrf` and `cors` declarations on the routes that need them.
+
 ## CORS and request policy
 
 Response helpers accept typed CORS declarations. Demiurge validates origins,
