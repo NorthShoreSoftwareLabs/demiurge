@@ -119,6 +119,33 @@ Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.
 - If a direct commit completes all verified criteria, use `Closes #123` instead.
 - Do not use a closing keyword for partial work.
 
+## Pull requests
+
+Follow `.github/pull_request_template.md`. Every pull request uses the same
+structure, so a reviewer finds the same information in the same place. Write
+the title and every section under the [Writing standard](#writing-standard)
+above.
+
+1. `## Summary` — one to three sentences. State the problem before the fix.
+2. A body section that explains the change, under whichever heading fits:
+   `What changed`, `Design decisions`, `Decision rules`, or
+   `Implementation notes`. Omit it for a small or mechanical change.
+3. `## Verification` — the exact commands you ran and their result. State
+   plainly when `pnpm verify` did not run, and why. Do not claim a result you
+   did not observe.
+4. `## Notes for reviewers` — open questions, known gaps, or things not
+   exercised. Omit this section when there are none.
+5. A closing footer: `Refs #123` for related or partial work, `Closes #123`
+   only when this pull request alone satisfies every acceptance criterion.
+
+Do not add an emoji anywhere in a pull request title or body. Do not add a
+signature, attribution line, or "generated with" footer naming a tool,
+model, or assistant. A pull request reads as the work, not as a record of
+which tool produced it.
+
+The pull request title follows the same Conventional Commits form as a
+commit subject, because GitHub squash merges it into one.
+
 ## Branches and releases
 
 - Treat protected `main` as the integration branch. Use short-lived branches
