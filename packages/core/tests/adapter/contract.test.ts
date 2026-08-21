@@ -176,9 +176,10 @@ describe("adapter contract suite", () => {
   it("requires every capability to be declared as a boolean", async () => {
     await expectViolation(
       {
+        // SAFETY: undefined as never injects an invalid capability for the contract test.
         capabilities: {
           ...everyCapability,
-          streaming: undefined as unknown as boolean,
+          streaming: undefined as never,
         },
         name: "untyped",
       },

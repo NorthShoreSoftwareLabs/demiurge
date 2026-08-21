@@ -102,6 +102,7 @@ export function limitRequestBody(
     },
   });
 
+  // SAFETY: the duplex field is a runtime extension required for stream request bodies. The cast adds it to the standard init type.
   const limitedRequest = new Request(request, {
     body,
     duplex: "half",
@@ -153,6 +154,7 @@ export function parseBodySize(value: number | string) {
   }
 
   const amount = Number(match[1]);
+  // SAFETY: the regex restricts the unit to a byte size suffix. The lowercase value is therefore a key of the byte units map.
   const unit = match[2].toLowerCase() as keyof typeof byteUnits;
   const size = amount * byteUnits[unit];
 

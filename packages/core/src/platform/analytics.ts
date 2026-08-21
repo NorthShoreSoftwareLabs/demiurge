@@ -206,6 +206,7 @@ function parseEndpoint(endpoint: string) {
       throw new Error("Analytics endpoint must not be a scheme-relative URL.");
     }
 
+    // SAFETY: the self string literal is a valid CSP source keyword. The cast labels it as the CspSource type.
     return {
       base: endpoint === "/" ? "" : endpoint.replace(/\/+$/, ""),
       source: "'self'" as CspSource,
@@ -214,6 +215,7 @@ function parseEndpoint(endpoint: string) {
 
   const url = parseAbsoluteEndpoint(endpoint);
 
+  // SAFETY: the parsed URL origin is a valid same-origin CSP source string. The cast labels it as the CspSource type.
   return { base: url.origin, source: url.origin as CspSource };
 }
 

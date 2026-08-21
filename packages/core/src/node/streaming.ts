@@ -34,6 +34,7 @@ export async function renderStreamingPageResponse(
     let cancelled = false;
     let responseCommitted = false;
     let documentSuffix = "";
+    // SAFETY: undefined is a member of the declared union type. The cast only makes the variable type explicit.
     let stream = undefined as ReturnType<typeof renderToPipeableStream> | undefined;
     const documentStream = new Transform({
       destroy(error, callback) {

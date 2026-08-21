@@ -12,6 +12,7 @@ function DeferredValue({ value }: { value: Promise<string> }) {
 }
 
 function StreamingPage({ data }: { data: unknown }) {
+  // SAFETY: the test passes a promise value the deferred component resolves during render.
   return (
     <main>
       <h1>Streaming shell</h1>
@@ -33,6 +34,7 @@ function deferred(delay = 20) {
 }
 
 function match(overrides: Partial<LoadedRouteMatch> = {}): LoadedRouteMatch {
+  // SAFETY: the test fills every field and spreads overrides so the partial input matches the full type.
   return {
     data: deferred(),
     layouts: [],

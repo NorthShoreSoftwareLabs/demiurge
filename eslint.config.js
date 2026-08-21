@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import typeEvidence from "./tooling/eslint-plugin-type-evidence/index.js";
 
 export default tseslint.config(
   {
@@ -9,7 +10,10 @@ export default tseslint.config(
       "**/dist/**",
       "**/node_modules/**",
       "**/.vercel/**",
+      "**/.claude/**",
+      "**/.omc/**",
       "examples/**/.demiurge/**",
+      "tooling/eslint-plugin-type-evidence/**",
     ],
   },
   js.configs.recommended,
@@ -28,6 +32,9 @@ export default tseslint.config(
         },
       },
     },
+    plugins: {
+      "type-evidence": typeEvidence,
+    },
     rules: {
       "@typescript-eslint/no-unused-vars": [
         "error",
@@ -44,6 +51,9 @@ export default tseslint.config(
           allowInterfaces: "always",
         },
       ],
+      "type-evidence/no-chained-type-assertions": "error",
+      "type-evidence/require-safety-comment-for-type-assertion": "error",
+      "type-evidence/no-unsafe-dictionary-type": "error",
     },
   },
   {

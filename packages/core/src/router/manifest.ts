@@ -361,6 +361,7 @@ export async function loadPageRoute(
     url,
   };
 
+  // SAFETY: the route module view and layout exports are React components. The casts label them as component types.
   return {
     status: "ready",
     match: {
@@ -543,6 +544,7 @@ export async function loadNotFoundMatch(
     options.fallback ??
     findClosestFallbackForPath(manifest.fallbacks.notFound, pathname);
   const fallbackModule = await fallback?.load();
+  // SAFETY: the fallback module default export is a React component. The cast labels it as a not found component type.
   const notFound = fallbackModule?.default as
     | ComponentType<NotFoundProps>
     | undefined;
@@ -566,6 +568,7 @@ export async function loadNotFoundMatch(
       layoutRoutes.map((layout) => layout.load()),
     );
 
+    // SAFETY: the layout module default export is a React component. The cast labels it as a layout component type.
     return {
       layouts: layoutModules.map(
         (module) => module.default as ComponentType<LayoutProps>,
@@ -681,6 +684,7 @@ async function loadFallbackComponent(fallback: FallbackRoute | undefined) {
 
   const module = await fallback.load();
 
+  // SAFETY: the fallback module default export is a React component. The cast labels it as a component type.
   return module.default as ComponentType | undefined;
 }
 
@@ -691,6 +695,7 @@ async function loadErrorFallbackComponent(fallback: FallbackRoute | undefined) {
 
   const module = await fallback.load();
 
+  // SAFETY: the fallback module default export is a React component. The cast labels it as a route error component type.
   return module.default as ComponentType<RouteErrorProps> | undefined;
 }
 

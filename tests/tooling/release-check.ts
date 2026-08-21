@@ -209,6 +209,7 @@ function check(name: string, body: () => void) {
     console.log(`ok - ${name}`);
   } catch (error) {
     failureCount += 1;
+    // SAFETY: The test body throws Error instances, so the caught value has a message.
     console.error(`not ok - ${name}: ${(error as Error).message}`);
   }
 }

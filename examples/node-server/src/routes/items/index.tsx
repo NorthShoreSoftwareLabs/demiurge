@@ -13,6 +13,7 @@ export const GET = page({
       throw new Error(`Items upstream returned ${response.status}.`);
     }
 
+    // SAFETY: The items endpoint returns the typed items payload after the successful response check.
     return await response.json() as ItemsData;
   },
   view: ItemsPage,

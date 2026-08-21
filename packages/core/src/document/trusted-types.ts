@@ -57,6 +57,7 @@ function resolveFrameworkPolicy(
 }
 
 function createFrameworkPolicy(view: object) {
+  // SAFETY: the view is a browser global that may expose the Trusted Types API. The cast adds that optional property for a runtime check.
   const trustedTypes = (view as { trustedTypes?: TrustedTypesApi }).trustedTypes;
 
   if (!trustedTypes || typeof trustedTypes.createPolicy !== "function") {

@@ -105,6 +105,7 @@ export function createImageOptimizer(
     cache.set(key, encoded);
 
     while (cache.size > cacheSize) {
+      // SAFETY: the loop runs only while the cache holds an entry. The next key therefore exists as a string.
       cache.delete(cache.keys().next().value as string);
     }
 
@@ -163,8 +164,9 @@ function respond(request: Request, encoded: EncodedImage, varyOnAccept: boolean)
 
   headers.set("content-length", String(encoded.body.byteLength));
 
+  // SAFETY: the encoded body is an ArrayBuffer-backed view that the DOM body type accepts.
   return new Response(
-    request.method === "HEAD" ? null : (encoded.body as unknown as BodyInit),
+    request.method === "HEAD" ? null : (encoded.body as Uint8Array<ArrayBuffer>),
     { headers, status: 200 },
   );
 }

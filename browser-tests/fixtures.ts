@@ -25,6 +25,7 @@ export const test = base.extend<{ cspMonitor: CspViolation[] }>({
     });
     await page.addInitScript(() => {
       document.addEventListener("securitypolicyviolation", (event) => {
+        // SAFETY: exposeFunction registers __demiurgeRecordCspViolation on window before this script runs.
         (window as Window & {
           __demiurgeRecordCspViolation: (violation: CspViolation) => void;
         }).__demiurgeRecordCspViolation(

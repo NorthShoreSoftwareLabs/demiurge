@@ -81,6 +81,7 @@ test("the dashboard route loads the script after consent without blocking hydrat
   const analyticsScript = page.locator('script[src="/vendor/analytics"]');
   await expect(analyticsScript).toHaveAttribute("async", "");
 
+  // SAFETY: The locator matches a script tag, so the element is an HTMLScriptElement.
   const analyticsNonce = await analyticsScript.evaluate(
     (element) => (element as HTMLScriptElement).nonce,
   );

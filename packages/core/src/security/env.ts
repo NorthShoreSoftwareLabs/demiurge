@@ -85,6 +85,7 @@ export function validateEnv<Schema extends EnvSchema>(
   const issues: EnvValidationIssue[] = [];
   const values: Partial<Record<keyof Schema, unknown>> = {};
 
+  // SAFETY: Object.keys returns the schema keys as strings. The cast narrows them to the schema key type because they come from the schema.
   for (const key of Object.keys(schema) as Array<keyof Schema>) {
     const variable = schema[key];
     const rawValue = source[String(key)];
@@ -120,6 +121,7 @@ export function validateEnv<Schema extends EnvSchema>(
     throw new EnvValidationError(issues);
   }
 
+  // SAFETY: the loop above populated values from the validated schema entries. The cast restores the inferred schema type.
   return values as InferEnvSchema<Schema>;
 }
 

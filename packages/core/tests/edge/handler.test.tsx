@@ -49,6 +49,7 @@ const rateLimitedModules = {
 
 describe("createEdgeRequestHandler", () => {
   it("refuses construction without a cache store decision", () => {
+    // SAFETY: the test builds an incomplete options object to verify the missing-field rejection.
     expect(() =>
       createEdgeRequestHandler({
         rateLimitStore: "unavailable",
@@ -58,6 +59,7 @@ describe("createEdgeRequestHandler", () => {
   });
 
   it("refuses construction without a rate limit store decision", () => {
+    // SAFETY: the test builds an incomplete options object to verify the missing-field rejection.
     expect(() =>
       createEdgeRequestHandler({
         cacheStore: "unavailable",

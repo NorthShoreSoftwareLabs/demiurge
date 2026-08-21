@@ -670,6 +670,7 @@ function getCapabilityCors(capability: RouteCapability) {
 
 function normalizeMethod(method: string): HttpMethod | null {
   const upperMethod = method.toUpperCase();
+  // SAFETY: the includes check confirms the upper method is a member of the supported methods tuple. The second cast reuses that narrowing.
   return supportedMethods.includes(upperMethod as HttpMethod)
     ? (upperMethod as HttpMethod)
     : null;

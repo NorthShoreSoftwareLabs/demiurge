@@ -15,6 +15,7 @@ function FeedPage() {
     });
 
     source.addEventListener("tick", (event) => {
+      // SAFETY: The tick event is a MessageEvent whose data parses to the feed tick shape.
       const payload = JSON.parse((event as MessageEvent).data) as FeedTick;
       setTicks((previous) => [...previous, payload].slice(-20));
     });

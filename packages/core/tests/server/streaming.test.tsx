@@ -17,7 +17,9 @@ function routeModule(module: RouteModule) {
 }
 
 function deferred<T>() {
+  // SAFETY: the test initializes the resolver and assigns it inside the promise executor.
   let reject = undefined as ((error: unknown) => void) | undefined;
+  // SAFETY: the test initializes the resolver and assigns it inside the promise executor.
   let resolve = undefined as ((value: T) => void) | undefined;
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     reject = rejectPromise;

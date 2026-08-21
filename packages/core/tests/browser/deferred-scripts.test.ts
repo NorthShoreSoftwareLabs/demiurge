@@ -20,6 +20,7 @@ function stubIdleCallback(stub: IdleStub) {
 function renderPlaceholder(markup: string) {
   document.body.innerHTML = markup;
 
+  // SAFETY: the test renders a markup string that always includes a script element.
   return document.body.querySelector("script") as HTMLScriptElement;
 }
 

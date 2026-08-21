@@ -11,6 +11,7 @@ import {
 } from "@demiurgejs/core/node";
 
 function incoming(init: Partial<IncomingMessage> = {}) {
+  // SAFETY: the test builds a partial request stream with only the fields the bridge reads.
   return Object.assign(Readable.from([Buffer.from("hello")]), {
     headers: {},
     method: "GET",
@@ -75,13 +76,14 @@ describe("Node HTTP bridge", () => {
         callback();
       },
     });
+    // SAFETY: the test supplies a minimal ServerResponse. The code under test reads only these fields.
     const nodeResponse = Object.assign(response, {
       setHeader(name: string, value: string | string[]) {
         headers.set(name, value);
       },
       statusCode: 0,
       statusMessage: "",
-    }) as unknown as ServerResponse;
+    }) as ServerResponse;
     const webResponse = new Response("hello", { status: 201 });
     webResponse.headers.append("set-cookie", "a=1");
     webResponse.headers.append("set-cookie", "b=2");
@@ -143,6 +145,7 @@ describe("Node HTTP bridge", () => {
   });
 
   it("trusts forwarded values only when the peer matches a configured range", () => {
+    // SAFETY: the test supplies a partial socket with only the address the bridge reads.
     const trusted = toWebRequest(
       incoming({
         headers: {
@@ -160,6 +163,7 @@ describe("Node HTTP bridge", () => {
     );
 
     expect(trusted.url).toBe("https://example.test/health?ready=true");
+    // SAFETY: the test supplies a partial socket with only the address the bridge reads.
     expect(() =>
       toWebRequest(
         incoming({
@@ -179,6 +183,7 @@ describe("Node HTTP bridge", () => {
   });
 
   it("supports exact, mapped IPv4, and IPv6 trusted proxy ranges", () => {
+    // SAFETY: the test supplies a partial socket with only the address the bridge reads.
     const forwardedRequest = (remoteAddress: string, ranges: readonly string[]) =>
       toWebRequest(
         incoming({
@@ -205,6 +210,7 @@ describe("Node HTTP bridge", () => {
   });
 
   it("does not trust a proxy address from the wrong IP family", () => {
+    // SAFETY: the test supplies a partial socket with only the address the bridge reads.
     const request = toWebRequest(
       incoming({
         headers: {
@@ -305,6 +311,7 @@ describe("Node HTTP bridge", () => {
   it("feeds only the resolved peer identity to IP rate limiting", async () => {
     const store = createMemoryRateLimitStore();
     const policy = { key: "ip", limit: 1, window: "1m" } as const;
+    // SAFETY: the test supplies a partial socket with only the address the bridge reads.
     const direct = (spoofedIp: string) =>
       toWebRequest(
         incoming({
@@ -326,6 +333,7 @@ describe("Node HTTP bridge", () => {
   it("reads X-Forwarded-For right-to-left for a trusted hop count", async () => {
     const store = createMemoryRateLimitStore();
     const policy = { key: "ip", limit: 1, window: "1m" } as const;
+    // SAFETY: the test supplies a partial socket with only the address the bridge reads.
     const proxied = (spoofedLeftmost: string) =>
       toWebRequest(
         incoming({
@@ -348,6 +356,7 @@ describe("Node HTTP bridge", () => {
   });
 
   it("detects TLS directly and validates typed origin policy options", () => {
+    // SAFETY: the test supplies a partial socket with only the fields the bridge reads.
     const request = toWebRequest(
       incoming({
         headers: { host: "example.test" },
@@ -385,11 +394,12 @@ describe("Node HTTP bridge", () => {
         callback();
       },
     });
+    // SAFETY: the test supplies a minimal ServerResponse. The code under test reads only these fields.
     const response = Object.assign(writable, {
-      setHeader() {},
+      setHeader(_name: string, _value: string | string[]) {},
       statusCode: 0,
       statusMessage: "",
-    }) as unknown as ServerResponse;
+    }) as ServerResponse;
 
     await writeWebResponse(response, new Response(null, { status: 204 }));
 

@@ -357,7 +357,8 @@ describe("file route conventions", () => {
     const invalidPathManifest = unstable_createRouteManifest({
       "./routes/blog/[slug].tsx": routeModule({
         GET: page({ render: { mode: "static" }, view: View }),
-        paths: async () => [{ slug: { nested: true } as unknown as string }],
+        // SAFETY: the nested value marks an invalid path variable for the convention test.
+        paths: async () => [{ slug: { nested: true } as never }],
       }),
     });
 

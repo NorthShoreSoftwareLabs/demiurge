@@ -97,8 +97,10 @@ describe("typed middleware request context", () => {
     type RouteProps = { path: {}; pathname: string; data?: undefined };
     type ContextKeys = keyof HttpRouteContext["context"];
 
-    const props = null as never as RouteProps;
-    const keys = null as never as ContextKeys;
+    // SAFETY: null is a compile-time placeholder. The declared type documents the route prop shape.
+    const props: RouteProps = null as never;
+    // SAFETY: null is a compile-time placeholder. The declared type documents the context key shape.
+    const keys: ContextKeys = null as never;
 
     expect(props).toBeNull();
     expect(keys).toBeNull();

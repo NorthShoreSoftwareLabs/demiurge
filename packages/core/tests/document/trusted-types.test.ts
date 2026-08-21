@@ -5,7 +5,9 @@ import {
 } from "@demiurgejs/core";
 
 function viewWith(trustedTypes: unknown) {
-  return { trustedTypes } as unknown as Window & typeof globalThis;
+  const view: unknown = { trustedTypes };
+  // SAFETY: the test supplies a partial window. The cast names the type the framework reads.
+  return view as Window & typeof globalThis;
 }
 
 describe("createFrameworkScriptUrl", () => {

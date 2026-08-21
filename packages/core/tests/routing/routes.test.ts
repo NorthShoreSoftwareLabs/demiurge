@@ -73,6 +73,7 @@ describe("typed URL routes", () => {
   });
 
   it("throws when a runtime dynamic target is missing path values", () => {
+    // SAFETY: the test passes an empty path to verify the runtime reports the missing value.
     expect(() =>
       href({ to: "/blog/[slug]", path: {} as never }),
     ).toThrow('Missing path value for "slug"');
@@ -101,7 +102,8 @@ describe("typed URL routes", () => {
       };
       void invalidLinkProps;
 
-      const routeProps = null as never as RouteProps<"/blog/[slug]">;
+      // SAFETY: null is a compile-time placeholder. The declared type documents the route props.
+      const routeProps: RouteProps<"/blog/[slug]"> = null as never;
       const slug: string = routeProps.path.slug;
       void slug;
 

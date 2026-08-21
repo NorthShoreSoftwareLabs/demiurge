@@ -51,6 +51,7 @@ export function createKvRateLimitStore(
     async increment(key, windowMs, now) {
       const storeKey = counterKey(key);
       const raw = await kv.get(storeKey);
+      // SAFETY: the stored raw value is JSON that the store serialized as a rate limit entry. The cast restores that shape.
       const existing = raw ? (JSON.parse(raw) as KvRateLimitEntry) : undefined;
 
       const next: KvRateLimitEntry = !existing || existing.resetAt <= now

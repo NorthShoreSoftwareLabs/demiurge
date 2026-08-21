@@ -52,6 +52,7 @@ type RedisRateLimitCommands = {
 // command is idempotent, so building several stores on the same client, or
 // rebuilding one after a reconnect, never redefines the command twice.
 function commands(client: Redis): Redis & RedisRateLimitCommands {
+  // SAFETY: the cast adds the optional custom command methods before the runtime check installs them.
   const withCommands = client as Redis & Partial<RedisRateLimitCommands>;
 
   if (!withCommands.demiurgeRateLimitIncrement) {
@@ -61,6 +62,7 @@ function commands(client: Redis): Redis & RedisRateLimitCommands {
     });
   }
 
+  // SAFETY: the defineCommand call above installs the custom command. The cast reflects that the method now exists.
   return withCommands as Redis & RedisRateLimitCommands;
 }
 

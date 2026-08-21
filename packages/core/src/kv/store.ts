@@ -109,6 +109,7 @@ export function createKvCacheStore(options: KvCacheStoreOptions): CacheStore {
 
   async function readEntry(key: string): Promise<CacheStoreEntry | undefined> {
     const raw = await kv.get(entryKey(key));
+    // SAFETY: the stored raw value is JSON that the store serialized from a cache entry. The cast restores that shape.
     return raw ? (JSON.parse(raw) as CacheStoreEntry) : undefined;
   }
 

@@ -4,6 +4,7 @@ import type { Page } from "@playwright/test";
 const developmentOrigin = "http://localhost:42179";
 
 async function expectViteRuntime(page: Page, csp: string | undefined) {
+  // SAFETY: Vite React refresh sets the $RefreshReg$ and $RefreshSig$ globals on window during development.
   await expect.poll(() =>
     page.evaluate(() =>
       typeof (window as Window & { $RefreshReg$?: unknown }).$RefreshReg$ ===
@@ -15,14 +16,17 @@ async function expectViteRuntime(page: Page, csp: string | undefined) {
 
   const viteClient = page.locator('script[src="/@vite/client"]');
   await expect(viteClient).toHaveCount(1);
+  // SAFETY: The locator matches a script tag, so the element is an HTMLScriptElement.
   const viteNonce = await viteClient.evaluate((element) =>
     (element as HTMLScriptElement).nonce
   );
 
   expect(viteNonce).not.toBe("");
   expect(csp).toContain(`'nonce-${viteNonce}'`);
+  // SAFETY: The locator matches a meta tag, so the element is an HTMLMetaElement.
   const metaNonce = await page.locator('meta[property="csp-nonce"]')
     .evaluate((element) => (element as HTMLMetaElement).nonce);
+  // SAFETY: The locator selects elements with a nonce attribute, so each element is an HTMLElement.
   const documentNonces = await page.locator("[nonce]").evaluateAll((elements) =>
     elements.map((element) => (element as HTMLElement).nonce)
   );
@@ -142,6 +146,7 @@ test("Vite development streams and hydrates a late managed script", async ({
     )
   ).toBe("true");
   const csp = (await response?.allHeaders())?.["content-security-policy"];
+  // SAFETY: The locator matches a script tag, so the element is an HTMLScriptElement.
   const streamedScriptNonce = await streamedScript.evaluate((element) =>
     (element as HTMLScriptElement).nonce
   );

@@ -34,6 +34,7 @@ try {
     headers: { "x-webhook-signature": `sha256=${signature}` },
     method: "POST",
   });
+  // SAFETY: The webhook endpoint returns the byte length and received body after a valid signature.
   const validPayload = (await validResponse.json()) as {
     byteLength: number;
     received: string;

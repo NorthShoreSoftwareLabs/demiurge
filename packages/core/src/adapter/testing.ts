@@ -446,6 +446,7 @@ function isContainedFile(file: string) {
 }
 
 function lowercaseHeaders(headers: Record<string, string>) {
+  // SAFETY: Object.fromEntries builds a record with string keys and string values. The cast widens the values to allow undefined.
   return Object.fromEntries(
     Object.entries(headers).map(([name, value]) => [
       name.toLowerCase(),
