@@ -62,5 +62,36 @@ export type {
   ServerStartSignal,
   TraceSignal,
   WebVitalName,
+  WebVitalRating,
   WebVitalSignal,
 } from "./observability";
+export {
+  COLLECTED_WEB_VITAL_NAMES,
+  defineWebVitals,
+  parseWebVitalsBeacon,
+  readWebVitalsBeacon,
+  WEB_VITAL_NAMES,
+  WEB_VITAL_THRESHOLDS,
+  webVitalRating,
+  webVitalsPolicy,
+} from "./web-vitals";
+export type {
+  ReadWebVitalsBeaconOptions,
+  WebVitalNavigationType,
+  WebVitalReport,
+  WebVitalsBeacon,
+  WebVitalsBeaconRejection,
+  WebVitalsBeaconResult,
+  WebVitalsIntegration,
+  WebVitalsOptions,
+} from "./web-vitals";
+export {
+  collectWebVitals,
+  sendWebVitalsBeacon,
+  WebVitals,
+} from "./web-vitals-client";
+export type {
+  CollectWebVitalsOptions,
+  WebVitalsProps,
+  WebVitalsTransport,
+} from "./web-vitals-client";
