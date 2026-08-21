@@ -42,6 +42,10 @@ status live in GitHub issues and milestones.
 - Declared fonts are now self-hosted. The build and the Node handler publish
   each font file and one `@font-face` stylesheet, and `fontSources` derives the
   `font-src` value from the declaration (#67).
+- `createSecureCookie(...)` serializes a `set-cookie` value from a typed
+  declaration. A cookie defaults to the `__Host-` prefix, `Secure`, `Path=/`,
+  `HttpOnly`, and `SameSite=Lax`. The helper reports a broken prefix invariant
+  instead of leaving a browser to drop the cookie (#111).
 - Host adapters stay subpath exports of `@demiurgejs/core`. `@vercel/routing-utils`
   is now an optional peer dependency, so a Node-only deployment does not install
   it (#149).

@@ -9,6 +9,20 @@ export {
   validateCorsPolicy,
 } from "./cors";
 export {
+  createSecureCookie,
+  readSecureCookie,
+  secureCookieName,
+  validateSecureCookie,
+} from "./cookies";
+export type {
+  CookieIssue,
+  CookieIssueCode,
+  CookieSameSite,
+  CookieScope,
+  SecureCookieDeclaration,
+  SecureCookieDefinition,
+} from "./cookies";
+export {
   createCsrfCookie,
   createCsrfToken,
   enforceCsrfProtection,
