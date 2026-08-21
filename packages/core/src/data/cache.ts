@@ -26,10 +26,9 @@ type MaybePromise<T> = T | Promise<T>;
 export type CacheRequest<TResult> = {
   fn: () => MaybePromise<TResult>;
   key: CacheKey;
-  // TTL for a negative entry (the loader called `cacheNotFound()`), kept
-  // separate from `ttl` because "this doesn't currently exist" tends to
-  // change sooner than "this currently exists." Falls back to `ttl` when
-  // omitted.
+  // TTL for a negative entry (the loader called `cacheNotFound()`). Kept
+  // separate from `ttl` because "does not currently exist" tends to change
+  // sooner than "currently exists." Falls back to `ttl` when omitted.
   notFoundTtl?: CacheDuration;
   scope?: CacheScope;
   staleWhileRevalidate?: CacheDuration;
@@ -172,15 +171,15 @@ export function query<TArgs extends readonly unknown[], TResult>(
   });
 }
 
-// The framework's route/data layer already signals "this doesn't exist" by
-// throwing a specific error class (`HttpError` with a 404 status) rather
-// than returning a sentinel value. `CacheNotFoundError` follows the same
-// convention at the cache layer: a `fn` passed to `cache.get()` throws it
-// (typically via `cacheNotFound()`) to report a negative result the cache
+// The framework route/data layer already signals "not found" by throwing a
+// specific error class, `HttpError` with a 404 status, rather than
+// returning a sentinel value. `CacheNotFoundError` follows the same
+// convention at the cache layer. A `fn` passed to `cache.get()` throws it,
+// typically via `cacheNotFound()`, to report a negative result the cache
 // should still store. `data/` sits below `route/` in the package's
-// dependency order, so this stays independent of `HttpError` — callers
-// that need an HTTP response translate `CacheNotFoundError` into
-// `httpError(404)` themselves.
+// dependency order, so this stays independent of `HttpError`. Callers that
+// need an HTTP response translate `CacheNotFoundError` into `httpError(404)`
+// themselves.
 export class CacheNotFoundError extends Error {
   constructor(message?: string) {
     super(message ?? "Not found");
@@ -697,7 +696,7 @@ async function getRequestValue<TResult>(
   } catch (error) {
     if (entries.get(key) === entry) {
       // A negative result stays cached, the same as a positive one, just
-      // under its own (usually shorter) TTL — it re-throws on every hit
+      // under its own (usually shorter) TTL. It re-throws on every hit
       // until it expires.
       if (error instanceof CacheNotFoundError) {
         entry.expiresAt = now() +
