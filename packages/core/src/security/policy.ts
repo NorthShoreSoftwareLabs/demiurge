@@ -13,6 +13,7 @@ import type {
   StrictTransportSecurityPolicy,
   TrustedTypesPolicy,
 } from "./types";
+import { FRAMEWORK_TRUSTED_TYPES_POLICY } from "../document/trusted-types";
 
 const nonceToken = "{nonce}";
 
@@ -501,11 +502,30 @@ function renderTrustedTypes(policy: TrustedTypesPolicy | false | undefined) {
     directives.push("require-trusted-types-for 'script'");
   }
 
-  if (policy.policies.length > 0) {
-    directives.push(`trusted-types ${policy.policies.join(" ")}`);
-  }
+  directives.push(renderTrustedTypesDirective(policy));
 
   return joinCspDirectives(...directives);
+}
+
+function renderTrustedTypesDirective(policy: TrustedTypesPolicy) {
+  // An explicit empty list refuses every policy name, including the
+  // framework policy. It is the one way to close a policy the application
+  // does not need.
+  if (policy.policies !== undefined && policy.policies.length === 0) {
+    return "trusted-types 'none'";
+  }
+
+  const names = [FRAMEWORK_TRUSTED_TYPES_POLICY];
+
+  if (policy.allowDefaultPolicy) {
+    names.push("default");
+  }
+
+  for (const name of policy.policies ?? []) {
+    names.push(name);
+  }
+
+  return `trusted-types ${[...new Set(names)].join(" ")}`;
 }
 
 function joinCspDirectives(...parts: Array<string | undefined>) {

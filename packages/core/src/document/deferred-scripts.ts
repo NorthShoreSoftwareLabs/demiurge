@@ -1,4 +1,5 @@
 import type { ScriptStrategy } from "./scripts";
+import { createFrameworkScriptUrl } from "./trusted-types";
 
 // A deferred strategy cannot be a plain script tag, because the browser fetches
 // and runs a plain script tag as soon as it parses one. The document therefore
@@ -121,7 +122,7 @@ function loadIdleScript(placeholder: HTMLScriptElement) {
   // over for policies that list a nonce without strict-dynamic.
   element.async = true;
   element.nonce = placeholder.nonce;
-  element.src = src;
+  element.src = createFrameworkScriptUrl(owner.defaultView, src);
   owner.head.appendChild(element);
 }
 
@@ -148,7 +149,9 @@ function startScriptWorker(placeholder: HTMLScriptElement) {
   try {
     workers.set(
       src,
-      new view.Worker(src, { type: type === "module" ? "module" : "classic" }),
+      new view.Worker(createFrameworkScriptUrl(view, src), {
+        type: type === "module" ? "module" : "classic",
+      }),
     );
   } catch (error) {
     // A worker URL has to be same-origin or a blob URL, and the document policy
