@@ -33,6 +33,10 @@ export {
   script,
 } from "./scripts";
 export {
+  createFrameworkScriptUrl,
+  FRAMEWORK_TRUSTED_TYPES_POLICY,
+} from "./trusted-types";
+export {
   defineOgImage,
   defineRobots,
   defineSitemap,

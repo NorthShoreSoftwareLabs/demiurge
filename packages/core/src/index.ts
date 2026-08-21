@@ -23,12 +23,14 @@ export {
   tag,
 } from "./data";
 export {
+  createFrameworkScriptUrl,
   defineLinks,
   defineMetadata,
   defineOgImage,
   defineRobots,
   defineScripts,
   defineSitemap,
+  FRAMEWORK_TRUSTED_TYPES_POLICY,
   getScriptWorker,
   link,
   meta,
