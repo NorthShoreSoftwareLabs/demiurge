@@ -18,7 +18,7 @@ test("Chromium accepts the prefixed cookies that createSecureCookie writes", asy
     value: "alpha",
   });
   expect(byName.get("__Host-preference")).toMatchObject({
-    httpOnly: true,
+    httpOnly: false,
     path: "/",
     sameSite: "Strict",
     secure: true,
@@ -31,6 +31,21 @@ test("Chromium accepts the prefixed cookies that createSecureCookie writes", asy
     secure: true,
     value: "gamma",
   });
+});
+
+test("the JavaScript-readable cookie reaches page script, and the HttpOnly ones do not", async ({
+  page,
+}) => {
+  await page.goto("/api/cookies");
+
+  const visible = await page.evaluate(() => document.cookie);
+
+  // `readSecureCookie("preference")` reads this same string through
+  // `parseCookieHeader` and `secureCookieName`, both covered directly in
+  // packages/core/tests/security/cookies.test.ts.
+  expect(visible).toContain("__Host-preference=beta");
+  expect(visible).not.toContain("__Host-session");
+  expect(visible).not.toContain("__Secure-tenant");
 });
 
 test("Chromium rejects prefixed cookies that break the invariants", async ({

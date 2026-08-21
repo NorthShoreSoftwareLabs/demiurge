@@ -10,6 +10,7 @@ export {
 } from "./cors";
 export {
   createSecureCookie,
+  readSecureCookie,
   secureCookieName,
   validateSecureCookie,
 } from "./cookies";
@@ -19,6 +20,7 @@ export type {
   CookieSameSite,
   CookieScope,
   SecureCookieDeclaration,
+  SecureCookieDefinition,
 } from "./cookies";
 export {
   createCsrfCookie,

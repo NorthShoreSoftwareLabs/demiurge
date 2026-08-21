@@ -1,4 +1,5 @@
 import { createSecureCookie, response } from "@demiurgejs/core";
+import { preferenceCookie } from "../../lib/cookies";
 
 export const GET = response(() => {
   const headers = new Headers({
@@ -11,13 +12,12 @@ export const GET = response(() => {
     "set-cookie",
     createSecureCookie({ name: "session", value: "alpha" }),
   );
+  // `preferenceCookie` is the same definition a client script passes to
+  // `readSecureCookie(...)`. Spreading it here keeps the name and the
+  // `httpOnly: false` opt-out in one place instead of two.
   headers.append(
     "set-cookie",
-    createSecureCookie({
-      name: "preference",
-      sameSite: "Strict",
-      value: "beta",
-    }),
+    createSecureCookie({ ...preferenceCookie, value: "beta" }),
   );
   // A "secure" scope shares the cookie with subdomains. It keeps Secure and
   // accepts a Domain attribute.

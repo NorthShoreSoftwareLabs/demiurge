@@ -208,9 +208,47 @@ message names the cookie and the change that repairs it. Demiurge never renames
 an application cookie to satisfy a prefix. Use `validateSecureCookie(...)` to
 read the same findings as a list of typed issues.
 
-Read a cookie back with `parseCookieHeader(...)` and the prefixed name.
-`createSecureCookie(...)` encodes the value with `encodeURIComponent`, and
-`parseCookieHeader(...)` decodes it.
+Read a cookie header back on the server with `parseCookieHeader(...)` and the
+prefixed name. `createSecureCookie(...)` encodes the value with
+`encodeURIComponent`, and `parseCookieHeader(...)` decodes it.
+
+### Sharing a cookie definition with the browser
+
+A route and a client script often need the same cookie identity. Declare the
+shared part once, as a `SecureCookieDefinition`, in a module both sides
+import, and spread it into the write:
+
+```ts
+// lib/cookies.ts — imported by the route and by the client script
+import type { SecureCookieDefinition } from "@demiurgejs/core";
+
+export const preferenceCookie: SecureCookieDefinition = {
+  httpOnly: false,
+  name: "preference",
+  sameSite: "Strict",
+};
+```
+
+```ts
+// route
+import { createSecureCookie } from "@demiurgejs/core";
+import { preferenceCookie } from "../lib/cookies";
+
+createSecureCookie({ ...preferenceCookie, value: "dark" });
+```
+
+```ts
+// client script
+import { readSecureCookie } from "@demiurgejs/core";
+import { preferenceCookie } from "../lib/cookies";
+
+const preference = readSecureCookie(preferenceCookie);
+```
+
+Neither side retypes the name or the scope. A rename in `preferenceCookie`
+reaches the write and the read together. `readSecureCookie(...)` also accepts
+a bare name for a cookie with no shared definition. It returns `undefined`
+outside a browser and for a cookie the browser did not send.
 
 ### The JavaScript-readable exception
 

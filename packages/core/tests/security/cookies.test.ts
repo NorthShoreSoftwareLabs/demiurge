@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createSecureCookie,
   parseCookieHeader,
+  readSecureCookie,
   secureCookieName,
   validateSecureCookie,
 } from "@demiurgejs/core";
@@ -80,6 +81,45 @@ describe("secure cookie serialization", () => {
     expect(secureCookieName("session")).toBe("__Host-session");
     expect(secureCookieName("tenant", "secure")).toBe("__Secure-tenant");
     expect(secureCookieName("locale", "none")).toBe("locale");
+  });
+
+  describe("readSecureCookie", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("returns undefined outside a browser", () => {
+      expect(readSecureCookie("preference")).toBeUndefined();
+    });
+
+    it("reads a value back through the same prefixed name it was written under", () => {
+      vi.stubGlobal("document", {
+        cookie: "__Host-preference=beta; __Secure-tenant=gamma",
+      });
+
+      expect(readSecureCookie("preference")).toBe("beta");
+      expect(readSecureCookie("tenant", "secure")).toBe("gamma");
+    });
+
+    it("accepts the same definition object a route spread into createSecureCookie", () => {
+      const preferenceCookie = { name: "preference", sameSite: "Strict" } as const;
+
+      expect(
+        createSecureCookie({ ...preferenceCookie, value: "beta" }),
+      ).toBe(
+        "__Host-preference=beta; Path=/; SameSite=Strict; HttpOnly; Secure",
+      );
+
+      vi.stubGlobal("document", { cookie: "__Host-preference=beta" });
+
+      expect(readSecureCookie(preferenceCookie)).toBe("beta");
+    });
+
+    it("returns undefined for a cookie the browser did not send", () => {
+      vi.stubGlobal("document", { cookie: "" });
+
+      expect(readSecureCookie("preference")).toBeUndefined();
+    });
   });
 });
 

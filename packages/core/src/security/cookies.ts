@@ -1,3 +1,5 @@
+import { parseCookieHeader } from "./csrf";
+
 // Cookie prefixes are the one cookie control that the browser enforces without
 // server cooperation. A browser refuses a `__Host-` cookie that lacks `Secure`,
 // that lacks `Path=/`, or that carries a `Domain` attribute. A browser also
@@ -21,6 +23,14 @@ export type SecureCookieDeclaration = {
   secure?: boolean;
   value: string;
 };
+
+// The part of a declaration that determines a cookie's identity rather than
+// one write's payload. An application declares this once, in a module both
+// the route and the client bundle import. It spreads the definition into
+// `createSecureCookie({ ...definition, value })` on the server, and passes it
+// straight to `readSecureCookie(definition)` on the client. Neither side
+// retypes the name or the scope, so a rename in one place changes both.
+export type SecureCookieDefinition = Omit<SecureCookieDeclaration, "value">;
 
 export type CookieIssueCode =
   | "cookie-domain-not-allowed"
@@ -132,6 +142,30 @@ export function validateSecureCookie(
   }
 
   return issues;
+}
+
+// A page reads a cookie only where the application chose `httpOnly: false`.
+// This helper computes the same prefixed name `createSecureCookie` wrote, so
+// browser code never hardcodes a `__Host-`/`__Secure-` prefix by hand.
+// Pass the same `SecureCookieDefinition` the route spread into
+// `createSecureCookie(...)`. A rename or a scope change in that declaration
+// then reaches both the write and the read. A bare name is also accepted for
+// a cookie with no shared definition. Returns `undefined` outside a browser
+// and for a cookie that is absent.
+export function readSecureCookie(
+  reference: SecureCookieDefinition | string,
+  scope: CookieScope = "host",
+) {
+  if (typeof document === "undefined") {
+    return undefined;
+  }
+
+  const definition: SecureCookieDefinition =
+    typeof reference === "string" ? { name: reference, scope } : reference;
+
+  return parseCookieHeader(document.cookie).get(
+    secureCookieName(definition.name, definition.scope ?? "host"),
+  );
 }
 
 export function createSecureCookie(declaration: SecureCookieDeclaration) {
