@@ -152,7 +152,6 @@ describe("security report endpoint handler", () => {
         controller.close();
       },
     });
-    // SAFETY: the test adds the duplex option the runtime needs for a streamed request body.
     const response = await handler(
       new Request("https://app.example.com/reports", {
         body,

@@ -412,9 +412,9 @@ type AstNode = {
   type: string;
 };
 
-// SAFETY: rollup returns a generic program node. The local type is a loose access shape.
+// TYPE-EVIDENCE: rollup returns a generic program node. The local type is a loose access shape.
 function asAstNode(value: unknown): AstNode {
-  // SAFETY: the caller passes a rollup program node. The cast labels it with the loose access shape.
+  // TYPE-EVIDENCE: the caller passes a rollup program node. The cast labels it with the loose access shape.
   return value as AstNode;
 }
 
@@ -604,10 +604,10 @@ function walkAst(value: unknown, visit: (node: AstNode) => void) {
     return;
   }
 
-  // SAFETY: the value was checked to be an object. The cast adds the loose AST node shape.
+  // TYPE-EVIDENCE: the value was checked to be an object. The cast adds the loose AST node shape.
   const node = value as Partial<AstNode>;
   if (typeof node.type !== "string") return;
-  // SAFETY: the type field check above confirms the value is an AST node. The cast asserts that node shape.
+  // TYPE-EVIDENCE: the type field check above confirms the value is an AST node. The cast asserts that node shape.
   visit(node as AstNode);
   for (const [key, child] of Object.entries(node)) {
     if (!new Set(["end", "loc", "start", "type"]).has(key)) {
@@ -617,7 +617,7 @@ function walkAst(value: unknown, visit: (node: AstNode) => void) {
 }
 
 function asNode(value: unknown) {
-  // SAFETY: the type in value check confirms the value is an AST node. The cast asserts that node shape.
+  // TYPE-EVIDENCE: the type in value check confirms the value is an AST node. The cast asserts that node shape.
   return value && typeof value === "object" && "type" in value
     ? value as AstNode
     : undefined;
@@ -1134,7 +1134,7 @@ async function loadDevManifest(
   request: IncomingMessage,
   routesDir: string,
 ) {
-  // SAFETY: the cast adds the symbol-keyed manifest carrier field used for request-local caching.
+  // TYPE-EVIDENCE: the cast adds the symbol-keyed manifest carrier field used for request-local caching.
   const carrier = request as IncomingMessage & DevManifestCarrier;
   const cached = carrier[DEV_MANIFEST];
 
@@ -1372,7 +1372,7 @@ export async function createDevRouteImporters(
 
   for (const file of files) {
     const routeKey = toRouteKey(routesDir, file);
-    // SAFETY: the SSR loader returns a module record for a route file. The cast labels it as a route module.
+    // TYPE-EVIDENCE: the SSR loader returns a module record for a route file. The cast labels it as a route module.
     routes[routeKey] = async () =>
       (await server.ssrLoadModule(file)) as RouteModule;
   }

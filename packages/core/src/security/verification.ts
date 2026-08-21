@@ -438,7 +438,7 @@ function findNonceDirective(policy: ContentSecurityPolicy | false | undefined) {
   }
 
   for (const [name, value] of Object.entries(policy)) {
-    // SAFETY: the policy entries carry CSP directive values. The cast labels the entry value with the directive value type.
+    // TYPE-EVIDENCE: the policy entries carry CSP directive values. The cast labels the entry value with the directive value type.
     const sources = resolveCspDirectiveValue(value as CspDirectiveValue);
 
     if (

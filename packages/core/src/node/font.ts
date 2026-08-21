@@ -76,7 +76,7 @@ function respond(request: Request, asset: FontAsset) {
 
   headers.set("content-length", String(asset.body.byteLength));
 
-  // SAFETY: the font body is an ArrayBuffer-backed view that the DOM body type accepts.
+  // TYPE-EVIDENCE: the font body is an ArrayBuffer-backed view that the DOM body type accepts.
   return new Response(
     request.method === "HEAD" ? null : (asset.body as Uint8Array<ArrayBuffer>),
     { headers, status: 200 },

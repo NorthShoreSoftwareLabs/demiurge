@@ -125,7 +125,7 @@ export function toWebRequest(
   };
 
   if (method !== "GET" && method !== "HEAD") {
-    // SAFETY: Readable.toWeb returns a web stream that matches the DOM ReadableStream body type.
+    // TYPE-EVIDENCE: Readable.toWeb returns a web stream that matches the DOM ReadableStream body type.
     init.body = Readable.toWeb(request) as ReadableStream;
     init.duplex = "half";
   }
@@ -150,7 +150,7 @@ function resolveProtocol(
     return protocol;
   }
 
-  // SAFETY: the socket may expose the encrypted flag that Node sets for TLS connections. The cast reads that optional flag.
+  // TYPE-EVIDENCE: the socket may expose the encrypted flag that Node sets for TLS connections. The cast reads that optional flag.
   return (request.socket as { encrypted?: boolean } | undefined)?.encrypted
     ? "https"
     : "http";
@@ -404,7 +404,7 @@ export async function writeWebResponse(
   // also leave an associated file descriptor open. `pipeline` destroys the
   // source when either side closes.
   try {
-    // SAFETY: the DOM body stream matches the Node web stream shape that fromWeb reads.
+    // TYPE-EVIDENCE: the DOM body stream matches the Node web stream shape that fromWeb reads.
     await pipeline(
       Readable.fromWeb(
         webResponse.body as import("node:stream/web").ReadableStream,
@@ -458,7 +458,7 @@ export function toHeaders(headers: IncomingHttpHeaders) {
 }
 
 function getSetCookies(headers: Headers) {
-  // SAFETY: the getSetCookie method is a vendor extension present in some server runtimes. The cast reads that optional method for the runtime check.
+  // TYPE-EVIDENCE: the getSetCookie method is a vendor extension present in some server runtimes. The cast reads that optional method for the runtime check.
   const getSetCookie = (headers as Headers & {
     getSetCookie?: () => string[];
   }).getSetCookie;

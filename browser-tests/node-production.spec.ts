@@ -174,7 +174,6 @@ test("browser-generated Fetch Metadata reaches route handlers", async ({ page })
   await page.goto("/");
   const metadata = await page.evaluate(async () => {
     const response = await fetch("/api/request-metadata");
-    // SAFETY: The request-metadata endpoint returns a JSON object with string or null values.
     return (await response.json()) as Record<string, string | null>;
   });
 
@@ -191,7 +190,6 @@ test("issued CSRF tokens complete the browser cookie and header flow", async ({
   await page.goto("/");
   const result = await page.evaluate(async () => {
     const issuedResponse = await fetch("/api/csrf");
-    // SAFETY: The csrf endpoint returns a JSON object with a token string.
     const issued = (await issuedResponse.json()) as { token: string };
     const rejected = await fetch("/api/csrf-submit", {
       body: JSON.stringify({ message: "hello" }),

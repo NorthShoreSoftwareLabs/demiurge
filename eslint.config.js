@@ -64,4 +64,15 @@ export default tseslint.config(
       },
     },
   },
+  {
+    // Test code casts deliberately malformed or partial values to exercise
+    // runtime rejection and harness plumbing. That is not the same claim as a
+    // production invariant, so this rule does not apply here. The other two
+    // type-evidence rules still apply: a chained assertion or an unsafe
+    // dictionary type is a bug in test code too.
+    files: ["packages/core/tests/**", "browser-tests/**", "tests/**"],
+    rules: {
+      "type-evidence/require-safety-comment-for-type-assertion": "off",
+    },
+  },
 );

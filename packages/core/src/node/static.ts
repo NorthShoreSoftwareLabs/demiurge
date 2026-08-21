@@ -127,7 +127,7 @@ export function createStaticFileHandler(
         return new Response(null, { headers, status: 206 });
       }
 
-      // SAFETY: Readable.toWeb returns a web stream that matches the DOM ReadableStream body type.
+      // TYPE-EVIDENCE: Readable.toWeb returns a web stream that matches the DOM ReadableStream body type.
       return new Response(
         Readable.toWeb(
           file.createReadStream({ end: range.end, start: range.start }),
@@ -141,7 +141,7 @@ export function createStaticFileHandler(
       return new Response(null, { headers });
     }
 
-    // SAFETY: Readable.toWeb returns a web stream that matches the DOM ReadableStream body type.
+    // TYPE-EVIDENCE: Readable.toWeb returns a web stream that matches the DOM ReadableStream body type.
     return new Response(
       Readable.toWeb(file.createReadStream()) as ReadableStream,
       { headers },

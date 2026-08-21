@@ -103,37 +103,37 @@ expectReport(
   "require-safety-comment-for-type-assertion",
   requireSafetyCommentForTypeAssertion,
   "const value = input as string;",
-  "missingSafetyComment",
+  "missingTypeEvidenceComment",
   "an assertion with no comment is rejected",
 );
 
 expectClean(
   "require-safety-comment-for-type-assertion",
   requireSafetyCommentForTypeAssertion,
-  "// SAFETY: input was validated above.\nconst value = input as string;",
-  "an assertion preceded by a SAFETY comment on its statement is allowed",
+  "// TYPE-EVIDENCE: input was validated above.\nconst value = input as string;",
+  "an assertion preceded by a TYPE-EVIDENCE comment on its statement is allowed",
 );
 
 expectClean(
   "require-safety-comment-for-type-assertion",
   requireSafetyCommentForTypeAssertion,
   "const value = input as const;",
-  "a const assertion never requires a SAFETY comment",
+  "a const assertion never requires a TYPE-EVIDENCE comment",
 );
 
 expectReport(
   "require-safety-comment-for-type-assertion",
   requireSafetyCommentForTypeAssertion,
   "// just a note\nconst value = input as string;",
-  "missingSafetyComment",
-  "a comment without the SAFETY marker does not satisfy the rule",
+  "missingTypeEvidenceComment",
+  "a comment without the TYPE-EVIDENCE marker does not satisfy the rule",
 );
 
 expectClean(
   "require-safety-comment-for-type-assertion",
   requireSafetyCommentForTypeAssertion,
-  "function read() {\n  // SAFETY: the caller guarantees a string here.\n  return input as string;\n}",
-  "a SAFETY comment covering the containing return statement is allowed",
+  "function read() {\n  // TYPE-EVIDENCE: the caller guarantees a string here.\n  return input as string;\n}",
+  "a TYPE-EVIDENCE comment covering the containing return statement is allowed",
 );
 
 // no-unsafe-dictionary-type

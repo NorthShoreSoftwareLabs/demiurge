@@ -31,7 +31,7 @@ export function page<
     } satisfies PageCapability<TPath>;
   }
 
-  // SAFETY: the object literal carries the fields that the page capability type requires. The cast asserts that structural match.
+  // TYPE-EVIDENCE: the object literal carries the fields that the page capability type requires. The cast asserts that structural match.
   return {
     data: options.data,
     kind: "page",

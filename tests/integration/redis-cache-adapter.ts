@@ -139,7 +139,6 @@ async function invalidateTag(origin: string, tagId: string) {
     );
   }
 
-  // SAFETY: The invalidate endpoint returns the deleted count and kind after the successful response check.
   return await response.json() as { deleted: number; kind: string };
 }
 

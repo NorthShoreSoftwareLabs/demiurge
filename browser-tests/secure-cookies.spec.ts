@@ -57,7 +57,6 @@ test("Chromium rejects prefixed cookies that break the invariants", async ({
   expect(result?.status()).toBe(200);
   const payload = await page.evaluate(() => {
     const body = document.body.textContent ?? "{}";
-    // SAFETY: The cookie-prefix-rejection endpoint renders a JSON body with a reported array.
     return JSON.parse(body) as { reported: string[] };
   });
   const names = (await context.cookies("http://localhost:42177/")).map(

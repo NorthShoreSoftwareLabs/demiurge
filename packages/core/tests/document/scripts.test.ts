@@ -195,7 +195,6 @@ describe("document scripts", () => {
   });
 
   it("rejects a strategy that is not a supported name", () => {
-    // SAFETY: the test passes an unsupported strategy name to verify the runtime rejection.
     expect(() =>
       script({
         src: "https://cdn.example.com/lazy.js",

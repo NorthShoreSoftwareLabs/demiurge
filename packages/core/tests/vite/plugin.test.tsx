@@ -92,7 +92,6 @@ function routeModule(module: RouteModule) {
 describe("Vite plugin dev request handling", () => {
   it("exposes the selected static deployment to the build command", () => {
     const deployment = vercelStatic();
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ static: { deployment } }) as PluginHarness;
 
     expect(plugin.api).toEqual({
@@ -149,7 +148,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   });
 
   it("configures and loads both framework virtual entries", () => {
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ styles: false }) as PluginHarness;
 
     expect(plugin.config?.({}, {
@@ -223,7 +221,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   });
 
   it("configures a development-only Vite nonce placeholder", () => {
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge() as PluginHarness;
     const development = plugin.config?.({}, {
       command: "serve",
@@ -695,7 +692,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
       ssrLoadModule: vi.fn(async () => ({ GET: json({ ok: true }) })),
     };
 
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     const routes = await unstable_createDevRouteImporters(
       server as never,
       routesDir,
@@ -712,7 +708,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-build-"));
     const routesDir = join(root, "routes");
     const outputFile = join(root, "manifest.d.ts");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({
       routesDir: "routes",
       typedRoutes: { outputFile: "manifest.d.ts" },
@@ -721,9 +716,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await mkdir(routesDir, { recursive: true });
     await writeFile(join(routesDir, "index.tsx"), "export {}");
 
-    // SAFETY: The test passes a partial config object. The cast satisfies the hook parameter type.
     plugin.configResolved?.({ root } as never);
-    // SAFETY: The test passes an empty options object. The cast satisfies the hook parameter type.
     await plugin.buildStart?.({} as never);
 
     await expect(readText(outputFile)).resolves.toContain('"/": {};');
@@ -733,15 +726,12 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-build-default-"));
     const routesDir = join(root, "src", "routes");
     const outputFile = join(root, ".demiurge", "route-manifest.d.ts");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ typedRoutes: true }) as PluginHarness;
 
     await mkdir(routesDir, { recursive: true });
     await writeFile(join(routesDir, "blog.tsx"), "export {}");
 
-    // SAFETY: The test passes a partial config object. The cast satisfies the hook parameter type.
     plugin.configResolved?.({ root } as never);
-    // SAFETY: The test passes an empty options object. The cast satisfies the hook parameter type.
     await plugin.buildStart?.({} as never);
 
     await expect(readText(outputFile)).resolves.toContain('"/blog": {};');
@@ -750,7 +740,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   it("wires middleware responses in Vite dev", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-middleware-"));
     const routesDir = join(root, "routes");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
     const middleware = createMiddlewareHarness();
     const watcher = createWatcherHarness();
@@ -766,14 +755,12 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await mkdir(join(routesDir, "api"), { recursive: true });
     await writeFile(join(routesDir, "api", "health.tsx"), "export {}");
 
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.(server as never);
 
     const request = requestFor("/api/health");
     const response = new CapturingResponse();
     const next = vi.fn();
 
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.handler(request as never, response as never, next);
 
     expect(next).not.toHaveBeenCalled();
@@ -785,7 +772,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   it("serves the framework document for page routes in Vite dev", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-document-"));
     const routesDir = join(root, "routes");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({
       document: { title: "Docs & Routes" },
       routesDir: "routes",
@@ -846,11 +832,9 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await writeFile(join(routesDir, "@layout.tsx"), "export {}");
     await writeFile(join(routesDir, "index.tsx"), "export {}");
 
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.(server as never);
 
     const response = new CapturingResponse();
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.handler(
       requestFor("/?hero=true&checkout=true", {
         headers: {
@@ -889,7 +873,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   it("preserves an unsafe-inline style policy for Vite development", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-csp-"));
     const routesDir = join(root, "routes");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
     const developmentConfig = plugin.config?.({}, {
       command: "serve",
@@ -897,7 +880,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
       isSsrBuild: false,
       mode: "development",
     });
-    // SAFETY: The development config exposes a cspNonce placeholder. The cast narrows the html value so the test can read it.
     const placeholder = (developmentConfig?.html as {
       cspNonce: string;
     }).cspNonce;
@@ -939,11 +921,9 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await mkdir(routesDir, { recursive: true });
     await writeFile(join(routesDir, "@policy.ts"), "export {};");
     await writeFile(join(routesDir, "index.tsx"), "export {};");
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.(server as never);
 
     const response = new CapturingResponse();
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.handler(
       requestFor("/", {
         headers: { accept: "text/html", host: "example.test" },
@@ -993,7 +973,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-images-"));
     const routesDir = join(root, "routes");
     const publicDir = join(root, "public");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({
       images: defineImages({ loader: "static" }),
       routesDir: "routes",
@@ -1032,11 +1011,9 @@ export const GET = page({ data: () => secret, view: () => secret });`;
         create: { background: "#204080", channels: 3, height: 100, width: 200 },
       }).png().toBuffer(),
     );
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.(server as never);
 
     const document = new CapturingResponse();
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.handler(
       requestFor("/", {
         headers: { accept: "text/html", host: "example.test" },
@@ -1052,7 +1029,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     expect(variantPath).toBeTruthy();
 
     const image = new CapturingResponse();
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.handler(
       requestFor(variantPath!, { headers: { host: "example.test" } }) as never,
       image as never,
@@ -1066,7 +1042,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   it("streams page routes through Vite's transformed dev shell", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-streaming-"));
     const routesDir = join(root, "routes");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
     const middleware = createMiddlewareHarness();
     const transformIndexHtml = vi.fn(async (_url: string, html: string) =>
@@ -1090,11 +1065,9 @@ export const GET = page({ data: () => secret, view: () => secret });`;
 
     await mkdir(routesDir, { recursive: true });
     await writeFile(join(routesDir, "index.tsx"), "export {}");
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.(server as never);
 
     const response = new CapturingResponse();
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.handler(
       requestFor("/", { headers: { accept: "text/html", host: "example.test" } }) as never,
       response as never,
@@ -1112,7 +1085,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   it("renders the built-in not-found document for HTML navigation misses", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-missing-document-"));
     const routesDir = join(root, "routes");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
     const middleware = createMiddlewareHarness();
     const server = {
@@ -1127,12 +1099,10 @@ export const GET = page({ data: () => secret, view: () => secret });`;
 
     await mkdir(routesDir, { recursive: true });
 
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.(server as never)?.();
 
     const next = vi.fn();
     const routeResponse = new CapturingResponse();
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.handler(
       requestFor("/missing", {
         headers: { accept: "text/html", host: "example.test" },
@@ -1145,7 +1115,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     expect(next).toHaveBeenCalledWith();
 
     const response = new CapturingResponse();
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.notFoundHandler(
       requestFor("/missing", {
         headers: { accept: "text/html", host: "example.test" },
@@ -1165,7 +1134,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   it("renders server markup and a hydration bootstrap for a matched page route in Vite dev", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-ssr-document-"));
     const routesDir = join(root, "routes");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
     const middleware = createMiddlewareHarness();
     const server = {
@@ -1186,11 +1154,9 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await mkdir(routesDir, { recursive: true });
     await writeFile(join(routesDir, "index.tsx"), "export {}");
 
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.(server as never);
 
     const response = new CapturingResponse();
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.handler(
       requestFor("/", {
         headers: {
@@ -1214,7 +1180,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   it("includes server-resolved route data in the dev document bootstrap payload", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-ssr-data-"));
     const routesDir = join(root, "routes");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
     const middleware = createMiddlewareHarness();
     const server = {
@@ -1235,11 +1200,9 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await mkdir(routesDir, { recursive: true });
     await writeFile(join(routesDir, "index.tsx"), "export {}");
 
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.(server as never);
 
     const response = new CapturingResponse();
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.handler(
       requestFor("/", {
         headers: {
@@ -1256,7 +1219,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   });
 
   it("emits a bodiless static shell, styles, and a production manifest", () => {
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge() as PluginHarness;
 
     if (!plugin.generateBundle) {
@@ -1278,7 +1240,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
       },
     };
 
-    // SAFETY: The test passes fake options and bundle objects. The casts satisfy the hook parameter types.
     plugin.generateBundle.call({ emitFile }, {} as never, bundle as never);
 
     expect(emitFile).toHaveBeenCalledTimes(2);
@@ -1305,7 +1266,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   it("passes POST request bodies and repeated headers to route handlers", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-post-"));
     const routesDir = join(root, "routes");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
     const middleware = createMiddlewareHarness();
     const server = {
@@ -1325,7 +1285,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await mkdir(join(routesDir, "api"), { recursive: true });
     await writeFile(join(routesDir, "api", "echo.tsx"), "export {}");
 
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.(server as never);
 
     const request = requestFor("/api/echo", {
@@ -1339,7 +1298,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     const response = new CapturingResponse();
     const next = vi.fn();
 
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.handler(request as never, response as never, next);
 
     expect(next).not.toHaveBeenCalled();
@@ -1349,7 +1307,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   it("writes empty HEAD middleware responses without a body", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-head-"));
     const routesDir = join(root, "routes");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
     const middleware = createMiddlewareHarness();
     const server = {
@@ -1364,11 +1321,9 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await mkdir(join(routesDir, "api"), { recursive: true });
     await writeFile(join(routesDir, "api", "health.tsx"), "export {}");
 
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.(server as never);
 
     const response = new CapturingResponse();
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.handler(
       requestFor("/api/health", { method: "HEAD" }) as never,
       response as never,
@@ -1383,7 +1338,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-watch-"));
     const routesDir = join(root, "routes");
     const outputFile = join(root, "routes.d.ts");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({
       routesDir: "routes",
       typedRoutes: { outputFile: "routes.d.ts" },
@@ -1394,7 +1348,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await mkdir(routesDir, { recursive: true });
     await writeFile(join(routesDir, "index.tsx"), "export {}");
 
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.({
       config: { root },
       middlewares: { use: middleware.use },
@@ -1414,7 +1367,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
   it("collapses a burst of route changes into one policy scan", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-policy-burst-"));
     const routesDir = join(root, "routes");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
     const watcher = createWatcherHarness();
     const middleware = createMiddlewareHarness();
@@ -1427,7 +1379,6 @@ export const GET = page({ data: () => secret, view: () => secret });`;
 export const GET = json({}, { cors: { credentials: true, origins: "*" } });`,
     );
 
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.({
       config: { logger: { warn }, root },
       middlewares: { use: middleware.use },
@@ -1453,7 +1404,6 @@ export const GET = json({}, { cors: { credentials: true, origins: "*" } });`,
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-defaults-"));
     const routesDir = join(root, "src", "routes");
     const outputFile = join(root, ".demiurge", "route-manifest.d.ts");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ typedRoutes: {} }) as PluginHarness;
     const watcher = createWatcherHarness();
     const middleware = createMiddlewareHarness();
@@ -1466,7 +1416,6 @@ export const GET = json({}, { cors: { credentials: true, origins: "*" } });`,
     };
 
     await mkdir(routesDir, { recursive: true });
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.(server as never)?.();
 
     expect(watcher.add).toHaveBeenCalledWith(routesDir);
@@ -1477,7 +1426,6 @@ export const GET = json({}, { cors: { credentials: true, origins: "*" } });`,
     const request = requestFor("/missing", {
       headers: { accept: "text/html", host: "example.test" },
     });
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.handler(
       request as never,
       new CapturingResponse() as never,
@@ -1485,7 +1433,6 @@ export const GET = json({}, { cors: { credentials: true, origins: "*" } });`,
     );
 
     const response = new CapturingResponse();
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.notFoundHandler(
       request as never,
       response as never,
@@ -1498,7 +1445,6 @@ export const GET = json({}, { cors: { credentials: true, origins: "*" } });`,
   it("renders a dev error document when a route module fails to load", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-error-"));
     const routesDir = join(root, "routes");
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge({ routesDir: "routes" }) as PluginHarness;
     const middleware = createMiddlewareHarness();
     const error = new Error("load failed");
@@ -1517,12 +1463,10 @@ export const GET = json({}, { cors: { credentials: true, origins: "*" } });`,
     await mkdir(routesDir, { recursive: true });
     await writeFile(join(routesDir, "api.tsx"), "export {}");
 
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     plugin.configureServer?.(server as never);
 
     const next = vi.fn();
     const response = new CapturingResponse();
-    // SAFETY: The test provides fake request and response objects. The cast satisfies the handler parameter types.
     await middleware.handler(
       requestFor("/api", {
         headers: { accept: "text/html", host: "example.test" },
@@ -1985,14 +1929,11 @@ export const GET = json(() => db.widgets.page(2));
 
   it("runs from buildStart only for a build", async () => {
     const root = await scaffold({ "index.tsx": pageRoute });
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge() as PluginHarness;
 
-    // SAFETY: The test passes a partial config object. The cast satisfies the hook parameter type.
     plugin.configResolved?.({ command: "serve", root } as never);
     await expect(plugin.buildStart?.()).resolves.toBeUndefined();
 
-    // SAFETY: The test passes a partial config object. The cast satisfies the hook parameter type.
     plugin.configResolved?.({ command: "build", root } as never);
     await expect(plugin.buildStart?.()).rejects.toThrow(/@not-found\.tsx/);
   });
@@ -2006,10 +1947,8 @@ export const GET = json({}, {
   cors: { credentials: true, origins: "*" },
 });`,
     });
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const plugin = demiurge() as PluginHarness;
 
-    // SAFETY: The test passes a partial config object. The cast satisfies the hook parameter type.
     plugin.configResolved?.({ command: "build", root } as never);
 
     await expect(plugin.buildStart?.()).rejects.toThrow(
@@ -2027,13 +1966,10 @@ export const GET = json({}, {
 });`,
     });
     const warn = vi.fn();
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const devPlugin = demiurge() as PluginHarness;
-    // SAFETY: The test casts the framework plugin to its harness type to call hook methods directly.
     const buildPlugin = demiurge() as PluginHarness;
 
     devPlugin.configResolved?.({ command: "serve", root });
-    // SAFETY: The test fakes a partial Vite server object. The cast satisfies the hook parameter type.
     devPlugin.configureServer?.({
       config: { logger: { warn }, root },
       middlewares: { use: vi.fn() },
@@ -2043,7 +1979,6 @@ export const GET = json({}, {
     await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
 
     buildPlugin.configResolved?.({ command: "build", root });
-    // SAFETY: The test captured the warning text in the first mock call. The cast treats that argument as a string.
     await expect(buildPlugin.buildStart?.()).rejects.toThrow(
       warn.mock.calls[0]![0] as string,
     );

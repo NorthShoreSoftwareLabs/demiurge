@@ -124,7 +124,7 @@ async function loadImageCodec() {
   let module: SharpModule;
 
   try {
-    // SAFETY: sharp ships no types. The local type describes the methods the codec calls.
+    // TYPE-EVIDENCE: sharp ships no types. The local type describes the methods the codec calls.
     module = (await import("sharp")) as SharpModule;
   } catch (error) {
     throw new Error(

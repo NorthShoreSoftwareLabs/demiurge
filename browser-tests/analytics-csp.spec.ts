@@ -35,7 +35,6 @@ test("the analytics script loads under a strict CSP without unsafe-inline", asyn
     "analytics-csp.example",
   );
 
-  // SAFETY: The locator matches a script tag, so the element is an HTMLScriptElement.
   const nonce = await analyticsScript.evaluate(
     (element) => (element as HTMLScriptElement).nonce,
   );

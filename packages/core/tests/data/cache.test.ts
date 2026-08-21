@@ -69,15 +69,12 @@ describe("data cache primitives", () => {
   });
 
   it("rejects unsupported runtime cache key values recursively", () => {
-    // SAFETY: the test passes an undefined value to verify the runtime key validation rejects it.
     expect(() => serializeCacheKey([undefined] as never)).toThrow(
       "Demiurge cache keys do not accept values of type undefined.",
     );
-    // SAFETY: the test passes a Date instance to verify the runtime key validation rejects it.
     expect(() => serializeCacheKey([new Date()] as never)).toThrow(
       "Demiurge cache keys accept only primitives, arrays, and plain objects.",
     );
-    // SAFETY: the test passes a nested NaN value to verify the runtime key validation rejects it.
     expect(() =>
       serializeCacheKey([{ nested: { value: Number.NaN } }] as never),
     ).toThrow(
@@ -94,15 +91,12 @@ describe("data cache primitives", () => {
     });
     const symbol = { [Symbol("secret")]: "value" };
 
-    // SAFETY: the test passes a circular object to verify the runtime key validation rejects it.
     expect(() => serializeCacheKey([circular] as never)).toThrow(
       "Demiurge cache keys cannot contain circular references.",
     );
-    // SAFETY: the test passes an object with a hidden property to verify the runtime key validation rejects it.
     expect(() => serializeCacheKey([hidden] as never)).toThrow(
       "Demiurge cache key objects require enumerable string data properties.",
     );
-    // SAFETY: the test passes an object with a symbol key to verify the runtime key validation rejects it.
     expect(() => serializeCacheKey([symbol] as never)).toThrow(
       "Demiurge cache key objects require enumerable string data properties.",
     );
@@ -122,12 +116,10 @@ describe("data cache primitives", () => {
     });
 
     for (const value of [sparse, custom, symbol, accessor]) {
-      // SAFETY: the test passes arrays with custom state to verify the runtime key validation rejects them.
       expect(() => serializeCacheKey(value as never)).toThrow(
         "Demiurge cache key arrays must be dense and cannot contain accessors or custom properties.",
       );
     }
-    // SAFETY: the test passes an object with an accessor property to verify the runtime key validation rejects it.
     expect(() => serializeCacheKey([objectAccessor] as never)).toThrow(
       "Demiurge cache key objects require enumerable string data properties.",
     );
@@ -146,7 +138,6 @@ describe("data cache primitives", () => {
       values.push([value, "nested"], { nested: value });
     }
 
-    // SAFETY: the test casts known accepted values so the key serializer can prove no collisions.
     const serialized = values.map((value) =>
       serializeCacheKey([value] as never),
     );
@@ -165,7 +156,6 @@ describe("data cache primitives", () => {
       store,
     });
 
-    // SAFETY: the test passes a sparse array to verify the runtime key validation rejects it.
     await expect(
       cache.get({
         fn: vi.fn(),
@@ -173,7 +163,6 @@ describe("data cache primitives", () => {
         scope: "public",
       }),
     ).rejects.toThrow("Demiurge cache key arrays must be dense");
-    // SAFETY: the test passes a sparse array to verify the runtime key validation rejects it.
     await expect(cache.invalidateKey([Array(1)] as never)).rejects.toThrow(
       "Demiurge cache key arrays must be dense",
     );
@@ -244,7 +233,6 @@ describe("data cache primitives", () => {
     expect(() => parseCacheDuration(-1)).toThrow(
       "Demiurge cache duration must be a non-negative integer.",
     );
-    // SAFETY: the test passes an invalid duration string to verify the duration parser rejects it.
     expect(() => parseCacheDuration("1d" as never)).toThrow(
       "Demiurge cache duration must use an ms/s/m/h suffix.",
     );

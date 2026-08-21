@@ -137,25 +137,19 @@ try {
   );
 
   const installedRoot = join(scratch, "node_modules", expectedPackage.name);
-  // SAFETY: The packed package.json parses to an object with string keys.
   const installedPackage = JSON.parse(
     readFileSync(join(installedRoot, "package.json"), "utf8"),
   ) as Record<string, unknown>;
-  // SAFETY: The repository field is JSON data or undefined when the manifest omits it.
   const installedRepository = installedPackage.repository as
     | { directory?: string; type?: string; url?: string }
     | undefined;
-  // SAFETY: The bugs field is JSON data or undefined when the manifest omits it.
   const installedBugs = installedPackage.bugs as { url?: string } | undefined;
-  // SAFETY: The engines field is JSON data or undefined when the manifest omits it.
   const installedEngines = installedPackage.engines as
     | { node?: string }
     | undefined;
-  // SAFETY: The publishConfig field is JSON data or undefined when the manifest omits it.
   const installedPublishConfig = installedPackage.publishConfig as
     | { access?: string; provenance?: boolean }
     | undefined;
-  // SAFETY: The bin field is JSON data or undefined when the manifest omits it.
   const installedBin = installedPackage.bin as
     | { demiurge?: string }
     | undefined;

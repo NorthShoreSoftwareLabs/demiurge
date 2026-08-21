@@ -53,7 +53,6 @@ describe("environment validation", () => {
       });
     } catch (error) {
       expect(error).toBeInstanceOf(EnvValidationError);
-      // SAFETY: the test narrows the catch variable to the known error type.
       expect((error as EnvValidationError).issues).toEqual([
         {
           code: "invalid",
@@ -94,14 +93,12 @@ describe("environment validation", () => {
     try {
       validateEnv(schema, {});
     } catch (error) {
-      // SAFETY: the test narrows the catch variable to the known error type.
       absentIssues = (error as EnvValidationError).issues;
     }
 
     try {
       validateEnv(schema, { NODE_ENV: "" });
     } catch (error) {
-      // SAFETY: the test narrows the catch variable to the known error type.
       emptyIssues = (error as EnvValidationError).issues;
     }
 
@@ -125,7 +122,6 @@ describe("environment validation", () => {
       throw new Error("expected validateEnv to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(EnvValidationError);
-      // SAFETY: the test narrows the catch variable to the known error type.
       expect((error as EnvValidationError).message).toBe(
         "Environment variable NODE_ENV must be one of: development, production, test.",
       );
@@ -143,7 +139,6 @@ describe("environment validation", () => {
       throw new Error("expected validateEnv to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(EnvValidationError);
-      // SAFETY: the test narrows the catch variable to the known error type.
       expect((error as EnvValidationError).message).toBe(
         "Environment validation failed with 2 issues.",
       );
@@ -168,7 +163,6 @@ describe("environment validation", () => {
       throw new Error("expected validateEnv to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(EnvValidationError);
-      // SAFETY: the test narrows the catch variable to the known error type.
       expect((error as EnvValidationError).issues).toEqual([
         {
           code: "invalid",
@@ -348,9 +342,7 @@ describe("secret environment variables", () => {
       throw new Error("expected validateEnv to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(EnvValidationError);
-      // SAFETY: the test narrows the catch variable to the known error type.
       const message = (error as EnvValidationError).message;
-      // SAFETY: the test narrows the catch variable to the known error type.
       const issueMessage = (error as EnvValidationError).issues[0].message;
       expect(message).not.toContain(invalidSecretValue);
       expect(issueMessage).not.toContain(invalidSecretValue);

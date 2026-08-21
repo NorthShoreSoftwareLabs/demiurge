@@ -27,7 +27,6 @@ try {
   const origin = await waitForOrigin(child);
 
   const response = await fetch(`${origin}/api/timings`);
-  // SAFETY: The timings endpoint returns the cache and database payload after a successful request.
   const body = (await response.json()) as {
     cache: { hit: boolean };
     database: { rows: number };

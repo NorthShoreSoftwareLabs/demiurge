@@ -22,7 +22,7 @@ export const metadata = defineMetadata({
 });
 
 export const GET = page<"/guides/[slug]", GuideData>({
-  // SAFETY: The paths export returns only keys of guides, so the slug is a GuideSlug.
+  // TYPE-EVIDENCE: The paths export returns only keys of guides, so the slug is a GuideSlug.
   data: async ({ path }) => guides[path.slug as GuideSlug],
   render: { mode: "static" },
   view: Guide,

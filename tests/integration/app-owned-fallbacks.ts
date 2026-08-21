@@ -66,7 +66,6 @@ try {
     "application/problem+json",
     "API content type",
   );
-  // SAFETY: The broken endpoint returns a JSON problem document with string keys.
   const problem = await apiResponse.json() as Record<string, unknown>;
   assertEqual(problem.status, 409, "problem status");
   assertEqual(problem.title, "Project Revision Conflict", "problem title");

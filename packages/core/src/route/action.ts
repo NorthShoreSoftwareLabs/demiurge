@@ -66,7 +66,7 @@ export function action<
 ) {
   return response<TPath, TValues>(
     async (context) => {
-      // SAFETY: the input defaults to undefined when the caller did not provide a parser. The cast labels that fallback as TInput.
+      // TYPE-EVIDENCE: the input defaults to undefined when the caller did not provide a parser. The cast labels that fallback as TInput.
       const input = options.input
         ? await options.input(context)
         : undefined as TInput;
@@ -107,7 +107,7 @@ export const actionInput = {
     return await request.formData();
   },
   async json({ request }: HttpRouteContext) {
-    // SAFETY: the request body is JSON and the caller parses it to a known type. The cast widens the parsed value to unknown.
+    // TYPE-EVIDENCE: the request body is JSON and the caller parses it to a known type. The cast widens the parsed value to unknown.
     return await request.json() as unknown;
   },
   async text({ request }: HttpRouteContext) {

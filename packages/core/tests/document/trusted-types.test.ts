@@ -6,7 +6,6 @@ import {
 
 function viewWith(trustedTypes: unknown) {
   const view: unknown = { trustedTypes };
-  // SAFETY: the test supplies a partial window. The cast names the type the framework reads.
   return view as Window & typeof globalThis;
 }
 

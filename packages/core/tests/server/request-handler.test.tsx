@@ -662,7 +662,6 @@ describe("request handler", () => {
         controller.close();
       },
     });
-    // SAFETY: the test adds the duplex option the runtime needs for a streamed request body.
     const request = new Request("https://example.test/api/echo", {
       body,
       duplex: "half",
@@ -1767,7 +1766,6 @@ describe("request handler", () => {
       "./routes/index.tsx": routeModule({
         GET: page<string, { scope: CacheScope; value: string }>({
           async data({ cache, search }) {
-            // SAFETY: the test reads a scope name it controls so the cast narrows the string to the union.
             const scope = search.get("scope") as CacheScope;
 
             return await cache.get({
@@ -1979,7 +1977,6 @@ describe("request handler", () => {
   });
 
   it("renders a document string directly with renderPageDocument", () => {
-    // SAFETY: the test casts the page view to the component type the renderer expects.
     const html = renderPageDocument(
       {
         layouts: [],

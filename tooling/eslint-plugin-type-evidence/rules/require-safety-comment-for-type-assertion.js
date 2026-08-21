@@ -16,12 +16,14 @@ function isConstAssertion(node) {
   );
 }
 
-function hasSafetyComment(sourceCode, node) {
+function hasTypeEvidenceComment(sourceCode, node) {
   let current = node;
   while (true) {
     const hasComment = sourceCode
       .getCommentsBefore(current)
-      .some((comment) => comment.range[1] <= node.range[0] && /\bSAFETY\s*:/u.test(comment.value));
+      .some(
+        (comment) => comment.range[1] <= node.range[0] && /\bTYPE-EVIDENCE\s*:/u.test(comment.value),
+      );
     if (hasComment) return true;
     if (COMMENT_OWNER_KINDS.has(current.type) || current.parent.type === "Program") {
       return false;
@@ -35,20 +37,20 @@ export const requireSafetyCommentForTypeAssertion = {
     type: "problem",
     docs: {
       description:
-        "Require a nearby SAFETY comment for every TypeScript type assertion except const assertions.",
+        "Require a nearby TYPE-EVIDENCE comment for every TypeScript type assertion except const assertions.",
     },
     messages: {
-      missingSafetyComment:
-        "This type assertion has no SAFETY justification. State the checked invariant immediately before the assertion or its containing statement.",
+      missingTypeEvidenceComment:
+        "This type assertion has no TYPE-EVIDENCE justification. State the checked invariant immediately before the assertion or its containing statement.",
     },
     schema: [],
   },
   create(context) {
     const check = (node) => {
-      if (isConstAssertion(node) || hasSafetyComment(context.sourceCode, node)) {
+      if (isConstAssertion(node) || hasTypeEvidenceComment(context.sourceCode, node)) {
         return;
       }
-      context.report({ node, messageId: "missingSafetyComment" });
+      context.report({ node, messageId: "missingTypeEvidenceComment" });
     };
     return {
       TSAsExpression: check,

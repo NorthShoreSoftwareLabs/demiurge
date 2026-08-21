@@ -16,7 +16,7 @@ export function defineMiddleware<TValues extends object>(
     next: RouteMiddlewareNext,
   ) => MaybePromise<Response>,
 ): RouteMiddleware<string, TValues> & MiddlewareContextContribution<TValues> {
-  // SAFETY: the middleware function matches the declared route middleware signature. The cast adds the context contribution marker type.
+  // TYPE-EVIDENCE: the middleware function matches the declared route middleware signature. The cast adds the context contribution marker type.
   return middleware as RouteMiddleware<string, TValues> &
     MiddlewareContextContribution<TValues>;
 }

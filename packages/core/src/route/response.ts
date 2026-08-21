@@ -113,7 +113,7 @@ export function redirect<
 ) {
   const options = typeof init === "number" ? undefined : init;
 
-  // SAFETY: the object literal carries the fields that the redirect capability type requires. The cast asserts that structural match.
+  // TYPE-EVIDENCE: the object literal carries the fields that the redirect capability type requires. The cast asserts that structural match.
   return {
     cors: options?.cors,
     kind: "redirect",
@@ -310,7 +310,7 @@ async function resolveValue<
     return value;
   }
 
-  // SAFETY: the typeof check above confirms the value is a function. The cast gives it the route value function signature.
+  // TYPE-EVIDENCE: the typeof check above confirms the value is a function. The cast gives it the route value function signature.
   return await (value as (context: HttpRouteContext) => MaybePromise<T>)(
     context,
   );

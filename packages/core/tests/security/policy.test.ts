@@ -176,7 +176,6 @@ describe("security policy headers", () => {
     { scriptSrc: ["'self'", 1] },
     { scriptSrc: { replace: "'self'" } },
   ])("rejects a malformed CSP source directive value", (csp) => {
-    // SAFETY: the test passes a malformed directive value to verify the runtime rejection.
     expect(() => createSecurityHeaders({
       csp: csp as never,
     })).toThrow(
@@ -185,7 +184,6 @@ describe("security policy headers", () => {
   });
 
   it("names a malformed directive after preset policy merges", () => {
-    // SAFETY: the test passes a malformed replacement object to verify the runtime rejection.
     const policy = security.static({
       csp: {
         styleSrc: { replace: "'self'" } as never,
@@ -218,7 +216,6 @@ describe("security policy headers", () => {
         'Demiurge CSP directive "sandbox" must be a boolean or a list of sandbox tokens.',
     },
   ])("rejects a malformed CSP scalar directive", ({ csp, message }) => {
-    // SAFETY: the test passes a malformed directive value to verify the runtime rejection.
     expect(() => createSecurityHeaders({ csp: csp as never })).toThrow(message);
   });
 
@@ -401,7 +398,6 @@ describe("security policy headers", () => {
       'Demiurge CSP report-to group "missing" is not defined in headers.reportingEndpoints.',
     );
 
-    // SAFETY: the test passes a non-HTTPS URL to verify the runtime rejects it.
     expect(() => createSecurityHeaders({
       headers: {
         reportingEndpoints: {
@@ -410,14 +406,12 @@ describe("security policy headers", () => {
       },
     })).toThrow(/same-origin path or an HTTPS URL/);
 
-    // SAFETY: the test passes a report URI that injects a directive to verify the runtime rejects it.
     expect(() => createSecurityHeaders({
       csp: {
         reportUri: ["/reports; script-src *" as `/${string}`],
       },
     })).toThrow(/same-origin path or an HTTPS URL/);
 
-    // SAFETY: the test passes an endpoint with an injected value to verify the runtime rejects it.
     expect(() => createSecurityHeaders({
       headers: {
         reportingEndpoints: {

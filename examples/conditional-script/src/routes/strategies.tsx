@@ -46,7 +46,7 @@ function StrategiesPage() {
   }, []);
 
   useEffect(() => {
-    // SAFETY: The vendor script tags write these optional timing globals on window.
+    // TYPE-EVIDENCE: The vendor script tags write these optional timing globals on window.
     const timed = window as TimedWindow;
     const interval = setInterval(() => {
       const busyEndedAt = timed.__demiurgeBusyEndedAt;

@@ -159,7 +159,7 @@ function asManifest(value: unknown): PackageManifest | undefined {
     return undefined;
   }
 
-  // SAFETY: The guard confirmed the value is a non-null object that is not an array.
+  // TYPE-EVIDENCE: The guard confirmed the value is a non-null object that is not an array.
   return value as PackageManifest;
 }
 

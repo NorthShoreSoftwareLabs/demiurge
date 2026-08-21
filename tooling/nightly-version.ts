@@ -171,6 +171,7 @@ export function nightlyManifest(manifest: string, version: string): string {
     throw new Error("The package manifest is not a JSON object.");
   }
 
+  // TYPE-EVIDENCE: the guard above confirmed the value is a non-null object.
   const updated = { ...(parsed as Record<string, unknown>), version };
   return `${JSON.stringify(updated, undefined, 2)}\n`;
 }

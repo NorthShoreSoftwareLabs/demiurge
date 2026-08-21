@@ -41,7 +41,6 @@ describe("httpError", () => {
   });
 
   it("rejects an unsupported status at runtime", () => {
-    // SAFETY: the test passes a success status to verify the runtime rejects it.
     expect(() => httpError(200 as HttpErrorStatus)).toThrow(
       /standard 4xx or 5xx status/,
     );

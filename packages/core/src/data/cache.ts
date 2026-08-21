@@ -244,7 +244,7 @@ export function createCache(options: CreateCacheOptions): Cache {
           );
         }
 
-        // SAFETY: the store entry holds a value that the caller stored as TResult. The cast restores that generic type after storage erased it.
+        // TYPE-EVIDENCE: the store entry holds a value that the caller stored as TResult. The cast restores that generic type after storage erased it.
         return existing.value as TResult;
       }
 
@@ -271,7 +271,7 @@ export function createCache(options: CreateCacheOptions): Cache {
           options.waitUntil?.(refresh);
         }
 
-        // SAFETY: the store entry holds a value that the caller stored as TResult. The cast restores that generic type after storage erased it.
+        // TYPE-EVIDENCE: the store entry holds a value that the caller stored as TResult. The cast restores that generic type after storage erased it.
         return existing.value as TResult;
       }
 
@@ -282,7 +282,7 @@ export function createCache(options: CreateCacheOptions): Cache {
       const currentPending = sharedPending.get(key);
 
       if (currentPending) {
-        // SAFETY: the pending entry wraps the request function that returns TResult. The cast restores that generic type.
+        // TYPE-EVIDENCE: the pending entry wraps the request function that returns TResult. The cast restores that generic type.
         return await currentPending.promise as TResult;
       }
 
@@ -682,7 +682,7 @@ async function getRequestValue<TResult>(
   const existing = entries.get(key);
 
   if (existing && existing.expiresAt > now()) {
-    // SAFETY: the entry holds a promise that the request produced as TResult. The cast restores that generic type after the map erased it.
+    // TYPE-EVIDENCE: the entry holds a promise that the request produced as TResult. The cast restores that generic type after the map erased it.
     return await existing.value as TResult;
   }
 
@@ -805,7 +805,7 @@ function requireRefreshStore(store: CacheStore): CoordinatedCacheStore {
     );
   }
 
-  // SAFETY: the guard above confirms each coordination method exists on the store. The cast reflects that runtime check.
+  // TYPE-EVIDENCE: the guard above confirms each coordination method exists on the store. The cast reflects that runtime check.
   return store as CoordinatedCacheStore;
 }
 
@@ -968,7 +968,7 @@ function stableSerialize(value: CacheKeyPart, ancestors: Set<object>): string {
     );
   }
 
-  // SAFETY: the checks above confirm the value is a plain object with enumerable string properties. The cast adds the string index signature.
+  // TYPE-EVIDENCE: the checks above confirm the value is a plain object with enumerable string properties. The cast adds the string index signature.
   const objectValue = value as { readonly [key: string]: CacheKeyPart };
   const serialized = `{${Object.keys(objectValue)
     .sort()
