@@ -109,8 +109,23 @@ export type StrictTransportSecurityPolicy = {
 };
 
 export type TrustedTypesPolicy = {
+  /**
+   * Permits the `default` policy, which the browser applies to every raw
+   * string that reaches a guarded sink. The `default` policy is one global
+   * relaxation of the guarantee, so no preset turns it on. An application
+   * declares it here when legacy or third-party code cannot use a named
+   * policy.
+   */
+  allowDefaultPolicy?: boolean;
   mode: "enforce" | "report-only";
-  policies: readonly string[];
+  /**
+   * Policy names the document may create, beyond the framework-owned
+   * `demiurge` policy that the framework always permits.
+   *
+   * An absent list permits the framework policy only. An empty list renders
+   * `trusted-types 'none'`, which refuses every policy name.
+   */
+  policies?: readonly string[];
   requireFor?: readonly ["script"];
 };
 

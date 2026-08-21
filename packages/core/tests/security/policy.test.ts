@@ -428,6 +428,48 @@ describe("security policy headers", () => {
     expect(headers.has("content-security-policy-report-only")).toBe(false);
   });
 
+  it("renders the framework policy alone when no policies are declared", () => {
+    const headers = createSecurityHeaders({
+      trustedTypes: {
+        mode: "enforce",
+        requireFor: ["script"],
+      },
+    });
+
+    expect(headers.get("content-security-policy")).toBe(
+      "require-trusted-types-for 'script'; trusted-types demiurge",
+    );
+  });
+
+  it("renders declared policies and the default policy after the framework policy", () => {
+    const headers = createSecurityHeaders({
+      trustedTypes: {
+        allowDefaultPolicy: true,
+        mode: "enforce",
+        policies: ["dompurify"],
+        requireFor: ["script"],
+      },
+    });
+
+    expect(headers.get("content-security-policy")).toBe(
+      "require-trusted-types-for 'script'; trusted-types demiurge default dompurify",
+    );
+  });
+
+  it("renders trusted-types 'none' for an explicit empty policy list", () => {
+    const headers = createSecurityHeaders({
+      trustedTypes: {
+        mode: "enforce",
+        policies: [],
+        requireFor: ["script"],
+      },
+    });
+
+    expect(headers.get("content-security-policy")).toBe(
+      "require-trusted-types-for 'script'; trusted-types 'none'",
+    );
+  });
+
   it("renders optional strict transport security directives", () => {
     const headers = createSecurityHeaders(
       security.api({
