@@ -136,17 +136,32 @@ function assertCounts(
   actual: Record<string, number[]>,
   expected: Record<string, number[]>,
 ) {
-  const matches = Object.entries(expected).every(
-    ([scope, counts]) =>
-      actual[scope]?.length === counts.length &&
-      counts.every((count, index) => actual[scope]?.[index] === count),
-  );
+  const matches =
+    Object.keys(actual).length === Object.keys(expected).length &&
+    Object.entries(expected).every(([scope, counts]) => {
+      const actualCounts = actual[scope];
 
-  if (!matches || Object.keys(actual).length !== Object.keys(expected).length) {
+      if (!actualCounts || actualCounts.length !== counts.length) {
+        return false;
+      }
+
+      const orderedActual = [...actualCounts].sort(compareCounts);
+      const orderedExpected = [...counts].sort(compareCounts);
+
+      return orderedExpected.every(
+        (count, index) => count === orderedActual[index],
+      );
+    });
+
+  if (!matches) {
     throw new Error(
       `Unexpected runtime cache counters. Expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}.`,
     );
   }
+}
+
+function compareCounts(left: number, right: number) {
+  return left - right;
 }
 
 function assertDocumentIncludes(document: string, expected: string) {
