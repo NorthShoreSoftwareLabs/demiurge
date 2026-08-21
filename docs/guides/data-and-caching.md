@@ -63,6 +63,45 @@ entry while one lease owner refreshes it. Publication is owner-only and
 invalidation cancels obsolete refresh work. Node graceful shutdown drains
 tracked refresh work up to its configured deadline.
 
+## Negative results
+
+A `fn` may call `cacheNotFound(message?)` instead of returning a value, to
+report that the requested item does not currently exist. `cache.get(...)`
+caches that outcome the same way it caches a real result, and re-throws a
+`CacheNotFoundError` on every hit until the entry expires:
+
+```tsx
+cache.get({
+  fn: async () => {
+    const post = await db.posts.findBySlug(path.slug);
+    if (!post) return cacheNotFound(`no post at ${path.slug}`);
+    return post;
+  },
+  key: ["post", path.slug],
+  notFoundTtl: "30s",
+  ttl: "5m",
+});
+```
+
+This avoids repeating the full lookup for every request against a slug that
+does not resolve. `notFoundTtl` sets the negative entry's lifetime separately
+from `ttl`, because a missing item tends to start existing sooner than an
+existing item tends to disappear. It falls back to `ttl` when omitted. A
+request with neither field caches a negative result forever, the same as a
+positive one, until an explicit `invalidateTags(...)` call.
+
+Catch `CacheNotFoundError` with `isCacheNotFoundError(...)` where a negative
+result needs a different treatment. One example is translating it into an
+HTTP response with `httpError(404, ...)` at the route layer. The cache layer
+stays independent of HTTP status codes. That translation is the caller's job.
+
+A negative result reached through `staleWhileRevalidate` replaces the stale
+entry immediately instead of waiting out its remaining freshness.
+`cacheNotFound()` is the application asserting that the item is gone, not a
+transient failure. An ordinary thrown error during a background refresh does
+not replace the stale entry. It reaches `onBackgroundError`, and the existing
+value keeps serving.
+
 ## Redis store
 
 `createRedisCacheStore(...)` from `@demiurgejs/core/redis` shares `public`,

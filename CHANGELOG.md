@@ -5,6 +5,10 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- A `cache.get(...)` loader may call `cacheNotFound(message?)` to report a
+  negative result the cache should still store. `notFoundTtl` sets the
+  negative entry's lifetime, and `isCacheNotFoundError(...)` identifies the
+  thrown `CacheNotFoundError` on a subsequent hit (#180).
 - `<Script />` renders a script that a component discovers during render. The
   document hoists a script found before the head flush and gives it the request
   nonce (#38).
