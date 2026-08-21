@@ -194,6 +194,7 @@ export function createNodeServer(
   options: NodeServerOptions,
 ): NodeServer {
   const timeouts = normalizeNodeServerTimeouts(options.timeouts);
+  // TYPE-EVIDENCE: createServer returns an http.Server that the framework manages as a node server. The cast adds the framework lifecycle type.
   const server = createServer(createNodeRequestListener(options)) as NodeServer;
   server.keepAliveTimeout = timeouts.keepAliveTimeout;
   server.headersTimeout = timeouts.headersTimeout;
@@ -312,6 +313,7 @@ function attachNodeServerLifecycle(
       }, gracePeriod);
 
       server.close((error) => {
+        // TYPE-EVIDENCE: Node close callbacks pass an error with an optional code. The cast reads that code to detect an ordinary shutdown condition.
         if (error && (error as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING") {
           closeError = error;
         }

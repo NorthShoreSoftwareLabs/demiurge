@@ -39,6 +39,7 @@ export function checkPullRequestTitle(title: string): string[] {
   const failures: string[] = [];
   const { rest, scope, type } = match.groups;
 
+  // TYPE-EVIDENCE: The cast widens the readonly tuple to a string array for the includes check.
   if (!(allowedTypes as readonly string[]).includes(type)) {
     failures.push(
       `The type ${type} is not allowed. Use one of these types: ${allowedTypes.join(", ")}.`,

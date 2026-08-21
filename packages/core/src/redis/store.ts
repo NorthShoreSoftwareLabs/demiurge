@@ -171,6 +171,7 @@ type RedisCacheCommands = {
 // commands is idempotent, so building several stores on the same client, or
 // rebuilding one after a reconnect, never redefines a command twice.
 function commands(client: Redis): Redis & RedisCacheCommands {
+  // TYPE-EVIDENCE: the cast adds the optional custom command methods before the runtime checks install them.
   const withCommands = client as Redis & Partial<RedisCacheCommands>;
 
   if (!withCommands.demiurgeCacheSet) {
@@ -205,6 +206,7 @@ function commands(client: Redis): Redis & RedisCacheCommands {
     });
   }
 
+  // TYPE-EVIDENCE: the defineCommand calls above install each custom command. The cast reflects that the methods now exist.
   return withCommands as Redis & RedisCacheCommands;
 }
 
@@ -255,6 +257,7 @@ export function createRedisCacheStore(
     },
     async get(key) {
       const raw = await client.get(entryPrefix + key);
+      // TYPE-EVIDENCE: the stored raw value is JSON that the store serialized from a cache entry. The cast restores that shape.
       return raw ? (JSON.parse(raw) as CacheStoreEntry) : undefined;
     },
     async invalidateTags(tags) {

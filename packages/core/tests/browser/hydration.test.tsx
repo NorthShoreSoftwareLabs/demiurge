@@ -17,10 +17,7 @@ describe("React DOM client interop", () => {
     const client = {
       createRoot: vi.fn(),
       hydrateRoot: vi.fn(),
-    } as unknown as Pick<
-      typeof import("react-dom/client"),
-      "createRoot" | "hydrateRoot"
-    >;
+    };
 
     expect(resolveReactDomClient(client)).toBe(client);
     expect(resolveReactDomClient({ default: client })).toBe(client);

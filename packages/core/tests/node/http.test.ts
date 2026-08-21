@@ -81,7 +81,7 @@ describe("Node HTTP bridge", () => {
       },
       statusCode: 0,
       statusMessage: "",
-    }) as unknown as ServerResponse;
+    }) as ServerResponse;
     const webResponse = new Response("hello", { status: 201 });
     webResponse.headers.append("set-cookie", "a=1");
     webResponse.headers.append("set-cookie", "b=2");
@@ -386,10 +386,10 @@ describe("Node HTTP bridge", () => {
       },
     });
     const response = Object.assign(writable, {
-      setHeader() {},
+      setHeader(_name: string, _value: string | string[]) {},
       statusCode: 0,
       statusMessage: "",
-    }) as unknown as ServerResponse;
+    }) as ServerResponse;
 
     await writeWebResponse(response, new Response(null, { status: 204 }));
 

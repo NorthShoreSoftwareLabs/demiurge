@@ -156,6 +156,7 @@ export function parseRateLimitWindow(value: number | string) {
   }
 
   const amount = Number(match[1]);
+  // TYPE-EVIDENCE: the regex restricts the unit to s, m, or h. The lowercase value is therefore a key of the duration units map.
   const unit = match[2].toLowerCase() as keyof typeof durationUnits;
   const duration = amount * durationUnits[unit];
 

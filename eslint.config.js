@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import typeEvidence from "./tooling/eslint-plugin-type-evidence/index.js";
 
 export default tseslint.config(
   {
@@ -9,7 +10,10 @@ export default tseslint.config(
       "**/dist/**",
       "**/node_modules/**",
       "**/.vercel/**",
+      "**/.claude/**",
+      "**/.omc/**",
       "examples/**/.demiurge/**",
+      "tooling/eslint-plugin-type-evidence/**",
     ],
   },
   js.configs.recommended,
@@ -28,6 +32,9 @@ export default tseslint.config(
         },
       },
     },
+    plugins: {
+      "type-evidence": typeEvidence,
+    },
     rules: {
       "@typescript-eslint/no-unused-vars": [
         "error",
@@ -44,6 +51,9 @@ export default tseslint.config(
           allowInterfaces: "always",
         },
       ],
+      "type-evidence/no-chained-type-assertions": "error",
+      "type-evidence/require-safety-comment-for-type-assertion": "error",
+      "type-evidence/no-unsafe-dictionary-type": "error",
     },
   },
   {
@@ -52,6 +62,17 @@ export default tseslint.config(
       globals: {
         ...globals.browser,
       },
+    },
+  },
+  {
+    // Test code casts deliberately malformed or partial values to exercise
+    // runtime rejection and harness plumbing. That is not the same claim as a
+    // production invariant, so this rule does not apply here. The other two
+    // type-evidence rules still apply: a chained assertion or an unsafe
+    // dictionary type is a bug in test code too.
+    files: ["packages/core/tests/**", "browser-tests/**", "tests/**"],
+    rules: {
+      "type-evidence/require-safety-comment-for-type-assertion": "off",
     },
   },
 );

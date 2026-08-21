@@ -69,6 +69,7 @@ export function createMemoryIdempotencyStore(
       const existing = entries.get(key);
 
       if (existing && (existing.pending || existing.expiresAt > currentTime)) {
+        // TYPE-EVIDENCE: the entry stores the promise from a request typed TResult. The cast restores that generic type.
         return {
           key,
           replayed: true,

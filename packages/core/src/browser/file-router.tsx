@@ -278,6 +278,7 @@ type ReactDomClientModule = Partial<ReactDomClientApi> & {
 };
 
 export function resolveReactDomClient(module: ReactDomClientModule) {
+  // TYPE-EVIDENCE: the runtime checks confirm both client functions exist. The module therefore matches the client API shape.
   const client = typeof module.createRoot === "function" &&
       typeof module.hydrateRoot === "function"
     ? module as ReactDomClientApi
@@ -303,6 +304,7 @@ export function Link<const TTo extends AppHref>(
   },
 ) {
   const router = useRouter();
+  // TYPE-EVIDENCE: the props type adds only children and className to a link target. The cast removes those extra fields.
   const to = href(props as LinkTarget<TTo>);
 
   return (
@@ -443,6 +445,7 @@ async function loadNavigationData(request: Request) {
   const kind = response.headers.get(NAVIGATION_DATA_HEADER);
 
   if (kind === NAVIGATION_DATA_RESPONSE) {
+    // TYPE-EVIDENCE: the response body is JSON that the server serialized as initial route data. The next check validates the required hasData field.
     const value = await response.json() as Partial<InitialRouteData>;
 
     if (value.hasData !== true) {
@@ -458,6 +461,7 @@ async function loadNavigationData(request: Request) {
 
   if (kind === NAVIGATION_ERROR_RESPONSE || !response.ok) {
     const problem = await readProblem(response);
+    // TYPE-EVIDENCE: the includes check confirms the status is a member of the error status tuple. The second cast reuses that same narrowing.
     const status = HTTP_ERROR_STATUSES.includes(
       response.status as (typeof HTTP_ERROR_STATUSES)[number],
     )
@@ -477,6 +481,7 @@ async function loadNavigationData(request: Request) {
 
 async function readProblem(response: Response) {
   try {
+    // TYPE-EVIDENCE: the response body is JSON that parses to a plain object. The record type describes any JSON object.
     return await response.json() as Record<string, unknown>;
   } catch {
     return undefined;

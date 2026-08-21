@@ -22,6 +22,7 @@ export function serializeInitialRouteData(
 
 export function readInitialRouteData(source: Document) {
   const element = source.getElementById(HYDRATION_DATA_ELEMENT_ID);
+  // TYPE-EVIDENCE: the tagName check confirms the element is a template element. The cast adds the template content property.
   const serialized = element?.tagName === "TEMPLATE"
     ? (element as HTMLTemplateElement).content.textContent
     : element?.textContent;
@@ -31,6 +32,7 @@ export function readInitialRouteData(source: Document) {
   }
 
   try {
+    // TYPE-EVIDENCE: the serialized value came from serializeInitialRouteData which emits an initial route data shape. The cast restores that shape after parsing.
     return JSON.parse(serialized) as InitialRouteData;
   } catch (error) {
     throw new Error(

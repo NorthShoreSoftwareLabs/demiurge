@@ -160,5 +160,6 @@ async function loadSource(origin: string, channel: string) {
     throw httpError(502, `Runtime data source returned ${response.status}.`);
   }
 
+  // TYPE-EVIDENCE: The source endpoint returns the sample shape after the successful response check.
   return await response.json() as SourceSample;
 }

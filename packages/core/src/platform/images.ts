@@ -275,10 +275,12 @@ export function parseImageOptimizerRequest(
 
   const rawFormat = url.searchParams.get("f");
 
+  // TYPE-EVIDENCE: the set membership check confirms the raw format is a known image format. The cast matches that check.
   if (rawFormat !== null && !imageFormats.has(rawFormat as ImageFormat)) {
     return reject(400, "The image format is not supported.");
   }
 
+  // TYPE-EVIDENCE: the raw format value is a string that names an image format or is null. The cast labels it with the format union.
   return {
     descriptor: {
       format: (rawFormat as ImageFormat | null) ?? "auto",

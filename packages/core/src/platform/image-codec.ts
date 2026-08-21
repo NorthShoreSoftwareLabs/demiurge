@@ -124,7 +124,8 @@ async function loadImageCodec() {
   let module: SharpModule;
 
   try {
-    module = (await import("sharp")) as unknown as SharpModule;
+    // TYPE-EVIDENCE: sharp ships no types. The local type describes the methods the codec calls.
+    module = (await import("sharp")) as SharpModule;
   } catch (error) {
     throw new Error(
       "Demiurge image optimization requires the optional peer dependency sharp. Install sharp in the application.",

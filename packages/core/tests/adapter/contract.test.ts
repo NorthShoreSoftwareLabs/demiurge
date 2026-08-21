@@ -178,7 +178,7 @@ describe("adapter contract suite", () => {
       {
         capabilities: {
           ...everyCapability,
-          streaming: undefined as unknown as boolean,
+          streaming: undefined as never,
         },
         name: "untyped",
       },

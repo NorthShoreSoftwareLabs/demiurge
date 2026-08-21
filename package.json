@@ -17,7 +17,7 @@
     "release:check": "tsx tooling/release-check.ts",
     "test": "pnpm --filter @demiurgejs/core test && pnpm test:scaffold && pnpm test:tooling",
     "test:scaffold": "pnpm --filter create-demiurge test",
-    "test:tooling": "node --import tsx --test tooling/*.test.ts && tsx tests/tooling/release-check.ts && tsx tests/tooling/pr-title.ts",
+    "test:tooling": "node --import tsx --test tooling/*.test.ts && tsx tests/tooling/release-check.ts && tsx tests/tooling/pr-title.ts && tsx tests/tooling/type-evidence-lint-rules.ts",
     "nightly:plan": "tsx tooling/nightly-release.ts plan",
     "nightly:publish": "tsx tooling/nightly-release.ts publish",
     "test:browser": "pnpm build:browser-tests && playwright test",

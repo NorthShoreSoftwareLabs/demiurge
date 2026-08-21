@@ -101,7 +101,7 @@ describe("typed URL routes", () => {
       };
       void invalidLinkProps;
 
-      const routeProps = null as never as RouteProps<"/blog/[slug]">;
+      const routeProps: RouteProps<"/blog/[slug]"> = null as never;
       const slug: string = routeProps.path.slug;
       void slug;
 

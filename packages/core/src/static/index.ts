@@ -169,6 +169,7 @@ async function loadRouteModules(
 
   await Promise.all(workers);
 
+  // TYPE-EVIDENCE: Object.fromEntries builds a record whose values are the loaded route modules. The cast labels the keys and values.
   return Object.fromEntries(modules) as Record<string, RouteModule>;
 }
 
@@ -955,6 +956,7 @@ async function writeOutput(
 async function readPreviousOutputFiles(outDir: string) {
   try {
     const source = await readFile(join(outDir, STATIC_MANIFEST_FILE), "utf8");
+    // TYPE-EVIDENCE: the manifest file is JSON that the static build serialized. The cast describes its expected shape before validation.
     const value = JSON.parse(source) as {
       adapter?: unknown;
       entries?: Array<{ file?: unknown }>;

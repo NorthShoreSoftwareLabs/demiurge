@@ -24,7 +24,7 @@ Each behavior should be tested at the layer where it can fail.
 | Production integration | `tests/integration` | Running example servers and cross-request behavior |
 | Browser conformance | `browser-tests` | Hydration, navigation, CSP, cookies, Fetch Metadata, and fallbacks |
 | Packed consumer | `tests/package` | Tarball contents, declarations, entry points, and clean installation |
-| Repository tooling | `tests/tooling` | Release metadata rules and pull request title rules |
+| Repository tooling | `tests/tooling` | Release metadata rules, pull request title rules, and the type-evidence ESLint rules |
 
 Unit tests live beside the package rather than in the repository-level `tests`
 directory. The repository-level tests deliberately exercise built examples or a

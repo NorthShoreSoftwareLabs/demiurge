@@ -243,6 +243,7 @@ function applyPolicyNeed(
     return csp;
   }
 
+  // TYPE-EVIDENCE: the directive value is a CSP source list or a replacement. The cast labels it with the directive value union.
   const current = resolveCspDirectiveValue(
     (csp[directive] ?? csp.defaultSrc) as CspDirectiveValue | undefined,
   ) ?? [];
@@ -402,6 +403,7 @@ function mergeCsp(
   };
 
   for (const [name, value] of cspDirectiveEntries(override)) {
+    // TYPE-EVIDENCE: the indexed base value is a CSP directive value or undefined. The cast labels it with the directive value union.
     const baseValue = resolveCspDirectiveValue(
       normalizedBase[name] as CspDirectiveValue | undefined,
     );
@@ -448,6 +450,7 @@ function setCspDirective(
   }
 
   if (name === "reportUri") {
+    // TYPE-EVIDENCE: the reportUri directive value is an array of reporting endpoint URL strings. The cast labels it with that specific array type.
     policy.reportUri = value as readonly ReportingEndpointUrl[];
     return;
   }
@@ -787,6 +790,7 @@ function isAsciiHeaderValue(value: string) {
 }
 
 function cspDirectiveEntries(policy: ContentSecurityPolicy) {
+  // TYPE-EVIDENCE: Object.entries returns the policy entries as string keyed pairs. The cast narrows the keys to the policy key type.
   return Object.entries(policy) as Array<[
     keyof ContentSecurityPolicy,
     CspDirectiveValue | undefined,

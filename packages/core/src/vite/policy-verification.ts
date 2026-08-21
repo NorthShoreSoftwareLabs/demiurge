@@ -20,6 +20,12 @@ type AstNode = {
   type: string;
 };
 
+// TYPE-EVIDENCE: rollup returns a generic program node. The local type is a loose access shape.
+function asAstNode(value: unknown): AstNode {
+  // TYPE-EVIDENCE: the caller passes a rollup program node. The cast labels it with the loose access shape.
+  return value as AstNode;
+}
+
 export type StaticPolicyFinding = {
   code: "cors-invalid" | "cors-method-unavailable" | "rate-limit-invalid" |
     "security-header-render-failed";
@@ -80,7 +86,7 @@ export async function verifyRoutePolicySource(source: string, file: string) {
 }
 
 function extractRouteModule(code: string): ExtractedRouteModule {
-  const ast = parseAst(code) as unknown as AstNode;
+  const ast = asAstNode(parseAst(code));
   const imports = collectCoreImports(ast);
   const constants = collectConstants(ast);
   const declarations = collectVariableInitializers(ast);
@@ -165,6 +171,7 @@ function extractCapability(
     constants,
   );
 
+  // TYPE-EVIDENCE: the isRecord checks confirm the values are plain objects. The casts label them as the capability policy types.
   return {
     cors: isRecord(cors) ? cors as CorsPolicy : undefined,
     security: isRecord(securityPolicy)
@@ -211,6 +218,7 @@ function extractRoutePolicy(
 
   if (node.type !== "ObjectExpression") {
     const value = evaluateLiteral(node, constants);
+    // TYPE-EVIDENCE: the isRecord check confirms the value is a plain object. The cast labels it as a route policy.
     return isRecord(value) ? value as RoutePolicy : undefined;
   }
 
@@ -233,6 +241,7 @@ function extractRoutePolicy(
     result[name] = value;
   }
 
+  // TYPE-EVIDENCE: the loop above copied each property from the object expression. The cast labels the accumulated record as a route policy.
   return result as RoutePolicy;
 }
 
@@ -243,6 +252,7 @@ function extractSecurityPolicy(
 ): SecurityPolicy | undefined {
   if (node.type !== "CallExpression") {
     const value = evaluateLiteral(node, constants);
+    // TYPE-EVIDENCE: the isRecord check confirms the value is a plain object. The cast labels it as a security policy.
     return isRecord(value) ? value as SecurityPolicy : undefined;
   }
 
@@ -259,12 +269,22 @@ function extractSecurityPolicy(
     return undefined;
   }
 
-  if (preset === "api") return security.api(options as never);
+  if (preset === "api") {
+    // TYPE-EVIDENCE: the guard above rejects non-object options values. The preset helper validates the specific option fields.
+    return security.api(options as never);
+  }
   if (preset === "crossOriginIsolated") {
+    // TYPE-EVIDENCE: the guard above rejects non-object options values. The preset helper validates the specific option fields.
     return security.crossOriginIsolated(options as never);
   }
-  if (preset === "static") return security.static(options as never);
-  if (preset === "strict") return security.strict(options as never);
+  if (preset === "static") {
+    // TYPE-EVIDENCE: the guard above rejects non-object options values. The preset helper validates the specific option fields.
+    return security.static(options as never);
+  }
+  if (preset === "strict") {
+    // TYPE-EVIDENCE: the guard above rejects non-object options values. The preset helper validates the specific option fields.
+    return security.strict(options as never);
+  }
   return undefined;
 }
 
@@ -280,6 +300,7 @@ function validateExtractedRouteModule(
   // CORS configuration, and rejecting it would fail a build over nothing.
   availableMethods.add("OPTIONS");
 
+  // TYPE-EVIDENCE: Object.entries returns the capability map entries as string keyed pairs. The cast narrows the keys to HTTP methods and the values to capability types.
   for (const [exportName, capability] of Object.entries(
     routeModule.capabilities,
   ) as Array<[HttpMethod, ExtractedCapability]>) {
@@ -345,6 +366,7 @@ function toFragmentDocument(document: SecurityPolicy): SecurityPolicy {
     return document;
   }
 
+  // TYPE-EVIDENCE: the guard above returns early when the csp field is false or missing. The remaining value is therefore a policy object.
   return {
     ...document,
     csp: { ...document.csp as ContentSecurityPolicy, reportTo: undefined },
@@ -468,6 +490,7 @@ function evaluateLiteral(
 }
 
 function isHttpMethod(value: string): value is HttpMethod {
+  // TYPE-EVIDENCE: the value is a string that the includes check tests against the HTTP methods tuple. The cast narrows it for the check.
   return httpMethods.includes(value as HttpMethod);
 }
 
@@ -480,6 +503,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function asNode(value: unknown) {
+  // TYPE-EVIDENCE: the type in value check confirms the value is an AST node. The cast asserts that node shape.
   return value && typeof value === "object" && "type" in value
     ? value as AstNode
     : undefined;
