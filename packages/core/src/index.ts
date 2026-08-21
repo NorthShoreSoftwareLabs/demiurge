@@ -5,12 +5,15 @@ export {
   defineAdapter,
 } from "./adapter";
 export {
+  cacheNotFound,
+  CacheNotFoundError,
   createCache,
   createInvalidation,
   createMemoryIdempotencyStore,
   createMemoryCache,
   createMemoryCacheStore,
   defineTags,
+  isCacheNotFoundError,
   parseCacheDuration,
   query,
   runIdempotentMutation,

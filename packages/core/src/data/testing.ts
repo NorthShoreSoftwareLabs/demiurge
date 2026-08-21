@@ -12,8 +12,10 @@ export async function verifyCacheStoreContract(
   const alphaKey = `${prefix}:alpha`;
   const betaKey = `${prefix}:beta`;
   const gammaKey = `${prefix}:gamma`;
+  const deltaKey = `${prefix}:delta`;
   const alphaTag = `${prefix}:tag:alpha`;
   const betaTag = `${prefix}:tag:beta`;
+  const deltaTag = `${prefix}:tag:delta`;
   const future = Date.now() + 60_000;
   const alpha = {
     expiresAt: future,
@@ -76,11 +78,38 @@ export async function verifyCacheStoreContract(
       await store.delete(betaKey) === false,
       "delete() must report a missing key",
     );
+
+    // A negative entry (a loader's `cacheNotFound()` result) round-trips
+    // like any other entry, and tag invalidation clears it the same way it
+    // clears a positive result.
+    const delta = {
+      expiresAt: future,
+      negative: true,
+      staleUntil: future,
+      tags: [deltaTag],
+      value: "not found",
+    } satisfies CacheStoreEntry;
+
+    await store.set(deltaKey, delta);
+    assertEntry(
+      await store.get(deltaKey),
+      delta,
+      "set() then get() for a negative entry",
+    );
+    assert(
+      await store.invalidateTags([deltaTag]) === 1,
+      "invalidateTags() must delete a negative entry carrying a matching tag",
+    );
+    assert(
+      await store.get(deltaKey) === undefined,
+      "invalidateTags() must remove a negative entry the same as a positive one",
+    );
   } finally {
     await Promise.all([
       store.delete(alphaKey),
       store.delete(betaKey),
       store.delete(gammaKey),
+      store.delete(deltaKey),
     ]);
   }
 }
@@ -185,6 +214,10 @@ function assertEntry(
   assert(
     actual?.expiresAt === expected.expiresAt,
     `${operation} must preserve expiresAt`,
+  );
+  assert(
+    Boolean(actual?.negative) === Boolean(expected.negative),
+    `${operation} must preserve the negative flag`,
   );
   assert(
     actual?.staleUntil === expected.staleUntil,

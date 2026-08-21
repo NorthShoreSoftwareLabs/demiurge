@@ -1,9 +1,12 @@
 export {
+  cacheNotFound,
+  CacheNotFoundError,
   createCache,
   createInvalidation,
   createMemoryCache,
   createMemoryCacheStore,
   defineTags,
+  isCacheNotFoundError,
   parseCacheDuration,
   query,
   serializeCacheKey,
