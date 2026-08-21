@@ -1,0 +1,144 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One nightly publication at a time. Two runs that start together would compute
+# the same version from the same commit, and the second npm publish would fail
+# on a version the registry already holds.
+concurrency:
+  group: nightly-publish
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Decide whether main advanced
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      publish: ${{ steps.plan.outputs.publish }}
+      version: ${{ steps.plan.outputs.version }}
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The published nightly version carries its own source commit, so the
+      # registry is the marker for the last nightly. The workflow needs no Git
+      # tag, no commit, and no stored file to answer whether main advanced.
+      - name: Plan the nightly version
+        id: plan
+        run: pnpm nightly:plan
+
+  verify:
+    name: Verify main
+    needs: plan
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install Redis
+        run: sudo apt-get update && sudo apt-get install -y redis-server
+
+      - name: Run the complete verification gate
+        run: pnpm verify
+
+  publish:
+    name: Publish the nightly version
+    needs: [plan, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node for npm
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse an unrelated npm package owner
+        env:
+          EXPECTED_NPM_OWNER: john_nssl
+        run: |
+          if repository=$(npm view @demiurgejs/core repository.url --json 2>/dev/null); then
+            case "$repository" in
+              ""|null)
+                owners=$(npm owner ls @demiurgejs/core)
+                case "$owners" in
+                  *"$EXPECTED_NPM_OWNER"*) ;;
+                  *) echo "npm package @demiurgejs/core does not list the expected owner." >&2; exit 1 ;;
+                esac
+                ;;
+              *NorthShoreSoftwareLabs/demiurge*) ;;
+              *) echo "npm package @demiurgejs/core belongs to another repository: $repository" >&2; exit 1 ;;
+            esac
+          fi
+
+      # The guard runs the publish through `tooling/nightly-release.ts`. That
+      # script refuses any dist-tag other than `nightly` and any version without
+      # a `nightly` prerelease identifier. `tooling/nightly-version.test.ts`
+      # proves both refusals. The dry run exercises the same code path first.
+      - name: Prove the publish arguments
+        run: pnpm nightly:publish --version "${{ needs.plan.outputs.version }}" --dry-run
+
+      - name: Publish under the nightly dist-tag
+        run: pnpm nightly:publish --version "${{ needs.plan.outputs.version }}"
+
+      # The nightly version exists only in this checkout. Nothing commits it,
+      # tags it, or creates a release. Prove that the checkout is the only place
+      # it reached.
+      - name: Prove that the nightly version stayed out of Git
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git tag --points-at HEAD)"
+          test "$(git diff --name-only)" = "packages/core/package.json"

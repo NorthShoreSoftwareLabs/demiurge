@@ -39,22 +39,109 @@ maintenance branch only when that line requires more fixes.
 
 ## Nightly channel
 
-Nightlies are planned in [GitHub issue #117](https://github.com/NorthShoreSoftwareLabs/demiurge/issues/117)
-and are not published until that workflow is available. The workflow will use a
-daily schedule. It will run only when `main` has advanced. It will run
-`pnpm verify` and assign a unique temporary version. An example version is
-`0.2.0-nightly.20260812.a1b2c3d`. It will publish with provenance under `nightly`.
+The nightly channel is unsupported prerelease software. It carries whatever
+`main` contained at build time. It has no compatibility promise, no deprecation
+period, and no patch line. Use it for early integration testing only. Never
+depend on it from a production application.
 
-Nightly publication does not commit a version, create a Git tag, or create a
-GitHub release. Consumers will opt in explicitly:
+Consumers opt in explicitly:
 
 ```sh
 pnpm add @demiurgejs/core@nightly
 ```
 
+Pin the exact nightly version in an application that must reproduce a build.
+The `nightly` dist-tag moves every time the workflow publishes.
+
+Only `@demiurgejs/core` publishes to this channel. The `create-demiurge`
+scaffold publishes from signed version tags alone.
+
+### How the nightly workflow runs
+
+[The nightly workflow](../../.github/workflows/nightly.yml) runs on a daily
+schedule and on maintainer dispatch. It has three jobs:
+
+1. `plan` decides whether `main` advanced and names the version.
+2. `verify` runs the complete `pnpm verify` gate against `main`.
+3. `publish` writes the version into the workflow checkout and publishes it.
+
+A `concurrency` group named `nightly-publish` serializes the workflow. Two runs
+that started together would compute one version from one commit, and the second
+publication would fail on a version the registry already holds.
+
+### How the workflow detects an advanced main
+
+The published nightly version carries its own source commit. An example version
+is `0.2.0-nightly.20260812.a1b2c3d`, where `a1b2c3d` is the short commit name.
+The `plan` job reads the current `nightly` version from the registry and
+compares that commit against the head of `main`. Equal commits skip the run.
+
+The registry is therefore the marker for the last nightly. This choice needs no
+Git tag, no commit on `main`, and no state file in the repository. A version
+that npm rejects also never becomes the marker, so a failed publication leaves
+the next run free to retry the same commit.
+
+### How the version is computed
+
+`tooling/nightly-version.ts` holds the rules as pure functions. The base version
+comes from `packages/core/package.json`:
+
+- A prerelease package version such as `0.2.0-beta.2` is not released yet, so
+  the nightly belongs to `0.2.0`.
+- A plain package version such as `0.2.0` is already released under `latest`, so
+  the nightly belongs to the next patch, `0.2.1`.
+
+Both rules place every nightly version above the current `latest` version and
+below the next stable version.
+
+### How the stable channel stays out of reach
+
+Two independent guards protect the stable version and the `latest` dist-tag:
+
+1. Every nightly version carries a `nightly` prerelease identifier. npm never
+   assigns `latest` to a prerelease version.
+2. `tooling/nightly-release.ts` builds the one permitted npm command. It refuses
+   any dist-tag other than `nightly`. It refuses any version without the
+   `nightly` prerelease identifier. It also refuses to write a version of any
+   other form into the package manifest.
+
+The nightly workflow contains no other publish command. `tooling/nightly-version.test.ts`
+proves each refusal, and `pnpm test:tooling` runs those tests inside
+`pnpm verify`. The `publish` job runs the command once with `--dry-run` before
+the real publication. Then the job proves that the temporary version reached no
+commit and no tag.
+
+Nightly publication does not commit a version, create a Git tag, or create a
+GitHub release. The version exists only in the workflow checkout.
+
 Publishing each individual commit is intentionally avoided because registry
 versions are permanent and would create noise without adding a useful testing
 window.
+
+### Inspect the nightly decision locally
+
+Print the decision and the version without touching the registry:
+
+```sh
+pnpm nightly:plan --published none
+pnpm nightly:plan --published 0.2.0-nightly.20260812.a1b2c3d
+```
+
+Run the complete publish path without publishing:
+
+```sh
+pnpm nightly:publish --version 0.2.0-nightly.20260812.a1b2c3d --dry-run
+```
+
+The dry run rewrites `packages/core/package.json` in the working tree. Restore
+that file with `git checkout packages/core/package.json` afterward.
+
+### One-time nightly setup
+
+Configure npm trusted publishing for `.github/workflows/nightly.yml` in
+addition to `.github/workflows/release.yml`. The protected `npm` environment
+gates the `publish` job. Allow `main` for that environment, or give the nightly
+workflow its own environment when the tag restriction must stay.
 
 ## Prereleases
 
