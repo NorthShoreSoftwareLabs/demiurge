@@ -105,6 +105,11 @@ jobs:
       - name: Run clean-checkout verification
         run: pnpm verify
 
+      # This step runs after verification. It therefore also proves that no
+      # verification step changed a tracked file in the release checkout.
+      - name: Validate release metadata
+        run: pnpm release:check -- "$GITHUB_REF_NAME"
+
   publish:
     name: Publish with provenance
     needs: verify

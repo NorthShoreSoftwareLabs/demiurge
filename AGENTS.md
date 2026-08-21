@@ -111,6 +111,9 @@ Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.
 - Mark a breaking change with `!` before the colon or a `BREAKING CHANGE:`
   footer, and explain the migration in the commit body.
 - Keep commits coherent. Do not mix unrelated cleanup into a feature or fix.
+- Give the pull request a title in the same form. GitHub squash merges the pull
+  request, so the title becomes the commit subject on `main`. A required check
+  rejects a title that does not follow this policy.
 - Add a `Refs #123` footer to each commit that relates to an issue.
 - For an issue in another repository, use `Refs owner/repository#123`.
 - If a direct commit completes all verified criteria, use `Closes #123` instead.
