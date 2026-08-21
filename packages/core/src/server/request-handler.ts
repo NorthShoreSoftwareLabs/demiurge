@@ -44,10 +44,12 @@ import { renderNotFoundResponse } from "./not-found";
 import { createProblemResponse } from "./problem";
 import {
   applyCorsHeaders,
+  applyFetchMetadataVary,
   createCorsPreflightResponse,
   createMemoryRateLimitStore,
   createSecurityHeaders,
   enforceCsrfProtection,
+  enforceFetchMetadataPolicy,
   enforceRateLimit,
   enforceRequestSecurity,
   mergeRoutePolicies,
@@ -275,10 +277,33 @@ async function handleMatchedRoute(
   );
   const routeSecurity = policy.security;
 
+  // Every response for this route must declare the Fetch Metadata fields that
+  // the decision read, including the responses that the route body produces.
+  // Otherwise a shared cache can give one client the response of another one.
+  const fetchMetadata = enforceFetchMetadataPolicy(
+    routeSecurity?.fetchMetadata,
+    request,
+    method,
+  );
+  const withFetchMetadataVary = (response: Response) =>
+    applyFetchMetadataVary(response, fetchMetadata.vary);
+
+  if (fetchMetadata.response) {
+    return withFetchMetadataVary(
+      applyCorsHeaders(
+        fetchMetadata.response,
+        getCapabilityCors(capability),
+        request,
+      ),
+    );
+  }
+
   const csrfResponse = enforceCsrfProtection(routeSecurity?.csrf, request);
 
   if (csrfResponse) {
-    return applyCorsHeaders(csrfResponse, getCapabilityCors(capability), request);
+    return withFetchMetadataVary(
+      applyCorsHeaders(csrfResponse, getCapabilityCors(capability), request),
+    );
   }
 
   const rateLimitResponse = await enforceRateLimit(
@@ -288,10 +313,12 @@ async function handleMatchedRoute(
   );
 
   if (rateLimitResponse) {
-    return applyCorsHeaders(
-      rateLimitResponse,
-      getCapabilityCors(capability),
-      request,
+    return withFetchMetadataVary(
+      applyCorsHeaders(
+        rateLimitResponse,
+        getCapabilityCors(capability),
+        request,
+      ),
     );
   }
 
@@ -302,10 +329,12 @@ async function handleMatchedRoute(
   );
 
   if (requestSecurityResponse) {
-    return applyCorsHeaders(
-      requestSecurityResponse,
-      getCapabilityCors(capability),
-      request,
+    return withFetchMetadataVary(
+      applyCorsHeaders(
+        requestSecurityResponse,
+        getCapabilityCors(capability),
+        request,
+      ),
     );
   }
 
@@ -415,6 +444,8 @@ async function handleMatchedRoute(
       response.headers.set("cache-control", "private, no-store");
     }
 
+    withFetchMetadataVary(response);
+
     if (method === "HEAD") {
       await response.body?.cancel();
 
@@ -479,14 +510,18 @@ async function handleMatchedRoute(
   // `timing` or `cors` value on an API route gives a problem+json response. It
   // cannot enter the negotiated path and produce HTML.
   try {
-    return finalizeRouteResponse(response, capability, request, method);
+    return withFetchMetadataVary(
+      finalizeRouteResponse(response, capability, request, method),
+    );
   } catch (error) {
-    return await renderFailureResponse(
-      manifest,
-      request,
-      error,
-      "route",
-      fallbackOptions,
+    return withFetchMetadataVary(
+      await renderFailureResponse(
+        manifest,
+        request,
+        error,
+        "route",
+        fallbackOptions,
+      ),
     );
   }
 }

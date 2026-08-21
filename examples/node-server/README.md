@@ -15,6 +15,13 @@ root page includes server-loaded data. `/api/items` remains a regular JSON route
 `WWW-Authenticate` challenge. `/stream` uses `render.mode: "streaming"`. Its
 Suspense fallback arrives in the shell before the lazy component resolves.
 
+`/api/fetch-metadata-guarded` opts into the Fetch Metadata resource-isolation
+policy. It answers a same-origin request and a top-level navigation, and it
+answers every other cross-site request with status 403.
+`/api/fetch-metadata-open` declares the cross-site exemption that an intended
+CORS resource needs. Both routes add a `Vary` field for each `Sec-Fetch-*`
+header that the decision reads.
+
 The `/items` page also demonstrates cancellation-safe upstream work. Its data
 loader passes `request.signal` to `fetch(...)`, so the production Node adapter
 stops the upstream request if the browser disconnects before the page is ready.

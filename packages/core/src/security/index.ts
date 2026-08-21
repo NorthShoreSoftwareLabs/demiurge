@@ -17,6 +17,12 @@ export {
 } from "./csrf";
 export type { CsrfCookieOptions, IssuedCsrfToken } from "./csrf";
 export {
+  applyFetchMetadataVary,
+  checkFetchMetadata,
+  enforceFetchMetadataPolicy,
+} from "./fetch-metadata";
+export type { FetchMetadataEnforcement } from "./fetch-metadata";
+export {
   EnvValidationError,
   defineEnvSchema,
   env,
@@ -67,6 +73,11 @@ export type {
   CspDirectiveReplacement,
   CspSource,
   CspSourceDirective,
+  FetchMetadataCheck,
+  FetchMetadataDestination,
+  FetchMetadataPolicy,
+  FetchMetadataPolicyOptions,
+  FetchMetadataReason,
   MemoryRateLimitStoreOptions,
   RateLimitKey,
   RateLimitPolicy,
