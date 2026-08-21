@@ -170,6 +170,57 @@ export const policy = defineRoutePolicy({
 });
 ```
 
+## Cookies
+
+`createSecureCookie(...)` serializes a `set-cookie` value from a typed
+declaration. The declaration names the cookie without a prefix. The `scope`
+field selects the prefix, and Demiurge adds it:
+
+| `scope` | Prefix | Browser requirement |
+| --- | --- | --- |
+| `"host"` (default) | `__Host-` | `Secure`, `Path=/`, and no `Domain` |
+| `"secure"` | `__Secure-` | `Secure` |
+| `"none"` | none | none |
+
+A browser enforces these rules without server cooperation. A browser drops a
+cookie that breaks them, and it reports nothing. The application sees a lost
+session rather than a policy failure. So Demiurge validates each declaration
+before it serializes the value.
+
+```ts
+import { createSecureCookie, secureCookieName } from "@demiurgejs/core";
+
+const cookie = createSecureCookie({ name: "session", value: sessionId });
+// __Host-session=...; Path=/; SameSite=Lax; HttpOnly; Secure
+
+const name = secureCookieName("session");
+// __Host-session
+```
+
+Every cookie defaults to `HttpOnly`, `Secure`, `Path=/`, and `SameSite=Lax`.
+Declare `scope: "secure"` and a `domain` value to share a cookie with
+subdomains. Declare `scope: "none"` for a cookie that carries no prefix. Only
+an unprefixed cookie can drop `Secure`, which supports a plain HTTP development
+host.
+
+`createSecureCookie(...)` throws when a declaration breaks an invariant. The
+message names the cookie and the change that repairs it. Demiurge never renames
+an application cookie to satisfy a prefix. Use `validateSecureCookie(...)` to
+read the same findings as a list of typed issues.
+
+Read a cookie back with `parseCookieHeader(...)` and the prefixed name.
+`createSecureCookie(...)` encodes the value with `encodeURIComponent`, and
+`parseCookieHeader(...)` decodes it.
+
+### The JavaScript-readable exception
+
+A cookie that page script must read carries `httpOnly: false`. The
+double-submit CSRF token is the only supported use, because page script must
+copy the token into a request header. The token is a random value that proves
+same-origin script sent the request. It is not a credential, so a reader gains
+nothing from it. Keep every session and authentication cookie on the `HttpOnly`
+default.
+
 ## CSRF
 
 Cookie-authenticated unsafe methods receive double-submit CSRF protection by
@@ -177,6 +228,9 @@ default. Use `issueCsrfToken(...)`, `createCsrfToken(...)`, and
 `createCsrfCookie(...)` to issue the matching token and cookie. A route can make
 an explicit, auditable exemption when another authentication model makes CSRF
 inapplicable.
+
+`createCsrfCookie(...)` keeps the unprefixed `csrf-token` name for
+compatibility. Pass a `cookie` option to move the token to a prefixed name.
 
 ## CORS and request policy
 
