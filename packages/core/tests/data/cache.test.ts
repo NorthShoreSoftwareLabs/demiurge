@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  cacheNotFound,
+  CacheNotFoundError,
   createCache,
   createInvalidation,
   createMemoryCache,
   createMemoryCacheStore,
   defineTags,
+  isCacheNotFoundError,
   parseCacheDuration,
   query,
   serializeCacheKey,
@@ -462,6 +465,84 @@ describe("data cache primitives", () => {
     await expect(cache.get(request)).resolves.toBe("post-2");
     await expect(cache.invalidateKey(["post", "hello"])).resolves.toBe(true);
     await expect(cache.get(request)).resolves.toBe("post-3");
+  });
+
+  it("caches a negative result and re-throws it on subsequent shared hits", async () => {
+    let now = 0;
+    const cache = createMemoryCache({ now: () => now });
+    const loadPost = vi.fn(async () => cacheNotFound("no such post"));
+    const request = {
+      fn: loadPost,
+      key: ["post", "missing"],
+      notFoundTtl: "1s",
+      scope: "public",
+      ttl: "1h",
+    } as const;
+
+    await expect(cache.get(request)).rejects.toThrow(CacheNotFoundError);
+    await expect(cache.get(request)).rejects.toThrow("no such post");
+    expect(loadPost).toHaveBeenCalledTimes(1);
+
+    now = 1_001;
+
+    await expect(cache.get(request)).rejects.toThrow(CacheNotFoundError);
+    expect(loadPost).toHaveBeenCalledTimes(2);
+  });
+
+  it("caches a negative result and re-throws it on subsequent request-scoped hits", async () => {
+    let now = 0;
+    const cache = createMemoryCache({ now: () => now });
+    const loadPost = vi.fn(async () => cacheNotFound());
+    const request = {
+      fn: loadPost,
+      key: ["post", "missing"],
+      notFoundTtl: "1s",
+      scope: "request",
+      ttl: "1h",
+    } as const;
+
+    await expect(cache.get(request)).rejects.toSatisfy(isCacheNotFoundError);
+    await expect(cache.get(request)).rejects.toSatisfy(isCacheNotFoundError);
+    expect(loadPost).toHaveBeenCalledTimes(1);
+
+    now = 1_001;
+
+    await expect(cache.get(request)).rejects.toSatisfy(isCacheNotFoundError);
+    expect(loadPost).toHaveBeenCalledTimes(2);
+  });
+
+  it("invalidates a negative entry by tag the same as a positive one", async () => {
+    const cache = createMemoryCache();
+    const loadPost = vi.fn(async () => cacheNotFound());
+    const request = {
+      fn: loadPost,
+      key: ["post", "missing"],
+      notFoundTtl: "1h",
+      scope: "public",
+      tags: [tag("posts")],
+    } as const;
+
+    await expect(cache.get(request)).rejects.toThrow(CacheNotFoundError);
+    await expect(cache.invalidateTags([tag("posts")])).resolves.toBe(1);
+    await expect(cache.get(request)).rejects.toThrow(CacheNotFoundError);
+    expect(loadPost).toHaveBeenCalledTimes(2);
+  });
+
+  it("propagates an error that is not a negative-result signal without caching it", async () => {
+    const cache = createMemoryCache();
+    const loadPost = vi.fn(async () => {
+      throw new Error("boom");
+    });
+    const request = {
+      fn: loadPost,
+      key: ["post", "broken"],
+      notFoundTtl: "1h",
+      scope: "public",
+    } as const;
+
+    await expect(cache.get(request)).rejects.toThrow("boom");
+    await expect(cache.get(request)).rejects.toThrow("boom");
+    expect(loadPost).toHaveBeenCalledTimes(2);
   });
 
   it("creates framework-owned invalidation helpers over a cache", async () => {

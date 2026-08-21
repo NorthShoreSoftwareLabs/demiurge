@@ -9,6 +9,20 @@ export {
   validateCorsPolicy,
 } from "./cors";
 export {
+  createSecureCookie,
+  readSecureCookie,
+  secureCookieName,
+  validateSecureCookie,
+} from "./cookies";
+export type {
+  CookieIssue,
+  CookieIssueCode,
+  CookieSameSite,
+  CookieScope,
+  SecureCookieDeclaration,
+  SecureCookieDefinition,
+} from "./cookies";
+export {
   createCsrfCookie,
   createCsrfToken,
   enforceCsrfProtection,
@@ -16,6 +30,12 @@ export {
   parseCookieHeader,
 } from "./csrf";
 export type { CsrfCookieOptions, IssuedCsrfToken } from "./csrf";
+export {
+  applyFetchMetadataVary,
+  checkFetchMetadata,
+  enforceFetchMetadataPolicy,
+} from "./fetch-metadata";
+export type { FetchMetadataEnforcement } from "./fetch-metadata";
 export {
   EnvValidationError,
   defineEnvSchema,
@@ -67,6 +87,11 @@ export type {
   CspDirectiveReplacement,
   CspSource,
   CspSourceDirective,
+  FetchMetadataCheck,
+  FetchMetadataDestination,
+  FetchMetadataPolicy,
+  FetchMetadataPolicyOptions,
+  FetchMetadataReason,
   MemoryRateLimitStoreOptions,
   RateLimitKey,
   RateLimitPolicy,

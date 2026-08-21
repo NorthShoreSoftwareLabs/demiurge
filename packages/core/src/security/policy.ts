@@ -162,6 +162,7 @@ export function mergeRouteSecurityPolicies(
 
     return {
       csrf: policy.csrf ?? merged.csrf,
+      fetchMetadata: policy.fetchMetadata ?? merged.fetchMetadata,
       needs: mergeRouteNeeds(merged.needs, policy.needs),
       rateLimit: policy.rateLimit ?? merged.rateLimit,
       request: mergeObject(merged.request, policy.request),

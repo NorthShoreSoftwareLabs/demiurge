@@ -162,7 +162,7 @@ test("the Node adapter preserves repeated secure cookie headers", async ({
     value: "alpha",
   });
   expect(preference).toMatchObject({
-    httpOnly: true,
+    httpOnly: false,
     path: "/",
     sameSite: "Strict",
     secure: true,

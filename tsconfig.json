@@ -23,6 +23,7 @@
     "examples/cloud-run/.demiurge/route-manifest.d.ts",
     "tests/integration",
     "tests/package",
+    "tests/tooling",
     "tooling"
   ],
   "exclude": ["examples/**/vite.config.ts", "examples/**/dist"]

@@ -1,0 +1,38 @@
+# GitHub squash merges every pull request. The validated title becomes the
+# subject of the squash commit on main. Therefore, this check applies the
+# Conventional Commits policy in AGENTS.md to the title.
+name: Pull request title
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  conventional-title:
+    name: Conventional Commit title
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Node 24 runs the TypeScript check directly, so this job needs no
+      # dependency installation. The title arrives through the environment,
+      # because a title is untrusted input and must never reach the shell.
+      - name: Check the title against the commit policy
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: node tooling/check-pr-title.ts

@@ -5,6 +5,10 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- A `cache.get(...)` loader may call `cacheNotFound(message?)` to report a
+  negative result the cache should still store. `notFoundTtl` sets the
+  negative entry's lifetime, and `isCacheNotFoundError(...)` identifies the
+  thrown `CacheNotFoundError` on a subsequent hit (#180).
 - `<Script />` renders a script that a component discovers during render. The
   document hoists a script found before the head flush and gives it the request
   nonce (#38).
@@ -38,6 +42,10 @@ status live in GitHub issues and milestones.
 - Declared fonts are now self-hosted. The build and the Node handler publish
   each font file and one `@font-face` stylesheet, and `fontSources` derives the
   `font-src` value from the declaration (#67).
+- `createSecureCookie(...)` serializes a `set-cookie` value from a typed
+  declaration. A cookie defaults to the `__Host-` prefix, `Secure`, `Path=/`,
+  `HttpOnly`, and `SameSite=Lax`. The helper reports a broken prefix invariant
+  instead of leaving a browser to drop the cookie (#111).
 - Host adapters stay subpath exports of `@demiurgejs/core`. `@vercel/routing-utils`
   is now an optional peer dependency, so a Node-only deployment does not install
   it (#149).
@@ -70,6 +78,10 @@ status live in GitHub issues and milestones.
 - More examples cover webhook signature verification (#32), tag invalidation
   (#50), conditional script loading (#43), a cross-origin API (#31), and
   `Server-Timing` output (#72).
+- A route can declare an opt-in Fetch Metadata resource-isolation policy with
+  `security.fetchMetadata`. Demiurge denies a disallowed cross-site request
+  before the route body runs and adds a `Vary` field for each `Sec-Fetch-*`
+  header that the decision read (#114).
 
 ## 0.1.1 — 2026-08-14
 

@@ -2011,6 +2011,192 @@ describe("request handler", () => {
   });
 });
 
+describe("Fetch Metadata route policy", () => {
+  function guardedHandler(handlerSpy: () => string) {
+    return createRequestHandler({
+      routes: {
+        "./routes/api/reports.tsx": routeModule({
+          GET: text(handlerSpy, {
+            security: { fetchMetadata: true },
+          }),
+          POST: text(handlerSpy, {
+            cors: { origins: ["https://partner.example"] },
+            security: { fetchMetadata: true },
+          }),
+        }),
+        "./routes/api/public.tsx": routeModule({
+          GET: text(handlerSpy, {
+            security: { fetchMetadata: { allowCrossSite: true } },
+          }),
+        }),
+        "./routes/api/open.tsx": routeModule({
+          GET: text(handlerSpy),
+        }),
+        // A page declares route security through `policy`, because a page
+        // capability carries no `security` option.
+        "./routes/reports.tsx": routeModule({
+          GET: page(View),
+          policy: defineRoutePolicy({
+            security: { fetchMetadata: true },
+          }),
+        }),
+      },
+    });
+  }
+
+  it("rejects a cross-site request before the route body runs", async () => {
+    const handlerSpy = vi.fn(() => "report");
+    const response = await guardedHandler(handlerSpy)(
+      new Request("https://example.test/api/reports", {
+        headers: {
+          "sec-fetch-dest": "empty",
+          "sec-fetch-mode": "no-cors",
+          "sec-fetch-site": "cross-site",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("vary")).toBe("Sec-Fetch-Site, Sec-Fetch-Mode");
+    expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
+  it("adds the consulted fields to Vary on an allowed response", async () => {
+    const handlerSpy = vi.fn(() => "report");
+    const response = await guardedHandler(handlerSpy)(
+      new Request("https://example.test/api/reports", {
+        headers: {
+          "sec-fetch-dest": "empty",
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "same-origin",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("vary")).toBe("Sec-Fetch-Site");
+    expect(handlerSpy).toHaveBeenCalledOnce();
+  });
+
+  it("adds the consulted fields to Vary on an allowed page document", async () => {
+    const handlerSpy = vi.fn(() => "report");
+    const response = await guardedHandler(handlerSpy)(
+      new Request("https://example.test/reports", {
+        headers: {
+          "sec-fetch-dest": "document",
+          "sec-fetch-mode": "navigate",
+          "sec-fetch-site": "cross-site",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("vary")).toBe(
+      "Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest",
+    );
+  });
+
+  it("leaves a route without the policy unguarded", async () => {
+    const handlerSpy = vi.fn(() => "open");
+    const response = await guardedHandler(handlerSpy)(
+      new Request("https://example.test/api/open", {
+        headers: {
+          "sec-fetch-dest": "empty",
+          "sec-fetch-mode": "no-cors",
+          "sec-fetch-site": "cross-site",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("vary")).toBeNull();
+  });
+
+  it("serves an exempt route to another site", async () => {
+    const handlerSpy = vi.fn(() => "public");
+    const response = await guardedHandler(handlerSpy)(
+      new Request("https://example.test/api/public", {
+        headers: {
+          "sec-fetch-dest": "empty",
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "cross-site",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("vary")).toBe("Sec-Fetch-Site");
+  });
+
+  it("answers a CORS preflight for a guarded route", async () => {
+    const handlerSpy = vi.fn(() => "report");
+    const response = await guardedHandler(handlerSpy)(
+      new Request("https://example.test/api/reports", {
+        headers: {
+          "access-control-request-method": "POST",
+          origin: "https://partner.example",
+          "sec-fetch-dest": "empty",
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "cross-site",
+        },
+        method: "OPTIONS",
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-origin")).toBe(
+      "https://partner.example",
+    );
+    expect(response.headers.get("vary")).toBe("Origin");
+  });
+
+  it("keeps the CORS Vary field beside the Fetch Metadata fields", async () => {
+    const handlerSpy = vi.fn(() => "report");
+    const response = await guardedHandler(handlerSpy)(
+      new Request("https://example.test/api/reports", {
+        headers: {
+          origin: "https://partner.example",
+          "sec-fetch-dest": "empty",
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "cross-site",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("vary")).toBe("Sec-Fetch-Site, Origin");
+  });
+
+  it("lets a route policy declare the guard for a whole route group", async () => {
+    const handlerSpy = vi.fn(() => "report");
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/@policy.ts": routeModule({
+          policy: defineRoutePolicy({
+            security: { fetchMetadata: { allowSameSite: true } },
+          }),
+        }),
+        "./routes/api/reports.tsx": routeModule({
+          GET: text(handlerSpy),
+        }),
+      },
+    });
+    const response = await handler(
+      new Request("https://example.test/api/reports", {
+        headers: {
+          "sec-fetch-dest": "empty",
+          "sec-fetch-mode": "cors",
+          "sec-fetch-site": "same-site",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("vary")).toBe("Sec-Fetch-Site");
+  });
+});
+
 async function hmacSignature(body: string, secret: string) {
   return hmacSignatureBytes(new TextEncoder().encode(body), secret, "hex");
 }

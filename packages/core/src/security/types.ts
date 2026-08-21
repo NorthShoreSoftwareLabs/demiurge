@@ -142,6 +142,75 @@ export type CsrfPolicy = false | true | {
   header?: string;
 };
 
+/**
+ * A value of the `Sec-Fetch-Dest` header. The list holds the destinations that
+ * a cross-site exemption usually names. Any other string stays valid.
+ */
+export type FetchMetadataDestination =
+  | "audio"
+  | "document"
+  | "embed"
+  | "empty"
+  | "font"
+  | "frame"
+  | "iframe"
+  | "image"
+  | "manifest"
+  | "object"
+  | "script"
+  | "style"
+  | "track"
+  | "video"
+  | "worker"
+  | (string & {});
+
+export type FetchMetadataPolicyOptions = {
+  /**
+   * Allows every cross-site request. Use this for a route that intentionally
+   * serves another site, such as a CORS API or a public embed.
+   */
+  allowCrossSite?: boolean;
+  /**
+   * Allows a safe top-level navigation, so a person can enter the site from a
+   * link on another site. The default is `true`.
+   */
+  allowNavigation?: boolean;
+  /**
+   * Allows `Sec-Fetch-Site: same-site`. Trust of a sibling subdomain must be
+   * explicit, because another team or an attacker can control that subdomain.
+   */
+  allowSameSite?: boolean;
+  /**
+   * Cross-site destinations that stay allowed, for example `"image"`.
+   */
+  allowedDestinations?: readonly FetchMetadataDestination[];
+};
+
+/**
+ * `true` uses the default resource-isolation rules. `false` and an omitted
+ * value keep the route unguarded, because the policy is opt-in.
+ */
+export type FetchMetadataPolicy = boolean | FetchMetadataPolicyOptions;
+
+export type FetchMetadataReason =
+  | "cors-preflight"
+  | "cross-site-denied"
+  | "cross-site-exempt"
+  | "destination-exempt"
+  | "metadata-absent"
+  | "same-origin"
+  | "same-site-denied"
+  | "same-site-trusted"
+  | "top-level-navigation"
+  | "user-initiated";
+
+export type FetchMetadataCheck = {
+  allowed: boolean;
+  reason: FetchMetadataReason;
+  /** The `Sec-Fetch-*` fields that this decision read. */
+  vary: readonly string[];
+};
+
 export type RequestSecurityPolicy = {
   allowedMethods?: readonly HttpMethod[];
   maxBodySize?: number | `${number}${"b" | "gb" | "kb" | "mb"}`;
@@ -189,6 +258,7 @@ export type RouteSecurityNeeds = {
 
 export type RouteSecurityPolicy = {
   csrf?: CsrfPolicy;
+  fetchMetadata?: FetchMetadataPolicy;
   needs?: RouteSecurityNeeds;
   rateLimit?: RateLimitPolicy;
   request?: RequestSecurityPolicy;
