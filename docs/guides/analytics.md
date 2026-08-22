@@ -161,6 +161,21 @@ The component renders nothing. It starts the collector after hydration and
 stops it when it unmounts. `collectWebVitals(vitals)` does the same work
 without React, and it returns a function that stops the collector.
 
+### INP on an interaction-heavy page
+
+The published INP metric is close to the 98th percentile of every
+interaction on the page. This collector reports the single slowest
+interaction instead. The two match on a typical content page. A page with
+many interactions, or a long session, gets a worse number from this
+collector. One slow interaction stays the reported value for the rest of
+the visit, instead of counting as an outlier.
+
+An application that needs the published percentile installs the
+[`web-vitals`](https://github.com/GoogleChrome/web-vitals) package and
+passes its output to `instrumentation.reportWebVitals` instead of using
+`defineWebVitals` and `<WebVitals />`. A `web-vitals` metric matches the
+`WebVitalSignal` shape without a conversion.
+
 ### The beacon
 
 The collector holds each measurement until the page hides, then posts one
