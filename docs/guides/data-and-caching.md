@@ -318,7 +318,7 @@ The build writes [Build Output API version 3](https://vercel.com/docs/build-outp
 to `.vercel/output`. It copies the public site to `.vercel/output/static`.
 
 The generated `config.json` applies route security headers before file cache
-rules. It also serves the app-owned fallback with status 404.
+rules. The final fallback rewrite includes its security headers and status 404.
 
 Set the Vercel [Framework Preset](https://vercel.com/docs/builds/configure-a-build#framework-preset)
 to `Other`. Do not set an Output Directory override.
