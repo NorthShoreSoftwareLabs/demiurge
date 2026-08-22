@@ -97,6 +97,10 @@ describe("Demiurge CLI arguments", () => {
     );
 
     expect(build).toHaveBeenCalledTimes(2);
+    expect(build.mock.calls[0]![0]).toMatchObject({
+      define: { "process.env.NODE_ENV": '"production"' },
+      mode: "production",
+    });
     expect(build.mock.calls[0]![0].build?.rollupOptions).toEqual({
       input: "virtual:demiurge/client-entry",
     });
@@ -108,6 +112,10 @@ describe("Demiurge CLI arguments", () => {
         output: { entryFileNames: "server-entry.js" },
       },
       ssr: true,
+    });
+    expect(build.mock.calls[1]![0]).toMatchObject({
+      define: { "process.env.NODE_ENV": '"production"' },
+      mode: "production",
     });
     expect(build.mock.calls[0]![0].root).toBeUndefined();
     expect(importModule).toHaveBeenCalledWith(
