@@ -50,12 +50,19 @@ import {
   verifyRoutePolicyFile,
   type StaticPolicyFinding,
 } from "./policy-verification";
+import {
+  createRouteAuditResponse,
+  isRouteAuditRequest,
+} from "./route-audit";
 import type {
   StaticFileHeaderPatternRule,
   VercelStaticDeployment,
 } from "../static";
 
 export type DemiurgeVitePluginOptions = {
+  // The route audit panel of the development server. The panel is available by
+  // default. Set this option to false to remove the endpoint.
+  devtools?: boolean;
   document?: {
     lang?: string;
     title?: string;
@@ -281,6 +288,7 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
         }
       }
 
+      const routeAuditEnabled = isRouteAuditEnabled(options);
       const optimizeImage = createDevImageOptimizer(server, options);
       const serveFont = createFontAssetHandler({
         fonts: options.fonts,
@@ -305,6 +313,20 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
             }
 
             throw error;
+          }
+
+          if (routeAuditEnabled && isRouteAuditRequest(webRequest)) {
+            const manifest = await loadDevManifest(
+              server,
+              request,
+              resolve(server.config.root, options.routesDir ?? "src/routes"),
+            );
+
+            await writeWebResponse(
+              response,
+              await createRouteAuditResponse(manifest, webRequest),
+            );
+            return;
           }
 
           const font = await serveFont(webRequest);
@@ -843,6 +865,13 @@ function createStylesImport(
 // Development serves the same image URLs that production serves. A static
 // loader path describes its own transform, so the same optimizer answers
 // both loaders without any build output.
+// Only `configureServer` registers the route audit panel, and Vite runs that
+// hook for the development server alone. A production environment removes the
+// panel as well, because a build or a start script can set that environment.
+export function isRouteAuditEnabled(options: DemiurgeVitePluginOptions) {
+  return options.devtools !== false && process.env.NODE_ENV !== "production";
+}
+
 export function createDevImageOptimizer(
   server: ViteDevServer,
   options: DemiurgeVitePluginOptions,

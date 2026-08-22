@@ -12,9 +12,23 @@ export {
   formatStaticPolicyFindings as unstable_formatStaticPolicyFindings,
 } from "./plugin";
 export {
+  isRouteAuditEnabled as unstable_isRouteAuditEnabled,
+} from "./plugin";
+export {
   verifyRoutePolicySource as unstable_verifyRoutePolicySource,
 } from "./policy-verification";
+export {
+  createRouteAudit as unstable_createRouteAudit,
+  renderRouteAuditDocument as unstable_renderRouteAuditDocument,
+  ROUTE_AUDIT_PATH as unstable_ROUTE_AUDIT_PATH,
+} from "./route-audit";
 export type {
   DemiurgeVitePluginApi,
   DemiurgeVitePluginOptions,
 } from "./plugin";
+export type {
+  RouteAudit,
+  RouteAuditCacheRead,
+  RouteAuditRoute,
+  RouteAuditScript,
+} from "./route-audit";

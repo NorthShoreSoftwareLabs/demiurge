@@ -356,6 +356,9 @@ headers, static scripts, reporting configuration, and declared third-party
 script dependencies. Audit findings explain policy conflicts. They do not
 replace runtime reports for conditions that only a browser can observe.
 
+The development server shows this audit for one route. Read the
+[route audit panel](./devtools.md) guide.
+
 ## Policy verification
 
 The Vite plugin validates literal CORS, rate-limit, and document policy during

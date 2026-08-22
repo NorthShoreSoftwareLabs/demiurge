@@ -7,6 +7,7 @@ export {
   findRouteMatch,
   isAttachedFileForRoute,
   isLayoutForPage,
+  isRouteGroupSegment,
   loadErrorFallback,
   loadLoadingFallback,
   loadNotFoundMatch,
@@ -16,6 +17,7 @@ export {
   matchSegments,
   scoreRoute,
   splitPathname,
+  toRoutePattern,
   toRouteSegments,
 } from "./manifest";
 export type { InitialRouteData } from "../document";

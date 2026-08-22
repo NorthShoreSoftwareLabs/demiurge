@@ -576,11 +576,13 @@ function applyCapabilityInit(response: Response, init: ResponseInit | undefined)
   });
 }
 
-async function loadInheritedRoutePolicy(
+// The route argument is narrower than `RouteRecord` because the route audit
+// resolves the policy of a path that matches no route file.
+export async function loadInheritedRoutePolicy(
   manifest: RouteManifest,
-  route: RouteRecord,
+  route: Pick<RouteRecord, "fileSegments">,
   routeModule: RouteModule,
-  capability: RouteCapability,
+  capability: RouteCapability | undefined,
 ) {
   const policyModules = await Promise.all(
     manifest.policies
@@ -594,7 +596,9 @@ async function loadInheritedRoutePolicy(
     ...policyModules.map((module) => module.policy),
     routeModule.policy,
     {
-      security: capability.kind === "page" ? undefined : capability.security,
+      security: !capability || capability.kind === "page"
+        ? undefined
+        : capability.security,
     },
   );
 }
