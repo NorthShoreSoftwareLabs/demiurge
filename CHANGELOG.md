@@ -47,8 +47,8 @@ status live in GitHub issues and milestones.
   `HttpOnly`, and `SameSite=Lax`. The helper reports a broken prefix invariant
   instead of leaving a browser to drop the cookie (#111).
 - Host adapters stay subpath exports of `@demiurgejs/core`. `@vercel/routing-utils`
-  is now an optional peer dependency, so a Node-only deployment does not install
-  it (#149).
+  is no longer a framework peer. The Vercel adapter uses the patched route
+  pattern parser directly (#149, #287).
 - The Vercel output now declares `access-control-allow-origin` ahead of every
   other rule. The platform default no longer survives undeclared (#143).
 - `verifyAdapterContract(adapter, probes)` checks a host adapter against its own

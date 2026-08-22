@@ -14,9 +14,8 @@ as `@demiurgejs/vercel`. The Vercel adapter lives in
 shared adapter contract tests (#75), both of which need this boundary settled
 first.
 
-`@vercel/routing-utils` is a normal `dependencies` entry in
-`packages/core/package.json`. Every consumer installs it, including one that
-deploys to Node only and never imports `@demiurgejs/core/static`.
+Before issue #149, `@vercel/routing-utils` was a normal dependency. Every
+consumer installed it, including a consumer that deployed only to Node.
 
 `packages/core/package.json` already has a precedent for an adapter-shaped
 dependency that not every consumer needs. `vite` is a `peerDependency` marked
@@ -39,10 +38,11 @@ edge adapters all continue to ship as subpath exports of
 
 Host-specific runtime dependencies are not framework dependencies. They move
 to `peerDependencies`, marked optional in `peerDependenciesMeta`, following
-the existing `vite` precedent. `@vercel/routing-utils` moves out of
-`dependencies`. A consumer that never imports `@demiurgejs/core/static` never
-installs it. A consumer that does import it, or that hits the missing-peer
-warning, installs the version the framework was built against.
+the existing `vite` precedent.
+
+Issue #287 removes `@vercel/routing-utils` from the adapter. The framework now
+creates the small required route set directly. It uses the patched
+`path-to-regexp@6.3.0` package for application cache patterns.
 
 This does not resolve the four numbered questions in #149 permanently. It
 answers them for 0.3.0. No adapter gets its own package yet. A moved adapter
@@ -51,7 +51,7 @@ arise, because there is one package.
 
 ## Consequences
 
-A Node-only deployment no longer installs `@vercel/routing-utils`.
+No deployment installs `@vercel/routing-utils` through the framework.
 
 Adding the edge adapter (#73) and the shared adapter contract tests (#75)
 proceeds against a single package. Edge-specific dependencies, if any, follow
