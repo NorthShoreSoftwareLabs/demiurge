@@ -43,8 +43,8 @@ Add `format=json` to get the same report as JSON:
 http://localhost:5173/_demiurge/audit?path=/blog/hello&format=json
 ```
 
-A script or an editor can read this report. The JSON keeps a policy function as
-the text `[function]`, because JSON holds no function.
+A script or an editor can read this report. The JSON report holds the same
+fields that the panel shows.
 
 ## The panel runs the data loader
 

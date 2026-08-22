@@ -1510,10 +1510,7 @@ describe("the development route audit panel", () => {
       ssrLoadModule: vi.fn(async (file: string) => {
         if (file.endsWith("@policy.ts")) {
           return {
-            policy: defineRoutePolicy({
-              document: security.strict(),
-              security: { rateLimit: false },
-            }),
+            policy: defineRoutePolicy({ document: security.strict() }),
           };
         }
 
@@ -1537,7 +1534,7 @@ describe("the development route audit panel", () => {
               {
                 cors: { origins: ["https://app.example.test"] },
                 security: {
-                  rateLimit: { key: () => "audit", limit: 5, window: "1m" },
+                  rateLimit: { key: "ip", limit: 5, window: "1m" },
                 },
               },
             ),
@@ -1692,7 +1689,7 @@ describe("the development route audit panel", () => {
     ).toEqual([]);
   });
 
-  it("audits a resource route and keeps a policy function readable", async () => {
+  it("audits a resource route without document headers", async () => {
     const { middleware } = await scaffoldAuditServer();
     const { response } = await auditResponse(
       middleware,
@@ -1702,7 +1699,7 @@ describe("the development route audit panel", () => {
     expect(response.body).toContain("No contributed scripts.");
     expect(response.body).toContain("No document metadata.");
     expect(response.body).toContain("The request read no cache entry.");
-    expect(response.body).toContain("[function]");
+    expect(response.body).toContain("The response carries no document header.");
     expect(response.body).toContain("https://app.example.test");
 
     const json = await auditResponse(
@@ -1777,7 +1774,7 @@ describe("the development route audit panel", () => {
       routes: {
         "/src/routes/index.tsx": async () => ({ GET: page({ view: View }) }),
         "/src/routes/@not-found.tsx": async () => ({
-          GET: notFound({ body: "Missing" }),
+          GET: notFound("Missing"),
         }),
       },
     });

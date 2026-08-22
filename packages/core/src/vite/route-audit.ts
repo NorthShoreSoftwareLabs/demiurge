@@ -106,7 +106,7 @@ export async function createRouteAuditResponse(
 
   return new Response(
     json
-      ? JSON.stringify(report, replaceUnserializableValue, 2)
+      ? JSON.stringify(report, null, 2)
       : renderRouteAuditDocument(report),
     {
       headers: {
@@ -314,12 +314,6 @@ function formatDuration(duration: number | string | undefined) {
   return duration === undefined ? undefined : String(duration);
 }
 
-// A policy can hold a function, and JSON does not keep one. The report names
-// the value instead of dropping the key without a trace.
-function replaceUnserializableValue(_key: string, value: unknown) {
-  return typeof value === "function" ? "[function]" : value;
-}
-
 export function renderRouteAuditDocument(report: RouteAudit) {
   return `<!doctype html>
 <html lang="en">
@@ -449,7 +443,7 @@ function renderPolicySection(report: RouteAudit) {
   return section(
     "Effective policy",
     `<pre>${
-      escapeHtml(JSON.stringify(policy, replaceUnserializableValue, 2))
+      escapeHtml(JSON.stringify(policy, null, 2))
     }</pre>`,
   );
 }
@@ -462,7 +456,7 @@ function renderMetadataSection(metadata: ResolvedMetadata | undefined) {
   return section(
     "Metadata",
     `<pre>${
-      escapeHtml(JSON.stringify(metadata, replaceUnserializableValue, 2))
+      escapeHtml(JSON.stringify(metadata, null, 2))
     }</pre>`,
   );
 }
