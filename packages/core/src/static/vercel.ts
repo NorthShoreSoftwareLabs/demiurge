@@ -202,15 +202,13 @@ export function createVercelOutputConfig(
 
   routes.push({ handle: "error" });
   const fallbackHeaders = withoutContentType(fallback.headers);
-  if (Object.keys(fallbackHeaders).length > 0) {
-    routes.push({
-      continue: true,
-      headers: fallbackHeaders,
-      src: "^/.*$",
-    });
-  }
   routes.push(...applicationRoutes.map((route) => ({ ...route })));
-  routes.push({ dest: `/${fallback.file}`, src: "^/.*$", status: 404 });
+  routes.push({
+    dest: `/${fallback.file}`,
+    headers: fallbackHeaders,
+    src: "^/.*$",
+    status: 404,
+  });
 
   validateVercelRoutes(routes);
 

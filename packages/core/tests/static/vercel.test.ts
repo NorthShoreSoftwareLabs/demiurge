@@ -143,16 +143,37 @@ describe("Vercel static output", () => {
       { handle: "error" },
       {
         continue: true,
-        headers: { "content-security-policy": "default-src 'none'" },
-        src: "^/.*$",
-      },
-      {
-        continue: true,
         headers: { "cache-control": "public, max-age=604800" },
         src: "^/videos(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?$",
       },
-      { dest: "/404.html", src: "^/.*$", status: 404 },
+      {
+        dest: "/404.html",
+        headers: { "content-security-policy": "default-src 'none'" },
+        src: "^/.*$",
+        status: 404,
+      },
     ]);
+  });
+
+  it("keeps the fallback headers on the final error rewrite", () => {
+    const config = createVercelOutputConfig(manifest, vercelStatic());
+    const errorIndex = config.routes.findIndex((route) =>
+      "handle" in route && route.handle === "error"
+    );
+    const fallbackRoute = config.routes.at(-1);
+
+    expect(errorIndex).toBeGreaterThanOrEqual(0);
+    expect(fallbackRoute).toEqual({
+      dest: "/404.html",
+      headers: { "content-security-policy": "default-src 'none'" },
+      src: "^/.*$",
+      status: 404,
+    });
+    expect(config.routes.slice(errorIndex + 1, -1)).not.toContainEqual(
+      expect.objectContaining({
+        headers: { "content-security-policy": "default-src 'none'" },
+      }),
+    );
   });
 
   it("publishes only deployable files and replaces stale Vercel output", async () => {
