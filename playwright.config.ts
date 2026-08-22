@@ -22,7 +22,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   // Playwright boots the entries of a `webServer` array one at a time, costing
-  // about a second per server before the first test runs. The eight servers
+  // about a second per server before the first test runs. The nine servers
   // these tests need have distinct ports and no shared state.
   // `tooling/browser-test-servers.ts` starts them all at once, then opens
   // port 42176 once every one of them answers.

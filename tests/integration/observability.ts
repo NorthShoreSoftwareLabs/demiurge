@@ -56,6 +56,8 @@ try {
     "cache description",
   );
 
+  await probeWebVitalsEndpoint(origin);
+
   console.log(`observability probe passed with server-timing: ${timingHeader}`);
 } finally {
   child.kill("SIGTERM");
@@ -67,6 +69,59 @@ try {
 
     child.once("exit", () => resolveExit());
   });
+}
+
+// The beacon endpoint accepts a report only when every field matches the
+// contract. A real browser cannot prove the rejection paths, so the probe
+// posts each body against the running server.
+async function probeWebVitalsEndpoint(origin: string) {
+  const report = {
+    id: "LCP-1-2",
+    name: "LCP",
+    navigationType: "navigate",
+    rating: "good",
+    url: `${origin}/`,
+    value: 1_842,
+  };
+
+  const accepted = await postBeacon(origin, JSON.stringify({ metrics: [report] }));
+
+  assertEqual(accepted.status, 202, "web vitals accepted status");
+
+  const unreadable = await postBeacon(origin, "not json");
+
+  assertEqual(unreadable.status, 400, "web vitals unreadable status");
+  assertEqual(unreadable.reason, "unreadable-body", "web vitals unreadable reason");
+
+  const invalid = await postBeacon(
+    origin,
+    JSON.stringify({ metrics: [{ ...report, name: "SPEED" }] }),
+  );
+
+  assertEqual(invalid.status, 400, "web vitals invalid status");
+  assertEqual(invalid.reason, "invalid-payload", "web vitals invalid reason");
+
+  const stored = await fetch(`${origin}/api/vitals`);
+  const body = (await stored.json()) as { metrics: { name: string }[] };
+
+  assertEqual(body.metrics.length, 1, "stored report count");
+  assertEqual(body.metrics[0]?.name, "LCP", "stored report name");
+}
+
+async function postBeacon(origin: string, body: string) {
+  const response = await fetch(`${origin}/api/vitals`, {
+    body,
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+
+  if (response.status === 202) {
+    return { reason: undefined, status: response.status };
+  }
+
+  const payload = (await response.json()) as { reason?: string };
+
+  return { reason: payload.reason, status: response.status };
 }
 
 type ParsedMetric = {

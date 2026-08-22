@@ -1,8 +1,13 @@
 # Observability Example
 
-This example demonstrates `serverTiming(...)` end to end. `GET /api/timings`
-runs a simulated database query and a simulated cache lookup, times each
-step, and reports the results in a `Server-Timing` response header.
+This example demonstrates the two halves of a timing pipeline. The server half
+is `serverTiming(...)`. `GET /api/timings` runs a simulated database query and
+a simulated cache lookup, times each step, and reports the results in a
+`Server-Timing` response header. The browser half is Core Web Vitals, which
+the collector posts to `POST /api/vitals`.
+
+The routes run under `security.strict()`. The policy carries no
+`unsafe-inline` source, and it needs no `script-src` source for the collector.
 
 Run the example with:
 
@@ -40,6 +45,36 @@ That builds a validated metric list. The handler writes that list into the
 the `Server-Timing` header from the real HTTP response. It confirms the
 `db` and `cache` metrics are present, each with a duration at least as long
 as the artificial delay that step introduces.
+
+## How the Core Web Vitals collector works
+
+[`src/web-vitals.ts`](./src/web-vitals.ts) declares the integration once:
+
+```ts
+export const vitals = defineWebVitals({ endpoint: "/api/vitals" });
+```
+
+[`src/routes/@policy.ts`](./src/routes/@policy.ts) takes the CSP source from
+the same value with `webVitalsPolicy(vitals)`. The root layout mounts
+`<WebVitals integration={vitals} />`, which starts the collector after
+hydration.
+
+The collector uses `PerformanceObserver` only. It loads no vendor script and
+emits no inline snippet, so the strict policy needs no `script-src` source for
+it. It holds each measurement until the page hides, then posts one beacon
+through `navigator.sendBeacon`. `connect-src 'self'` is the only directive the
+beacon needs.
+
+[`src/routes/api/vitals.tsx`](./src/routes/api/vitals.tsx) owns the endpoint.
+`readWebVitalsBeacon(request)` validates every field, and the handler forwards
+each accepted report to `instrumentation.reportWebVitals`. A real deployment
+sends the report to a metrics backend. This example keeps the last 50 reports
+in memory, and `GET /api/vitals` returns them.
+
+`pnpm test:browser` drives a real browser through the page. It confirms the
+response policy contains `'strict-dynamic'` and no `'unsafe-inline'`. It
+confirms the endpoint received the beacon after the page hid. The `cspMonitor`
+fixture fails the test on any policy violation.
 
 ## How a real backend consumes this header
 

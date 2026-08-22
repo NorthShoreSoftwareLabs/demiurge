@@ -2,8 +2,8 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { createServer } from "node:http";
 
 // Playwright starts the entries of a `webServer` array one at a time. Its task
-// runner awaits each plugin's setup before starting the next. Eight servers at
-// roughly a second each cost eight seconds before the first test runs, and the
+// runner awaits each plugin's setup before starting the next. Nine servers at
+// roughly a second each cost nine seconds before the first test runs, and the
 // array offers no concurrency option. So this launcher takes their place as a
 // single `webServer` entry. It starts every server at once, waits for all of
 // them, and only then opens `readyPort`, which is the URL Playwright polls.
@@ -64,6 +64,12 @@ const servers = [
     url: "http://localhost:42184/",
   },
   {
+    args: ["--filter", "@demiurge-examples/observability", "start"],
+    env: { HOST: "localhost", NODE_ENV: "production", PORT: "42185" },
+    name: "observability",
+    url: "http://localhost:42185/",
+  },
+  {
     args: ["--filter", "@demiurge-examples/cors-api", "start"],
     env: { HOST: "localhost", NODE_ENV: "production", PORT: "42182" },
     name: "cors-api",
@@ -91,7 +97,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 
 try {
   // `reuseExistingServer: false` in the Playwright config only guards the
-  // readiness gate now, so the eight real ports are checked here instead. A
+  // readiness gate now, so the nine real ports are checked here instead. A
   // stray server left over from an interrupted run would otherwise answer the
   // readiness poll and the suite would silently test yesterday's build.
   await assertPortsAreFree();
@@ -137,7 +143,7 @@ async function start(server: (typeof servers)[number]) {
   // Deliberately not `detached`. Playwright tears a `webServer` down with
   // `process.kill(-pid, "SIGKILL")` on this launcher's process group. SIGKILL
   // cannot be handled, so these servers must sit in that same group to die
-  // with the suite. Detaching them leaves eight servers holding their ports.
+  // with the suite. Detaching them leaves nine servers holding their ports.
   const child = spawn("pnpm", server.args, {
     env: { ...process.env, ...server.env, FORCE_COLOR: "1" },
     stdio: ["ignore", "pipe", "pipe"],

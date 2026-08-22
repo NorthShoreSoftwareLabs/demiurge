@@ -30,11 +30,13 @@ export type TraceSignal = {
 
 export type WebVitalName = "CLS" | "FCP" | "FID" | "INP" | "LCP" | "TTFB";
 
+export type WebVitalRating = "good" | "needs-improvement" | "poor";
+
 export type WebVitalSignal = {
   id?: string;
   name: WebVitalName;
   navigationType?: string;
-  rating?: "good" | "needs-improvement" | "poor";
+  rating?: WebVitalRating;
   value: number;
   attributes?: Readonly<Record<string, ObservabilityValue>>;
 };
