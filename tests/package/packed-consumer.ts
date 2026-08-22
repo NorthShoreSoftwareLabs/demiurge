@@ -25,7 +25,7 @@ const expectedPackage = {
   license: "MIT",
   name: "@demiurgejs/core",
   repository: "git+https://github.com/NorthShoreSoftwareLabs/demiurge.git",
-  version: "0.2.0-beta.2",
+  version: "0.2.0-beta.3",
 } as const;
 
 function run(command: string, args: string[], cwd: string) {
