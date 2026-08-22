@@ -72,7 +72,7 @@ export function collectWebVitals(
   const observers: PerformanceObserver[] = [];
   const pending: WebVitalReport[] = [];
   const reported = new Set<WebVitalName>();
-  const navigationType = readNavigationType();
+  let navigationType = readNavigationType();
   let clsValue = 0;
   let sessionValue = 0;
   let sessionFirst = 0;
@@ -130,6 +130,33 @@ export function collectWebVitals(
   const onVisibilityChange = () => {
     if (document.visibilityState === "hidden") {
       flush();
+    }
+  };
+
+  // A page restored from the back-forward cache reuses its JavaScript
+  // context, so the effect that started this collector never reruns. A
+  // restored view would report nothing without this listener. Reset the
+  // accumulators and tag the next report with the restore, the same way the
+  // Navigation Timing entry names a real reload.
+  const onPageShow = (event: PageTransitionEvent) => {
+    if (!event.persisted) {
+      return;
+    }
+
+    navigationType = "back-forward-cache";
+    reported.clear();
+    clsValue = 0;
+    sessionValue = 0;
+    sessionFirst = 0;
+    sessionLast = 0;
+    lcpValue = undefined;
+    inpValue = undefined;
+
+    // No new "first-contentful-paint" entry fires after a restore, because the
+    // browser did not repaint from a blank page. Report the restore itself as
+    // the paint moment, which is what a person actually experienced.
+    if (wanted.has("FCP")) {
+      report("FCP", performance.now() - event.timeStamp);
     }
   };
 
@@ -195,6 +222,19 @@ export function collectWebVitals(
     });
   }
 
+  // The published metric is close to the 98th percentile of every
+  // interaction on the page. It takes the single slowest interaction while
+  // the page has 50 or fewer, then a less extreme rank as the count grows.
+  // One outlier does not fix the score at its worst for the rest of the
+  // visit. Ranking by percentile needs each interaction grouped by its
+  // browser-assigned `interactionId`. Chrome increments that value by 7 per
+  // interaction, an internal detail the specification does not guarantee.
+  // This collector reports the plain maximum instead. That value matches
+  // the published metric on a typical content page, and reports a worse
+  // number on an interaction-heavy page or a long session. An application
+  // that needs the published percentile can call
+  // `instrumentation.reportWebVitals` with the output of the `web-vitals`
+  // npm package instead of `defineWebVitals`.
   if (wanted.has("INP")) {
     observe(
       observers,
@@ -213,6 +253,7 @@ export function collectWebVitals(
 
   document.addEventListener("visibilitychange", onVisibilityChange);
   window.addEventListener("pagehide", flush);
+  window.addEventListener("pageshow", onPageShow);
 
   return () => {
     flush();
@@ -224,6 +265,7 @@ export function collectWebVitals(
 
     document.removeEventListener("visibilitychange", onVisibilityChange);
     window.removeEventListener("pagehide", flush);
+    window.removeEventListener("pageshow", onPageShow);
   };
 }
 

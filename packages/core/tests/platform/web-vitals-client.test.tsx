@@ -274,6 +274,75 @@ describe("collectWebVitals", () => {
 
     expect(subscriptions.size).toBe(0);
   });
+
+  it("reports again after a back-forward cache restore", () => {
+    const beacons: WebVitalsBeacon[] = [];
+
+    collectWebVitals(integration, {
+      random: () => 0.5,
+      transport: (_endpoint, beacon) => beacons.push(beacon),
+    });
+
+    deliver("paint", [{ name: "first-contentful-paint", startTime: 900 }]);
+    deliver("layout-shift", [{ hadRecentInput: false, startTime: 100, value: 0.05 }]);
+    hidePage();
+
+    expect(beacons).toHaveLength(1);
+
+    restorePage(3_000);
+    hidePage();
+
+    expect(beacons).toHaveLength(2);
+
+    const byName = new Map(beacons[1].metrics.map((metric) => [metric.name, metric]));
+
+    expect(byName.get("FCP")).toMatchObject({
+      navigationType: "back-forward-cache",
+      value: 3_000,
+    });
+    // A layout shift did not repeat after the restore, so the session
+    // resets and reports no measurable shift for the restored view.
+    expect(byName.get("CLS")).toMatchObject({
+      navigationType: "back-forward-cache",
+      value: 0,
+    });
+  });
+
+  it("does not restart a stopped collector on a bfcache restore", () => {
+    const beacons: WebVitalsBeacon[] = [];
+    const stop = collectWebVitals(integration, {
+      random: () => 0.5,
+      transport: (_endpoint, beacon) => beacons.push(beacon),
+    });
+
+    // TTFB reports immediately, and stop() flushes it: one beacon before the
+    // restore this test is checking against.
+    stop();
+    expect(beacons).toHaveLength(1);
+
+    restorePage(1_000);
+
+    expect(beacons).toHaveLength(1);
+  });
+
+  it("ignores a pageshow that did not restore from the cache", () => {
+    const beacons: WebVitalsBeacon[] = [];
+
+    collectWebVitals(integration, {
+      random: () => 0.5,
+      transport: (_endpoint, beacon) => beacons.push(beacon),
+    });
+    deliver("paint", [{ name: "first-contentful-paint", startTime: 900 }]);
+    hidePage();
+
+    expect(beacons).toHaveLength(1);
+
+    window.dispatchEvent(new Event("pageshow"));
+    hidePage();
+
+    // Nothing new to send: the metrics from the first flush already went out.
+    expect(beacons).toHaveLength(1);
+  });
 });
 
 describe("sendWebVitalsBeacon", () => {
@@ -372,4 +441,17 @@ describe("WebVitals component", () => {
 function hidePage() {
   vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
   document.dispatchEvent(new Event("visibilitychange"));
+}
+
+// jsdom does not implement the PageTransitionEvent constructor. This builds
+// a plain event with the two fields the collector reads. It also pins
+// performance.now() so the reported FCP restore value is exact.
+function restorePage(elapsedMs: number) {
+  const timeStamp = 1_000;
+  const event = new Event("pageshow");
+
+  Object.defineProperty(event, "persisted", { value: true });
+  Object.defineProperty(event, "timeStamp", { value: timeStamp });
+  vi.spyOn(performance, "now").mockReturnValue(timeStamp + elapsedMs);
+  window.dispatchEvent(event);
 }
