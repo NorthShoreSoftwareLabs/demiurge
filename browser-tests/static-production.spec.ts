@@ -1,6 +1,20 @@
+import { readdir, readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { expect, test } from "./fixtures";
 
 const staticOrigin = "http://localhost:42178";
+
+test("static output uses production React transforms", async () => {
+  const assets = resolve("examples/static-export/dist/assets");
+  const files = (await readdir(assets)).filter((file) => file.endsWith(".js"));
+  const source = (await Promise.all(
+    files.map(async (file) => await readFile(resolve(assets, file), "utf8")),
+  )).join("\n");
+
+  expect(files.some((file) => file.includes("jsx-dev-runtime"))).toBe(false);
+  expect(source).not.toContain("react.development");
+  expect(source).not.toContain("jsxDEV");
+});
 
 test("static output hydrates under its hash-based CSP", async ({ page }) => {
   const response = await page.goto(staticOrigin);

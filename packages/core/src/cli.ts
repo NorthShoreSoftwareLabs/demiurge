@@ -114,7 +114,7 @@ export async function buildStaticSite(
   const vite = runtime ? undefined : await import("vite");
   const config = runtime
     ? await runtime.resolveConfig()
-    : await vite!.resolveConfig({}, "build", "production");
+    : await vite!.resolveConfig({}, "build", "production", "production");
   const root = config.root;
   const outDir = resolve(root, options.outDir);
   const serverOutDir = resolve(root, ".demiurge/server");
@@ -128,6 +128,8 @@ export async function buildStaticSite(
   );
 
   await build({
+    define: { "process.env.NODE_ENV": JSON.stringify("production") },
+    mode: "production",
     build: {
       emptyOutDir: true,
       outDir,
@@ -135,6 +137,8 @@ export async function buildStaticSite(
     },
   });
   await build({
+    define: { "process.env.NODE_ENV": JSON.stringify("production") },
+    mode: "production",
     build: {
       copyPublicDir: false,
       emptyOutDir: true,
