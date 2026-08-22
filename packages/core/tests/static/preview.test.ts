@@ -24,6 +24,7 @@ async function createOutput() {
   await writeFile(join(root, "index.html"), "<h1>Home</h1>");
   await writeFile(join(root, "404.html"), "<h1>Missing</h1>");
   await writeFile(join(root, "feed.json"), '{"ready":true}');
+  await writeFile(join(root, "demo.mp4"), new Uint8Array([0, 0, 0, 0]));
   await writeFile(join(root, "assets", "app-abcdefgh.js"), "export {};");
   await writeFile(join(root, "site.webmanifest"), "{}");
   await writeFile(
@@ -114,6 +115,14 @@ describe("static output preview", () => {
       "public, max-age=0, must-revalidate",
     );
     expect(await publicFile.text()).toBe("");
+  });
+
+  it("serves MP4 files with the standard media type", async () => {
+    const origin = await start(await createOutput());
+    const video = await fetch(`${origin}/demo.mp4`);
+
+    expect(video.status).toBe(200);
+    expect(video.headers.get("content-type")).toBe("video/mp4");
   });
 
   it("applies route policy to direct generated file URLs", async () => {
