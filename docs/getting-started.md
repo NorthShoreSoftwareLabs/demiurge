@@ -69,10 +69,8 @@ For static production output, run `demiurge build`. Run `demiurge preview` to
 serve the output with its declared headers.
 
 For Vercel, select `vercelStatic()` in the Vite configuration. The build then
-creates Build Output API artifacts under `.vercel/output`. `vercelStatic()`
-has an optional peer dependency on `@vercel/routing-utils`. Install it in the
-application that calls `vercelStatic()`. A deployment that never imports
-`@demiurgejs/core/static` does not need it.
+creates Build Output API artifacts under `.vercel/output`. The adapter does not
+require a Vercel package in the application.
 
 To optimize an image, follow the [image guide](./guides/images.md). It covers
 the static build shape and the request-time optimizer.

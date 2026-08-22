@@ -122,7 +122,6 @@ try {
     [
       "add",
       tarballPath,
-      "@vercel/routing-utils@6.5.0",
       "ioredis@^5.4.1",
       "react@^19.0.0",
       "react-dom@^19.0.0",
@@ -153,6 +152,12 @@ try {
   const installedBin = installedPackage.bin as
     | { demiurge?: string }
     | undefined;
+  const installedDependencies = installedPackage.dependencies as
+    | Record<string, string>
+    | undefined;
+  const installedPeerDependencies = installedPackage.peerDependencies as
+    | Record<string, string>
+    | undefined;
 
   assert(installedPackage.name === expectedPackage.name, "Packed package has the wrong name.");
   assert(installedPackage.version === expectedPackage.version, "Packed package has the wrong staged version.");
@@ -169,6 +174,14 @@ try {
   assert(installedEngines?.node === ">=22.13.0", "Packed package must declare the supported Node runtime.");
   assert(installedPublishConfig?.access === "public" && installedPublishConfig.provenance === true, "Packed package must require public provenance publication.");
   assert(installedBin?.demiurge === "./bin/demiurge.mjs", "Packed package is missing the Demiurge command.");
+  assert(
+    installedDependencies?.["path-to-regexp"] === "6.3.0",
+    "Packed package must use the patched route pattern parser.",
+  );
+  assert(
+    installedPeerDependencies?.["@vercel/routing-utils"] === undefined,
+    "Packed package must not require @vercel/routing-utils.",
+  );
   assert(Array.isArray(installedPackage.keywords) && installedPackage.keywords.includes("react"), "Packed package is missing npm discovery keywords.");
 
   const installedReadme = readFileSync(join(installedRoot, "README.md"), "utf8");

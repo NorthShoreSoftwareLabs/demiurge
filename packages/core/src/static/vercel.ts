@@ -7,12 +7,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import {
-  getTransformedRoutes,
-  normalizeRoutes,
-  type Header,
-  type Route,
-} from "@vercel/routing-utils";
+import { pathToRegexp } from "path-to-regexp";
 import { validateCorsPolicy } from "../security";
 import type { CorsPolicy } from "../security";
 import { CONTENT_HASHED_FILE_NAME_PATTERN } from "../static-files";
@@ -40,7 +35,21 @@ export type VercelStaticDeployment = {
   cors?: CorsPolicy;
 };
 
-export type VercelOutputRoute = Route;
+export type VercelOutputSourceRoute = {
+  continue?: boolean;
+  dest?: string;
+  headers?: Record<string, string>;
+  src: string;
+  status?: number;
+};
+
+export type VercelOutputHandleRoute = {
+  handle: "error" | "hit";
+};
+
+export type VercelOutputRoute =
+  | VercelOutputHandleRoute
+  | VercelOutputSourceRoute;
 
 export type VercelOutputConfig = {
   overrides: Record<string, {
@@ -128,7 +137,7 @@ export function createVercelOutputConfig(
   // application never declared never reaches a deployed response. It comes
   // first so every later route in the sequence keeps it, the same pattern
   // the file header rules use for the cache policy.
-  const routes: Route[] = [
+  const routes: VercelOutputRoute[] = [
     {
       continue: true,
       headers: { "access-control-allow-origin": corsOrigin },
@@ -203,18 +212,13 @@ export function createVercelOutputConfig(
   routes.push(...applicationRoutes.map((route) => ({ ...route })));
   routes.push({ dest: `/${fallback.file}`, src: "^/.*$", status: 404 });
 
-  const normalized = normalizeRoutes(routes);
-  if (normalized.error || !normalized.routes) {
-    throw new Error(
-      `Vercel rejected the generated routes: ${normalized.error?.message ?? "The route list is empty."}`,
-    );
-  }
+  validateVercelRoutes(routes);
 
   return {
     overrides: Object.fromEntries(
       manifest.entries.map((entry) => [entry.file, createOverride(entry)]),
     ),
-    routes: normalized.routes,
+    routes,
     version: 3,
   };
 }
@@ -279,17 +283,32 @@ function translateFileNamePattern(pattern: string) {
 }
 
 function transformApplicationCache(cache: VercelStaticCacheRule[]) {
-  const headers: Header[] = cache.map((rule) => ({
-    headers: [{ key: "cache-control", value: rule.value }],
-    source: rule.source,
-  }));
-  const transformed = getTransformedRoutes({ headers });
-  if (transformed.error || !transformed.routes) {
+  try {
+    return cache.map((rule) => ({
+      continue: true,
+      headers: { "cache-control": rule.value },
+      src: pathToRegexp(rule.source, [], {
+        delimiter: "/",
+        strict: true,
+      }).source.replaceAll("\\/", "/"),
+    }));
+  } catch {
     throw new Error(
-      `A Vercel static header rule is not valid: ${transformed.error?.message ?? "The route list is empty."}`,
+      "A Vercel static header rule is not valid.",
     );
   }
-  return transformed.routes;
+}
+
+function validateVercelRoutes(routes: VercelOutputRoute[]) {
+  for (const route of routes) {
+    if ("handle" in route) continue;
+
+    try {
+      new RegExp(route.src);
+    } catch {
+      throw new Error("A generated Vercel route is not valid.");
+    }
+  }
 }
 
 // A static response cannot vary `access-control-allow-origin` by request, so
