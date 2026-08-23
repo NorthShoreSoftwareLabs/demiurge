@@ -55,6 +55,25 @@ Implemented response helpers are:
 - `action(...)` for parsed, optionally idempotent mutations
 - `webhook(...)` for verified HMAC webhook requests
 
+### Action validation
+
+An action parser can use any application-owned parser or schema library. The
+parser returns the typed input that the handler receives as `context.input`.
+
+When input is invalid, the parser throws an application-created validation
+error. The response has status `400` and this stable JSON shape:
+
+```ts
+{
+  type: "validation-error",
+  issues: [{ code: "required", message: "Title is required", path: ["title"] }]
+}
+```
+
+An empty `path` reports a form-level error. A non-empty path reports a field or
+nested value. The framework does not select a parser or expose parser-specific
+diagnostics.
+
 Each response helper accepts the response and route-policy options appropriate
 to its result. `serverTiming(...)` creates metrics for the `Server-Timing`
 header. `throw httpError(status, details)` creates an intentional HTTP failure
