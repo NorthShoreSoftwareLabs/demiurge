@@ -40,10 +40,33 @@ jobs:
       - name: Verify minimum-Node package contract
         run: pnpm --filter @demiurge-js/core test && pnpm test:pack
 
-  verify:
-    name: pnpm verify
+  verification-shard:
+    name: Verify / ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: lint
+            command: pnpm lint
+          - name: build and types
+            command: pnpm --filter @demiurgejs/core build && pnpm typecheck
+          - name: coverage
+            command: pnpm coverage
+            redis: true
+            coverage: true
+          - name: scaffold and tooling
+            command: pnpm test:scaffold && pnpm test:tooling
+          - name: examples and integration
+            command: pnpm --filter @demiurgejs/core build && pnpm build:examples && pnpm test:examples
+            redis: true
+          - name: browser
+            command: pnpm test:browser
+            redis: true
+            chromium: true
+          - name: package contract
+            command: pnpm test:pack
 
     steps:
       - name: Checkout
@@ -62,23 +85,39 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Chromium
+        if: matrix.chromium == true
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Install Redis
+        if: matrix.redis == true
         run: sudo apt-get update && sudo apt-get install -y redis-server
 
-      - name: Run verification
-        run: pnpm verify
+      - name: Run ${{ matrix.name }} verification
+        run: ${{ matrix.command }}
 
       # The text reporter already prints the per-file table into the log, and
       # per-file thresholds name the file that dipped. What is missing on a red
       # run is which lines, so upload the report then and not on the green runs
       # nobody opens.
       - name: Upload coverage report
-        if: failure()
+        if: failure() && matrix.coverage == true
         uses: actions/upload-artifact@v4
         with:
           name: coverage-html
           path: packages/core/coverage/
           retention-days: 7
           if-no-files-found: ignore
+
+  # Keep the existing required-check context while the independent shards give
+  # each failure a direct name and run concurrently.
+  verify:
+    name: pnpm verify
+    if: always()
+    needs: verification-shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Confirm all verification shards passed
+        env:
+          SHARD_RESULT: ${{ needs.verification-shard.result }}
+        run: test "$SHARD_RESULT" = success
