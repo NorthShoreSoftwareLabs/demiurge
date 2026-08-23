@@ -333,14 +333,16 @@ describe("static output adapter", () => {
     const homeEntry = manifest.entries.find((entry) => entry.pathname === "/");
     const home = await readFile(join(outDir, "index.html"), "utf8");
     const structuredDataSource = home.match(
-      /<script type="application\/ld\+json">([\s\S]*?)<\/script>/,
+      /<script type="application\/ld\+json" data-demiurge-document-contribution>([\s\S]*?)<\/script>/,
     )?.[1];
     const hash = await cspHash(structuredDataSource ?? "");
 
     expect(homeEntry?.headers["content-security-policy"]).toContain(hash);
     expect(homeEntry?.headers["content-security-policy"])
       .not.toContain("'unsafe-inline'");
-    expect(home).toContain('<script type="application/ld+json">');
+    expect(home).toContain(
+      '<script type="application/ld+json" data-demiurge-document-contribution>',
+    );
     expect(home).toContain("\\u003c/script\\u003e");
     expect(home).toContain("\\u2028");
     expect(home).toContain("\\u2029");

@@ -154,6 +154,9 @@ a second attempt to render application markup.
 The error document renders without layouts. The error path runs the minimum
 amount of app code that can still produce a page.
 
+Browser navigation uses the same app error state as document navigation. The
+server response also removes document contributions from the previous route.
+
 ### Dev shows the stack, production never does
 
 Production does not put stack traces, file paths, or framework internals in a

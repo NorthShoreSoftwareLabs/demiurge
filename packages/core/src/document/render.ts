@@ -18,6 +18,10 @@ import {
   isDeferredScriptStrategy,
 } from "./deferred-scripts";
 import { scriptPlacement, type ScriptTag } from "./scripts";
+import {
+  DOCUMENT_CONTRIBUTION_ATTRIBUTE,
+  DOCUMENT_SCRIPT_STRATEGY_ATTRIBUTE,
+} from "./navigation";
 
 export const STRUCTURED_DATA_ATTRIBUTE = "data-demiurge-structured-data";
 
@@ -179,7 +183,7 @@ function renderHeadTags({
           content: metadata.description,
           kind: "meta",
           name: "description",
-        }),
+        }, true),
       ]
       : []),
     ...(metadata?.canonical
@@ -188,7 +192,7 @@ function renderHeadTags({
           href: metadata.canonical,
           kind: "link",
           rel: "canonical",
-        }),
+        }, true),
       ]
       : []),
     ...renderRobotsTags(metadata),
@@ -200,7 +204,7 @@ function renderHeadTags({
     ...styles.map(
       (href) => `    <link rel="stylesheet" href="${escapeHtml(href)}" />`,
     ),
-    ...links.map(renderLinkTag),
+    ...links.map((tag) => renderLinkTag(tag, true)),
     ...scripts
       .filter((scriptTag) => scriptTag[scriptPlacement] === "hoisted")
       .map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`),
@@ -222,7 +226,7 @@ function renderRobotsTags(metadata: ResolvedMetadata | undefined) {
       content: directives.join(", "),
       kind: "meta",
       name: "robots",
-    }),
+    }, true),
   ];
 }
 
@@ -237,55 +241,62 @@ function renderOpenGraphTags(metadata: ResolvedMetadata | undefined) {
         content: metadata.openGraph.title,
         kind: "meta",
         property: "og:title",
-      })
+      }, true)
       : null,
     metadata.openGraph.description
       ? renderMetaTag({
         content: metadata.openGraph.description,
         kind: "meta",
         property: "og:description",
-      })
+      }, true)
       : null,
     metadata.openGraph.image
       ? renderMetaTag({
         content: metadata.openGraph.image,
         kind: "meta",
         property: "og:image",
-      })
+      }, true)
       : null,
   ].filter((tag): tag is string => Boolean(tag));
 }
 
 function renderDocumentMetadataTag(tag: DocumentMetadataTag) {
   if (tag.kind === "link") {
-    return renderLinkTag(tag);
+    return renderLinkTag(tag, true);
   }
 
-  return renderMetaTag(tag);
+  return renderMetaTag(tag, true);
 }
 
 function renderStructuredDataTag(
   tag: StructuredDataTag,
   nonce: string | undefined,
 ) {
-  const ownership = nonce ? "" : ` ${STRUCTURED_DATA_ATTRIBUTE}`;
+  const ownership = ` ${DOCUMENT_CONTRIBUTION_ATTRIBUTE}` +
+    (nonce ? "" : ` ${STRUCTURED_DATA_ATTRIBUTE}`);
 
   return `    <script type="application/ld+json"${ownership}${renderAttribute("nonce", nonce)}>${escapeJsonScript(JSON.stringify(tag.value))}</script>`;
 }
 
-function renderMetaTag(tag: DocumentMetadataTag & { kind: "meta" }) {
+function renderMetaTag(
+  tag: DocumentMetadataTag & { kind: "meta" },
+  owned = false,
+) {
+  const ownership = owned ? ` ${DOCUMENT_CONTRIBUTION_ATTRIBUTE}` : "";
+
   if (tag.name === "charset") {
-    return `    <meta charset="${escapeHtml(tag.content)}" />`;
+    return `    <meta${ownership} charset="${escapeHtml(tag.content)}" />`;
   }
 
   const name = tag.name ? ` name="${escapeHtml(tag.name)}"` : "";
   const property = tag.property ? ` property="${escapeHtml(tag.property)}"` : "";
 
-  return `    <meta${name}${property} content="${escapeHtml(tag.content)}" />`;
+  return `    <meta${ownership}${name}${property} content="${escapeHtml(tag.content)}" />`;
 }
 
-function renderLinkTag(tag: LinkTag) {
-  return `    <link${renderAttribute("rel", tag.rel)}${renderAttribute("href", tag.href)}${renderAttribute("as", tag.as)}${renderAttribute("type", tag.type)}${renderAttribute("crossorigin", tag.crossOrigin)}${renderAttribute("hreflang", tag.hrefLang)} />`;
+function renderLinkTag(tag: LinkTag, owned = false) {
+  const ownership = owned ? ` ${DOCUMENT_CONTRIBUTION_ATTRIBUTE}` : "";
+  return `    <link${ownership}${renderAttribute("rel", tag.rel)}${renderAttribute("href", tag.href)}${renderAttribute("as", tag.as)}${renderAttribute("type", tag.type)}${renderAttribute("crossorigin", tag.crossOrigin)}${renderAttribute("hreflang", tag.hrefLang)} />`;
 }
 
 function renderScriptTag(scriptTag: ScriptTag, nonce: string | undefined) {
@@ -293,7 +304,7 @@ function renderScriptTag(scriptTag: ScriptTag, nonce: string | undefined) {
     return renderDeferredScriptTag(scriptTag, nonce);
   }
 
-  return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("src", scriptTag.src)}${renderAttribute("type", scriptTag.type ?? scriptTypeForStrategy(scriptTag.strategy))}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("crossorigin", scriptTag.crossOrigin)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderAttribute("data-api", scriptTag.dataApi)}${renderAttribute("data-domain", scriptTag.dataDomain)}${renderAttribute("data-demiurge-script-placement", scriptTag[scriptPlacement])}${renderBooleanAttribute("async", scriptTag.async)}${renderBooleanAttribute("defer", scriptTag.defer)}></script>`;
+  return `<script ${DOCUMENT_CONTRIBUTION_ATTRIBUTE}${renderAttribute(DOCUMENT_SCRIPT_STRATEGY_ATTRIBUTE, scriptTag.strategy)}${renderAttribute("id", scriptTag.id)}${renderAttribute("src", scriptTag.src)}${renderAttribute("type", scriptTag.type ?? scriptTypeForStrategy(scriptTag.strategy))}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("crossorigin", scriptTag.crossOrigin)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderAttribute("data-api", scriptTag.dataApi)}${renderAttribute("data-domain", scriptTag.dataDomain)}${renderAttribute("data-demiurge-script-placement", scriptTag[scriptPlacement])}${renderBooleanAttribute("async", scriptTag.async)}${renderBooleanAttribute("defer", scriptTag.defer)}></script>`;
 }
 
 // An idle or worker script must not run while the browser parses the document.
@@ -303,7 +314,7 @@ function renderDeferredScriptTag(
   scriptTag: ScriptTag,
   nonce: string | undefined,
 ) {
-  return `<script${renderAttribute("id", scriptTag.id)}${renderAttribute("type", DEFERRED_SCRIPT_TYPE)}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("crossorigin", scriptTag.crossOrigin)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderAttribute("data-api", scriptTag.dataApi)}${renderAttribute("data-domain", scriptTag.dataDomain)}${renderAttribute(DEFERRED_SCRIPT_ATTRIBUTE, scriptTag.strategy)}${renderAttribute(DEFERRED_SCRIPT_SRC_ATTRIBUTE, scriptTag.src)}${renderAttribute(DEFERRED_SCRIPT_TYPE_ATTRIBUTE, scriptTag.type)}${renderAttribute("data-demiurge-script-placement", scriptTag[scriptPlacement])}></script>`;
+  return `<script ${DOCUMENT_CONTRIBUTION_ATTRIBUTE}${renderAttribute(DOCUMENT_SCRIPT_STRATEGY_ATTRIBUTE, scriptTag.strategy)}${renderAttribute("id", scriptTag.id)}${renderAttribute("type", DEFERRED_SCRIPT_TYPE)}${renderAttribute("nonce", scriptTag.nonce ?? nonce)}${renderAttribute("integrity", scriptTag.integrity)}${renderAttribute("crossorigin", scriptTag.crossOrigin)}${renderAttribute("referrerpolicy", scriptTag.referrerPolicy)}${renderAttribute("data-api", scriptTag.dataApi)}${renderAttribute("data-domain", scriptTag.dataDomain)}${renderAttribute(DEFERRED_SCRIPT_ATTRIBUTE, scriptTag.strategy)}${renderAttribute(DEFERRED_SCRIPT_SRC_ATTRIBUTE, scriptTag.src)}${renderAttribute(DEFERRED_SCRIPT_TYPE_ATTRIBUTE, scriptTag.type)}${renderAttribute("data-demiurge-script-placement", scriptTag[scriptPlacement])}></script>`;
 }
 
 function scriptTypeForStrategy(strategy: ScriptTag["strategy"]) {

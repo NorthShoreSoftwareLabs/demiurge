@@ -145,6 +145,10 @@ The framework does not pass request context to browser route props or
 navigation data. Keep context values server-only. Dynamic values are called
 `path`, not `params`:
 
+During browser navigation, the server also resolves document contributions.
+The navigation response contains only the resolved title, metadata, links, and
+managed script fields. The browser does not run contribution functions.
+
 ```tsx
 export const GET = json(({ path, request }) => ({
   id: path.id,
@@ -178,6 +182,38 @@ href({ to: "/blog/[slug]", path: { slug: "hello" } });
 
 Generated route declarations live under the application's `.demiurge`
 directory and should not be edited by hand.
+
+`Link` accepts native anchor attributes except `href`. Use `to`, `path`,
+`search`, and `hash` to create the `href` value.
+
+The router intercepts an unmodified primary click on a same-origin HTTP link.
+The router does not intercept these links:
+
+- A link with `reloadDocument`.
+- A link with `download`.
+- A link with a target other than `_self`.
+- A link to a different origin.
+- A link that uses a non-HTTP scheme.
+
+An application `onClick` handler runs before the router. If the handler
+prevents the default action, the router does not navigate.
+
+Use `LinkProps` to preserve typed destinations in an application wrapper:
+
+```tsx
+import { Link, type AppHref, type LinkProps } from "@demiurgejs/core";
+
+type NavLinkProps<TTo extends AppHref> = LinkProps<TTo> & {
+  emphasis?: "normal" | "strong";
+};
+
+function NavLink<const TTo extends AppHref>({
+  emphasis = "normal",
+  ...props
+}: NavLinkProps<TTo>) {
+  return <Link data-emphasis={emphasis} {...props} />;
+}
+```
 
 ## Negotiation and failures
 

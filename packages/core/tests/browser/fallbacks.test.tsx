@@ -9,7 +9,9 @@ import {
   httpError,
   Link,
   page,
+  resolveMetadata,
   type LayoutProps,
+  type LinkProps,
   type RouteErrorProps,
   type RouteProps,
 } from "@demiurgejs/core";
@@ -52,6 +54,10 @@ describe("browser router fallbacks", () => {
     window.history.replaceState(null, "", "/missing");
 
     const Router = createFileRouter({
+      loadNavigationData: async () => ({
+        document: navigationDocument("Missing document"),
+        hasData: true,
+      }),
       notFound: NotFound,
       routes: {},
     });
@@ -61,6 +67,7 @@ describe("browser router fallbacks", () => {
     await waitFor(() => {
       expect(screen.getByText("App not found: /missing")).toBeTruthy();
     });
+    expect(document.title).toBe("Missing document");
   });
 
   it("renders the built-in not-found UI when no app fallback exists", async () => {
@@ -345,6 +352,15 @@ describe("browser router fallbacks", () => {
     const Router = createFileRouter({
       loadNavigationData: async () => ({
         data: "from server",
+        document: {
+          links: [{ href: "/server.css", kind: "link", rel: "stylesheet" }],
+          metadata: resolveMetadata({
+            description: "Resolved on the server",
+            title: "Server contribution",
+          }),
+          scripts: [],
+          title: "Server contribution",
+        },
         hasData: true,
       }),
       routes: {
@@ -373,6 +389,10 @@ describe("browser router fallbacks", () => {
     expect(layoutScripts).not.toHaveBeenCalled();
     expect(pageLinks).not.toHaveBeenCalled();
     expect(pageScripts).not.toHaveBeenCalled();
+    expect(document.title).toBe("Server contribution");
+    expect(document.head.querySelector('meta[name="description"]')?.getAttribute("content"))
+      .toBe("Resolved on the server");
+    expect(document.head.querySelector('link[href="/server.css"]')).toBeTruthy();
   });
 
   it("does not reload route data for a hash-only navigation", async () => {
@@ -429,6 +449,78 @@ describe("browser router fallbacks", () => {
     expect(screen.getByText("Second page")).toBeTruthy();
   });
 
+  it("cannot apply an error document from a superseded navigation", async () => {
+    const first = deferred<Response>();
+    const second = deferred<Response>();
+    vi.stubGlobal("fetch", vi.fn(async (request: Request) => {
+      const pathname = new URL(request.url).pathname;
+      if (pathname === "/first") return await first.promise;
+      if (pathname === "/second") return await second.promise;
+      return navigationResponse("Home document");
+    }));
+    const Router = createFileRouter({
+      routes: {
+        "./routes/@error.tsx": routeModule({ default: StatusError }),
+        "./routes/index.tsx": routeModule({ GET: page(HomePage) }),
+        "./routes/first.tsx": routeModule({ GET: page(FirstPage) }),
+        "./routes/second.tsx": routeModule({ GET: page(SecondPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Home")).toBeTruthy());
+
+    window.history.pushState(null, "", "/first");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    window.history.pushState(null, "", "/second");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    second.resolve(navigationResponse("Second document"));
+    await waitFor(() => expect(document.title).toBe("Second document"));
+
+    first.resolve(Response.json(
+      {
+        document: navigationDocument("Stale error document"),
+        error: { title: "Internal Server Error" },
+        hasData: true,
+      },
+      {
+        headers: { "x-demiurge-navigation": "error" },
+        status: 500,
+      },
+    ));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(document.title).toBe("Second document");
+    expect(screen.getByText("Second page")).toBeTruthy();
+  });
+
+  it("applies the error document for the current navigation", async () => {
+    window.history.replaceState(null, "", "/broken");
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(
+      {
+        document: navigationDocument("Error document"),
+        error: { title: "Service Unavailable" },
+        hasData: true,
+      },
+      {
+        headers: { "x-demiurge-navigation": "error" },
+        status: 503,
+      },
+    )));
+    const Router = createFileRouter({
+      routes: {
+        "./routes/@error.tsx": routeModule({ default: StatusError }),
+        "./routes/broken.tsx": routeModule({ GET: page(BrokenPage) }),
+      },
+    });
+
+    render(<Router />);
+
+    await waitFor(() => expect(screen.getByText("Route status: 503")).toBeTruthy());
+    expect(document.title).toBe("Error document");
+  });
+
   it("leaves non-primary link clicks to the browser", async () => {
     const Router = createFileRouter({
       routes: {
@@ -447,10 +539,80 @@ describe("browser router fallbacks", () => {
 
     expect(window.location.pathname).toBe("/");
   });
+
+  it("composes anchor behavior before internal navigation", async () => {
+    const onClick = vi.fn((event: React.MouseEvent<HTMLAnchorElement>) => {
+      event.preventDefault();
+    });
+    const Router = createFileRouter({
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page(() => (
+            <Link
+              aria-label="Account settings"
+              data-navigation-kind="account"
+              id="account-link"
+              onClick={onClick}
+              ref={(element) => element?.setAttribute("data-has-ref", "true")}
+              to="/blog"
+            >
+              Account
+            </Link>
+          )),
+        }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    render(<Router />);
+    const link = await screen.findByRole("link", { name: "Account settings" });
+
+    expect(link.getAttribute("data-navigation-kind")).toBe("account");
+    expect(link.getAttribute("data-has-ref")).toBe("true");
+    fireEvent.click(link);
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(window.location.pathname).toBe("/");
+  });
+
+  it.each<[string, LinkProps]>([
+    ["target", { target: "_blank", to: "/blog" }],
+    ["download", { download: true, to: "/blog" }],
+    ["external origin", runtimeLinkProps("https://example.test/blog")],
+    ["non-HTTP scheme", runtimeLinkProps("mailto:team@example.test")],
+    ["reload request", { reloadDocument: true, to: "/blog" }],
+  ])("leaves %s links to native navigation", async (_name, linkProps) => {
+    const pushState = vi.spyOn(window.history, "pushState");
+    const Router = createFileRouter({
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page(() => <Link {...linkProps}>Native</Link>),
+        }),
+      },
+    });
+
+    render(<Router />);
+    const link = await screen.findByText("Native");
+    window.addEventListener("click", (event) => event.preventDefault(), {
+      once: true,
+    });
+    link.dispatchEvent(new MouseEvent("click", {
+      bubbles: true,
+      button: 0,
+      cancelable: true,
+    }));
+
+    expect(pushState).not.toHaveBeenCalled();
+  });
 });
 
 function routeModule(module: Record<string, unknown>) {
   return async () => module;
+}
+
+function runtimeLinkProps(to: string) {
+  // TYPE-EVIDENCE: this helper exercises runtime protection for a destination that generated application route types reject at compile time.
+  return { to } as LinkProps;
 }
 
 function deferred<T>() {
@@ -460,6 +622,22 @@ function deferred<T>() {
   });
 
   return { promise, resolve };
+}
+
+function navigationDocument(title: string) {
+  return {
+    links: [],
+    metadata: resolveMetadata({ title }),
+    scripts: [],
+    title,
+  };
+}
+
+function navigationResponse(title: string) {
+  return Response.json(
+    { document: navigationDocument(title), hasData: true },
+    { headers: { "x-demiurge-navigation": "data" } },
+  );
 }
 
 function Loading() {

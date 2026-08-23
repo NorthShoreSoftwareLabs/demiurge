@@ -1658,6 +1658,10 @@ describe("request handler", () => {
         }),
         "./routes/index.tsx": routeModule({
           GET: page<string, { headline: string }>({ data, view: DataView }),
+          metadata: defineMetadata({
+            description: "Navigation description",
+            title: "Navigation title",
+          }),
           scripts: defineScripts(pageScripts),
         }),
       },
@@ -1677,6 +1681,23 @@ describe("request handler", () => {
     expect(response.headers.get("vary")).toContain("x-demiurge-navigation");
     await expect(response.json()).resolves.toEqual({
       data: { headline: "Server" },
+      document: {
+        links: [{
+          href: "https://layout.example.test",
+          kind: "link",
+          rel: "preconnect",
+        }],
+        metadata: expect.objectContaining({
+          description: "Navigation description",
+          title: "Navigation title",
+        }),
+        scripts: [{
+          kind: "script",
+          src: "https://scripts.example.test/navigation.js",
+          strategy: "afterInteractive",
+        }],
+        title: "Navigation title",
+      },
       hasData: true,
     });
     const historyResponse = await handler(
@@ -1689,6 +1710,7 @@ describe("request handler", () => {
     );
     await expect(historyResponse.json()).resolves.toEqual({
       data: { headline: "History" },
+      document: expect.objectContaining({ title: "Navigation title" }),
       hasData: true,
     });
     expect(data).toHaveBeenCalledTimes(2);
@@ -1733,6 +1755,15 @@ describe("request handler", () => {
     expect(missing.headers.get("x-demiurge-navigation")).toBe("not-found");
     expect(broken.status).toBe(500);
     expect(broken.headers.get("x-demiurge-navigation")).toBe("error");
+    await expect(missing.json()).resolves.toMatchObject({
+      document: { links: [], scripts: [], title: "Demiurge App" },
+      hasData: true,
+    });
+    await expect(broken.json()).resolves.toMatchObject({
+      document: { links: [], scripts: [], title: "Demiurge App" },
+      error: { title: "Internal Server Error" },
+      hasData: true,
+    });
   });
 
   it("escapes serialized route data for the hydration payload", async () => {
@@ -1908,12 +1939,12 @@ describe("request handler", () => {
 
     expect(html).toContain(`<html lang="en-GB">`);
     expect(html).toContain("<title>Home</title>");
-    expect(html).toContain(`<meta name="description" content="Layout &amp; document" />`);
-    expect(html).toContain(`<link rel="preconnect" href="https://api.example.com" />`);
+    expect(html).toContain(`<meta data-demiurge-document-contribution name="description" content="Layout &amp; document" />`);
+    expect(html).toContain(`<link data-demiurge-document-contribution rel="preconnect" href="https://api.example.com" />`);
     expect(html).toContain(
-      `<link rel="preload" href="/hero.avif" as="image" type="image/avif" />`,
+      `<link data-demiurge-document-contribution rel="preload" href="/hero.avif" as="image" type="image/avif" />`,
     );
-    expect(html).toContain(`<script src="https://cdn.example.com/root.js"></script>`);
+    expect(html).toContain(`<script data-demiurge-document-contribution data-demiurge-script-strategy="beforeInteractive" src="https://cdn.example.com/root.js"></script>`);
     expect(html).toContain(`<script type="module" src="/client-entry.js"></script>`);
     expect(html).toContain("<section>Layout: <main>Hello SSR</main></section>");
   });

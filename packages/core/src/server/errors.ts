@@ -1,8 +1,18 @@
 import { createElement, type ComponentType } from "react";
 import { renderToString } from "react-dom/server";
-import { renderDocument } from "../document";
+import {
+  createNavigationDocument,
+  renderDocument,
+  resolveMetadata,
+} from "../document";
 import { createScriptRenderContext, withScriptContext } from "../document/scripts";
-import { loadErrorFallback, type RouteManifest } from "../router";
+import {
+  createNavigationDataResponse,
+  isNavigationDataRequest,
+  loadErrorFallback,
+  NAVIGATION_ERROR_RESPONSE,
+  type RouteManifest,
+} from "../router";
 import type { RouteErrorProps } from "../route";
 import { isHttpError, type HttpErrorStatus } from "../route/http-error";
 import { BuiltInError, DevError, describeError } from "./fallbacks";
@@ -40,10 +50,35 @@ export async function renderFailureResponse(
   // document. Middleware and policy run before either is decided, so they
   // negotiate the same way an unmatched path does.
   const wantsDocument =
-    site === "page" || (site === "middleware" && prefersHtmlDocument(request));
+    isNavigationDataRequest(request) ||
+    site === "page" ||
+    (site === "middleware" && prefersHtmlDocument(request));
 
   if (!wantsDocument) {
     return createErrorProblemResponse(url, error, options);
+  }
+
+  if (isNavigationDataRequest(request)) {
+    const described = describeError(error);
+    const headers = isHttpError(error)
+      ? new Headers(error.headers)
+      : new Headers();
+
+    return createNavigationDataResponse(undefined, {
+      document: createNavigationDocument({
+        metadata: resolveMetadata(),
+        title: options.title,
+      }),
+      error: {
+        detail: isHttpError(error)
+          ? error.detail
+          : isDevErrorRendering(options.dev) ? described.message : undefined,
+        title: isHttpError(error) ? error.title : "Internal Server Error",
+      },
+      headers,
+      kind: NAVIGATION_ERROR_RESPONSE,
+      status: errorStatus(error),
+    });
   }
 
   return await renderErrorDocumentResponse(manifest, url, error, options);
