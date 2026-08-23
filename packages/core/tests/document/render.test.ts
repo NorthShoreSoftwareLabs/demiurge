@@ -132,20 +132,20 @@ describe("renderDocument head metadata", () => {
 
     expect(html).toContain("<title>Checkout</title>");
     expect(html).toContain(
-      '<meta name="description" content="Complete your order." />',
+      '<meta data-demiurge-document-contribution name="description" content="Complete your order." />',
     );
-    expect(html).toContain('<link rel="canonical" href="/checkout" />');
+    expect(html).toContain('<link data-demiurge-document-contribution rel="canonical" href="/checkout" />');
     expect(html).toContain(
-      '<meta name="robots" content="noindex, nofollow" />',
+      '<meta data-demiurge-document-contribution name="robots" content="noindex, nofollow" />',
     );
     expect(html).toContain(
-      '<meta property="og:title" content="Checkout" />',
+      '<meta data-demiurge-document-contribution property="og:title" content="Checkout" />',
     );
-    expect(html).toContain('<meta property="og:image" content="/og.png" />');
-    expect(html).toContain('<meta name="theme-color" content="#fff" />');
-    expect(html).toContain('<link rel="alternate" href="/feed.xml" />');
+    expect(html).toContain('<meta data-demiurge-document-contribution property="og:image" content="/og.png" />');
+    expect(html).toContain('<meta data-demiurge-document-contribution name="theme-color" content="#fff" />');
+    expect(html).toContain('<link data-demiurge-document-contribution rel="alternate" href="/feed.xml" />');
     expect(html).toContain(
-      '<script type="application/ld+json" data-demiurge-structured-data>{"@context":"https://schema.org","@type":"Article","headline":"Checkout"}</script>',
+      '<script type="application/ld+json" data-demiurge-document-contribution data-demiurge-structured-data>{"@context":"https://schema.org","@type":"Article","headline":"Checkout"}</script>',
     );
   });
 
@@ -209,16 +209,16 @@ describe("renderDocument resource hints and static scripts", () => {
     });
 
     expect(html).toContain(
-      '<link rel="preconnect" href="https://api.example.com" crossorigin="anonymous" />',
+      '<link data-demiurge-document-contribution rel="preconnect" href="https://api.example.com" crossorigin="anonymous" />',
     );
     expect(html).toContain(
-      '<link rel="preload" href="/hero.avif" as="image" type="image/avif" />',
+      '<link data-demiurge-document-contribution rel="preload" href="/hero.avif" as="image" type="image/avif" />',
     );
     expect(html).toContain(
-      '<link rel="modulepreload" href="/assets/editor.js" />',
+      '<link data-demiurge-document-contribution rel="modulepreload" href="/assets/editor.js" />',
     );
     expect(html).toContain(
-      '<script src="https://cdn.example.com/app.js" nonce="doc-nonce" integrity="sha384-demo"></script>',
+      '<script data-demiurge-document-contribution data-demiurge-script-strategy="afterInteractive" src="https://cdn.example.com/app.js" nonce="doc-nonce" integrity="sha384-demo"></script>',
     );
   });
 
@@ -234,7 +234,7 @@ describe("renderDocument resource hints and static scripts", () => {
     });
 
     expect(html).toContain(
-      '<script src="https://cdn.example.com/explicit.js" nonce="script-nonce"></script>',
+      '<script data-demiurge-document-contribution data-demiurge-script-strategy="afterInteractive" src="https://cdn.example.com/explicit.js" nonce="script-nonce"></script>',
     );
   });
 
@@ -252,7 +252,7 @@ describe("renderDocument resource hints and static scripts", () => {
     });
 
     expect(html).toContain(
-      '<script id="idle-tag" type="text/demiurge-script" nonce="doc-nonce" integrity="sha384-idle" data-demiurge-script="idle" data-demiurge-script-src="/vendor/idle-tag"></script>',
+      '<script data-demiurge-document-contribution data-demiurge-script-strategy="idle" id="idle-tag" type="text/demiurge-script" nonce="doc-nonce" integrity="sha384-idle" data-demiurge-script="idle" data-demiurge-script-src="/vendor/idle-tag"></script>',
     );
     expect(html).not.toContain('<script src="/vendor/idle-tag"');
   });
@@ -265,7 +265,7 @@ describe("renderDocument resource hints and static scripts", () => {
     });
 
     expect(html).toContain(
-      '<script type="text/demiurge-script" data-demiurge-script="worker" data-demiurge-script-src="/vendor/worker-task" data-demiurge-script-type="module"></script>',
+      '<script data-demiurge-document-contribution data-demiurge-script-strategy="worker" type="text/demiurge-script" data-demiurge-script="worker" data-demiurge-script-src="/vendor/worker-task" data-demiurge-script-type="module"></script>',
     );
   });
 });
@@ -286,10 +286,10 @@ describe("renderDocument HTML escaping", () => {
     expect(html).toContain('<html lang="en&quot; data-test=&quot;bad">');
     expect(html).toContain("<title>Checkout &lt;Secure&gt;</title>");
     expect(html).toContain(
-      '<meta name="description" content="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;" />',
+      '<meta data-demiurge-document-contribution name="description" content="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;" />',
     );
     expect(html).toContain(
-      '<link rel="canonical" href="/checkout&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;" />',
+      '<link data-demiurge-document-contribution rel="canonical" href="/checkout&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;" />',
     );
     expect(html).not.toContain("<script>alert(1)</script>");
   });
@@ -344,10 +344,10 @@ describe("renderDocument nonce propagation", () => {
     });
 
     expect(html).toContain(
-      '<script type="application/ld+json" nonce="doc-nonce">',
+      '<script type="application/ld+json" data-demiurge-document-contribution nonce="doc-nonce">',
     );
     expect(html).toContain(
-      '<script src="https://cdn.example.com/app.js" nonce="doc-nonce"></script>',
+      '<script data-demiurge-document-contribution data-demiurge-script-strategy="afterInteractive" src="https://cdn.example.com/app.js" nonce="doc-nonce"></script>',
     );
     expect(html).toContain(`<template id="${HYDRATION_DATA_ELEMENT_ID}">`);
     expect(html).not.toContain(

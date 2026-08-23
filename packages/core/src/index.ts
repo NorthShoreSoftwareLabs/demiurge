@@ -1,4 +1,5 @@
 export { createFileRouter, hydrateFileRouter, Link } from "./browser";
+export type { LinkProps } from "./browser";
 export {
   assertAdapterCapabilities,
   checkAdapterCapabilities,

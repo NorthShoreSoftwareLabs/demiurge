@@ -49,10 +49,30 @@ test("SPA navigation keeps request callbacks server-only across query history", 
   await page.goto("/");
   await page.getByRole("link", { name: "Test navigation" }).click();
   await expect(page).toHaveURL("http://localhost:42177/navigation");
+  await expect(page).toHaveTitle("Navigation | Demiurge Node Server");
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+    "content",
+    "Server-resolved browser navigation contributions.",
+  );
+  await expect(page.locator('link[rel="preconnect"][href="https://navigation.example.test"]'))
+    .toHaveCount(1);
+  await expect(page.locator('script[src="/navigation-contribution.js"]'))
+    .toHaveCount(1);
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-navigation-contribution",
+    "loaded",
+  );
   await expect(page.getByText("Query: none")).toBeVisible();
   await expect(page.getByText("Loaded by the server.")).toBeVisible();
 
-  await page.getByRole("link", { name: "Repeated query" }).click();
+  const repeatedQuery = page.getByRole("link", { name: "Repeated query" });
+  await expect(repeatedQuery).toHaveAttribute("data-navigation-kind", "query");
+  await expect(repeatedQuery).toHaveAttribute(
+    "title",
+    "Load the repeated query",
+  );
+
+  await repeatedQuery.click();
   await expect(page).toHaveURL(
     "http://localhost:42177/navigation?q=alpha&q=beta#results",
   );
@@ -66,6 +86,34 @@ test("SPA navigation keeps request callbacks server-only across query history", 
     "http://localhost:42177/navigation?q=alpha&q=beta#results",
   );
   await expect(page.getByText("Query: alpha, beta")).toBeVisible();
+  await expect(page).toHaveTitle("Navigation | Demiurge Node Server");
+  await expect(page.locator('script[src="/navigation-contribution.js"]'))
+    .toHaveCount(1);
+
+  await page.getByRole("link", { name: "Home" }).click();
+  await expect(page).toHaveTitle("Demiurge Node Server");
+  await expect(page.locator('link[rel="preconnect"][href="https://navigation.example.test"]'))
+    .toHaveCount(0);
+  await expect(page.locator('script[src="/navigation-contribution.js"]'))
+    .toHaveCount(0);
+
+  await page.goBack();
+  await expect(page).toHaveURL(
+    "http://localhost:42177/navigation?q=alpha&q=beta#results",
+  );
+  await expect(page).toHaveTitle("Navigation | Demiurge Node Server");
+  await expect(page.locator('link[rel="preconnect"][href="https://navigation.example.test"]'))
+    .toHaveCount(1);
+  await expect(page.locator('script[src="/navigation-contribution.js"]'))
+    .toHaveCount(1);
+
+  await page.goForward();
+  await expect(page).toHaveURL("http://localhost:42177/");
+  await expect(page).toHaveTitle("Demiurge Node Server");
+  await expect(page.locator('link[rel="preconnect"][href="https://navigation.example.test"]'))
+    .toHaveCount(0);
+  await expect(page.locator('script[src="/navigation-contribution.js"]'))
+    .toHaveCount(0);
 
   const clientChunks = await page.evaluate(async () => {
     const urls = performance.getEntriesByType("resource")
@@ -85,7 +133,7 @@ test("SPA navigation keeps request callbacks server-only across query history", 
   )).toHaveLength(2);
   expect(routeDataRequests.filter((url) =>
     url === "http://localhost:42177/navigation?q=alpha&q=beta"
-  )).toHaveLength(2);
+  )).toHaveLength(3);
   expect(clientChunks.join("\n")).not.toContain(
     "DEMIURGE_SERVER_ONLY_NAVIGATION_CALLBACK",
   );

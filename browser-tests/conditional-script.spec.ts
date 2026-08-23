@@ -103,7 +103,9 @@ test("the strategies route ships idle and worker scripts as inert placeholders",
   // parses, because neither placeholder carries a src attribute.
   expect(html).not.toContain('<script id="idle-tag" src=');
   expect(html).not.toContain('<script id="worker-task" src=');
-  expect(html).toContain('<script id="eager-tag" src="/vendor/eager-tag"');
+  expect(html).toContain(
+    'id="eager-tag" src="/vendor/eager-tag"',
+  );
   expect(response.headers()["content-security-policy"]).toContain(
     "worker-src 'self'",
   );

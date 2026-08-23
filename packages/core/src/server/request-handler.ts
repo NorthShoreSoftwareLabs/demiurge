@@ -1,4 +1,7 @@
 import {
+  createNavigationDocument,
+} from "../document";
+import {
   createNavigationDataResponse,
   createRouteManifest,
   findRouteMatch,
@@ -384,7 +387,14 @@ async function handleMatchedRoute(
           }
 
           if (isNavigationDataRequest(request)) {
-            return createNavigationDataResponse(match.match.data);
+            return createNavigationDataResponse(match.match.data, {
+              document: createNavigationDocument({
+                links: match.match.links,
+                metadata: match.match.metadata,
+                scripts: match.match.scripts,
+                title: options.ssr?.title,
+              }),
+            });
           }
 
           if (match.match.render.mode === "streaming" && !options.renderPage) {

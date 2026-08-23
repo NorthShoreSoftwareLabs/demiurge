@@ -1,10 +1,13 @@
 import { createElement, type ComponentType, type ReactNode } from "react";
 import { renderToString } from "react-dom/server";
-import { renderDocument } from "../document";
+import { createNavigationDocument, renderDocument } from "../document";
 import { createScriptRenderContext, withScriptContext } from "../document/scripts";
 import {
   findPoliciesForPath,
+  createNavigationDataResponse,
+  isNavigationDataRequest,
   loadNotFoundMatch,
+  NAVIGATION_NOT_FOUND_RESPONSE,
   type LoadedNotFoundMatch,
   type RouteManifest,
 } from "../router";
@@ -45,7 +48,7 @@ export async function renderNotFoundResponse(
 ) {
   const url = new URL(request.url);
 
-  if (!prefersHtmlDocument(request)) {
+  if (!isNavigationDataRequest(request) && !prefersHtmlDocument(request)) {
     return createNotFoundProblemResponse(url);
   }
 
@@ -56,11 +59,24 @@ export async function renderNotFoundResponse(
   const nonce = options.nonce ?? (
     securityPolicyRequiresNonce(documentPolicy) ? createCspNonce() : undefined
   );
-  const html = renderNotFoundDocument(match, { ...options, nonce });
   const headers = createSecurityHeaders(documentPolicy ?? {}, {
     nonce,
     request,
   });
+
+  if (isNavigationDataRequest(request)) {
+    return createNavigationDataResponse(undefined, {
+      document: createNavigationDocument({
+        metadata: match.metadata,
+        title: options.title,
+      }),
+      headers,
+      kind: NAVIGATION_NOT_FOUND_RESPONSE,
+      status: 404,
+    });
+  }
+
+  const html = renderNotFoundDocument(match, { ...options, nonce });
   headers.set("content-type", "text/html; charset=utf-8");
 
   return new Response(

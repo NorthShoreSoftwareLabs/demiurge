@@ -1,6 +1,8 @@
 import {
+  AnchorHTMLAttributes,
   Component,
   ComponentType,
+  ForwardedRef,
   MouseEvent,
   ReactNode,
   createContext,
@@ -12,6 +14,7 @@ import {
   useState,
 } from "react";
 import {
+  applyNavigationDocument,
   HYDRATION_FALLBACK_ATTRIBUTE,
   HYDRATION_ROOT_ATTRIBUTE,
   readInitialRouteData,
@@ -105,8 +108,9 @@ export function createFileRouter(options: FileRouterOptions) {
       });
       const request = new Request(location.href, { signal: controller.signal });
       Promise.resolve(navigationDataLoader(request))
-        .then((initialData) =>
-          loadPageRoute(
+        .then(async (initialData) => ({
+          initialData,
+          nextMatch: await loadPageRoute(
             manifest,
             location.pathname,
             request,
@@ -114,10 +118,13 @@ export function createFileRouter(options: FileRouterOptions) {
             undefined,
             { documentContributions: false },
           ),
-        )
-        .then((nextMatch) => {
+        }))
+        .then(({ initialData, nextMatch }) => {
           settled = true;
           if (isCurrent()) {
+            if (initialData.document) {
+              applyNavigationDocument(initialData.document);
+            }
             setMatch(nextMatch);
           }
         })
@@ -134,6 +141,12 @@ export function createFileRouter(options: FileRouterOptions) {
           );
 
           if (isCurrent()) {
+            const navigationDocument = typeof error === "object" && error
+              ? navigationErrorDocuments.get(error)
+              : undefined;
+            if (navigationDocument) {
+              applyNavigationDocument(navigationDocument);
+            }
             setMatch({
               Error: ErrorFallback,
               error,
@@ -297,33 +310,64 @@ export function resolveReactDomClient(module: ReactDomClientModule) {
   return client;
 }
 
-export function Link<const TTo extends AppHref>(
-  props: LinkTo<TTo> & {
-    children: ReactNode;
-    className?: string;
-  },
+type DataAttributes = {
+  [TName in `data-${string}`]?: string | number | undefined;
+};
+
+export type LinkProps<TTo extends AppHref = AppHref> = LinkTo<TTo> &
+  Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
+    reloadDocument?: boolean;
+  } & DataAttributes;
+
+function LinkImplementation<const TTo extends AppHref>(
+  props: LinkProps<TTo>,
+  ref: ForwardedRef<HTMLAnchorElement>,
 ) {
   const router = useRouter();
-  // TYPE-EVIDENCE: the props type adds only children and className to a link target. The cast removes those extra fields.
+  const {
+    children,
+    download,
+    hash: _hash,
+    onClick,
+    path: _path,
+    reloadDocument,
+    search: _search,
+    target,
+    to: _to,
+    ...anchorProps
+  } = props;
+  // TYPE-EVIDENCE: href reads only the typed destination fields from LinkProps.
   const to = href(props as LinkTarget<TTo>);
 
   return (
     <a
-      className={props.className}
+      {...anchorProps}
+      download={download}
       href={to}
+      ref={ref}
+      target={target}
       onClick={(event) => {
+        onClick?.(event);
+
         if (
           router.navigation === "server" &&
-          shouldHandleLinkClick(event)
+          !reloadDocument &&
+          shouldHandleLinkClick(event, { download, target, to })
         ) {
           event.preventDefault();
           router.push(to);
         }
       }}
     >
-      {props.children}
+      {children}
     </a>
   );
+}
+
+export function Link<const TTo extends AppHref>(
+  props: LinkProps<TTo> & { ref?: ForwardedRef<HTMLAnchorElement> },
+) {
+  return LinkImplementation(props, props.ref ?? null);
 }
 
 function RouteRenderer({
@@ -452,15 +496,23 @@ async function loadNavigationData(request: Request) {
       throw new Error("Demiurge received malformed navigation route data.");
     }
 
-    return { data: value.data, hasData: true };
+    return {
+      data: value.data,
+      document: value.document,
+      hasData: true,
+    };
   }
 
   if (kind === NAVIGATION_NOT_FOUND_RESPONSE) {
-    return { hasData: true };
+    const value = await readNavigationPayload(response);
+    return {
+      document: value?.document,
+      hasData: true,
+    };
   }
 
   if (kind === NAVIGATION_ERROR_RESPONSE || !response.ok) {
-    const problem = await readProblem(response);
+    const value = await readNavigationPayload(response);
     // TYPE-EVIDENCE: the includes check confirms the status is a member of the error status tuple. The second cast reuses that same narrowing.
     const status = HTTP_ERROR_STATUSES.includes(
       response.status as (typeof HTTP_ERROR_STATUSES)[number],
@@ -468,10 +520,14 @@ async function loadNavigationData(request: Request) {
       ? response.status as (typeof HTTP_ERROR_STATUSES)[number]
       : 500;
 
-    throw httpError(status, {
-      detail: typeof problem?.detail === "string" ? problem.detail : undefined,
-      title: typeof problem?.title === "string" ? problem.title : undefined,
+    const error = httpError(status, {
+      detail: value?.error?.detail,
+      title: value?.error?.title,
     });
+    if (value?.document) {
+      navigationErrorDocuments.set(error, value.document);
+    }
+    throw error;
   }
 
   throw new Error(
@@ -479,10 +535,15 @@ async function loadNavigationData(request: Request) {
   );
 }
 
-async function readProblem(response: Response) {
+const navigationErrorDocuments = new WeakMap<
+  object,
+  InitialRouteData["document"]
+>();
+
+async function readNavigationPayload(response: Response) {
   try {
-    // TYPE-EVIDENCE: the response body is JSON that parses to a plain object. The record type describes any JSON object.
-    return await response.json() as Record<string, unknown>;
+    // TYPE-EVIDENCE: a marked navigation response is serialized by createNavigationDataResponse. The server validates the resolved contribution types before serialization.
+    return await response.json() as Partial<InitialRouteData>;
   } catch {
     return undefined;
   }
@@ -505,13 +566,32 @@ function scrollToHash(hash: string) {
   });
 }
 
-function shouldHandleLinkClick(event: MouseEvent<HTMLAnchorElement>) {
+function shouldHandleLinkClick(
+  event: MouseEvent<HTMLAnchorElement>,
+  options: {
+    download?: AnchorHTMLAttributes<HTMLAnchorElement>["download"];
+    target?: string;
+    to: string;
+  },
+) {
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    options.download !== undefined && options.download !== false ||
+    options.target !== undefined && options.target.toLowerCase() !== "_self"
+  ) {
+    return false;
+  }
+
+  const destination = new URL(options.to, window.location.href);
+
   return (
-    event.button === 0 &&
-    !event.metaKey &&
-    !event.altKey &&
-    !event.ctrlKey &&
-    !event.shiftKey
+    (destination.protocol === "http:" || destination.protocol === "https:") &&
+    destination.origin === window.location.origin
   );
 }
 

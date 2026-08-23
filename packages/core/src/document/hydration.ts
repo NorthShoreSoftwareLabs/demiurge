@@ -1,5 +1,12 @@
+import type { NavigationDocument } from "./navigation";
+
 export type InitialRouteData = {
   data?: unknown;
+  document?: NavigationDocument;
+  error?: {
+    detail?: string;
+    title?: string;
+  };
   hasData: boolean;
   navigation?: "document";
 };

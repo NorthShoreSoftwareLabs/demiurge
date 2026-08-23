@@ -858,19 +858,19 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     expect(response.headers.get("content-type")).toContain("text/html");
     expect(response.body).toContain("<title>Route document | Demo</title>");
     expect(response.body).toContain(
-      '<meta name="description" content="Root document description" />',
+      '<meta data-demiurge-document-contribution name="description" content="Root document description" />',
     );
     expect(response.body).toContain(
-      '<link rel="preconnect" href="https://api.example.com" />',
+      '<link data-demiurge-document-contribution rel="preconnect" href="https://api.example.com" />',
     );
     expect(response.body).toContain(
-      '<link rel="preload" href="/hero.avif" as="image" />',
+      '<link data-demiurge-document-contribution rel="preload" href="/hero.avif" as="image" />',
     );
     expect(response.body).toContain(
-      '<script src="https://cdn.example.com/root.js"></script>',
+      '<script data-demiurge-document-contribution data-demiurge-script-strategy="beforeInteractive" src="https://cdn.example.com/root.js"></script>',
     );
     expect(response.body).toContain(
-      '<script src="https://js.stripe.com/v3/"></script>',
+      '<script data-demiurge-document-contribution data-demiurge-script-strategy="afterInteractive" src="https://js.stripe.com/v3/"></script>',
     );
     expect(response.body).toContain(
       'src="/@id/virtual:demiurge/client-entry"',
@@ -1850,35 +1850,35 @@ describe("Vite plugin document runtime", () => {
 
     expect(html).toContain("<title>Checkout &lt;Secure&gt;</title>");
     expect(html).toContain(
-      '<meta name="description" content="Complete your order." />',
+      '<meta data-demiurge-document-contribution name="description" content="Complete your order." />',
     );
-    expect(html).toContain('<link rel="canonical" href="/checkout" />');
+    expect(html).toContain('<link data-demiurge-document-contribution rel="canonical" href="/checkout" />');
     expect(html).toContain(
-      '<meta name="robots" content="noindex, nofollow" />',
-    );
-    expect(html).toContain(
-      '<meta property="og:title" content="Checkout &lt;Secure&gt;" />',
-    );
-    expect(html).toContain('<meta property="og:image" content="/og.png" />');
-    expect(html).toContain('<meta name="theme-color" content="#fff" />');
-    expect(html).toContain('<link rel="alternate" href="/feed.xml" />');
-    expect(html).toContain(
-      '<script type="application/ld+json" nonce="doc-nonce">{"@context":"https://schema.org","@type":"Article","headline":"Checkout \\u003c/script\\u003e"}</script>',
+      '<meta data-demiurge-document-contribution name="robots" content="noindex, nofollow" />',
     );
     expect(html).toContain(
-      '<link rel="preconnect" href="https://api.example.com" crossorigin="anonymous" />',
+      '<meta data-demiurge-document-contribution property="og:title" content="Checkout &lt;Secure&gt;" />',
+    );
+    expect(html).toContain('<meta data-demiurge-document-contribution property="og:image" content="/og.png" />');
+    expect(html).toContain('<meta data-demiurge-document-contribution name="theme-color" content="#fff" />');
+    expect(html).toContain('<link data-demiurge-document-contribution rel="alternate" href="/feed.xml" />');
+    expect(html).toContain(
+      '<script type="application/ld+json" data-demiurge-document-contribution nonce="doc-nonce">{"@context":"https://schema.org","@type":"Article","headline":"Checkout \\u003c/script\\u003e"}</script>',
     );
     expect(html).toContain(
-      '<link rel="preload" href="/hero.avif" as="image" type="image/avif" />',
+      '<link data-demiurge-document-contribution rel="preconnect" href="https://api.example.com" crossorigin="anonymous" />',
     );
     expect(html).toContain(
-      '<link rel="modulepreload" href="/assets/editor.js" />',
+      '<link data-demiurge-document-contribution rel="preload" href="/hero.avif" as="image" type="image/avif" />',
     );
     expect(html).toContain(
-      '<script src="https://cdn.example.com/app.js" nonce="abc123" integrity="sha384-demo" async></script>',
+      '<link data-demiurge-document-contribution rel="modulepreload" href="/assets/editor.js" />',
     );
     expect(html).toContain(
-      '<script src="/assets/module.js" type="module" nonce="doc-nonce"></script>',
+      '<script data-demiurge-document-contribution data-demiurge-script-strategy="afterInteractive" src="https://cdn.example.com/app.js" nonce="abc123" integrity="sha384-demo" async></script>',
+    );
+    expect(html).toContain(
+      '<script data-demiurge-document-contribution data-demiurge-script-strategy="module" src="/assets/module.js" type="module" nonce="doc-nonce"></script>',
     );
     expect(html).toContain(
       '<script type="module" src="/assets/app.js" nonce="doc-nonce"></script>',
@@ -1901,10 +1901,10 @@ describe("Vite plugin document runtime", () => {
     });
 
     expect(html).toContain(
-      '<script src="https://cdn.example.com/app.js" nonce="doc-nonce"></script>',
+      '<script data-demiurge-document-contribution data-demiurge-script-strategy="afterInteractive" src="https://cdn.example.com/app.js" nonce="doc-nonce"></script>',
     );
     expect(html).toContain(
-      '<script src="https://cdn.example.com/explicit.js" nonce="script-nonce"></script>',
+      '<script data-demiurge-document-contribution data-demiurge-script-strategy="afterInteractive" src="https://cdn.example.com/explicit.js" nonce="script-nonce"></script>',
     );
     expect(html).toContain(
       '<script type="module" src="/assets/app.js" nonce="doc-nonce"></script>',

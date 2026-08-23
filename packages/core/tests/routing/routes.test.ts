@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { href, Link, page, type PathValue, type RouteProps } from "@demiurgejs/core";
+import {
+  href,
+  Link,
+  page,
+  type AppHref,
+  type LinkProps,
+  type PathValue,
+  type RouteProps,
+} from "@demiurgejs/core";
 
 declare module "@demiurgejs/core" {
   interface RoutePathVars {
@@ -101,6 +109,17 @@ describe("typed URL routes", () => {
       };
       void invalidLinkProps;
 
+      const wrapperProps: LinkProps<"/blog/[slug]"> = {
+        "aria-label": "Read the post",
+        "data-analytics": "post-link",
+        onClick: (event) => event.preventDefault(),
+        path: { slug: "hello" },
+        reloadDocument: true,
+        target: "_self",
+        to: "/blog/[slug]",
+      };
+      acceptWrapperProps(wrapperProps);
+
       const routeProps: RouteProps<"/blog/[slug]"> = null as never;
       const slug: string = routeProps.path.slug;
       void slug;
@@ -120,5 +139,11 @@ describe("typed URL routes", () => {
 });
 
 function typecheckOnly(_callback: () => void) {
+  return;
+}
+
+function acceptWrapperProps<const TTo extends AppHref>(
+  _props: LinkProps<TTo>,
+) {
   return;
 }

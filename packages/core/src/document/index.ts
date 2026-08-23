@@ -24,6 +24,12 @@ export {
   structuredData,
 } from "./metadata";
 export {
+  applyNavigationDocument,
+  createNavigationDocument,
+  DOCUMENT_CONTRIBUTION_ATTRIBUTE,
+  DOCUMENT_SCRIPT_STRATEGY_ATTRIBUTE,
+} from "./navigation";
+export {
   renderDocument,
 } from "./render";
 export {
@@ -64,6 +70,10 @@ export type {
   StructuredDataTag,
   StructuredDataValue,
 } from "./metadata";
+export type {
+  NavigationDocument,
+  NavigationScriptTag,
+} from "./navigation";
 export type {
   DocumentBody,
   RenderDocumentOptions,
