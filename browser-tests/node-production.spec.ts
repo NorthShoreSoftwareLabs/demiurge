@@ -34,6 +34,58 @@ test("production SSR hydrates and navigates without a document reload", async ({
   expect(pageErrors).toEqual([]);
 });
 
+test("accessible browser navigation commits status, focus, and hash behavior", async ({
+  page,
+}) => {
+  const response = await page.goto("/");
+  expect(response?.status()).toBe(200);
+
+  const status = page.locator("[data-demiurge-navigation-status]");
+  await expect(status).toHaveAttribute("role", "status");
+  await expect(status).toHaveAttribute("aria-live", "polite");
+  await expect(status).toHaveAttribute("aria-atomic", "true");
+  await expect(status).toHaveText("");
+  await expect(status).not.toHaveAttribute("style");
+  await expect(page.locator("[data-demiurge-navigation-status-style]")).toHaveCount(1);
+
+  await page.evaluate(() => {
+    const status = document.querySelector("[data-demiurge-navigation-status]");
+    let changes = 0;
+    const observer = new MutationObserver((records) => {
+      changes += records.length;
+    });
+    observer.observe(status!, { childList: true, characterData: true, subtree: true });
+    (window as Window & { __demiurgeStatusChanges?: () => number }).__demiurgeStatusChanges =
+      () => changes;
+  });
+
+  await page.getByRole("link", { name: "Test navigation" }).click();
+  await expect(page).toHaveURL("http://localhost:42177/navigation");
+  await expect(status).toHaveText("Navigation | Demiurge Node Server");
+  await expect(page.locator("[data-route-focus-boundary]")).toBeFocused();
+  expect(await page.evaluate(() =>
+    (window as Window & { __demiurgeStatusChanges?: () => number })
+      .__demiurgeStatusChanges?.(),
+  )).toBe(1);
+
+  await page.evaluate(() => {
+    const sentinel = document.createElement("button");
+    sentinel.id = "hash-focus-sentinel";
+    sentinel.textContent = "Focus sentinel";
+    document.body.append(sentinel);
+    sentinel.focus();
+    history.pushState(null, "", "/navigation#results");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await expect(page).toHaveURL("http://localhost:42177/navigation#results");
+  await expect(page.locator("#hash-focus-sentinel")).toBeFocused();
+  await expect(status).toHaveText("Navigation | Demiurge Node Server");
+  expect(await page.evaluate(() =>
+    (window as Window & { __demiurgeStatusChanges?: () => number })
+      .__demiurgeStatusChanges?.(),
+  )).toBe(1);
+});
+
 test("SPA navigation keeps request callbacks server-only across query history", async ({
   page,
 }) => {

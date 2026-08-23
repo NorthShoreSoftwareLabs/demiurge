@@ -214,6 +214,30 @@ The router does not intercept these links:
 - A link to a different origin.
 - A link that uses a non-HTTP scheme.
 
+## Accessible browser navigation
+
+Browser navigation preserves focus by default. The framework announces the
+resolved document title after each ready, not-found, or error commit.
+
+Applications can opt in to route focus with an app-owned boundary:
+
+```tsx
+import { RouteFocusBoundary } from "@demiurgejs/core";
+
+export function Layout({ children }: { children: React.ReactNode }) {
+  return <RouteFocusBoundary as="main">{children}</RouteFocusBoundary>;
+}
+```
+
+The boundary uses `tabIndex={-1}` and accepts an application ref. The first
+mounted boundary is active. A hash-only navigation uses the browser fragment
+target and does not announce or focus the route boundary.
+
+Set `navigationAccessibility.announce` to `false`, `"title"`, or a function
+that returns a complete message. The function receives the destination URL,
+navigation kind, outcome, and resolved title. A null or empty result skips the
+announcement.
+
 An application `onClick` handler runs before the router. If the handler
 prevents the default action, the router does not navigate.
 

@@ -3,18 +3,26 @@ import {
   Component,
   ComponentType,
   ForwardedRef,
+  Fragment,
   MouseEvent,
   ReactNode,
   createContext,
   createElement,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
 import {
+  RouteFocusContext,
+  type RouteFocusBoundaryElement,
+} from "./focus";
+import {
   applyNavigationDocument,
+  announceNavigation as updateNavigationStatus,
+  ensureNavigationStatusRegion,
   HYDRATION_FALLBACK_ATTRIBUTE,
   HYDRATION_ROOT_ATTRIBUTE,
   readInitialRouteData,
@@ -48,12 +56,24 @@ export type NavigationDataLoader = (
   request: Request,
 ) => Promise<InitialRouteData>;
 
+export type NavigationCommit = {
+  url: URL;
+  kind: "push" | "pop";
+  outcome: "ready" | "not-found" | "error";
+  title: string;
+};
+
+export type NavigationAccessibility = {
+  announce?: "title" | false | ((context: NavigationCommit) => string | null);
+};
+
 export type FileRouterOptions = {
   initialMatch?: PendingRouteMatch;
   loadNavigationData?: NavigationDataLoader;
   navigation?: "document" | "server";
   routes: Record<string, RouteImporter>;
   loading?: ComponentType;
+  navigationAccessibility?: NavigationAccessibility;
   notFound?: ComponentType<NotFoundProps>;
 };
 
@@ -63,15 +83,84 @@ export function createFileRouter(options: FileRouterOptions) {
 
   return function FileRouter() {
     const [location, setLocation] = useState(() => getCurrentLocation());
+    const lastLocation = useRef(location);
     const [match, setMatch] = useState<PendingRouteMatch>(
       () => options.initialMatch ?? { status: "loading" },
     );
     const initialMatchPending = useRef(Boolean(options.initialMatch));
     const navigationSequence = useRef(0);
+    const navigationKind = useRef<"push" | "pop">("push");
+    const [pendingCommit, setPendingCommit] = useState<NavigationCommit | null>(null);
+    const [committed, setCommitted] = useState<NavigationCommit | null>(null);
+    const pendingCommitRef = useRef<NavigationCommit | null>(null);
+    pendingCommitRef.current = pendingCommit;
+    const boundaryRegistrations = useRef<{
+      element: RouteFocusBoundaryElement;
+      order: number;
+    }[]>([]);
+    const nextBoundaryOrder = useRef(0);
+    const focusRegistration = useMemo(() => ({
+      register(element: RouteFocusBoundaryElement) {
+        const registration = {
+          element,
+          order: nextBoundaryOrder.current++,
+        };
+        if (
+          boundaryRegistrations.current.length > 0 &&
+          typeof process !== "undefined" &&
+          process.env.NODE_ENV !== "production"
+        ) {
+          console.warn(
+            "Demiurge found more than one RouteFocusBoundary. The first boundary remains active.",
+          );
+        }
+        boundaryRegistrations.current.push(registration);
+
+        return () => {
+          const index = boundaryRegistrations.current.indexOf(registration);
+          if (index !== -1) boundaryRegistrations.current.splice(index, 1);
+        };
+      },
+      focus() {
+        const active = boundaryRegistrations.current
+          .slice()
+          .sort((left, right) => left.order - right.order)[0]?.element;
+        if (!active || !active.isConnected || typeof active.focus !== "function") {
+          return false;
+        }
+
+        try {
+          active.focus({ preventScroll: true });
+        } catch {
+          active.focus();
+        }
+        return true;
+      },
+    }), []);
+
+    useLayoutEffect(() => {
+      if (options.navigation !== "document") {
+        ensureNavigationStatusRegion();
+      }
+      return () => {
+        boundaryRegistrations.current = [];
+      };
+    }, [options.navigation]);
 
     useEffect(() => {
       function onPopState() {
-        setLocation(getCurrentLocation());
+        navigationKind.current = "pop";
+        const next = getCurrentLocation();
+        const previous = lastLocation.current;
+        lastLocation.current = next;
+        if (
+          previous.pathname === next.pathname &&
+          previous.search === next.search &&
+          previous.hash !== next.hash
+        ) {
+          scrollToHash(next.hash);
+        }
+        setLocation(next);
       }
 
       window.addEventListener("popstate", onPopState);
@@ -85,6 +174,9 @@ export function createFileRouter(options: FileRouterOptions) {
       const controller = new AbortController();
       const isCurrent = () =>
         !cancelled && sequence === navigationSequence.current;
+
+      setPendingCommit(null);
+      setCommitted(null);
 
       if (
         initialMatchPending.current &&
@@ -126,6 +218,12 @@ export function createFileRouter(options: FileRouterOptions) {
               applyNavigationDocument(initialData.document);
             }
             setMatch(nextMatch);
+            setPendingCommit({
+              kind: navigationKind.current,
+              outcome: nextMatch.status === "not-found" ? "not-found" : "ready",
+              title: document.title || "Demiurge App",
+              url: new URL(location.href),
+            });
           }
         })
         .catch(async (error: unknown) => {
@@ -153,6 +251,12 @@ export function createFileRouter(options: FileRouterOptions) {
               pathname: location.pathname,
               status: "error",
             });
+            setPendingCommit({
+              kind: navigationKind.current,
+              outcome: "error",
+              title: navigationDocument?.title ?? "Navigation failed",
+              url: new URL(location.href),
+            });
           }
         });
 
@@ -162,6 +266,25 @@ export function createFileRouter(options: FileRouterOptions) {
       };
     }, [location.pathname, location.search]);
 
+    useLayoutEffect(() => {
+      if (!committed || options.navigation === "document") {
+        return;
+      }
+
+      if (committed.url.hash) {
+        scrollToHash(committed.url.hash);
+        return;
+      }
+
+      focusRegistration.focus();
+      announceNavigation(committed, options.navigationAccessibility);
+    }, [
+      committed,
+      focusRegistration,
+      options.navigation,
+      options.navigationAccessibility,
+    ]);
+
     const router = useMemo(
       () => ({
         navigation: options.navigation ?? "server",
@@ -169,6 +292,7 @@ export function createFileRouter(options: FileRouterOptions) {
           const previous = getCurrentLocation();
           window.history.pushState(null, "", to);
           const next = getCurrentLocation();
+          lastLocation.current = next;
           setLocation(next);
 
           if (
@@ -178,6 +302,7 @@ export function createFileRouter(options: FileRouterOptions) {
           ) {
             scrollToHash(next.hash);
           }
+          navigationKind.current = "push";
         },
       }),
       [],
@@ -185,11 +310,23 @@ export function createFileRouter(options: FileRouterOptions) {
 
     return createElement(RouterContext.Provider, {
       value: router,
-      children: createElement(RouteRenderer, {
-        key: `${location.pathname}${location.search}`,
-        Loading: options.loading,
-        NotFound: options.notFound,
-        match,
+    children: createElement(RouteFocusContext.Provider, {
+        value: focusRegistration,
+        children: createElement(RouteRenderer, {
+          key: `${location.pathname}${location.search}`,
+          Loading: options.loading,
+          NotFound: options.notFound,
+          match,
+          pendingCommit,
+          onCommitted: (value) => {
+            if (pendingCommitRef.current === value) setCommitted(value);
+          },
+          onRenderError: () => {
+            setCommitted(pendingCommit
+              ? { ...pendingCommit, outcome: "error", title: "Navigation failed" }
+              : null);
+          },
+        }),
       }),
     });
   };
@@ -374,10 +511,16 @@ function RouteRenderer({
   Loading,
   NotFound,
   match,
+  onRenderError,
+  onCommitted,
+  pendingCommit,
 }: {
   Loading?: ComponentType;
   NotFound?: ComponentType<{ pathname: string }>;
   match: PendingRouteMatch;
+  onCommitted: (value: NavigationCommit) => void;
+  onRenderError: () => void;
+  pendingCommit: NavigationCommit | null;
 }) {
   if (match.status === "loading") {
     const AppLoading = match.loading ?? Loading;
@@ -388,7 +531,7 @@ function RouteRenderer({
   if (match.status === "not-found") {
     const AppNotFound = match.notFound ?? NotFound ?? BuiltInNotFound;
 
-    return match.layouts.reduceRight<ReactNode>(
+    return createElement(Fragment, null, match.layouts.reduceRight<ReactNode>(
       (children, Layout) =>
         createElement(Layout, {
           children,
@@ -396,17 +539,17 @@ function RouteRenderer({
           pathname: match.pathname,
         }),
       createElement(AppNotFound, { pathname: match.pathname }),
-    );
+    ), createElement(NavigationCommitMarker, { commit: pendingCommit, onCommit: onCommitted }));
   }
 
   if (match.status === "error") {
-    return match.Error
+    return createElement(Fragment, null, match.Error
       ? createElement(match.Error, {
           error: match.error,
           pathname: match.pathname,
           status: errorStatus(match.error),
         })
-      : null;
+      : null, createElement(NavigationCommitMarker, { commit: pendingCommit, onCommit: onCommitted }));
   }
 
   const { data, error, page, layouts, path, pathname } = match.match;
@@ -418,15 +561,34 @@ function RouteRenderer({
 
   return createElement(RouteErrorBoundary, {
     Error: error,
-    children: routeElement,
+      children: createElement(Fragment, null, routeElement, createElement(NavigationCommitMarker, { commit: pendingCommit, onCommit: onCommitted })),
+    onError: onRenderError,
     pathname,
   });
+}
+
+function NavigationCommitMarker({
+  commit,
+  onCommit,
+}: {
+  commit: NavigationCommit | null;
+  onCommit: (value: NavigationCommit) => void;
+}) {
+  const signaled = useRef<NavigationCommit | null>(null);
+  useLayoutEffect(() => {
+    if (commit && signaled.current !== commit) {
+      signaled.current = commit;
+      onCommit(commit);
+    }
+  }, [commit, onCommit]);
+  return null;
 }
 
 class RouteErrorBoundary extends Component<
   {
     children: ReactNode;
     Error?: ComponentType<RouteErrorProps>;
+    onError: () => void;
     pathname: string;
   },
   { error?: unknown }
@@ -437,9 +599,14 @@ class RouteErrorBoundary extends Component<
 
   override state: { error?: unknown } = {};
 
+  override componentDidCatch() {
+    this.props.onError();
+  }
+
   override componentDidUpdate(previousProps: {
     children: ReactNode;
     Error?: ComponentType<RouteErrorProps>;
+    onError: () => void;
     pathname: string;
   }) {
     if (
@@ -593,6 +760,29 @@ function shouldHandleLinkClick(
     (destination.protocol === "http:" || destination.protocol === "https:") &&
     destination.origin === window.location.origin
   );
+}
+
+function announceNavigation(
+  commit: NavigationCommit,
+  options: NavigationAccessibility | undefined,
+) {
+  const announce = options?.announce ?? "title";
+  if (announce === false) return;
+
+  let message: string | null;
+  try {
+    message = announce === "title" ? commit.title : announce(commit);
+  } catch {
+    return;
+  }
+
+  if (message) {
+    announceNavigationRegion(message);
+  }
+}
+
+function announceNavigationRegion(message: string) {
+  updateNavigationStatus(message);
 }
 
 type RouterApi = {

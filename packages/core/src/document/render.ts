@@ -21,6 +21,9 @@ import { scriptPlacement, type ScriptTag } from "./scripts";
 import {
   DOCUMENT_CONTRIBUTION_ATTRIBUTE,
   DOCUMENT_SCRIPT_STRATEGY_ATTRIBUTE,
+  NAVIGATION_STATUS_ATTRIBUTE,
+  NAVIGATION_STATUS_ID,
+  NAVIGATION_STATUS_STYLE_ATTRIBUTE,
 } from "./navigation";
 
 export const STRUCTURED_DATA_ATTRIBUTE = "data-demiurge-structured-data";
@@ -86,6 +89,7 @@ export function renderDocumentShell({
 ${renderHeadTags({ links, metadata, nonce, scripts, styles, title: documentTitle })}
   </head>
   <body>
+${body.navigation === "document" ? "" : renderNavigationStatusRegion(nonce)}
 ${renderRootStart(body)}`,
     suffix: `</div>
 ${trailingBodyContent}
@@ -107,6 +111,7 @@ function renderDocumentWithoutBody({
 }: RenderDocumentOptions) {
   const documentTitle = metadata?.title ?? title;
   const bodyContent = [
+    renderNavigationStatusRegion(nonce),
     renderRootElement(),
     ...scripts
       .filter((scriptTag) => scriptTag[scriptPlacement] !== "hoisted")
@@ -124,6 +129,15 @@ ${bodyContent}
   </body>
 </html>
 `;
+}
+
+function renderNavigationStatusRegion(nonce: string | undefined) {
+  return "    <style " + NAVIGATION_STATUS_STYLE_ATTRIBUTE +
+    renderAttribute("nonce", nonce) +
+    ">.demiurge-navigation-status{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0, 0, 0, 0);white-space:nowrap;border:0}</style>\n" +
+    "    <div id=\"" + NAVIGATION_STATUS_ID + "\" " +
+    NAVIGATION_STATUS_ATTRIBUTE +
+    " class=\"demiurge-navigation-status\" role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"></div>";
 }
 
 function renderRootElement(body?: DocumentBody) {

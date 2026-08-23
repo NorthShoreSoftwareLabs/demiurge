@@ -1,5 +1,6 @@
 import {
   Link,
+  RouteFocusBoundary,
   defineLinks,
   defineMetadata,
   fontLinks,
@@ -28,7 +29,7 @@ export default function RootLayout({ children }: LayoutProps) {
           <Link to="/items">Items</Link>
         </nav>
       </header>
-      {children}
+      <RouteFocusBoundary as="div" data-route-focus-boundary="">{children}</RouteFocusBoundary>
     </div>
   );
 }

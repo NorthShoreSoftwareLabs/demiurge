@@ -14,6 +14,43 @@ export const DOCUMENT_CONTRIBUTION_ATTRIBUTE =
   "data-demiurge-document-contribution";
 export const DOCUMENT_SCRIPT_STRATEGY_ATTRIBUTE =
   "data-demiurge-script-strategy";
+export const NAVIGATION_STATUS_ATTRIBUTE = "data-demiurge-navigation-status";
+export const NAVIGATION_STATUS_ID = "__demiurge_navigation_status";
+export const NAVIGATION_STATUS_STYLE_ATTRIBUTE = "data-demiurge-navigation-status-style";
+const NAVIGATION_STATUS_CLASS = "demiurge-navigation-status";
+const NAVIGATION_STATUS_STYLE = `.demiurge-navigation-status{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0, 0, 0, 0);white-space:nowrap;border:0}`;
+
+export function ensureNavigationStatusRegion(target?: Document) {
+  const owner = target ?? (typeof document === "undefined" ? undefined : document);
+  if (!owner || owner.querySelector(`[${NAVIGATION_STATUS_ATTRIBUTE}]`)) {
+    return owner?.querySelector<HTMLElement>(`[${NAVIGATION_STATUS_ATTRIBUTE}]`);
+  }
+
+  const style = owner.createElement("style");
+  style.setAttribute(NAVIGATION_STATUS_STYLE_ATTRIBUTE, "");
+  style.textContent = NAVIGATION_STATUS_STYLE;
+  const nonce = [...owner.scripts].reverse().find((script) => script.nonce)?.nonce;
+  if (nonce) style.nonce = nonce;
+  owner.head.append(style);
+
+  const region = owner.createElement("div");
+  region.id = NAVIGATION_STATUS_ID;
+  region.setAttribute(NAVIGATION_STATUS_ATTRIBUTE, "");
+  region.className = NAVIGATION_STATUS_CLASS;
+  region.setAttribute("role", "status");
+  region.setAttribute("aria-live", "polite");
+  region.setAttribute("aria-atomic", "true");
+  owner.body.prepend(region);
+  return region;
+}
+
+export function announceNavigation(message: string, target?: Document) {
+  const owner = target ?? (typeof document === "undefined" ? undefined : document);
+  const region = owner?.querySelector<HTMLElement>(
+    `[${NAVIGATION_STATUS_ATTRIBUTE}]`,
+  );
+  if (region) region.textContent = message;
+}
 
 export type NavigationScriptTag = Pick<
   ScriptTag,
