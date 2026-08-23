@@ -10,14 +10,14 @@
 
 ---
 
-A route file owns an address, not a page. Its exports declare the available
-operations. These operations include a rendered page, JSON endpoint, redirect,
-or stream. The framework owns the HTML document. One pipeline generates its
-metadata, scripts, preloads, and strict Content-Security-Policy.
+A route file owns an address. Its exports declare pages, API responses,
+redirects, streams, and mutations. The framework uses one document pipeline
+for metadata, scripts, resource hints, and Content Security Policy.
 
-Defaults are the strict option, and relaxing one is a named declaration at the
-route. `csrf: false` is a security audit you can run with `grep`. A config file
-three directories away is not.
+Applications declare security policy beside the routes that use it. Policy
+files cascade through the route tree, and explicit exceptions appear in the
+route audit. This structure keeps effective policy visible without one remote
+configuration file.
 
 ```tsx
 // src/routes/blog/[slug].tsx
@@ -68,7 +68,8 @@ export default function NotFound({ pathname }: NotFoundProps) {
 }
 ```
 
-Run `vite` for development and `vite build` for a browser build.
+Run `vite` for development. Production commands depend on the deployment
+target. The deployment guides provide complete build and start commands.
 
 There is no `index.html` to write. The framework renders the document, injects
 the client entry and stylesheets, and attaches CSP nonces to everything it
@@ -133,11 +134,11 @@ export const policy = {
 };
 ```
 
-The strict preset ships a nonce-based CSP with `'strict-dynamic'`, HSTS,
+The strict preset supplies a nonce-based CSP with `'strict-dynamic'`, HSTS,
 `frame-ancestors 'none'`, `nosniff`, a referrer policy, a permissions policy,
-and same-origin COOP and CORP. Cookie-authenticated unsafe methods get CSRF
-protection whether or not a route asks for it, and `csrf: false` shows up in
-the security audit.
+and same-origin COOP and CORP. The request pipeline protects
+cookie-authenticated unsafe methods against CSRF. An explicit exception appears
+in the route audit.
 
 Strict means the strongest policy that cannot break a user at runtime. A build
 cannot detect a third-party library that assigns a string to `innerHTML` in a
@@ -145,9 +146,11 @@ user browser. Default Trusted Types enforcement could therefore fail production
 sessions. Trusted Types enforcement is a named option. Report-only mode moves
 the directives to `Content-Security-Policy-Report-Only`.
 
-Other security features include typed CORS, rate limits, and request size limits.
-They also include webhook verification, WebSocket origin checks, CSP reports,
-cross-origin isolation, and environment schema validation.
+Other security features include typed CORS, rate limits, request size limits,
+webhook verification, WebSocket origin checks, CSP reports, cross-origin
+isolation, and environment schema validation. See the
+[security guide](./docs/guides/security.md) for the complete policy and audit
+behavior.
 
 Streaming SSR keeps the strict policy. React's flush payloads carry the request
 nonce rather than escaping through an inline-script exception.
@@ -274,8 +277,8 @@ each capability it declares.
 
 ## Examples
 
-Each example is a workspace that installs `@demiurgejs/core` the way a published
-consumer would.
+Each example consumes the built `@demiurgejs/core` package through its public
+exports. These examples are useful starting points:
 
 | Example | Shows |
 | --- | --- |
@@ -306,20 +309,25 @@ Maintainers and contributors can also read the [architecture records](./architec
 
 ## Status
 
-Demiurge 0.1.1 is published. The 0.2.0 prerelease line is published under the
-npm `next` tag. Version 0.2.0 is prepared on `main` and is not published.
-Routing, SSR, streaming, static output, the Vercel build output, the Node
-adapter, the edge adapter, and the document pipeline are implemented and tested.
-The cache, its Redis and KV stores, image optimization, and the security presets
-are also implemented and tested. The repository includes the
-`npm create demiurge` scaffold. React Server Components are not implemented.
-GitHub issues and milestones are the source of truth for delivery status.
+Demiurge is under prerelease development. The latest signed tag is
+`v0.2.0-beta.3`. Changes after that tag are Unreleased. The package metadata
+identifies the current prepared version.
+
+The framework implements routing, SSR, Suspense streaming, static output, Node
+and edge adapters, Vercel static output, and the managed document pipeline. It
+also implements cache stores, image optimization, security policy, and the
+`npm create demiurge` scaffold.
+
+React Server Components and React Server Functions are not implemented. The
+current SSR pipeline supports React `use(promise)` with Suspense. GitHub issues
+and milestones are the only source for planned work and delivery status.
 
 ## Working on the framework
 
-The library lives in `packages/core`. The examples consume it through
-`node_modules`. The normal build tests package exports, emitted declarations,
-and peer dependencies. Examples read the library's `dist`, not its source.
+The published package lives in `packages/core`. The examples consume its built
+output through `node_modules`. Verification checks package exports, emitted
+declarations, peer dependencies, and production behavior. Examples do not
+import framework source files.
 
 ```sh
 pnpm install
