@@ -81,6 +81,12 @@ const servers = [
     name: "cors-api-client",
     url: "http://localhost:42183/",
   },
+  {
+    args: ["--filter", "@demiurge-examples/form-interoperability", "start"],
+    env: { HOST: "localhost", NODE_ENV: "production", PORT: "42186" },
+    name: "form-interoperability",
+    url: "http://localhost:42186/",
+  },
 ];
 
 const bootTimeoutMs = 90_000;
