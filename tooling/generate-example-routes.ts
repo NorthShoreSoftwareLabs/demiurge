@@ -21,6 +21,7 @@ const examples = [
   "cors-api",
   "observability",
   "cloud-run",
+  "form-interoperability",
 ];
 
 for (const example of examples) {

@@ -8,7 +8,7 @@
     "dev": "pnpm --filter @demiurgejs/core build && pnpm generate:routes && pnpm --filter @demiurge-examples/basic-blog dev",
     "dev:lib": "pnpm --filter @demiurgejs/core dev",
     "build": "pnpm --filter @demiurgejs/core build && pnpm generate:routes && pnpm typecheck:consumers && pnpm build:examples",
-    "build:browser-tests": "pnpm --filter @demiurgejs/core build && pnpm --recursive --filter @demiurge-examples/node-server --filter @demiurge-examples/static-export --filter @demiurge-examples/sse-feed --filter @demiurge-examples/conditional-script --filter @demiurge-examples/analytics-csp --filter @demiurge-examples/observability --filter @demiurge-examples/cors-api build",
+    "build:browser-tests": "pnpm --filter @demiurgejs/core build && pnpm --recursive --filter @demiurge-examples/node-server --filter @demiurge-examples/static-export --filter @demiurge-examples/sse-feed --filter @demiurge-examples/conditional-script --filter @demiurge-examples/analytics-csp --filter @demiurge-examples/observability --filter @demiurge-examples/cors-api --filter @demiurge-examples/form-interoperability build",
     "build:examples": "pnpm --recursive --filter \"@demiurge-examples/*\" build",
     "generate:routes": "tsx tooling/generate-example-routes.ts",
     "lint": "eslint . && pnpm lint:writing",
