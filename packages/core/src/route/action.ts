@@ -73,6 +73,7 @@ export type ActionOptions<
   ) => MaybePromise<Response | ResponseCapability<TPath, TValues>>;
   idempotency?: ActionIdempotency<TInput, TPath, TValues>;
   input?: ActionInput<TInput, TPath, TValues>;
+  revalidateRoute?: boolean;
   security?: RouteSecurityPolicy;
   timing?: ServerTimingInput;
 };
@@ -107,7 +108,7 @@ export function action<
         const response = await resolveActionResult(result, context);
         return raw || !isActionProtocolRequest(context.request)
           ? response
-          : await actionProtocolResponse(response);
+          : await actionProtocolResponse(response, options.revalidateRoute === true);
       };
 
       if (!options.idempotency) {
@@ -157,7 +158,7 @@ function actionValidationResponse(
   });
 }
 
-async function actionProtocolResponse(response: Response) {
+async function actionProtocolResponse(response: Response, revalidateRoute: boolean) {
   if (response.status >= 300 && response.status < 400) {
     const location = response.headers.get("location");
     if (!location) return response;
@@ -177,6 +178,7 @@ async function actionProtocolResponse(response: Response) {
   return new Response(JSON.stringify({
     version: 1,
     status: response.ok ? "success" : "failed",
+    ...(revalidateRoute && response.ok ? { revalidate: true } : {}),
     ...(data === undefined ? {} : { data }),
   }), {
     headers: { "content-type": ACTION_RESPONSE_MEDIA_TYPE },

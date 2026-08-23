@@ -174,6 +174,12 @@ export function createFileRouter(options: FileRouterOptions) {
       };
     }, [options.navigation]);
 
+    useEffect(() => () => {
+      for (const controller of submissionControllers.current.values()) controller.abort();
+      submissionControllers.current.clear();
+      submissionStates.current.clear();
+    }, []);
+
     function abortSubmissions() {
       for (const controller of submissionControllers.current.values()) controller.abort();
       submissionControllers.current.clear();
@@ -673,8 +679,8 @@ export function useNavigation<T = unknown>(options?: {
   return useRouter().getActionNavigation(options?.form, options?.submissionKey ?? contextKey) as ActionNavigationState<T>;
 }
 
-export function useFormNavigation<T = unknown>() {
-  return useNavigation<T>();
+export function useFormNavigation<T = unknown>(submissionKey?: string) {
+  return useNavigation<T>({ submissionKey });
 }
 
 function RouteRenderer({
@@ -894,7 +900,7 @@ async function readActionResult(response: Response): Promise<ActionResult | unde
     return undefined;
   }
   try {
-    const value: unknown = await response.json();
+    const value: unknown = await response.clone().json();
     if (!isRecord(value) || value.version !== 1 || typeof value.status !== "string") {
       throw new Error("Demiurge received a malformed versioned action result.");
     }
@@ -926,6 +932,7 @@ function validateActionRedirect(location: string) {
   try {
     const destination = new URL(location, window.location.href);
     if (destination.origin !== window.location.origin) return undefined;
+    if (destination.username || destination.password) return undefined;
     return `${destination.pathname}${destination.search}${destination.hash}`;
   } catch {
     return undefined;

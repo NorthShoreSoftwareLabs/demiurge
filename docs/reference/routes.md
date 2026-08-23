@@ -94,9 +94,9 @@ one status: `success`, `invalid`, `redirect`, or `failed`.
 import { Form, useFormNavigation } from "@demiurgejs/core";
 
 export function SaveForm() {
-  const navigation = useFormNavigation();
+  const navigation = useFormNavigation("profile");
   return (
-    <Form action="/profile" method="post">
+    <Form action="/profile" method="post" submissionKey="profile">
       <button disabled={navigation.state === "submitting"}>Save</button>
     </Form>
   );

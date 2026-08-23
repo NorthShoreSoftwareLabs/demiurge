@@ -63,6 +63,23 @@ describe("action helper", () => {
     });
   });
 
+  it("marks protocol success results for route revalidation", async () => {
+    const capability = action({
+      revalidateRoute: true,
+      handler: () => json({ saved: true }),
+    });
+    const response = await toResponse(capability, createContext(new Request(
+      "https://example.test/posts",
+      { headers: { [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE }, method: "POST" },
+    )));
+    await expect(response.json()).resolves.toMatchObject({
+      version: 1,
+      status: "success",
+      data: { saved: true },
+      revalidate: true,
+    });
+  });
+
   it("returns a stable response for application validation errors", async () => {
     const capability = action({
       input: async () => {

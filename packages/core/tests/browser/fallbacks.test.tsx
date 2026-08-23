@@ -60,11 +60,18 @@ describe("browser router fallbacks", () => {
   });
 
   it("keeps external action forms native", async () => {
-    const fetchSpy = vi.fn();
+    const fetchSpy = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") throw new Error("unexpected action request");
+      return Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } });
+    });
     vi.stubGlobal("fetch", fetchSpy);
-    render(<Form action="https://other.example/save" method="post"><button type="submit">Save</button></Form>);
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(ExternalFormPage) }) },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getByRole("button")).toBeTruthy());
     fireEvent.submit(screen.getByRole("button"));
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(fetchSpy.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
   });
 
   afterEach(() => {
@@ -848,14 +855,18 @@ function HomePage(_props: RouteProps) {
 }
 
 function ActionFormPage() {
-  const navigation = useNavigation();
+  const navigation = useNavigation({ submissionKey: "action-form" });
   return (
-    <Form action="/" method="post" aria-label="action form">
+    <Form action="/" method="post" submissionKey="action-form" aria-label="action form">
       <input name="title" defaultValue="Draft" />
       <button type="submit">Save</button>
       <output>{navigation.state}</output>
     </Form>
   );
+}
+
+function ExternalFormPage() {
+  return <Form action="https://other.example/save" method="post"><button type="submit">Save</button></Form>;
 }
 
 function BlogPage({ pathname }: RouteProps) {
