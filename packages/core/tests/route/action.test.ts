@@ -5,6 +5,7 @@ import {
   ActionValidationError,
   ACTION_REQUEST_HEADER,
   ACTION_REQUEST_VALUE,
+  ACTION_RESPONSE_MEDIA_TYPE,
   createMemoryIdempotencyStore,
   json,
   redirect,
@@ -63,6 +64,21 @@ describe("action helper", () => {
     });
   });
 
+  it("uses replace only for permanent action redirects", async () => {
+    const capability = action({ handler: () => redirect("/posts", 308) });
+    const response = await toResponse(capability, createContext(new Request(
+      "https://example.test/posts",
+      { headers: { [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE }, method: "POST" },
+    )));
+
+    await expect(response.json()).resolves.toEqual({
+      version: 1,
+      status: "redirect",
+      location: "/posts",
+      history: "replace",
+    });
+  });
+
   it("marks protocol success results for route revalidation", async () => {
     const capability = action({
       revalidateRoute: true,
@@ -78,6 +94,42 @@ describe("action helper", () => {
       data: { saved: true },
       revalidate: true,
     });
+  });
+
+  it("keeps cache-tag invalidation separate from browser route revalidation", async () => {
+    const capability = action({
+      revalidate: [{ id: "posts" }],
+      revalidateRoute: true,
+      handler: () => json({ saved: true }),
+    });
+    const response = await toResponse(capability, createContext(new Request(
+      "https://example.test/posts",
+      { headers: { [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE }, method: "POST" },
+    )));
+
+    expect(response.headers.get("x-demiurge-revalidate-tags")).toBe("posts");
+    expect(response.headers.get("content-type")).toBe(ACTION_RESPONSE_MEDIA_TYPE);
+    await expect(response.json()).resolves.toMatchObject({
+      version: 1,
+      status: "success",
+      revalidate: true,
+    });
+  });
+
+  it("keeps a raw response opaque for protocol requests", async () => {
+    const capability = action({
+      handler: () => new Response("raw action response", {
+        headers: { "content-type": "text/plain" },
+        status: 422,
+      }),
+    });
+    const response = await toResponse(capability, createContext(new Request(
+      "https://example.test/posts",
+      { headers: { [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE }, method: "POST" },
+    )));
+
+    expect(response.headers.get("content-type")).toBe("text/plain");
+    await expect(response.text()).resolves.toBe("raw action response");
   });
 
   it("returns a stable response for application validation errors", async () => {

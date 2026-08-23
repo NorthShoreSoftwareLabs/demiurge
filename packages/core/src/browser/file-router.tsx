@@ -82,7 +82,7 @@ export type ActionResult<T = unknown> =
 export type ActionNavigationState<T = unknown> =
   | { state: "idle"; form?: HTMLFormElement; submissionKey?: string; result?: ActionResult<T> }
   | { state: "submitting"; form: HTMLFormElement; submissionKey?: string; formData: FormData }
-  | { state: "loading"; form: HTMLFormElement; submissionKey?: string; formData: FormData }
+  | { state: "loading"; form: HTMLFormElement; submissionKey?: string; formData: FormData; result?: Extract<ActionResult<T>, { status: "success" }> }
   | { state: "invalid"; form: HTMLFormElement; submissionKey?: string; formData: FormData; result: Extract<ActionResult<T>, { status: "invalid" }> }
   | { state: "error"; form: HTMLFormElement; submissionKey?: string; formData: FormData; response?: Response };
 
@@ -180,9 +180,24 @@ export function createFileRouter(options: FileRouterOptions) {
       submissionStates.current.clear();
     }, []);
 
-    function abortSubmissions() {
-      for (const controller of submissionControllers.current.values()) controller.abort();
-      submissionControllers.current.clear();
+    function abortSubmissions(except?: AbortController) {
+      let changed = false;
+      for (const [key, controller] of submissionControllers.current) {
+        if (controller === except) continue;
+        controller.abort();
+        submissionControllers.current.delete(key);
+        const state = submissionStates.current.get(key);
+        if (state?.state === "submitting" || state?.state === "loading") {
+          submissionStates.current.set(key, {
+            state: "idle",
+            form: state.form,
+            submissionKey: state.submissionKey,
+            ...(state.state === "loading" && state.result ? { result: state.result } : {}),
+          });
+        }
+        changed = true;
+      }
+      if (changed) setSubmissionVersion((value) => value + 1);
     }
 
     useEffect(() => {
@@ -263,6 +278,7 @@ export function createFileRouter(options: FileRouterOptions) {
                   state: "idle",
                   form: state.form,
                   submissionKey: state.submissionKey,
+                  result: state.result,
                 });
               }
             }
@@ -339,6 +355,17 @@ export function createFileRouter(options: FileRouterOptions) {
       setSubmissionVersion((value) => value + 1);
     }
 
+    function releaseActionNavigation(form: HTMLFormElement, submissionKey?: string) {
+      const key = actionSubmissionKey(form, submissionKey);
+      const state = submissionStates.current.get(key);
+      if (state?.form !== form) return;
+      if (state.state === "loading" && state.result) return;
+      submissionControllers.current.get(key)?.abort();
+      submissionControllers.current.delete(key);
+      submissionStates.current.delete(key);
+      setSubmissionVersion((value) => value + 1);
+    }
+
     const router = useMemo(
       () => ({
         navigation: options.navigation ?? "server",
@@ -351,6 +378,7 @@ export function createFileRouter(options: FileRouterOptions) {
             submissionKey,
           };
         },
+        releaseActionNavigation,
         push(to: string) {
           abortSubmissions();
           const previous = getCurrentLocation();
@@ -377,14 +405,17 @@ export function createFileRouter(options: FileRouterOptions) {
           const controller = new AbortController();
           submissionControllers.current.set(key, controller);
           const formData = request.formData;
+          const isCurrent = () =>
+            !controller.signal.aborted && submissionControllers.current.get(key) === controller;
           setSubmissionState(key, {
             state: "submitting",
             form,
             submissionKey,
             formData,
           });
+          let response: Response | undefined;
           try {
-            const response = await fetch(request.url, {
+            response = await fetch(request.url, {
               body: request.body,
               credentials: "same-origin",
               headers: {
@@ -396,8 +427,9 @@ export function createFileRouter(options: FileRouterOptions) {
               redirect: "manual",
               signal: controller.signal,
             });
-            if (controller.signal.aborted) return;
+            if (!isCurrent()) return;
             const result = await readActionResult(response);
+            if (!isCurrent()) return;
             if (result?.status === "invalid") {
               setSubmissionState(key, { state: "invalid", form, submissionKey, formData, result });
               return;
@@ -408,6 +440,7 @@ export function createFileRouter(options: FileRouterOptions) {
                 setSubmissionState(key, { state: "error", form, submissionKey, formData, response });
                 return;
               }
+              abortSubmissions(controller);
               setSubmissionState(key, { state: "loading", form, submissionKey, formData });
               if (result.history === "replace") window.history.replaceState(null, "", destination);
               else window.history.pushState(null, "", destination);
@@ -421,14 +454,14 @@ export function createFileRouter(options: FileRouterOptions) {
               return;
             }
             if (result?.status === "success" && result.revalidate) {
-              setSubmissionState(key, { state: "loading", form, submissionKey, formData });
+              setSubmissionState(key, { state: "loading", form, submissionKey, formData, result });
               setRouteRefresh((value) => value + 1);
             } else {
               setSubmissionState(key, { state: "idle", form, submissionKey, result });
             }
           } catch {
-            if (!controller.signal.aborted) {
-              setSubmissionState(key, { state: "error", form, submissionKey, formData });
+            if (isCurrent()) {
+              setSubmissionState(key, { state: "error", form, submissionKey, formData, response });
             }
           } finally {
             if (submissionControllers.current.get(key) === controller) {
@@ -643,8 +676,18 @@ const ActionFormContext = createContext<string | undefined>(undefined);
 
 export function Form(props: FormProps) {
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const generatedKey = useId();
   const formKey = props.submissionKey ?? generatedKey;
+  const formRef = useRef<HTMLFormElement | null>(null);
+
+  useLayoutEffect(() => () => {
+    if (formRef.current) {
+      routerRef.current.releaseActionNavigation(formRef.current, formKey);
+    }
+  }, [formKey]);
+
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     // TYPE-EVIDENCE: React form props expose the same submit event handler shape at runtime.
     const applicationHandler = props.onSubmit as
@@ -666,7 +709,16 @@ export function Form(props: FormProps) {
   const { submissionKey: _submissionKey, ...formProps } = props;
   return createElement(
     ActionFormContext.Provider,
-    { value: formKey, children: createElement("form", { ...formProps, onSubmit }) },
+    {
+      value: formKey,
+      children: createElement("form", {
+        ...formProps,
+        onSubmit,
+        ref: (element: HTMLFormElement | null) => {
+          formRef.current = element;
+        },
+      }),
+    },
   );
 }
 
@@ -894,10 +946,17 @@ async function readNavigationPayload(response: Response) {
 }
 
 async function readActionResult(response: Response): Promise<ActionResult | undefined> {
-  const mediaType = response.headers.get("content-type")?.toLowerCase() ?? "";
-  if (!mediaType.startsWith(ACTION_RESPONSE_MEDIA_TYPE.split(";")[0]) ||
-      !mediaType.includes("v=1")) {
+  const mediaType = response.headers.get("content-type");
+  if (!mediaType) {
     return undefined;
+  }
+  const [type, ...parameters] = mediaType
+    .split(";")
+    .map((value) => value.trim().toLowerCase());
+  const actionType = ACTION_RESPONSE_MEDIA_TYPE.split(";")[0];
+  if (type !== actionType) return undefined;
+  if (parameters.length !== 1 || parameters[0] !== "v=1") {
+    throw new Error("Demiurge received a malformed versioned action result.");
   }
   try {
     const value: unknown = await response.clone().json();
@@ -931,6 +990,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function validateActionRedirect(location: string) {
   try {
     const destination = new URL(location, window.location.href);
+    if (destination.protocol !== window.location.protocol) return undefined;
     if (destination.origin !== window.location.origin) return undefined;
     if (destination.username || destination.password) return undefined;
     return `${destination.pathname}${destination.search}${destination.hash}`;
@@ -954,30 +1014,26 @@ const formIds = new WeakMap<HTMLFormElement, string>();
 let nextFormId = 1;
 
 function canInterceptAction(form: HTMLFormElement, submitter: HTMLElement | null) {
-  const method = (submitter?.getAttribute("formmethod") || form.method || "get").toUpperCase();
+  const options = actionFormOptions(form, submitter);
+  if (!options) return false;
+  const { action, enctype, method, target } = options;
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return false;
-  const target = submitter?.getAttribute("formtarget") || form.target;
   if (target && target.toLowerCase() !== "_self") return false;
-  const action = submitter?.getAttribute("formaction") || form.action || window.location.href;
   try {
     const url = new URL(action, window.location.href);
     if (url.origin !== window.location.origin) return false;
   } catch {
     return false;
   }
-  const enctype = submitter?.getAttribute("formenctype") || form.enctype || "application/x-www-form-urlencoded";
   return ["application/x-www-form-urlencoded", "multipart/form-data", "text/plain"].includes(enctype);
 }
 
 function createActionRequest(form: HTMLFormElement, submitter: HTMLElement | null) {
   if (!canInterceptAction(form, submitter)) return undefined;
-  const method = (submitter?.getAttribute("formmethod") || form.method || "get").toUpperCase();
-  const action = submitter?.getAttribute("formaction") || form.action || window.location.href;
-  const enctype = submitter?.getAttribute("formenctype") || form.enctype || "application/x-www-form-urlencoded";
-  const formData = new FormData(form);
-  if (submitter && submitter.getAttribute("name")) {
-    formData.append(submitter.getAttribute("name")!, submitter.getAttribute("value") ?? "");
-  }
+  const { action, enctype, method } = actionFormOptions(form, submitter)!;
+  const formData = submitter
+    ? new FormData(form, submitter)
+    : new FormData(form);
   if (enctype === "multipart/form-data") {
     return { body: formData, contentType: undefined, formData, method, url: action };
   }
@@ -1000,12 +1056,41 @@ function createActionRequest(form: HTMLFormElement, submitter: HTMLElement | nul
     lines.push(`${name}=${typeof value === "string" ? value : value.name}`);
   }
   return {
-    body: lines.join("\r\n"),
+    body: `${lines.join("\r\n")}\r\n`,
     contentType: "text/plain;charset=UTF-8",
     formData,
     method,
     url: action,
   };
+}
+
+function actionFormOptions(form: HTMLFormElement, submitter: HTMLElement | null) {
+  if (!isSupportedActionSubmitter(submitter)) return undefined;
+  const button = submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement
+    ? submitter
+    : undefined;
+  return {
+    action: (actionSubmitterAttribute(button, "formaction") ?? form.action) || window.location.href,
+    enctype: ((actionSubmitterAttribute(button, "formenctype") ?? form.enctype) || "application/x-www-form-urlencoded").toLowerCase(),
+    method: ((actionSubmitterAttribute(button, "formmethod") ?? form.method) || "get").toUpperCase(),
+    target: actionSubmitterAttribute(button, "formtarget") ?? form.target,
+  };
+}
+
+function actionSubmitterAttribute(
+  submitter: HTMLButtonElement | HTMLInputElement | undefined,
+  name: "formaction" | "formenctype" | "formmethod" | "formtarget",
+) {
+  return submitter?.hasAttribute(name) ? submitter.getAttribute(name) ?? "" : undefined;
+}
+
+function isSupportedActionSubmitter(submitter: HTMLElement | null) {
+  if (!submitter) return true;
+  if (submitter instanceof HTMLButtonElement) {
+    return !submitter.disabled && submitter.type === "submit";
+  }
+  return submitter instanceof HTMLInputElement &&
+    !submitter.disabled && submitter.type === "submit";
 }
 
 function scrollToHash(hash: string) {
@@ -1082,6 +1167,7 @@ type RouterApi = {
   submissionVersion: number;
   push(to: string): void;
   getActionNavigation(form?: HTMLFormElement, submissionKey?: string): ActionNavigationState;
+  releaseActionNavigation(form: HTMLFormElement, submissionKey?: string): void;
   submitAction(form: HTMLFormElement, submitter: HTMLElement | null, submissionKey?: string): Promise<void>;
 };
 
@@ -1094,6 +1180,7 @@ const RouterContext = createContext<RouterApi>({
   getActionNavigation() {
     return { state: "idle" };
   },
+  releaseActionNavigation() {},
   async submitAction(form) {
     form.submit();
   },

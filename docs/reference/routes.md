@@ -90,6 +90,9 @@ The router sends `X-Demiurge-Action: data;v=1` and accepts
 `application/vnd.demiurge.action+json;v=1`. A typed result has `version: 1` and
 one status: `success`, `invalid`, `redirect`, or `failed`.
 
+The action helper gives each redirect an explicit history operation. It uses
+`replace` for `301` and `308`. It uses `push` for `302`, `303`, and `307`.
+
 ```tsx
 import { Form, useFormNavigation } from "@demiurgejs/core";
 
@@ -107,8 +110,8 @@ export function SaveForm() {
 form or `submissionKey` for another scope. The router preserves submitter
 values and submitter overrides for action, method, target, and encoding. The
 router sends URL-encoded, multipart, or plain-text bodies that match the form.
-Route revalidation uses the typed `revalidate` result. Cache-tag invalidation
-remains a separate server action concern.
+Set `revalidateRoute` to `true` to refresh the current route after success.
+Use `revalidate` to invalidate cache tags. The two operations are separate.
 
 #### React action state
 

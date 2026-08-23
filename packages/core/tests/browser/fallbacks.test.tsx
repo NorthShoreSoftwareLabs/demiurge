@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createFileRouter,
@@ -11,6 +12,7 @@ import {
   Link,
   page,
   RouteFocusBoundary,
+  useFormNavigation,
   useRouteFocusBoundary,
   useNavigation,
   resolveMetadata,
@@ -241,8 +243,140 @@ describe("browser router fallbacks", () => {
     await waitFor(() => expect(calls).toHaveLength(2));
     expect(calls[0]?.body).toBeInstanceOf(FormData);
     expect(new Headers(calls[0]?.headers).has("content-type")).toBe(false);
-    expect(calls[1]?.body).toBe("title=Draft");
+    expect(calls[1]?.body).toBe("title=Draft\r\n");
     expect(new Headers(calls[1]?.headers).get("content-type")).toBe("text/plain;charset=UTF-8");
+  });
+
+  it("reads context state and retains success data after route revalidation", async () => {
+    const refresh = deferred<{ hasData: true }>();
+    let loads = 0;
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return new Response(JSON.stringify({
+          data: { saved: "refreshed" },
+          revalidate: true,
+          status: "success",
+          version: 1,
+        }), { headers: { "content-type": "application/vnd.demiurge.action+json;v=1" } });
+      }
+      return Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } });
+    }));
+    const Router = createFileRouter({
+      loadNavigationData: async () => ++loads === 1 ? { hasData: true } : await refresh.promise,
+      routes: { "./routes/index.tsx": routeModule({ GET: page(RefreshActionFormPage) }) },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeTruthy());
+    fireEvent.submit(screen.getByRole("button", { name: "Save" }).closest("form")!);
+    await waitFor(() => expect(screen.getByLabelText("context state").textContent).toBe("loading"));
+    refresh.resolve({ hasData: true });
+    await waitFor(() => expect(screen.getByLabelText("action result").textContent).toBe("refreshed"));
+  });
+
+  it("aborts and clears a keyed Form when the component unmounts", async () => {
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        signal = init.signal ?? undefined;
+        return await new Promise<Response>(() => undefined);
+      }
+      return Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } });
+    }));
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(UnmountActionFormPage) }) },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeTruthy());
+    fireEvent.submit(screen.getByRole("button", { name: "Save" }).closest("form")!);
+    await waitFor(() => expect(screen.getByLabelText("unmount state").textContent).toBe("submitting"));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(screen.getByLabelText("unmount state").textContent).toBe("idle"));
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it("preserves submitter action, method, plain-text encoding, and value", async () => {
+    const calls: [RequestInfo | URL, RequestInit | undefined][] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push([input, init]);
+      if (init?.method === "PATCH") return actionResponse({ status: "success", version: 1 });
+      return Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } });
+    }));
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(SubmitterActionFormPage) }) },
+    });
+    render(<Router />);
+    const publish = await screen.findByRole("button", { name: "Publish" });
+    const submit = new Event("submit", { bubbles: true, cancelable: true });
+    Object.defineProperty(submit, "submitter", { value: publish });
+    fireEvent((publish as HTMLButtonElement).form!, submit);
+    await waitFor(() => expect(calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
+    const [url, action] = calls.find(([, init]) => init?.method === "PATCH")!;
+    expect(String(url)).toContain("/publish");
+    expect(new Headers(action?.headers).get("content-type")).toContain("text/plain");
+    expect(action?.body).toBe("title=Draft\r\nintent=publish\r\n");
+  });
+
+  it("rejects malformed and credentialed protocol redirects", async () => {
+    const responses = [
+      new Response("malformed", { headers: { "content-type": "application/vnd.demiurge.action+json;v=2" } }),
+      actionResponse({ history: "replace", location: "http://user@localhost/credentialed", status: "redirect", version: 1 }),
+    ];
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === "POST"
+        ? responses.shift()!
+        : Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } }),
+    ));
+    const replace = vi.spyOn(window.history, "replaceState");
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(ProtocolActionFormPage) }) },
+    });
+    render(<Router />);
+    const form = (await screen.findByRole("button", { name: "Save" })).closest("form")!;
+    fireEvent.submit(form);
+    await waitFor(() => expect(screen.getByLabelText("protocol state").textContent).toBe("error"));
+    fireEvent.submit(form);
+    await waitFor(() => expect(screen.getByLabelText("protocol state").textContent).toBe("error"));
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("ignores a replaced submission after the current key succeeds", async () => {
+    const actions: ((response: Response) => void)[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") return await new Promise<Response>((resolve) => actions.push(resolve));
+      return Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } });
+    }));
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(ReplaceActionFormPage) }) },
+    });
+    render(<Router />);
+    const form = (await screen.findByRole("button", { name: "Save" })).closest("form")!;
+    fireEvent.submit(form);
+    await waitFor(() => expect(actions).toHaveLength(1));
+    fireEvent.submit(form);
+    await waitFor(() => expect(actions).toHaveLength(2));
+    actions[1](actionResponse({ data: { saved: "current" }, status: "success", version: 1 }));
+    await waitFor(() => expect(screen.getByLabelText("replace result").textContent).toBe("current"));
+    actions[0](actionResponse({ data: { issues: [] }, status: "invalid", version: 1 }, 400));
+    await waitFor(() => expect(screen.getByLabelText("replace result").textContent).toBe("current"));
+  });
+
+  it("leaves targeted, disabled, and image submissions native", async () => {
+    const fetchSpy = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") throw new Error("unexpected action request");
+      return Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(NativeActionFormsPage) }) },
+    });
+    render(<Router />);
+    const targeted = await screen.findByRole("button", { name: "Targeted" });
+    const targetSubmit = new Event("submit", { bubbles: true, cancelable: true });
+    Object.defineProperty(targetSubmit, "submitter", { value: targeted });
+    fireEvent((targeted as HTMLButtonElement).form!, targetSubmit);
+    fireEvent.click(screen.getByRole("button", { name: "Image" }));
+    fireEvent.click(screen.getByRole("button", { name: "Disabled" }));
+    expect(fetchSpy.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
   });
 
   afterEach(() => {
@@ -1034,6 +1168,95 @@ function ActionFormPage() {
       <output>{navigation.state}</output>
     </Form>
   );
+}
+
+function RefreshActionFormPage() {
+  const navigation = useFormNavigation<{ saved: string }>("refresh-action");
+  return (
+    <>
+      <Form action="/save" method="post" submissionKey="refresh-action">
+        <RefreshActionFormState />
+        <button type="submit">Save</button>
+      </Form>
+      <output aria-label="action result">
+        {navigation.state === "idle" && navigation.result?.status === "success"
+          ? navigation.result.data?.saved
+          : ""}
+      </output>
+    </>
+  );
+}
+
+function RefreshActionFormState() {
+  const navigation = useFormNavigation();
+  return <output aria-label="context state">{navigation.state}</output>;
+}
+
+function UnmountActionFormPage() {
+  const [visible, setVisible] = useState(true);
+  const navigation = useFormNavigation("unmount-action");
+  return (
+    <>
+      {visible ? (
+        <Form action="/save" method="post" submissionKey="unmount-action">
+          <button type="submit">Save</button>
+        </Form>
+      ) : null}
+      <button onClick={() => setVisible(false)} type="button">Remove</button>
+      <output aria-label="unmount state">{navigation.state}</output>
+    </>
+  );
+}
+
+function SubmitterActionFormPage() {
+  return (
+    <Form action="/draft" method="post">
+      <input name="title" defaultValue="Draft" />
+      <button formAction="/publish" formEncType="text/plain" formMethod="patch" name="intent" type="submit" value="publish">
+        Publish
+      </button>
+    </Form>
+  );
+}
+
+function ProtocolActionFormPage() {
+  return <Form action="/save" method="post"><ProtocolActionFormState /><button type="submit">Save</button></Form>;
+}
+
+function ProtocolActionFormState() {
+  const navigation = useFormNavigation();
+  return <output aria-label="protocol state">{navigation.state}</output>;
+}
+
+function ReplaceActionFormPage() {
+  const navigation = useFormNavigation<{ saved: string }>("replace-action");
+  return (
+    <>
+      <Form action="/save" method="post" submissionKey="replace-action"><button type="submit">Save</button></Form>
+      <output aria-label="replace result">
+        {navigation.state === "idle" && navigation.result?.status === "success"
+          ? navigation.result.data?.saved
+          : ""}
+      </output>
+    </>
+  );
+}
+
+function NativeActionFormsPage() {
+  return (
+    <>
+      <Form action="/target" method="post"><button formTarget="_blank" type="submit">Targeted</button></Form>
+      <Form action="/image" method="post"><input alt="Image" src="/image.png" type="image" /></Form>
+      <Form action="/disabled" method="post"><button disabled type="submit">Disabled</button></Form>
+    </>
+  );
+}
+
+function actionResponse(value: object, status = 200) {
+  return new Response(JSON.stringify(value), {
+    headers: { "content-type": "application/vnd.demiurge.action+json;v=1" },
+    status,
+  });
 }
 
 function ExternalFormPage() {
