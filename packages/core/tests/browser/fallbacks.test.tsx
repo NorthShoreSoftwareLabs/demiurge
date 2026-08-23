@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createFileRouter,
+  Form,
   defineLinks,
   defineScripts,
   httpError,
@@ -11,6 +12,7 @@ import {
   page,
   RouteFocusBoundary,
   useRouteFocusBoundary,
+  useNavigation,
   resolveMetadata,
   type LayoutProps,
   type LinkProps,
@@ -27,6 +29,220 @@ describe("browser router fallbacks", () => {
         { hasData: true },
         { headers: { "x-demiurge-navigation": "data" } },
       )));
+  });
+
+  it("submits an explicit Form with a versioned action request", async () => {
+    const calls: RequestInit[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init) calls.push(init);
+      if (init?.method === "POST") {
+        return new Response(JSON.stringify({ version: 1, status: "success" }), {
+          headers: { "content-type": "application/vnd.demiurge.action+json;v=1" },
+        });
+      }
+      return Response.json(
+        { hasData: true },
+        { headers: { "x-demiurge-navigation": "data" } },
+      );
+    }));
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }) },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getByRole("button")).toBeTruthy());
+    fireEvent.submit(screen.getByRole("form"));
+    await waitFor(() => expect(calls.some((init) => init.method === "POST")).toBe(true));
+    const action = calls.find((init) => init.method === "POST");
+    expect(new Headers(action?.headers).get("x-demiurge-action")).toBe("data;v=1");
+    expect(new Headers(action?.headers).get("content-type")).toContain("application/x-www-form-urlencoded");
+    expect(String(action?.body)).toContain("title=Draft");
+    await waitFor(() => expect(screen.getByText("idle")).toBeTruthy());
+  });
+
+  it("keeps external action forms native", async () => {
+    const fetchSpy = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") throw new Error("unexpected action request");
+      return Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } });
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(ExternalFormPage) }) },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getByRole("button")).toBeTruthy());
+    fireEvent.submit(screen.getByRole("button"));
+    expect(fetchSpy.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it.each([
+    ["invalid", { version: 1, status: "invalid", data: { issues: [] } }, "invalid"],
+    ["failed", { version: 1, status: "failed", message: "Save failed" }, "error"],
+  ])("reports a %s action result", async (_name, result, expectedState) => {
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === "POST"
+        ? new Response(JSON.stringify(result), {
+            headers: { "content-type": "application/vnd.demiurge.action+json;v=1" },
+            status: result.status === "failed" ? 500 : 400,
+          })
+        : Response.json(
+            { hasData: true },
+            { headers: { "x-demiurge-navigation": "data" } },
+          ),
+    ));
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }) },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getByRole("form")).toBeTruthy());
+    fireEvent.submit(screen.getByRole("form"));
+    await waitFor(() => expect(screen.getByText(expectedState)).toBeTruthy());
+  });
+
+  it.each(["push", "replace"] as const)("follows a valid %s action redirect", async (history) => {
+    const historySpy = vi.spyOn(window.history, history === "push" ? "pushState" : "replaceState");
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === "POST"
+        ? new Response(JSON.stringify({
+            version: 1,
+            status: "redirect",
+            location: "/saved?from=action#result",
+            history,
+          }), { headers: { "content-type": "application/vnd.demiurge.action+json;v=1" } })
+        : Response.json(
+            { hasData: true },
+            { headers: { "x-demiurge-navigation": "data" } },
+          ),
+    ));
+    const Router = createFileRouter({
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }),
+        "./routes/saved.tsx": routeModule({ GET: page(ActionFormPage) }),
+      },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getByRole("form")).toBeTruthy());
+    fireEvent.submit(screen.getByRole("form"));
+    await waitFor(() => expect(window.location.pathname).toBe("/saved"));
+    expect(historySpy).toHaveBeenCalledWith(null, "", "/saved?from=action#result");
+    await waitFor(() => expect(screen.getByText("idle")).toBeTruthy());
+  });
+
+  it("rejects an external action redirect", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === "POST"
+        ? new Response(JSON.stringify({
+            version: 1,
+            status: "redirect",
+            location: "https://other.example/saved",
+            history: "push",
+          }), { headers: { "content-type": "application/vnd.demiurge.action+json;v=1" } })
+        : Response.json(
+            { hasData: true },
+            { headers: { "x-demiurge-navigation": "data" } },
+          ),
+    ));
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }) },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getByRole("form")).toBeTruthy());
+    fireEvent.submit(screen.getByRole("form"));
+    await waitFor(() => expect(screen.getByText("error")).toBeTruthy());
+    expect(window.location.pathname).toBe("/");
+  });
+
+  it("revalidates the route after a successful action", async () => {
+    let navigationLoads = 0;
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return new Response(JSON.stringify({
+          version: 1,
+          status: "success",
+          revalidate: true,
+        }), { headers: { "content-type": "application/vnd.demiurge.action+json;v=1" } });
+      }
+      navigationLoads += 1;
+      return Response.json(
+        { hasData: true },
+        { headers: { "x-demiurge-navigation": "data" } },
+      );
+    }));
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }) },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getByRole("form")).toBeTruthy());
+    const before = navigationLoads;
+    fireEvent.submit(screen.getByRole("form"));
+    await waitFor(() => expect(navigationLoads).toBeGreaterThan(before));
+    await waitFor(() => expect(screen.getByText("idle")).toBeTruthy());
+  });
+
+  it("reports a failed action request", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") throw new Error("network unavailable");
+      return Response.json(
+        { hasData: true },
+        { headers: { "x-demiurge-navigation": "data" } },
+      );
+    }));
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }) },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getByRole("form")).toBeTruthy());
+    fireEvent.submit(screen.getByRole("form"));
+    await waitFor(() => expect(screen.getByText("error")).toBeTruthy());
+  });
+
+  it.each([
+    ["an unmarked response", { status: "success", version: 1 }, "application/json", "idle"],
+    ["a malformed response", { status: "success", version: 1, revalidate: "yes" }, "application/vnd.demiurge.action+json;v=1", "error"],
+    ["a non-revalidating success", { status: "success", version: 1, revalidate: false }, "application/vnd.demiurge.action+json;v=1", "idle"],
+  ])("handles %s", async (_name, result, contentType, expectedState) => {
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === "POST"
+        ? new Response(JSON.stringify(result), { headers: { "content-type": contentType } })
+        : Response.json(
+            { hasData: true },
+            { headers: { "x-demiurge-navigation": "data" } },
+          ),
+    ));
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }) },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getByRole("form")).toBeTruthy());
+    fireEvent.submit(screen.getByRole("form"));
+    await waitFor(() => expect(screen.getByText(expectedState)).toBeTruthy());
+  });
+
+  it("serializes multipart and plain-text action forms", async () => {
+    const calls: RequestInit[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        calls.push(init);
+        return new Response(JSON.stringify({ version: 1, status: "success" }), {
+          headers: { "content-type": "application/vnd.demiurge.action+json;v=1" },
+        });
+      }
+      return Response.json(
+        { hasData: true },
+        { headers: { "x-demiurge-navigation": "data" } },
+      );
+    }));
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(EncodingFormsPage) }) },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getAllByRole("form")).toHaveLength(2));
+    fireEvent.submit(screen.getByRole("form", { name: "multipart action" }));
+    fireEvent.submit(screen.getByRole("form", { name: "text action" }));
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[0]?.body).toBeInstanceOf(FormData);
+    expect(new Headers(calls[0]?.headers).has("content-type")).toBe(false);
+    expect(calls[1]?.body).toBe("title=Draft");
+    expect(new Headers(calls[1]?.headers).get("content-type")).toBe("text/plain;charset=UTF-8");
   });
 
   afterEach(() => {
@@ -805,6 +1021,34 @@ function HomePage(_props: RouteProps) {
     <>
       <h1>Home</h1>
       <Link to="/blog">Blog</Link>
+    </>
+  );
+}
+
+function ActionFormPage() {
+  const navigation = useNavigation({ submissionKey: "action-form" });
+  return (
+    <Form action="/" method="post" submissionKey="action-form" aria-label="action form">
+      <input name="title" defaultValue="Draft" />
+      <button type="submit">Save</button>
+      <output>{navigation.state}</output>
+    </Form>
+  );
+}
+
+function ExternalFormPage() {
+  return <Form action="https://other.example/save" method="post"><button type="submit">Save</button></Form>;
+}
+
+function EncodingFormsPage() {
+  return (
+    <>
+      <Form action="/" method="post" encType="multipart/form-data" aria-label="multipart action">
+        <input name="title" defaultValue="Draft" />
+      </Form>
+      <Form action="/" method="post" encType="text/plain" aria-label="text action">
+        <input name="title" defaultValue="Draft" />
+      </Form>
     </>
   );
 }

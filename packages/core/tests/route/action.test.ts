@@ -3,6 +3,8 @@ import {
   action,
   actionInput,
   ActionValidationError,
+  ACTION_REQUEST_HEADER,
+  ACTION_REQUEST_VALUE,
   createMemoryIdempotencyStore,
   json,
   redirect,
@@ -24,6 +26,60 @@ function createContext(request: Request): HttpRouteContext {
 }
 
 describe("action helper", () => {
+  it("returns a versioned invalid result for protocol requests", async () => {
+    const capability = action({
+      input: async () => {
+        throw new ActionValidationError([{
+          code: "required",
+          message: "Title is required",
+          path: ["title"],
+        }]);
+      },
+      handler: () => new Response("unreachable"),
+    });
+    const response = await toResponse(capability, createContext(new Request(
+      "https://example.test/posts",
+      { headers: { [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE }, method: "POST" },
+    )));
+    expect(response.headers.get("content-type")).toContain("v=1");
+    await expect(response.json()).resolves.toMatchObject({
+      version: 1,
+      status: "invalid",
+    });
+  });
+
+  it("returns a versioned redirect for protocol requests", async () => {
+    const capability = action({ handler: () => redirect("/posts", 303) });
+    const response = await toResponse(capability, createContext(new Request(
+      "https://example.test/posts",
+      { headers: { [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE }, method: "POST" },
+    )));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      version: 1,
+      status: "redirect",
+      location: "/posts",
+      history: "push",
+    });
+  });
+
+  it("marks protocol success results for route revalidation", async () => {
+    const capability = action({
+      revalidateRoute: true,
+      handler: () => json({ saved: true }),
+    });
+    const response = await toResponse(capability, createContext(new Request(
+      "https://example.test/posts",
+      { headers: { [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE }, method: "POST" },
+    )));
+    await expect(response.json()).resolves.toMatchObject({
+      version: 1,
+      status: "success",
+      data: { saved: true },
+      revalidate: true,
+    });
+  });
+
   it("returns a stable response for application validation errors", async () => {
     const capability = action({
       input: async () => {

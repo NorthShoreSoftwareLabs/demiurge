@@ -25,6 +25,10 @@ export type ActionInput<
   context: HttpRouteContext<TPath, TValues>,
 ) => MaybePromise<TInput>;
 
+export const ACTION_REQUEST_HEADER = "x-demiurge-action";
+export const ACTION_REQUEST_VALUE = "data;v=1";
+export const ACTION_RESPONSE_MEDIA_TYPE = "application/vnd.demiurge.action+json;v=1";
+
 export type ActionValidationIssue = {
   code: string;
   message: string;
@@ -82,6 +86,7 @@ export type ActionOptions<
   ) => MaybePromise<Response | ResponseCapability<TPath, TValues>>;
   idempotency?: ActionIdempotency<TInput, TPath, TValues>;
   input?: ActionInput<TInput, TPath, TValues>;
+  revalidateRoute?: boolean;
   revalidate?: ActionRevalidation<TInput, TPath, TValues>;
   security?: RouteSecurityPolicy;
   timing?: ServerTimingInput;
@@ -105,22 +110,20 @@ export function action<
           : absentInput;
       } catch (error) {
         if (!(error instanceof ActionValidationError)) throw error;
-        return new Response(JSON.stringify({
-          issues: error.issues,
-          type: "validation-error",
-        }), {
-          headers: { "content-type": "application/json; charset=utf-8" },
-          status: 400,
-        });
+        return actionValidationResponse(context.request, error.issues);
       }
       const actionContext: ActionContext<TInput, TPath, TValues> = {
         ...context,
         input,
       };
-      const run = async () => await resolveActionResult(
-        await options.handler(actionContext),
-        context,
-      );
+      const run = async () => {
+        const result = await options.handler(actionContext);
+        const raw = result instanceof Response;
+        const response = await resolveActionResult(result, context);
+        return raw || !isActionProtocolRequest(context.request)
+          ? response
+          : await actionProtocolResponse(response, options.revalidateRoute === true);
+      };
 
       if (!options.idempotency) {
         const result = await run();
@@ -153,6 +156,58 @@ export function action<
       timing: options.timing,
     },
   );
+}
+
+function isActionProtocolRequest(request: Request) {
+  return request.headers.get(ACTION_REQUEST_HEADER) === ACTION_REQUEST_VALUE;
+}
+
+function actionValidationResponse(
+  request: Request,
+  issues: readonly ActionValidationIssue[],
+) {
+  if (isActionProtocolRequest(request)) {
+    return new Response(JSON.stringify({
+      version: 1,
+      status: "invalid",
+      data: { issues },
+    }), {
+      headers: { "content-type": ACTION_RESPONSE_MEDIA_TYPE },
+      status: 400,
+    });
+  }
+  return new Response(JSON.stringify({ issues, type: "validation-error" }), {
+    headers: { "content-type": "application/json; charset=utf-8" },
+    status: 400,
+  });
+}
+
+async function actionProtocolResponse(response: Response, revalidateRoute: boolean) {
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get("location");
+    if (!location) return response;
+    return new Response(JSON.stringify({
+      version: 1,
+      status: "redirect",
+      location,
+      history: response.status === 301 || response.status === 308 ? "replace" : "push",
+    }), {
+      headers: { "content-type": ACTION_RESPONSE_MEDIA_TYPE },
+      status: 200,
+    });
+  }
+  const data = response.headers.get("content-type")?.includes("json")
+    ? await response.clone().json().catch(() => undefined)
+    : undefined;
+  return new Response(JSON.stringify({
+    version: 1,
+    status: response.ok ? "success" : "failed",
+    ...(revalidateRoute && response.ok ? { revalidate: true } : {}),
+    ...(data === undefined ? {} : { data }),
+  }), {
+    headers: { "content-type": ACTION_RESPONSE_MEDIA_TYPE },
+    status: response.status,
+  });
 }
 
 async function resolveRevalidation<
