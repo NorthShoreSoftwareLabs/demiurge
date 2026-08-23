@@ -10,6 +10,7 @@ import {
   defineScripts,
   httpError,
   Link,
+  type NavigationScrollContext,
   page,
   RouteFocusBoundary,
   useFormNavigation,
@@ -129,9 +130,14 @@ describe("browser router fallbacks", () => {
     });
     render(<Router />);
     await waitFor(() => expect(screen.getByRole("form")).toBeTruthy());
+    historySpy.mockClear();
     fireEvent.submit(screen.getByRole("form"));
     await waitFor(() => expect(window.location.pathname).toBe("/saved"));
-    expect(historySpy).toHaveBeenCalledWith(null, "", "/saved?from=mutation#result");
+    expect(historySpy).toHaveBeenCalledWith(
+      expect.any(Object),
+      "",
+      "/saved?from=mutation#result",
+    );
     await waitFor(() => expect(screen.getByText("idle")).toBeTruthy());
   });
 
@@ -380,6 +386,7 @@ describe("browser router fallbacks", () => {
     });
     render(<Router />);
     const form = (await screen.findByRole("button", { name: "Save" })).closest("form")!;
+    replace.mockClear();
     fireEvent.submit(form);
     await waitFor(() => expect(screen.getByLabelText("protocol state").textContent).toBe("error"));
     fireEvent.submit(form);
@@ -813,6 +820,180 @@ describe("browser router fallbacks", () => {
       expect(window.location.pathname).toBe("/blog");
       expect(screen.getByText("Blog page at /blog")).toBeTruthy();
     });
+  });
+
+  it("scrolls a committed path navigation to the top", async () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(window, "scrollTo", { configurable: true, value: scrollTo });
+    const Router = createFileRouter({
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(HomePage) }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Home")).toBeTruthy());
+    scrollTo.mockClear();
+    fireEvent.click(screen.getByText("Blog"));
+
+    await waitFor(() => expect(screen.getByText("Blog page at /blog")).toBeTruthy());
+    expect(scrollTo).toHaveBeenCalledWith(0, 0);
+  });
+
+  it("restores a saved position on history navigation and preserves state", async () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(window, "scrollTo", { configurable: true, value: scrollTo });
+    let scrollX = 0;
+    let scrollY = 0;
+    Object.defineProperty(window, "scrollX", { configurable: true, get: () => scrollX });
+    Object.defineProperty(window, "scrollY", { configurable: true, get: () => scrollY });
+    window.history.replaceState({ application: "state" }, "", "/");
+    const Router = createFileRouter({
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(HomePage) }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Home")).toBeTruthy());
+    scrollX = 12;
+    scrollY = 240;
+    fireEvent.scroll(window);
+    window.history.pushState({ application: "next" }, "", "/blog");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitFor(() => expect(screen.getByText("Blog page at /blog")).toBeTruthy());
+    scrollTo.mockClear();
+
+    window.history.back();
+    await waitFor(() => expect(screen.getByText("Home")).toBeTruthy());
+    expect(scrollTo).toHaveBeenCalledWith(12, 240);
+    expect(window.history.state.application).toBe("state");
+  });
+
+  it("allows applications to disable the default restoration", async () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(window, "scrollTo", { configurable: true, value: scrollTo });
+    const Router = createFileRouter({
+      navigationScroll: false,
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(HomePage) }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Home")).toBeTruthy());
+    scrollTo.mockClear();
+    fireEvent.click(screen.getByText("Blog"));
+    await waitFor(() => expect(screen.getByText("Blog page at /blog")).toBeTruthy());
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("restores the browser scroll mode when the router unmounts", async () => {
+    Object.defineProperty(window.history, "scrollRestoration", { configurable: true, writable: true, value: "auto" });
+    const Router = createFileRouter({ routes: { "./routes/index.tsx": routeModule({ GET: page(HomePage) }) } });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Home")).toBeTruthy());
+    expect(window.history.scrollRestoration).toBe("manual");
+    cleanup();
+    expect(window.history.scrollRestoration).toBe("auto");
+  });
+
+  it("does not change scroll state in document mode", async () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(window, "scrollTo", { configurable: true, value: scrollTo });
+    Object.defineProperty(window.history, "scrollRestoration", { configurable: true, writable: true, value: "auto" });
+    window.history.replaceState({ application: "state" }, "", "/");
+    const Router = createFileRouter({
+      navigation: "document",
+      routes: { "./routes/index.tsx": routeModule({ GET: page(HomePage) }) },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Home")).toBeTruthy());
+    expect(window.history.state).toEqual({ application: "state" });
+    expect(window.history.scrollRestoration).toBe("auto");
+    expect(scrollTo).not.toHaveBeenCalled();
+    cleanup();
+    expect(window.history.scrollRestoration).toBe("auto");
+  });
+
+  it("reports a render error once to the scroll callback", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const commits: NavigationScrollContext[] = [];
+    const Router = createFileRouter({
+      navigationScroll: (context) => commits.push(context),
+      routes: {
+        "./routes/@error.tsx": routeModule({ default: RouteError }),
+        "./routes/index.tsx": routeModule({ GET: page(HomePage) }),
+        "./routes/broken.tsx": routeModule({ GET: page(BrokenPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Home")).toBeTruthy());
+    window.history.pushState(null, "", "/broken");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitFor(() => expect(screen.getByText("Route error at /broken: render failed")).toBeTruthy());
+    expect(commits).toHaveLength(1);
+    expect(commits[0]?.outcome).toBe("error");
+    expect(commits[0]?.navigation).toBe("pop");
+  });
+
+  it("does not fail a route when the scroll callback throws", async () => {
+    const Router = createFileRouter({
+      navigationScroll: () => { throw new Error("scroll failed"); },
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(HomePage) }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Home")).toBeTruthy());
+    fireEvent.click(screen.getByText("Blog"));
+    await waitFor(() => expect(screen.getByText("Blog page at /blog")).toBeTruthy());
+  });
+
+  it("replaces a history entry without adding one", async () => {
+    const Router = createFileRouter({
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(ReplacePage) }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Replace")).toBeTruthy());
+    const length = window.history.length;
+    fireEvent.click(screen.getByText("Replace"));
+    await waitFor(() => expect(screen.getByText("Blog page at /blog")).toBeTruthy());
+    expect(window.history.length).toBe(length);
+  });
+
+  it("applies cross-route fragments after commit and ignores missing targets", async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
+    const Router = createFileRouter({
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(CrossHashHome) }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(HashPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Cross hash")).toBeTruthy());
+    fireEvent.click(screen.getByText("Cross hash"));
+    await waitFor(() => expect(screen.getByText("Section")).toBeTruthy());
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    scrollIntoView.mockClear();
+    window.history.pushState(null, "", "/blog#missing");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitFor(() => expect(window.location.hash).toBe("#missing"));
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
   it("uses the real origin and reruns navigation data for query changes", async () => {
@@ -1365,6 +1546,14 @@ function FirstPage() {
 
 function SecondPage() {
   return <p>Second page</p>;
+}
+
+function ReplacePage() {
+  return <Link replace to="/blog">Replace</Link>;
+}
+
+function CrossHashHome() {
+  return <Link hash="section" to="/blog">Cross hash</Link>;
 }
 
 function BrokenPage(_props: RouteProps): never {

@@ -13,12 +13,15 @@ export {
   useRouteFocusBoundary,
 } from "./focus";
 export type {
+  FileRouterOptions,
   MutationNavigationState,
   FormProps,
   LinkProps,
   MutationSubmitProps,
   NavigationAccessibility,
   NavigationCommit,
+  NavigationScrollContext,
+  NavigationScrollOption,
 } from "./file-router";
 export type {
   MutationAction,
