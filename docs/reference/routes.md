@@ -110,6 +110,22 @@ router sends URL-encoded, multipart, or plain-text bodies that match the form.
 Route revalidation uses the typed `revalidate` result. Cache-tag invalidation
 remains a separate server action concern.
 
+#### React action state
+
+Demiurge `Form` does not wrap React `useActionState`. The APIs manage different
+state.
+
+- `Form` and `useNavigation` manage HTTP submission, cancellation, redirects,
+  history, and route revalidation.
+- `useActionState` manages component result state, ordered reducer actions, and
+  a React transition pending flag.
+
+Use `Form` when a submission must participate in browser routing. Use
+`useActionState` when an action must update component-local result state.
+
+Both clients can submit to the same application endpoint. They do not share
+pending state or action-result state.
+
 ## Page routes
 
 `page(...)` accepts a view and optional server data:
