@@ -1,6 +1,7 @@
 import type {
   CacheDuration,
   CacheKey,
+  CacheTag,
   IdempotencyStore,
 } from "../data";
 import type {
@@ -58,6 +59,18 @@ export type ActionIdempotency<
   ttl?: CacheDuration;
 };
 
+export type ActionRevalidation<
+  TInput,
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> =
+  | readonly CacheTag[]
+  | ((
+    context: ActionContext<TInput, TPath, TValues>,
+  ) => MaybePromise<readonly CacheTag[]>);
+
+export const ACTION_REVALIDATION_HEADER = "x-demiurge-revalidate-tags";
+
 export type ActionOptions<
   TInput,
   TPath extends string = string,
@@ -69,6 +82,7 @@ export type ActionOptions<
   ) => MaybePromise<Response | ResponseCapability<TPath, TValues>>;
   idempotency?: ActionIdempotency<TInput, TPath, TValues>;
   input?: ActionInput<TInput, TPath, TValues>;
+  revalidate?: ActionRevalidation<TInput, TPath, TValues>;
   security?: RouteSecurityPolicy;
   timing?: ServerTimingInput;
 };
@@ -109,7 +123,12 @@ export function action<
       );
 
       if (!options.idempotency) {
-        return await run();
+        const result = await run();
+        const revalidation = await resolveRevalidation(
+          options.revalidate,
+          actionContext,
+        );
+        return await addRevalidationHeader(result, revalidation);
       }
 
       const key = typeof options.idempotency.key === "function"
@@ -121,7 +140,12 @@ export function action<
         ttl: options.idempotency.ttl,
       });
 
-      return result.value;
+      if (result.replayed) return result.value;
+      const revalidation = await resolveRevalidation(
+        options.revalidate,
+        actionContext,
+      );
+      return await addRevalidationHeader(result.value, revalidation);
     },
     {
       cors: options.cors,
@@ -129,6 +153,37 @@ export function action<
       timing: options.timing,
     },
   );
+}
+
+async function resolveRevalidation<
+  TInput,
+  TPath extends string,
+  TValues extends object,
+>(
+  revalidate: ActionRevalidation<TInput, TPath, TValues> | undefined,
+  context: ActionContext<TInput, TPath, TValues>,
+) {
+  if (!revalidate) return [];
+  return typeof revalidate === "function"
+    ? await revalidate(context)
+    : revalidate;
+}
+
+async function addRevalidationHeader(
+  result: Response,
+  tags: readonly CacheTag[],
+) {
+  if (tags.length === 0) return result;
+  const headers = new Headers(result.headers);
+  headers.set(
+    ACTION_REVALIDATION_HEADER,
+    tags.map((value) => value.id).join(","),
+  );
+  return new Response(result.body, {
+    headers,
+    status: result.status,
+    statusText: result.statusText,
+  });
 }
 
 export const actionInput = {

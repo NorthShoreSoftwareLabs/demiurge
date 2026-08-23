@@ -21,6 +21,7 @@ import {
   createCache,
   createMemoryCache,
   serializeCacheNamespace,
+  type Cache,
   type CacheDuration,
   type CacheNamespace,
   type CacheStore,
@@ -69,6 +70,7 @@ import {
   createCspNonce,
   securityPolicyRequiresNonce,
 } from "../security/policy";
+import { ACTION_REVALIDATION_HEADER } from "../route/action";
 
 export type RequestErrorReporter = (
   error: unknown,
@@ -343,6 +345,7 @@ async function handleMatchedRoute(
 
   request = limitRequestBody(routeSecurity?.request, request);
   const requestContext: Record<string, unknown> = {};
+  const cache = createRequestCache(options.cacheStore);
 
   if (capability.kind === "page") {
     const context = {
@@ -360,7 +363,6 @@ async function handleMatchedRoute(
     const nonce = securityPolicyRequiresNonce(policy.document)
       ? createCspNonce()
       : undefined;
-    const cache = createRequestCache(options.cacheStore);
     let response: Response;
 
     try {
@@ -520,6 +522,7 @@ async function handleMatchedRoute(
   // `timing` or `cors` value on an API route gives a problem+json response. It
   // cannot enter the negotiated path and produce HTML.
   try {
+    await revalidateActionTags(response, cache);
     return withFetchMetadataVary(
       finalizeRouteResponse(response, capability, request, method),
     );
@@ -534,6 +537,18 @@ async function handleMatchedRoute(
       ),
     );
   }
+}
+
+async function revalidateActionTags(response: Response, cache: Cache) {
+  const value = response.headers.get(ACTION_REVALIDATION_HEADER);
+  if (!value) return;
+  const tags = value
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .map((id) => ({ id }));
+  if (tags.length > 0) await cache.invalidateTags(tags);
+  response.headers.delete(ACTION_REVALIDATION_HEADER);
 }
 
 function createRequestCache(options: RequestCacheStoreOptions | undefined) {
