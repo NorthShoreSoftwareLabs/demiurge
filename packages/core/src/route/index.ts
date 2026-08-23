@@ -1,6 +1,7 @@
 export {
   action,
   actionInput,
+  ActionValidationError,
 } from "./action";
 export { page } from "./page";
 export { defineMiddleware } from "./middleware";
@@ -29,6 +30,7 @@ export type {
   ActionIdempotency,
   ActionInput,
   ActionOptions,
+  ActionValidationIssue,
 } from "./action";
 export type {
   HttpErrorDetails,

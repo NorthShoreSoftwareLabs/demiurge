@@ -24,6 +24,22 @@ export type ActionInput<
   context: HttpRouteContext<TPath, TValues>,
 ) => MaybePromise<TInput>;
 
+export type ActionValidationIssue = {
+  code: string;
+  message: string;
+  path: readonly (string | number)[];
+};
+
+export class ActionValidationError extends Error {
+  readonly issues: readonly ActionValidationIssue[];
+
+  constructor(issues: readonly ActionValidationIssue[]) {
+    super("Action input validation failed.");
+    this.name = "ActionValidationError";
+    this.issues = issues.map((issue) => ({ ...issue, path: [...issue.path] }));
+  }
+}
+
 export type ActionContext<
   TInput,
   TPath extends string = string,
@@ -66,10 +82,23 @@ export function action<
 ) {
   return response<TPath, TValues>(
     async (context) => {
-      // TYPE-EVIDENCE: the input defaults to undefined when the caller did not provide a parser. The cast labels that fallback as TInput.
-      const input = options.input
-        ? await options.input(context)
-        : undefined as TInput;
+      let input: TInput;
+      try {
+        // TYPE-EVIDENCE: the input defaults to undefined when the caller did not provide a parser. The cast labels that fallback as TInput.
+        const absentInput = undefined as TInput;
+        input = options.input
+          ? await options.input(context)
+          : absentInput;
+      } catch (error) {
+        if (!(error instanceof ActionValidationError)) throw error;
+        return new Response(JSON.stringify({
+          issues: error.issues,
+          type: "validation-error",
+        }), {
+          headers: { "content-type": "application/json; charset=utf-8" },
+          status: 400,
+        });
+      }
       const actionContext: ActionContext<TInput, TPath, TValues> = {
         ...context,
         input,

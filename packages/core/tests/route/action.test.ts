@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   action,
   actionInput,
+  ActionValidationError,
   createMemoryIdempotencyStore,
   json,
   redirect,
@@ -23,6 +24,29 @@ function createContext(request: Request): HttpRouteContext {
 }
 
 describe("action helper", () => {
+  it("returns a stable response for application validation errors", async () => {
+    const capability = action({
+      input: async () => {
+        throw new ActionValidationError([{
+          code: "required",
+          message: "Title is required",
+          path: ["title"],
+        }]);
+      },
+      handler: () => new Response("unreachable"),
+    });
+
+    const response = await toResponse(
+      capability,
+      createContext(new Request("https://example.test/posts", { method: "POST" })),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      issues: [{ code: "required", message: "Title is required", path: ["title"] }],
+      type: "validation-error",
+    });
+  });
   it("parses JSON input and returns response capabilities", async () => {
     const capability = action({
       input: actionInput.json,
