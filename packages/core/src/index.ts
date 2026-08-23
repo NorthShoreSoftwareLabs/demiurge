@@ -171,6 +171,7 @@ export type {
   ActionIdempotency,
   ActionInput,
   ActionOptions,
+  ActionRevalidation,
   ActionValidationIssue,
   HttpErrorDetails,
   HttpErrorInit,

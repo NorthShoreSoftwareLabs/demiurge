@@ -1,7 +1,9 @@
 import type { ComponentType } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
+  action,
   createMemoryCacheStore,
+  createMemoryIdempotencyStore,
   createRequestHandler,
   defineLinks,
   defineAdapter,
@@ -54,6 +56,195 @@ function routeModule(module: RouteModule) {
 }
 
 describe("request handler", () => {
+  it("invalidates declared action tags and strips the transport header", async () => {
+    const store = createMemoryCacheStore();
+    const invalidateTags = vi.spyOn(store, "invalidateTags");
+    const revalidate = vi.fn(() => [{ id: "posts" }] as const);
+    const routeModules = {
+      "./routes/posts.ts": {
+        POST: action({
+          revalidate,
+          handler: () => new Response("updated"),
+        }),
+      },
+    } satisfies Record<string, RouteModule>;
+    const handler = createRequestHandler({
+      cacheStore: {
+        namespace: { app: "test", environment: "test", schemaVersion: 1 },
+        store,
+      },
+      routeModules,
+      routes: Object.fromEntries(
+        Object.entries(routeModules).map(([file, module]) => [
+          file,
+          routeModule(module),
+        ]),
+      ),
+    });
+
+    const response = await handler(
+      new Request("https://example.test/posts", { method: "POST" }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe("updated");
+    expect(response.headers.has("x-demiurge-revalidate-tags")).toBe(false);
+    expect(invalidateTags).toHaveBeenCalledTimes(1);
+    expect(invalidateTags.mock.calls[0]?.[0]).toEqual([
+      "test:test:1:build:tag:posts",
+      "test:test:1:private:tag:posts",
+      "test:test:1:public:tag:posts",
+    ]);
+  });
+
+  it("does not invalidate tags when an action fails", async () => {
+    const store = createMemoryCacheStore();
+    const invalidateTags = vi.spyOn(store, "invalidateTags");
+    const revalidate = vi.fn(() => [{ id: "posts" }] as const);
+    const routeModules = {
+      "./routes/posts.ts": {
+        POST: action({
+          revalidate,
+          handler: () => {
+            throw new Error("failed");
+          },
+        }),
+      },
+    } satisfies Record<string, RouteModule>;
+    const handler = createRequestHandler({
+      cacheStore: {
+        namespace: { app: "test", environment: "test", schemaVersion: 1 },
+        store,
+      },
+      routeModules,
+      routes: Object.fromEntries(
+        Object.entries(routeModules).map(([file, module]) => [
+          file,
+          routeModule(module),
+        ]),
+      ),
+    });
+
+    await handler(new Request("https://example.test/posts", { method: "POST" }));
+
+    expect(invalidateTags).not.toHaveBeenCalled();
+    expect(revalidate).not.toHaveBeenCalled();
+  });
+
+  it("does not repeat invalidation for an idempotent replay", async () => {
+    const store = createMemoryCacheStore();
+    const invalidateTags = vi.spyOn(store, "invalidateTags");
+    const idempotency = createMemoryIdempotencyStore();
+    const revalidate = vi.fn(() => [{ id: "posts" }] as const);
+    const routeModules = {
+      "./routes/posts.ts": {
+        POST: action({
+          idempotency: { key: ["create", "one"], store: idempotency },
+          revalidate,
+          handler: () => new Response("created"),
+        }),
+      },
+    } satisfies Record<string, RouteModule>;
+    const handler = createRequestHandler({
+      cacheStore: {
+        namespace: { app: "test", environment: "test", schemaVersion: 1 },
+        store,
+      },
+      routeModules,
+      routes: Object.fromEntries(
+        Object.entries(routeModules).map(([file, module]) => [
+          file,
+          routeModule(module),
+        ]),
+      ),
+    });
+
+    await handler(new Request("https://example.test/posts", { method: "POST" }));
+    await handler(new Request("https://example.test/posts", { method: "POST" }));
+
+    expect(invalidateTags).toHaveBeenCalledTimes(1);
+    expect(revalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("coordinates mutation invalidation with document and data navigation", async () => {
+    let value = "before";
+    let signalActionStarted!: () => void;
+    const actionStarted = new Promise<void>((resolve) => {
+      signalActionStarted = resolve;
+    });
+    let releaseAction!: () => void;
+    const actionRelease = new Promise<void>((resolve) => {
+      releaseAction = resolve;
+    });
+    const store = createMemoryCacheStore();
+    const routeModules = {
+      "./routes/index.tsx": {
+        GET: page({
+          data: ({ cache }) => cache.get({
+            fn: () => value,
+            key: ["value"],
+            scope: "public",
+            tags: [{ id: "value" }],
+            ttl: "1h",
+          }),
+          view: ({ data }) => <main>{data}</main>,
+        }),
+        POST: action({
+          revalidate: [{ id: "value" }],
+          handler: async () => {
+            signalActionStarted();
+            value = "after";
+            await actionRelease;
+            return new Response("updated");
+          },
+        }),
+      },
+      "./routes/@not-found.tsx": { default: () => <main>Missing</main> },
+    } satisfies Record<string, RouteModule>;
+    const handler = createRequestHandler({
+      cacheStore: {
+        namespace: { app: "test", environment: "test", schemaVersion: 1 },
+        store,
+      },
+      routeModules,
+      routes: Object.fromEntries(
+        Object.entries(routeModules).map(([file, module]) => [
+          file,
+          routeModule(module),
+        ]),
+      ),
+    });
+
+    const primed = await handler(new Request("https://example.test/", {
+      headers: { "x-demiurge-navigation": "data" },
+    }));
+    await expect(primed.json()).resolves.toMatchObject({ data: "before" });
+
+    const mutation = handler(
+      new Request("https://example.test/", { method: "POST" }),
+    );
+    await actionStarted;
+    const documentNavigation = handler(new Request("https://example.test/"));
+    const browserNavigation = handler(new Request("https://example.test/", {
+      headers: { "x-demiurge-navigation": "data" },
+    }));
+    const [documentResponse, browserResponse] = await Promise.all([
+      documentNavigation,
+      browserNavigation,
+    ]);
+    await expect(documentResponse.text()).resolves.toContain("before");
+    await expect(browserResponse.json()).resolves.toMatchObject({
+      data: "before",
+    });
+    releaseAction();
+    await mutation;
+
+    const refreshed = await handler(new Request("https://example.test/", {
+      headers: { "x-demiurge-navigation": "data" },
+    }));
+    await expect(refreshed.json()).resolves.toMatchObject({ data: "after" });
+  });
+
   it("validates eager route modules during handler construction", () => {
     const routeModules = {
       "./routes/api.ts": {

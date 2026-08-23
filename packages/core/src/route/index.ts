@@ -30,6 +30,7 @@ export type {
   ActionIdempotency,
   ActionInput,
   ActionOptions,
+  ActionRevalidation,
   ActionValidationIssue,
 } from "./action";
 export type {
