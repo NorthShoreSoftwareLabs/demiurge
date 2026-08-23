@@ -2,6 +2,9 @@ export {
   action,
   actionInput,
   ActionValidationError,
+  ACTION_REQUEST_HEADER,
+  ACTION_REQUEST_VALUE,
+  ACTION_RESPONSE_MEDIA_TYPE,
 } from "./action";
 export { page } from "./page";
 export { defineMiddleware } from "./middleware";

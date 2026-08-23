@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createFileRouter,
+  Form,
   defineLinks,
   defineScripts,
   httpError,
@@ -11,6 +12,7 @@ import {
   page,
   RouteFocusBoundary,
   useRouteFocusBoundary,
+  useNavigation,
   resolveMetadata,
   type LayoutProps,
   type LinkProps,
@@ -27,6 +29,31 @@ describe("browser router fallbacks", () => {
         { hasData: true },
         { headers: { "x-demiurge-navigation": "data" } },
       )));
+  });
+
+  it("submits an explicit Form with a versioned action request", async () => {
+    const calls: RequestInit[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init) calls.push(init);
+      if (init?.method === "POST") {
+        return new Response(JSON.stringify({ version: 1, status: "success" }), {
+          headers: { "content-type": "application/vnd.demiurge.action+json;v=1" },
+        });
+      }
+      return Response.json(
+        { hasData: true },
+        { headers: { "x-demiurge-navigation": "data" } },
+      );
+    }));
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }) },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getByRole("button")).toBeTruthy());
+    fireEvent.submit(screen.getByRole("form"));
+    await waitFor(() => expect(calls.some((init) => init.method === "POST")).toBe(true));
+    const action = calls.find((init) => init.method === "POST");
+    expect(new Headers(action?.headers).get("x-demiurge-action")).toBe("data;v=1");
   });
 
   afterEach(() => {
@@ -806,6 +833,17 @@ function HomePage(_props: RouteProps) {
       <h1>Home</h1>
       <Link to="/blog">Blog</Link>
     </>
+  );
+}
+
+function ActionFormPage() {
+  const navigation = useNavigation();
+  return (
+    <Form action="/" method="post" aria-label="action form">
+      <input name="title" defaultValue="Draft" />
+      <button type="submit">Save</button>
+      <output>{navigation.state}</output>
+    </Form>
   );
 }
 

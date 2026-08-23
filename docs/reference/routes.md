@@ -80,6 +80,34 @@ header. `throw httpError(status, details)` creates an intentional HTTP failure
 that becomes a problem response for APIs or an app-owned error document for
 pages.
 
+### Action forms
+
+Use `Form` for client action submissions. The browser router intercepts only
+same-origin forms with a supported method and target. Other forms keep native
+browser behavior.
+
+The router sends `X-Demiurge-Action: data;v=1` and accepts
+`application/vnd.demiurge.action+json;v=1`. A typed result has `version: 1` and
+one status: `success`, `invalid`, `redirect`, or `failed`.
+
+```tsx
+import { Form, useNavigation } from "@demiurgejs/core";
+
+export function SaveForm() {
+  const navigation = useNavigation();
+  return (
+    <Form action="/profile" method="post">
+      <button disabled={navigation.state === "submitting"}>Save</button>
+    </Form>
+  );
+}
+```
+
+`useNavigation` scopes state to the form or its `submissionKey`. The router
+preserves submitter values and submitter overrides for action, method, target,
+and encoding. Route revalidation uses the typed `revalidate` result. Cache-tag
+invalidation remains a separate server action concern.
+
 ## Page routes
 
 `page(...)` accepts a view and optional server data:
