@@ -39,6 +39,24 @@ export const POST = json(({ request }) => ({
 The browser router only treats a page-compatible `GET` as a navigation target.
 Other capabilities run through the server request pipeline.
 
+`Form` submits same-origin action routes through the browser router when
+JavaScript runs. `useNavigation` exposes `idle`, `submitting`, `loading`, and
+`error` states. The form keeps its native action and method attributes, so it
+continues to work when JavaScript does not load.
+
+```tsx
+import { Form, useNavigation } from "@demiurgejs/core";
+
+export function SaveForm() {
+  const navigation = useNavigation();
+  return (
+    <Form action="/profile" method="post">
+      <button disabled={navigation.state === "submitting"}>Save</button>
+    </Form>
+  );
+}
+```
+
 A static build emits fixed `text(...)`, `html(...)`, and `json(...)` GET values.
 It keeps a dotted route filename in the output filename.
 

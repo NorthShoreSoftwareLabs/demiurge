@@ -10,6 +10,8 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentPropsWithoutRef,
+  type FormEvent,
 } from "react";
 import {
   HYDRATION_FALLBACK_ATTRIBUTE,
@@ -54,6 +56,12 @@ export type FileRouterOptions = {
   notFound?: ComponentType<NotFoundProps>;
 };
 
+export type NavigationState =
+  | { state: "idle"; formData?: undefined; result?: undefined }
+  | { state: "submitting"; formData: FormData; result?: undefined }
+  | { state: "loading"; formData?: FormData; result?: undefined }
+  | { state: "error"; formData: FormData; result: Response };
+
 export function createFileRouter(options: FileRouterOptions) {
   const manifest = createRouteManifest(options.routes);
   const navigationDataLoader = options.loadNavigationData ?? loadNavigationData;
@@ -65,6 +73,11 @@ export function createFileRouter(options: FileRouterOptions) {
     );
     const initialMatchPending = useRef(Boolean(options.initialMatch));
     const navigationSequence = useRef(0);
+    const submissionController = useRef<AbortController | undefined>(undefined);
+    const [refresh, setRefresh] = useState(0);
+    const [navigationState, setNavigationState] = useState<NavigationState>({
+      state: "idle",
+    });
 
     useEffect(() => {
       function onPopState() {
@@ -147,12 +160,14 @@ export function createFileRouter(options: FileRouterOptions) {
         cancelled = true;
         controller.abort();
       };
-    }, [location.pathname, location.search]);
+    }, [location.pathname, location.search, refresh]);
 
     const router = useMemo(
       () => ({
         navigation: options.navigation ?? "server",
+        state: navigationState,
         push(to: string) {
+          submissionController.current?.abort();
           const previous = getCurrentLocation();
           window.history.pushState(null, "", to);
           const next = getCurrentLocation();
@@ -166,8 +181,60 @@ export function createFileRouter(options: FileRouterOptions) {
             scrollToHash(next.hash);
           }
         },
+        async submit(form: HTMLFormElement, submitter?: HTMLElement | null) {
+          if ((options.navigation ?? "server") !== "server") return;
+          const method = (submitter?.getAttribute("formmethod") ||
+            form.method || "get").toUpperCase();
+          if (method === "GET" || method === "HEAD") return;
+          const action = submitter?.getAttribute("formaction") ||
+            form.action || window.location.href;
+          const formData = new FormData(form);
+          submissionController.current?.abort();
+          const controller = new AbortController();
+          submissionController.current = controller;
+          const sequence = ++navigationSequence.current;
+          setNavigationState({ state: "submitting", formData });
+          try {
+            const response = await fetch(action, {
+              body: formData,
+              credentials: "same-origin",
+              headers: {
+                accept: "application/vnd.demiurge.action+json",
+                "x-demiurge-action": "data",
+              },
+              method,
+              redirect: "manual",
+              signal: controller.signal,
+            });
+            if (sequence !== navigationSequence.current) return;
+            if (response.status >= 300 && response.status < 400) {
+              const target = response.headers.get("location");
+              if (target) {
+                setNavigationState({ state: "loading", formData });
+                window.history.pushState(null, "", target);
+                setLocation(getCurrentLocation());
+                return;
+              }
+            }
+            if (!response.ok) {
+              setNavigationState({ state: "error", formData, result: response });
+              return;
+            }
+            setNavigationState({ state: "loading", formData });
+            setRefresh((value) => value + 1);
+            setNavigationState({ state: "idle" });
+          } catch (error) {
+            if (!controller.signal.aborted && sequence === navigationSequence.current) {
+              setNavigationState({
+                state: "error",
+                formData,
+                result: new Response(null, { status: 500 }),
+              });
+            }
+          }
+        },
       }),
-      [],
+      [navigationState, options.navigation],
     );
 
     return createElement(RouterContext.Provider, {
@@ -324,6 +391,30 @@ export function Link<const TTo extends AppHref>(
       {props.children}
     </a>
   );
+}
+
+export function useNavigation() {
+  return useRouter().state;
+}
+
+export function Form(
+  props: ComponentPropsWithoutRef<"form">,
+) {
+  const router = useRouter();
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    const onSubmit = props.onSubmit as
+      | ((event: FormEvent<HTMLFormElement>) => void)
+      | undefined;
+    onSubmit?.(event);
+    if (event.defaultPrevented || router.navigation !== "server") return;
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    const method = (submitter?.getAttribute("formmethod") ||
+      event.currentTarget.method || "get").toUpperCase();
+    if (method === "GET" || method === "HEAD") return;
+    event.preventDefault();
+    void router.submit(event.currentTarget, submitter);
+  }
+  return createElement("form", { ...props, onSubmit });
 }
 
 function RouteRenderer({
@@ -517,13 +608,19 @@ function shouldHandleLinkClick(event: MouseEvent<HTMLAnchorElement>) {
 
 type RouterApi = {
   navigation: "document" | "server";
+  state: NavigationState;
   push(to: string): void;
+  submit(form: HTMLFormElement, submitter?: HTMLElement | null): Promise<void>;
 };
 
 const RouterContext = createContext<RouterApi>({
   navigation: "document",
+  state: { state: "idle" },
   push(to) {
     window.location.href = to;
+  },
+  async submit(form) {
+    form.submit();
   },
 });
 

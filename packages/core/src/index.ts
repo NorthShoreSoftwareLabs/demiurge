@@ -1,4 +1,4 @@
-export { createFileRouter, hydrateFileRouter, Link } from "./browser";
+export { createFileRouter, Form, hydrateFileRouter, Link, useNavigation } from "./browser";
 export {
   assertAdapterCapabilities,
   checkAdapterCapabilities,
@@ -282,7 +282,7 @@ export type {
   RoutePathVars,
   RouteRequestContexts,
 } from "./routing";
-export type { HydrateFileRouterOptions } from "./browser";
+export type { HydrateFileRouterOptions, NavigationState } from "./browser";
 export type { SsrOptions, SsrRenderOptions } from "./server";
 export type {
   HtmlCapability,

@@ -6,9 +6,11 @@ import {
   createFileRouter,
   defineLinks,
   defineScripts,
+  Form,
   httpError,
   Link,
   page,
+  useNavigation,
   type LayoutProps,
   type RouteErrorProps,
   type RouteProps,
@@ -119,6 +121,28 @@ describe("browser router fallbacks", () => {
 
     expect(screen.queryByText("Route loading")).toBeNull();
     expect(screen.getByText("Blog page at /blog")).toBeTruthy();
+  });
+
+  it("submits Form through the router and exposes idle state", async () => {
+    const submit = vi.fn(async () =>
+      Response.json({ status: "success" }, { status: 200 }),
+    );
+    vi.stubGlobal("fetch", vi.fn(async (_request: Request | string, init?: RequestInit) => {
+      if (init?.method === "POST") return submit();
+      return Response.json(
+        { hasData: true },
+        { headers: { "x-demiurge-navigation": "data" } },
+      );
+    }));
+
+    const Router = createFileRouter({
+      routes: { "./routes/index.tsx": routeModule({ GET: page(FormPage) }) },
+    });
+    render(<Router />);
+    await waitFor(() => expect(screen.getByRole("button")).toBeTruthy());
+    fireEvent.submit(screen.getByRole("form"));
+    await waitFor(() => expect(submit).toHaveBeenCalledOnce());
+    expect(screen.getByText("idle")).toBeTruthy();
   });
 
   it("renders inherited @not-found UI for missing routes", async () => {
@@ -506,6 +530,18 @@ function HomePage(_props: RouteProps) {
     <>
       <h1>Home</h1>
       <Link to="/blog">Blog</Link>
+    </>
+  );
+}
+
+function FormPage() {
+  const navigation = useNavigation();
+  return (
+    <>
+      <p>{navigation.state}</p>
+      <Form action="/" method="post" aria-label="action form">
+        <button type="submit">Save</button>
+      </Form>
     </>
   );
 }
