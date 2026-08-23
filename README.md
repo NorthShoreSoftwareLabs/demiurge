@@ -201,38 +201,14 @@ use the same pipeline.
 
 ### Node
 
-A production app builds a browser bundle and an SSR bundle, then runs one Node
-process that serves both:
+The Node adapter runs browser and SSR bundles in one production process. The
+application currently provides a server entry that composes the request
+handler, static assets, and process lifecycle.
 
-```js
-// server.js
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { createNodeServer, renderNodePageResponse } from "@demiurgejs/core/node";
-import { createHandler } from "./dist/server/server-entry.js";
-
-const root = fileURLToPath(new URL("dist/client", import.meta.url));
-const manifest = JSON.parse(await readFile(join(root, "demiurge-manifest.json"), "utf8"));
-
-const server = createNodeServer({
-  allowedHosts: ["app.example.com"],
-  handler: createHandler({
-    clientEntry: manifest.clientEntry,
-    renderPage: renderNodePageResponse,
-    styles: manifest.styles,
-  }),
-  shutdown: { gracePeriod: 30_000, signals: ["SIGINT", "SIGTERM"] },
-  static: { root },
-});
-
-server.listen(Number(process.env.PORT ?? 4173), process.env.HOST ?? "127.0.0.1");
-```
-
-`allowedHosts` is mandatory, forwarded headers are ignored until you name a
-trusted proxy, and the static root rejects traversal and symlinks. See
-[Node deployment](./docs/guides/node-deployment.md) for proxy trust, timeouts,
-graceful shutdown, and shared cache stores.
+`allowedHosts` is mandatory. The adapter ignores forwarded headers until the
+application names a trusted proxy. The static root rejects traversal and
+symlinks. See [Node deployment](./docs/guides/node-deployment.md) for the current
+server entry, build commands, timeouts, graceful shutdown, and shared stores.
 
 ### Static
 
