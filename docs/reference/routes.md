@@ -91,10 +91,10 @@ The router sends `X-Demiurge-Action: data;v=1` and accepts
 one status: `success`, `invalid`, `redirect`, or `failed`.
 
 ```tsx
-import { Form, useNavigation } from "@demiurgejs/core";
+import { Form, useFormNavigation } from "@demiurgejs/core";
 
 export function SaveForm() {
-  const navigation = useNavigation();
+  const navigation = useFormNavigation();
   return (
     <Form action="/profile" method="post">
       <button disabled={navigation.state === "submitting"}>Save</button>
@@ -103,10 +103,12 @@ export function SaveForm() {
 }
 ```
 
-`useNavigation` scopes state to the form or its `submissionKey`. The router
-preserves submitter values and submitter overrides for action, method, target,
-and encoding. Route revalidation uses the typed `revalidate` result. Cache-tag
-invalidation remains a separate server action concern.
+`useFormNavigation` reads the nearest `Form` state. `useNavigation` accepts a
+form or `submissionKey` for another scope. The router preserves submitter
+values and submitter overrides for action, method, target, and encoding. The
+router sends URL-encoded, multipart, or plain-text bodies that match the form.
+Route revalidation uses the typed `revalidate` result. Cache-tag invalidation
+remains a separate server action concern.
 
 ## Page routes
 

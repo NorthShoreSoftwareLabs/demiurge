@@ -54,6 +54,17 @@ describe("browser router fallbacks", () => {
     await waitFor(() => expect(calls.some((init) => init.method === "POST")).toBe(true));
     const action = calls.find((init) => init.method === "POST");
     expect(new Headers(action?.headers).get("x-demiurge-action")).toBe("data;v=1");
+    expect(new Headers(action?.headers).get("content-type")).toContain("application/x-www-form-urlencoded");
+    expect(String(action?.body)).toContain("title=Draft");
+    await waitFor(() => expect(screen.getByText("idle")).toBeTruthy());
+  });
+
+  it("keeps external action forms native", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    render(<Form action="https://other.example/save" method="post"><button type="submit">Save</button></Form>);
+    fireEvent.submit(screen.getByRole("button"));
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

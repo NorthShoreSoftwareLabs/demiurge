@@ -14,6 +14,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useId,
   useRef,
   useState,
 } from "react";
@@ -63,7 +64,7 @@ export type NavigationDataLoader = (
 
 export type NavigationCommit = {
   url: URL;
-  kind: "push" | "pop";
+  kind: "push" | "replace" | "pop";
   outcome: "ready" | "not-found" | "error";
   title: string;
 };
@@ -79,7 +80,7 @@ export type ActionResult<T = unknown> =
   | { version: 1; status: "failed"; message?: string };
 
 export type ActionNavigationState<T = unknown> =
-  | { state: "idle"; form?: HTMLFormElement; submissionKey?: string }
+  | { state: "idle"; form?: HTMLFormElement; submissionKey?: string; result?: ActionResult<T> }
   | { state: "submitting"; form: HTMLFormElement; submissionKey?: string; formData: FormData }
   | { state: "loading"; form: HTMLFormElement; submissionKey?: string; formData: FormData }
   | { state: "invalid"; form: HTMLFormElement; submissionKey?: string; formData: FormData; result: Extract<ActionResult<T>, { status: "invalid" }> }
@@ -114,7 +115,8 @@ export function createFileRouter(options: FileRouterOptions) {
     const submissionControllers = useRef(new Map<string, AbortController>());
     const submissionStates = useRef(new Map<string, ActionNavigationState>());
     const [submissionVersion, setSubmissionVersion] = useState(0);
-    const navigationKind = useRef<"push" | "pop">("push");
+    const [routeRefresh, setRouteRefresh] = useState(0);
+    const navigationKind = useRef<"push" | "replace" | "pop">("push");
     const [pendingCommit, setPendingCommit] = useState<NavigationCommit | null>(null);
     const [committed, setCommitted] = useState<NavigationCommit | null>(null);
     const pendingCommitRef = useRef<NavigationCommit | null>(null);
@@ -172,8 +174,14 @@ export function createFileRouter(options: FileRouterOptions) {
       };
     }, [options.navigation]);
 
+    function abortSubmissions() {
+      for (const controller of submissionControllers.current.values()) controller.abort();
+      submissionControllers.current.clear();
+    }
+
     useEffect(() => {
       function onPopState() {
+        abortSubmissions();
         navigationKind.current = "pop";
         const next = getCurrentLocation();
         const previous = lastLocation.current;
@@ -243,6 +251,16 @@ export function createFileRouter(options: FileRouterOptions) {
               applyNavigationDocument(initialData.document);
             }
             setMatch(nextMatch);
+            for (const [key, state] of submissionStates.current) {
+              if (state.state === "loading") {
+                submissionStates.current.set(key, {
+                  state: "idle",
+                  form: state.form,
+                  submissionKey: state.submissionKey,
+                });
+              }
+            }
+            setSubmissionVersion((value) => value + 1);
             setPendingCommit({
               kind: navigationKind.current,
               outcome: nextMatch.status === "not-found" ? "not-found" : "ready",
@@ -289,7 +307,7 @@ export function createFileRouter(options: FileRouterOptions) {
         cancelled = true;
         controller.abort();
       };
-    }, [location.pathname, location.search]);
+    }, [location.pathname, location.search, routeRefresh]);
 
     useLayoutEffect(() => {
       if (!committed || options.navigation === "document") {
@@ -328,6 +346,7 @@ export function createFileRouter(options: FileRouterOptions) {
           };
         },
         push(to: string) {
+          abortSubmissions();
           const previous = getCurrentLocation();
           window.history.pushState(null, "", to);
           const next = getCurrentLocation();
@@ -360,11 +379,12 @@ export function createFileRouter(options: FileRouterOptions) {
           });
           try {
             const response = await fetch(request.url, {
-              body: formData,
+              body: request.body,
               credentials: "same-origin",
               headers: {
                 accept: ACTION_RESPONSE_MEDIA_TYPE,
                 [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE,
+                ...(request.contentType ? { "content-type": request.contentType } : {}),
               },
               method: request.method,
               redirect: "manual",
@@ -385,7 +405,7 @@ export function createFileRouter(options: FileRouterOptions) {
               setSubmissionState(key, { state: "loading", form, submissionKey, formData });
               if (result.history === "replace") window.history.replaceState(null, "", destination);
               else window.history.pushState(null, "", destination);
-              navigationKind.current = "push";
+              navigationKind.current = result.history;
               lastLocation.current = getCurrentLocation();
               setLocation(lastLocation.current);
               return;
@@ -396,13 +416,17 @@ export function createFileRouter(options: FileRouterOptions) {
             }
             if (result?.status === "success" && result.revalidate) {
               setSubmissionState(key, { state: "loading", form, submissionKey, formData });
-              setLocation(getCurrentLocation());
+              setRouteRefresh((value) => value + 1);
             } else {
-              setSubmissionState(key, { state: "idle", form, submissionKey });
+              setSubmissionState(key, { state: "idle", form, submissionKey, result });
             }
           } catch {
             if (!controller.signal.aborted) {
               setSubmissionState(key, { state: "error", form, submissionKey, formData });
+            }
+          } finally {
+            if (submissionControllers.current.get(key) === controller) {
+              submissionControllers.current.delete(key);
             }
           }
         },
@@ -609,8 +633,12 @@ export function Link<const TTo extends AppHref>(
   return LinkImplementation(props, props.ref ?? null);
 }
 
+const ActionFormContext = createContext<string | undefined>(undefined);
+
 export function Form(props: FormProps) {
   const router = useRouter();
+  const generatedKey = useId();
+  const formKey = props.submissionKey ?? generatedKey;
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     // TYPE-EVIDENCE: React form props expose the same submit event handler shape at runtime.
     const applicationHandler = props.onSubmit as
@@ -625,20 +653,28 @@ export function Form(props: FormProps) {
     void router.submitAction(
       event.currentTarget,
       submitter,
-      props.submissionKey,
+      formKey,
     );
   }
 
   const { submissionKey: _submissionKey, ...formProps } = props;
-  return createElement("form", { ...formProps, onSubmit });
+  return createElement(
+    ActionFormContext.Provider,
+    { value: formKey, children: createElement("form", { ...formProps, onSubmit }) },
+  );
 }
 
 export function useNavigation<T = unknown>(options?: {
   form?: HTMLFormElement;
   submissionKey?: string;
 }): ActionNavigationState<T> {
+  const contextKey = useContext(ActionFormContext);
   // TYPE-EVIDENCE: the router stores ActionNavigationState values and the generic only describes its application data.
-  return useRouter().getActionNavigation(options?.form, options?.submissionKey) as ActionNavigationState<T>;
+  return useRouter().getActionNavigation(options?.form, options?.submissionKey ?? contextKey) as ActionNavigationState<T>;
+}
+
+export function useFormNavigation<T = unknown>() {
+  return useNavigation<T>();
 }
 
 function RouteRenderer({
@@ -845,7 +881,8 @@ async function readNavigationPayload(response: Response) {
   try {
     // TYPE-EVIDENCE: a marked navigation response is serialized by createNavigationDataResponse. The server validates the resolved contribution types before serialization.
     return await response.json() as Partial<InitialRouteData>;
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("malformed versioned")) throw error;
     return undefined;
   }
 }
@@ -857,24 +894,32 @@ async function readActionResult(response: Response): Promise<ActionResult | unde
     return undefined;
   }
   try {
-    // TYPE-EVIDENCE: the media type and version checks below validate the protocol payload before use.
-    const value = await response.json() as Partial<ActionResult>;
-    if (value.version !== 1 || typeof value.status !== "string") return undefined;
-    // TYPE-EVIDENCE: the status membership check narrows the protocol discriminator.
-    if (["success", "invalid", "failed"].includes(value.status)) {
-      // TYPE-EVIDENCE: the status membership check narrows the protocol discriminator.
-      const result = value as ActionResult;
-      return result;
+    const value: unknown = await response.json();
+    if (!isRecord(value) || value.version !== 1 || typeof value.status !== "string") {
+      throw new Error("Demiurge received a malformed versioned action result.");
+    }
+    if (value.status === "success") {
+      if (value.revalidate !== undefined && typeof value.revalidate !== "boolean") throw new Error("Demiurge received a malformed action result.");
+      return { version: 1, status: "success", data: value.data, ...(value.revalidate === undefined ? {} : { revalidate: value.revalidate }) };
+    }
+    if (value.status === "invalid") return { version: 1, status: "invalid", data: value.data };
+    if (value.status === "failed") {
+      if (value.message !== undefined && typeof value.message !== "string") throw new Error("Demiurge received a malformed action result.");
+      return { version: 1, status: "failed", ...(value.message === undefined ? {} : { message: value.message }) };
     }
     if (value.status === "redirect" && typeof value.location === "string" &&
         (value.history === "push" || value.history === "replace")) {
-      // TYPE-EVIDENCE: the preceding checks validate every required redirect field.
-      return value as ActionResult;
+      return { version: 1, status: "redirect", location: value.location, history: value.history };
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("malformed")) throw error;
     return undefined;
   }
   return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function validateActionRedirect(location: string) {
@@ -921,11 +966,39 @@ function createActionRequest(form: HTMLFormElement, submitter: HTMLElement | nul
   if (!canInterceptAction(form, submitter)) return undefined;
   const method = (submitter?.getAttribute("formmethod") || form.method || "get").toUpperCase();
   const action = submitter?.getAttribute("formaction") || form.action || window.location.href;
+  const enctype = submitter?.getAttribute("formenctype") || form.enctype || "application/x-www-form-urlencoded";
   const formData = new FormData(form);
   if (submitter && submitter.getAttribute("name")) {
     formData.append(submitter.getAttribute("name")!, submitter.getAttribute("value") ?? "");
   }
-  return { formData, method, url: action };
+  if (enctype === "multipart/form-data") {
+    return { body: formData, contentType: undefined, formData, method, url: action };
+  }
+  if (enctype === "application/x-www-form-urlencoded") {
+    const body = new URLSearchParams();
+    for (const [name, value] of formData) {
+      if (typeof value === "string") body.append(name, value);
+      else body.append(name, value.name);
+    }
+    return {
+      body,
+      contentType: "application/x-www-form-urlencoded;charset=UTF-8",
+      formData,
+      method,
+      url: action,
+    };
+  }
+  const lines: string[] = [];
+  for (const [name, value] of formData) {
+    lines.push(`${name}=${typeof value === "string" ? value : value.name}`);
+  }
+  return {
+    body: lines.join("\r\n"),
+    contentType: "text/plain;charset=UTF-8",
+    formData,
+    method,
+    url: action,
+  };
 }
 
 function scrollToHash(hash: string) {

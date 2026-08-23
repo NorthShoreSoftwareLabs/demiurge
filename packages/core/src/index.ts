@@ -6,6 +6,7 @@ export {
   RouteFocusBoundary,
   useRouteFocusBoundary,
   useNavigation,
+  useFormNavigation,
 } from "./browser";
 export type { ActionNavigationState, ActionResult, FormProps, LinkProps } from "./browser";
 export {
