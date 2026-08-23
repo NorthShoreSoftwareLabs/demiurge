@@ -231,6 +231,28 @@ The application must choose an idempotency key tied to the intended operation
 and authenticated principal. A client-provided key alone is not an authorization
 boundary.
 
+### Mutation revalidation
+
+An action can declare the cache tags that its successful result changes:
+
+```ts
+export const POST = action({
+  revalidate: [tag("posts")],
+  handler: async ({ input }) => {
+    await savePost(input);
+    return redirect("/posts", 303);
+  },
+});
+```
+
+The server invalidates only the declared tags after the action resolves. The
+action does not trigger global route-data revalidation. A tag function can use
+the parsed input or authenticated request context to select affected tags.
+
+The same invalidated cache is used by the next document or browser-data
+request. An action does not refresh an unrelated route or force a client
+navigation.
+
 ## Static generation
 
 Run the framework build command for a static application:

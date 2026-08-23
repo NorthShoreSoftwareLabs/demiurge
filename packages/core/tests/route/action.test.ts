@@ -232,4 +232,18 @@ describe("action helper", () => {
     await expect(response.json()).resolves.toEqual({ ok: true });
     expect(createPost).toHaveBeenCalledTimes(2);
   });
+
+  it("declares the cache tags that a successful mutation revalidates", async () => {
+    const capability = action({
+      revalidate: [{ id: "posts" }],
+      handler: () => new Response("ok"),
+    });
+
+    const response = await toResponse(
+      capability,
+      createContext(new Request("https://example.test/posts", { method: "POST" })),
+    );
+
+    expect(response.headers.get("x-demiurge-revalidate-tags")).toBe("posts");
+  });
 });
