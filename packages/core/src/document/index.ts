@@ -28,6 +28,10 @@ export {
   createNavigationDocument,
   DOCUMENT_CONTRIBUTION_ATTRIBUTE,
   DOCUMENT_SCRIPT_STRATEGY_ATTRIBUTE,
+  NAVIGATION_STATUS_ATTRIBUTE,
+  NAVIGATION_STATUS_ID,
+  announceNavigation,
+  ensureNavigationStatusRegion,
 } from "./navigation";
 export {
   renderDocument,

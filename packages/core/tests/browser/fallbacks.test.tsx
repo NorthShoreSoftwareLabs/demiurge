@@ -9,6 +9,8 @@ import {
   httpError,
   Link,
   page,
+  RouteFocusBoundary,
+  useRouteFocusBoundary,
   resolveMetadata,
   type LayoutProps,
   type LinkProps,
@@ -19,6 +21,7 @@ import {
 describe("browser router fallbacks", () => {
   beforeEach(() => {
     window.history.replaceState(null, "", "/");
+    document.body.querySelector("[data-demiurge-navigation-status]")?.remove();
     vi.stubGlobal("fetch", vi.fn(async () =>
       Response.json(
         { hasData: true },
@@ -68,6 +71,118 @@ describe("browser router fallbacks", () => {
       expect(screen.getByText("App not found: /missing")).toBeTruthy();
     });
     expect(document.title).toBe("Missing document");
+  });
+
+  it("announces a committed navigation and focuses an opted-in boundary", async () => {
+    window.history.replaceState(null, "", "/blog");
+    document.title = "Initial document";
+    const Router = createFileRouter({
+      routes: {
+        "./routes/@layout.tsx": routeModule({ default: FocusLayout }),
+        "./routes/blog.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Blog page at /blog")).toBeTruthy();
+      expect(document.querySelector('[role="status"]')?.textContent).toBe(
+        "Initial document",
+      );
+    });
+    expect(document.activeElement?.tagName).toBe("MAIN");
+    expect(document.activeElement?.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("composes an application ref around the focus boundary", async () => {
+    const appRef = vi.fn();
+    function RefLayout({ children }: LayoutProps) {
+      return <RouteFocusBoundary as="main" ref={appRef}>{children}</RouteFocusBoundary>;
+    }
+    window.history.replaceState(null, "", "/blog");
+    const Router = createFileRouter({
+      routes: {
+        "./routes/@layout.tsx": routeModule({ default: RefLayout }),
+        "./routes/blog.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Blog page at /blog")).toBeTruthy());
+    expect(appRef).toHaveBeenCalledWith(expect.any(HTMLElement));
+    cleanup();
+    expect(appRef).toHaveBeenLastCalledWith(null);
+  });
+
+  it("keeps the low-level focus hook safe outside a router", () => {
+    function BareHook() {
+      const props = useRouteFocusBoundary();
+      return <div {...props}>Bare hook</div>;
+    }
+    render(<BareHook />);
+    expect(screen.getByText("Bare hook").getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("commits one error announcement after a route render fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    window.history.replaceState(null, "", "/broken");
+    document.title = "Initial document";
+    const Router = createFileRouter({
+      routes: {
+        "./routes/@layout.tsx": routeModule({ default: FocusLayout }),
+        "./routes/@error.tsx": routeModule({ default: RouteError }),
+        "./routes/broken.tsx": routeModule({ GET: page(BrokenPage) }),
+      },
+    });
+
+    render(<Router />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Route error at /broken: render failed")).toBeTruthy();
+      expect(document.querySelector("[role=\"status\"]")?.textContent).toBe(
+        "Navigation failed",
+      );
+    });
+    expect(document.activeElement?.tagName).not.toBe("MAIN");
+  });
+
+  it("does not transition for a cancelled navigation", async () => {
+    window.history.replaceState(null, "", "/slow");
+    const Router = createFileRouter({
+      loadNavigationData: () => new Promise(() => undefined),
+      routes: {},
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.queryByRole("status")).toBeTruthy());
+    expect(screen.getByRole("status").textContent).toBe("");
+  });
+
+  it("does not transition during initial hydration", async () => {
+    const Router = createFileRouter({
+      initialMatch: {
+        status: "ready",
+        match: {
+          data: undefined,
+          error: undefined,
+          links: [],
+          layouts: [],
+          metadata: resolveMetadata(),
+          page: HomePage,
+          path: {},
+          pathname: "/",
+          render: { mode: "ssr" },
+          scripts: [],
+        },
+      } as never,
+      routes: {},
+    });
+
+    render(<Router />);
+    expect(screen.getByText("Home")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("");
+    expect(document.activeElement?.tagName).not.toBe("MAIN");
   });
 
   it("renders the built-in not-found UI when no app fallback exists", async () => {
@@ -407,6 +522,7 @@ describe("browser router fallbacks", () => {
 
     render(<Router />);
     await waitFor(() => expect(screen.getByText("Jump")).toBeTruthy());
+    const initialAnnouncement = document.querySelector("[role=\"status\"]")?.textContent;
     const section = document.getElementById("section");
     Object.defineProperty(section, "scrollIntoView", { value: scrollIntoView });
     fireEvent.click(screen.getByText("Jump"));
@@ -414,6 +530,7 @@ describe("browser router fallbacks", () => {
 
     expect(window.location.hash).toBe("#section");
     expect(loadNavigationData).toHaveBeenCalledTimes(1);
+    expect(document.querySelector("[role=\"status\"]")?.textContent).toBe(initialAnnouncement);
   });
 
   it("cannot commit a superseded navigation after the new route finishes", async () => {
@@ -677,6 +794,10 @@ function RootLayout({ children }: LayoutProps) {
       {children}
     </section>
   );
+}
+
+function FocusLayout({ children }: LayoutProps) {
+  return <RouteFocusBoundary as="main">{children}</RouteFocusBoundary>;
 }
 
 function HomePage(_props: RouteProps) {
