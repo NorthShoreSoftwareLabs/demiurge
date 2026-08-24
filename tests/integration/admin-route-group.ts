@@ -45,8 +45,22 @@ try {
     "settings redirect target",
   );
 
+  const invalidResponse = await fetch(`${origin}/login`, {
+    body: new URLSearchParams({ password: "incorrect", username: "operator" }),
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    method: "POST",
+    redirect: "manual",
+  });
+
+  assertEqual(invalidResponse.status, 401, "invalid login status");
+  assertEqual(invalidResponse.headers.get("set-cookie"), null, "invalid login cookie");
+
   const loginResponse = await fetch(`${origin}/login?from=%2Fdashboard`, {
-    body: "",
+    body: new URLSearchParams({
+      password: "demiurge-demo",
+      username: "operator",
+    }),
+    headers: { "content-type": "application/x-www-form-urlencoded" },
     method: "POST",
     redirect: "manual",
   });
@@ -55,7 +69,7 @@ try {
   )[0];
 
   assertEqual(loginResponse.status, 303, "login status");
-  assertEqual(sessionCookie, "session=1", "login session cookie");
+  assertIncludes(sessionCookie, "__Host-admin=", "login session cookie");
   assertEqual(
     loginResponse.headers.get("location"),
     "/dashboard",
@@ -66,10 +80,23 @@ try {
     headers: { accept: "text/html", cookie: sessionCookie },
   });
   const dashboardDocument = await dashboardWithSession.text();
+  const csrfCookie = dashboardWithSession.headers.getSetCookie()
+    .map((cookie) => cookie.split(";")[0])
+    .find((cookie) => cookie.startsWith("csrf-token="));
+  const csrfToken = csrfCookie?.slice("csrf-token=".length);
 
   assertEqual(dashboardWithSession.status, 200, "authenticated dashboard status");
   assertIncludes(dashboardDocument, "Dashboard", "authenticated dashboard document");
+  assertIncludes(dashboardDocument, "Demo operator", "typed principal data");
   assertIncludes(dashboardDocument, "admin-shell", "authenticated dashboard shell");
+  assertIncludes(dashboardDocument, "name=\"csrf-token\"", "logout CSRF field");
+  assertIncludes(csrfCookie ?? "", "csrf-token=", "logout CSRF cookie");
+  assertNotEmpty(csrfToken, "logout CSRF token");
+  assertEqual(
+    dashboardWithSession.headers.get("cache-control"),
+    "private, no-store",
+    "authenticated cache policy",
+  );
 
   const settingsWithSession = await fetch(`${origin}/settings`, {
     headers: { accept: "text/html", cookie: sessionCookie },
@@ -78,7 +105,46 @@ try {
 
   assertEqual(settingsWithSession.status, 200, "authenticated settings status");
   assertIncludes(settingsDocument, "Settings", "authenticated settings document");
+  assertIncludes(
+    settingsDocument,
+    "application policy permits access",
+    "application authorization policy",
+  );
   assertIncludes(settingsDocument, "admin-shell", "authenticated settings shell");
+
+  const logoutResponse = await fetch(`${origin}/logout`, {
+    body: new URLSearchParams({ "csrf-token": csrfToken ?? "" }),
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      cookie: `${sessionCookie}; ${csrfCookie}`,
+    },
+    method: "POST",
+    redirect: "manual",
+  });
+  const logoutBody = await logoutResponse.text();
+
+  assertEqual(
+    logoutResponse.status,
+    303,
+    `logout status (${logoutBody || "empty body"})`,
+  );
+  assertIncludes(
+    logoutResponse.headers.get("set-cookie") ?? "",
+    "Max-Age=0",
+    "logout cookie expiration",
+  );
+
+  const staleSessionResponse = await fetch(`${origin}/dashboard`, {
+    headers: { cookie: sessionCookie },
+    redirect: "manual",
+  });
+  const staleSessionBody = await staleSessionResponse.text();
+
+  assertEqual(
+    staleSessionResponse.status,
+    302,
+    `logged-out session status (${staleSessionBody || "empty body"})`,
+  );
 
   console.log("admin route group probe passed");
 } finally {
@@ -104,6 +170,12 @@ function assertEqual(actual: unknown, expected: unknown, label: string) {
 function assertIncludes(actual: string, expected: string, label: string) {
   if (!actual.includes(expected)) {
     throw new Error(`${label} omitted ${expected}.`);
+  }
+}
+
+function assertNotEmpty(actual: string | undefined, label: string) {
+  if (!actual) {
+    throw new Error(`${label} was empty.`);
   }
 }
 

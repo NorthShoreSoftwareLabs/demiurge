@@ -3,16 +3,15 @@ import { Link, page } from "@demiurgejs/core";
 export const GET = page({
   view: () => (
     <main>
-      <h1>Admin route group</h1>
+      <h1>Bring your own authentication</h1>
       <p>
-        The <code>(admin)</code> route group wraps <code>/dashboard</code> and{" "}
-        <code>/settings</code> in one shared layout and one shared session
-        policy, without adding an <code>/admin</code> URL segment.
+        The application checks credentials and permissions. Demiurge manages
+        the session lifecycle and the typed middleware context.
       </p>
       <p>
         Visit <Link to="/dashboard">Dashboard</Link> or{" "}
-        <Link to="/settings">Settings</Link> without a session cookie and the
-        group middleware redirects both to <Link to="/login">Log in</Link>.
+        <Link to="/settings">Settings</Link>. The group middleware redirects
+        unauthenticated requests to <Link to="/login">Log in</Link>.
       </p>
     </main>
   ),
