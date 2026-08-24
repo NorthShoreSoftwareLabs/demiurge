@@ -154,6 +154,7 @@ export type CorsResponseOptions =
 
 export type CsrfPolicy = false | true | {
   cookie?: string;
+  field?: string;
   header?: string;
 };
 

@@ -225,6 +225,50 @@ redirects, cancellation, and route refresh.
 browser router and exposes state through `useFormNavigation` and
 `useNavigation`.
 
+#### CSRF tokens in progressive forms
+
+Cookie-authenticated mutations use CSRF protection by default. The default
+policy accepts a matching token in the configured request header.
+
+If a form must work without JavaScript, configure a field on the route policy:
+
+```tsx
+export const policy = defineRoutePolicy({
+  security: { csrf: { field: "_csrf" } },
+});
+```
+
+Issue a token on the server. Then, include the same token in the form:
+
+```tsx
+<Form action={save}>
+  <input type="hidden" name="_csrf" value={token} />
+  <input name="title" />
+  <button type="submit">Save</button>
+</Form>
+```
+
+The configured field or header must match the CSRF cookie. Do not put a
+session token or another credential in the field.
+
+#### Mutation conformance limits
+
+Request cancellation is advisory. An aborted request can complete its server
+commit after the browser stops waiting for the result.
+
+A process can stop after a commit and before cache invalidation completes.
+Demiurge cannot roll back the application commit.
+
+A memory cache applies to one process. Use a shared cache store when all
+application instances must observe one invalidation.
+
+React owns optimistic state and conflict policy. Application tests must cover
+rollback, overlapping edits, and authoritative refresh for each optimistic UI.
+
+The framework tests simulate transport cancellation and stale browser results.
+They do not simulate a process failure during a commit or a network partition
+between application instances.
+
 ### Migration from action names
 
 Version 0.2.0 removes the earlier nightly action names. It does not provide
