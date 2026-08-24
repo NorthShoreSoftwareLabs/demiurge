@@ -11,6 +11,8 @@ import type {
 import type {
   HttpRouteContext,
   MaybePromise,
+  JsonCapability,
+  RawResponseCapability,
   ResponseCapability,
   RouteRequestContextFor,
   ServerTimingInput,
@@ -28,6 +30,30 @@ export type MutationInput<
 export const MUTATION_REQUEST_HEADER = "x-demiurge-mutation";
 export const MUTATION_REQUEST_VALUE = "data;v=1";
 export const MUTATION_RESPONSE_MEDIA_TYPE = "application/vnd.demiurge.mutation+json;v=1";
+
+declare const mutationResultType: unique symbol;
+
+export type MutationMethod = "POST" | "PUT" | "PATCH" | "DELETE";
+
+export type MutationCapability<
+  TResult = unknown,
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+> = RawResponseCapability<TPath, TValues> & {
+  readonly [mutationResultType]: TResult;
+};
+
+export type MutationMethodsOf<TModule> = {
+  [TMethod in keyof TModule as
+    TMethod extends MutationMethod
+      ? TModule[TMethod] extends MutationCapability ? TMethod : never
+      : never]: TModule[TMethod] extends MutationCapability<infer TResult>
+        ? TResult
+        : never;
+};
+
+type MutationResponseData<TResult> = Awaited<TResult> extends
+  JsonCapability<infer TData, string, object> ? TData : unknown;
 
 export type MutationValidationIssue = {
   code: string;
@@ -79,11 +105,13 @@ export type MutationOptions<
   TInput,
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
+  TResult extends Response | ResponseCapability<TPath, TValues> =
+    Response | ResponseCapability<TPath, TValues>,
 > = {
   cors?: CorsPolicy;
   handler: (
     context: MutationContext<TInput, TPath, TValues>,
-  ) => MaybePromise<Response | ResponseCapability<TPath, TValues>>;
+  ) => MaybePromise<TResult>;
   idempotency?: MutationIdempotency<TInput, TPath, TValues>;
   input?: MutationInput<TInput, TPath, TValues>;
   revalidateRoute?: boolean;
@@ -96,10 +124,12 @@ export function mutation<
   TInput = undefined,
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
+  TResult extends Response | ResponseCapability<TPath, TValues> =
+    Response | ResponseCapability<TPath, TValues>,
 >(
-  options: MutationOptions<TInput, TPath, TValues>,
-) {
-  return response<TPath, TValues>(
+  options: MutationOptions<TInput, TPath, TValues, TResult>,
+): MutationCapability<MutationResponseData<TResult>, TPath, TValues> {
+  const capability = response<TPath, TValues>(
     async (context) => {
       let input: TInput;
       try {
@@ -156,6 +186,14 @@ export function mutation<
       timing: options.timing,
     },
   );
+
+  // TYPE-EVIDENCE: mutation() creates the raw response capability above. The
+  // brand records the handler's JSON result type without adding runtime data.
+  return capability as MutationCapability<
+    MutationResponseData<TResult>,
+    TPath,
+    TValues
+  >;
 }
 
 function isMutationProtocolRequest(request: Request) {

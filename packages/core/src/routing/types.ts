@@ -12,6 +12,29 @@ export interface RouteConcretePaths {}
 
 export interface RouteRequestContexts {}
 
+export interface RouteMutationMethods {}
+
+type KnownMutationPath = keyof RouteMutationMethods & string;
+type HasGeneratedMutations = [KnownMutationPath] extends [never] ? false : true;
+
+export type MutationRoute = HasGeneratedMutations extends true
+  ? KnownMutationPath
+  : string;
+
+export type MutationMethodFor<TPath extends MutationRoute> =
+  TPath extends KnownMutationPath
+    ? keyof RouteMutationMethods[TPath] & string
+    : "POST" | "PUT" | "PATCH" | "DELETE";
+
+export type MutationDataFor<
+  TPath extends MutationRoute,
+  TMethod extends MutationMethodFor<TPath>,
+> = TPath extends KnownMutationPath
+  ? TMethod extends keyof RouteMutationMethods[TPath]
+    ? RouteMutationMethods[TPath][TMethod]
+    : never
+  : unknown;
+
 type KnownRoutePath = keyof RoutePathVars & string;
 type KnownConcretePath = RouteConcretePaths[keyof RouteConcretePaths] & string;
 type HasGeneratedRoutes = [KnownRoutePath] extends [never] ? false : true;

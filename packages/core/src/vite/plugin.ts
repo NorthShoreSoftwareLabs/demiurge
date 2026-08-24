@@ -500,6 +500,8 @@ export function stripClientPageData(code: string) {
   const ast = asAstNode(parseAst(code));
   const dataRanges: Array<{ end: number; start: number }> = [];
   const documentRanges = findDocumentContributionRanges(ast);
+  const mutationRanges = findUnsafeMethodRanges(ast);
+  const mutationReexportRanges = findUnsafeMethodReexportRanges(ast);
   const serverImports: AstNode[] = [];
 
   walkAst(ast, (node) => {
@@ -524,7 +526,12 @@ export function stripClientPageData(code: string) {
     }
   });
 
-  const serverRanges = [...dataRanges, ...documentRanges];
+  const serverRanges = [
+    ...dataRanges,
+    ...documentRanges,
+    ...mutationRanges,
+    ...mutationReexportRanges,
+  ];
 
   if (serverRanges.length === 0) {
     return code;
@@ -553,10 +560,98 @@ export function stripClientPageData(code: string) {
     removalRanges.push({ end: declaration.end, start: declaration.start });
   }
 
-  return replaceRanges(code, removalRanges, (range) =>
-    dataRanges.includes(range) ? "data: undefined" :
-      documentRanges.includes(range) ? "undefined" : ""
-  );
+  return replaceRanges(code, removalRanges, (range) => {
+    if (dataRanges.includes(range)) return "data: undefined";
+    if (documentRanges.includes(range) || mutationRanges.includes(range)) {
+      return "undefined";
+    }
+    return mutationReexportRanges.find((entry) => entry === range)
+      ?.replacement ?? "";
+  });
+}
+
+const unsafeMethodNames = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+function findUnsafeMethodRanges(ast: AstNode) {
+  const ranges: Array<{ end: number; start: number }> = [];
+  const exportedLocals = new Set<string>();
+
+  for (const statement of asNodeArray(ast.body)) {
+    if (statement.type !== "ExportNamedDeclaration") continue;
+    const declaration = asNode(statement.declaration);
+    if (declaration?.type === "VariableDeclaration") {
+      for (const declarator of asNodeArray(declaration.declarations)) {
+        const id = asNode(declarator.id);
+        if (
+          id?.type === "Identifier" &&
+          unsafeMethodNames.has(String(id.name))
+        ) {
+          exportedLocals.add(String(id.name));
+        }
+      }
+    }
+
+    for (const specifier of asNodeArray(statement.specifiers)) {
+      const exported = propertyName(specifier.exported);
+      const local = propertyName(specifier.local);
+      if (exported && local && unsafeMethodNames.has(exported)) {
+        exportedLocals.add(local);
+      }
+    }
+  }
+
+  walkAst(ast, (node) => {
+    if (node.type !== "VariableDeclarator") return;
+    const id = asNode(node.id);
+    const init = asNode(node.init);
+    if (
+      id?.type === "Identifier" &&
+      exportedLocals.has(String(id.name)) &&
+      init
+    ) {
+      ranges.push({ end: init.end, start: init.start });
+    }
+  });
+
+  return ranges;
+}
+
+function findUnsafeMethodReexportRanges(ast: AstNode) {
+  const ranges: Array<{ end: number; replacement: string; start: number }> = [];
+
+  for (const statement of asNodeArray(ast.body)) {
+    if (statement.type !== "ExportNamedDeclaration") continue;
+    const source = asNode(statement.source)?.value;
+    if (typeof source !== "string") continue;
+
+    const safe: string[] = [];
+    const unsafe: string[] = [];
+    for (const specifier of asNodeArray(statement.specifiers)) {
+      const exported = propertyName(specifier.exported);
+      const local = propertyName(specifier.local);
+      if (!exported || !local) continue;
+      if (unsafeMethodNames.has(exported)) {
+        unsafe.push(exported);
+      } else {
+        safe.push(local === exported ? local : `${local} as ${exported}`);
+      }
+    }
+
+    if (unsafe.length === 0) continue;
+    const safeExport = safe.length > 0
+      ? `export { ${safe.join(", ")} } from ${JSON.stringify(source)};\n`
+      : "";
+    const removedExports = unsafe
+      .map((name) => `export const ${name} = undefined;`)
+      .join("\n");
+    ranges.push({
+      end: statement.end,
+      replacement: `${safeExport}${removedExports}`,
+      start: statement.start,
+    });
+  }
+
+  return ranges;
 }
 
 const documentContributionNames = new Set(["links", "metadata", "scripts"]);

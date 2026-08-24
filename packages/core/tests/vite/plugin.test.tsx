@@ -144,6 +144,37 @@ export const GET = page({ view: () => null });`;
     expect(transformed).toContain("view: () => null");
   });
 
+  it("strips unsafe route handlers and their server-only imports", () => {
+    const source = `
+import { secret } from "./mutation.server.js";
+import { json, mutation, page } from "@demiurgejs/core";
+export const GET = page({ view: () => null });
+export const POST = mutation({ handler: () => json({ secret }) });
+const update = mutation({ handler: () => new Response(secret) });
+export { update as PATCH };`;
+    const transformed = unstable_stripClientPageData(source);
+
+    expect(transformed).not.toContain("secret");
+    expect(transformed).not.toContain("mutation.server");
+    expect(transformed).toContain("export const POST = undefined");
+    expect(transformed).toContain("const update = undefined");
+    expect(transformed).toContain("view: () => null");
+  });
+
+  it("strips unsafe re-exports and preserves safe sibling exports", () => {
+    const source = `
+export { loader as GET, save as POST, update as PATCH } from "./route.server.js";`;
+    const transformed = unstable_stripClientPageData(source);
+
+    expect(transformed).toContain(
+      'export { loader as GET } from "./route.server.js";',
+    );
+    expect(transformed).toContain("export const POST = undefined;");
+    expect(transformed).toContain("export const PATCH = undefined;");
+    expect(transformed).not.toContain("save as POST");
+    expect(transformed).not.toContain("update as PATCH");
+  });
+
   it("rejects server-only imports used by client route code", () => {
     const source = `
 import { secret } from "./secrets.server.js";

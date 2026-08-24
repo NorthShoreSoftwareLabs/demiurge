@@ -270,6 +270,44 @@ href({ to: "/blog/[slug]", path: { slug: "hello" } });
 </Link>
 ```
 
+The generated declarations also identify each route mutation method. Use
+`createMutationAction(...)` to create a client function for React
+`useActionState`:
+
+```tsx
+import { createMutationAction } from "@demiurgejs/core";
+import { useActionState } from "react";
+
+const savePost = createMutationAction<{ title: string }>({
+  route: "/blog/[slug]",
+  method: "PATCH",
+  path: { slug: "hello" },
+});
+
+export function EditPost() {
+  const [result, save, pending] = useActionState(savePost, undefined);
+
+  return (
+    <form action={save}>
+      <input name="title" />
+      <button disabled={pending}>Save</button>
+      {result?.status === "failed" ? <p>{result.message}</p> : null}
+    </form>
+  );
+}
+```
+
+The route must export `mutation(...)` under the selected unsafe HTTP method.
+Generated types reject an unknown route, an unavailable method, or missing path
+values.
+
+Each client function owns one current submission. A new call cancels the old
+request when possible. An obsolete response cannot replace the new result.
+
+The function submits `FormData` through the HTTP route. It sends same-origin
+credentials and the mutation protocol headers. The browser does not import the
+server mutation handler.
+
 Generated route declarations live under the application's `.demiurge`
 directory and should not be edited by hand.
 
