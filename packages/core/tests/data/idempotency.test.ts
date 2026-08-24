@@ -141,6 +141,43 @@ describe("idempotent mutations", () => {
     expect(createPost).toHaveBeenCalledTimes(1);
   });
 
+  it("gives concurrent Response callers independent replay snapshots", async () => {
+    let releaseMutation!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      releaseMutation = resolve;
+    });
+    const createPost = vi.fn(async () => {
+      await pending;
+      return Response.json(
+        { id: 1 },
+        { headers: { "x-demiurge-revalidate-tags": "posts" } },
+      );
+    });
+    const store = createMemoryIdempotencyStore();
+    const request = {
+      fn: createPost,
+      key: ["mutation-response", "retry-key"],
+    } as const;
+    const firstPending = store.run(request);
+    const replayPending = store.run(request);
+
+    releaseMutation();
+    const [first, replay] = await Promise.all([firstPending, replayPending]);
+
+    expect(first.replayed).toBe(false);
+    expect(replay.replayed).toBe(true);
+    expect(first.value).not.toBe(replay.value);
+    await expect(first.value.json()).resolves.toEqual({ id: 1 });
+    await expect(replay.value.json()).resolves.toEqual({ id: 1 });
+    first.value.headers.delete("x-demiurge-revalidate-tags");
+
+    const laterReplay = await store.run(request);
+    expect(laterReplay.replayed).toBe(true);
+    expect(laterReplay.value.headers.get("x-demiurge-revalidate-tags")).toBe("posts");
+    await expect(laterReplay.value.json()).resolves.toEqual({ id: 1 });
+    expect(createPost).toHaveBeenCalledOnce();
+  });
+
   it("expires completed mutation results after TTL", async () => {
     let now = 0;
     const store = createMemoryIdempotencyStore({ now: () => now });

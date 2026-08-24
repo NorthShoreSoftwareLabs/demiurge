@@ -214,8 +214,8 @@ The client preserves multipart values and files. It does not set the multipart
 content type because the browser must add the boundary.
 
 Set `revalidateRoute` to `true` on `mutation(...)` to refresh the current route
-after success. Use `revalidate` to invalidate cache tags. The operations are
-separate.
+after success. Use `revalidate` to invalidate declared cache keys and tags. The
+operations are separate.
 
 The server controls route refresh. A client cannot add or change the
 `revalidateRoute` declaration.
@@ -234,6 +234,18 @@ it follows the redirect.
 Cache invalidation and route refresh have different purposes. The `revalidate`
 option changes cached server authority. The `revalidateRoute` option retrieves
 the current authority for the browser.
+
+The server resolves `revalidate` only after a successful handler result. It
+completes invalidation before it returns a success or redirect response.
+
+Validation, failed, and not-found results do not invalidate cached data. An
+idempotent replay does not repeat the original invalidation.
+
+If invalidation fails, the route uses the normal error and redaction path. The
+application change can already be committed, and Demiurge cannot roll it back.
+
+The browser cannot supply keys or tags. Only the server route owns the
+declaration.
 
 #### React Action state
 

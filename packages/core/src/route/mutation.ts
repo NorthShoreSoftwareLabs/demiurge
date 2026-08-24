@@ -61,6 +61,7 @@ export type MutationCapability<
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
 > = RawResponseCapability<TPath, TValues> & {
+  mutation: true;
   readonly [mutationResultType]: {
     data: TResult;
     fields: TField;
@@ -130,10 +131,15 @@ export type MutationRevalidation<
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
 > =
-  | readonly CacheTag[]
+  | MutationRevalidationDeclaration
   | ((
     context: MutationContext<TInput, TPath, TValues>,
-  ) => MaybePromise<readonly CacheTag[]>);
+  ) => MaybePromise<MutationRevalidationDeclaration>);
+
+export type MutationRevalidationDeclaration = {
+  keys?: readonly CacheKey[];
+  tags?: readonly CacheTag[];
+};
 
 export const MUTATION_REVALIDATION_HEADER = "x-demiurge-revalidate-tags";
 
@@ -263,7 +269,7 @@ export function mutation<
         ttl: options.idempotency.ttl,
       });
 
-      if (result.replayed) return result.value;
+      if (result.replayed) return withoutRevalidationHeader(result.value);
       if (!isSuccessfulMutationResponse(result.value)) return result.value;
       const revalidation = await resolveRevalidation(
         options.revalidate,
@@ -280,7 +286,10 @@ export function mutation<
 
   // TYPE-EVIDENCE: mutation() creates the raw response capability above. The
   // brand records the handler's JSON result type without adding runtime data.
-  return capability as MutationCapability<
+  return {
+    ...capability,
+    mutation: true,
+  } as MutationCapability<
     MutationResponseData<TResult>,
     TField,
     TPath,
@@ -412,7 +421,7 @@ async function resolveRevalidation<
   revalidate: MutationRevalidation<TInput, TPath, TValues> | undefined,
   context: MutationContext<TInput, TPath, TValues>,
 ) {
-  if (!revalidate) return [];
+  if (!revalidate) return {};
   return typeof revalidate === "function"
     ? await revalidate(context)
     : revalidate;
@@ -420,14 +429,33 @@ async function resolveRevalidation<
 
 async function addRevalidationHeader(
   result: Response,
-  tags: readonly CacheTag[],
+  invalidation: MutationRevalidationDeclaration,
 ) {
-  if (tags.length === 0) return result;
   const headers = new Headers(result.headers);
-  headers.set(
-    MUTATION_REVALIDATION_HEADER,
-    tags.map((value) => value.id).join(","),
-  );
+  headers.delete(MUTATION_REVALIDATION_HEADER);
+  const keys = invalidation.keys ?? [];
+  const tags = invalidation.tags ?? [];
+  if (keys.length > 0 || tags.length > 0) {
+    headers.set(
+      MUTATION_REVALIDATION_HEADER,
+      encodeURIComponent(serializeMutationResult({
+        keys,
+        tags: tags.map((value) => value.id),
+        version: 1,
+      })),
+    );
+  }
+  return new Response(result.body, {
+    headers,
+    status: result.status,
+    statusText: result.statusText,
+  });
+}
+
+function withoutRevalidationHeader(result: Response) {
+  if (!result.headers.has(MUTATION_REVALIDATION_HEADER)) return result;
+  const headers = new Headers(result.headers);
+  headers.delete(MUTATION_REVALIDATION_HEADER);
   return new Response(result.body, {
     headers,
     status: result.status,
