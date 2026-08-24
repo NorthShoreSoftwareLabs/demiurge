@@ -124,6 +124,10 @@ export async function verifySessionStoreContract(
       "destroy() must remove an existing identifier",
     );
     assert(
+      await store.read(successfulRotation.record.id, now) === undefined,
+      "destroy() must revoke a session for another store instance",
+    );
+    assert(
       !await store.destroy(successfulRotation.record.id),
       "destroy() must report a missing identifier",
     );
