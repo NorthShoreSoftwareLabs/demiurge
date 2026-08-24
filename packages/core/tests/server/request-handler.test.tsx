@@ -122,8 +122,12 @@ describe("request handler", () => {
 
   it("invalidates declared mutation tags and strips the transport header", async () => {
     const store = createMemoryCacheStore();
+    const invalidateKey = vi.spyOn(store, "delete");
     const invalidateTags = vi.spyOn(store, "invalidateTags");
-    const revalidate = vi.fn(() => [{ id: "posts" }] as const);
+    const revalidate = vi.fn(() => ({
+      keys: [["post", 1]],
+      tags: [{ id: "posts,archive" }],
+    } as const));
     const routeModules = {
       "./routes/posts.ts": {
         POST: mutation({
@@ -153,18 +157,150 @@ describe("request handler", () => {
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toBe("updated");
     expect(response.headers.has("x-demiurge-revalidate-tags")).toBe(false);
+    expect(invalidateKey).toHaveBeenCalledTimes(3);
     expect(invalidateTags).toHaveBeenCalledTimes(1);
+    expect(invalidateKey.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      invalidateTags.mock.invocationCallOrder[0]!,
+    );
     expect(invalidateTags.mock.calls[0]?.[0]).toEqual([
-      "test:test:1:build:tag:posts",
-      "test:test:1:private:tag:posts",
-      "test:test:1:public:tag:posts",
+      "test:test:1:build:tag:posts,archive",
+      "test:test:1:private:tag:posts,archive",
+      "test:test:1:public:tag:posts,archive",
     ]);
+  });
+
+  it("ignores invalidation metadata from a non-mutation route", async () => {
+    const store = createMemoryCacheStore();
+    const invalidateTags = vi.spyOn(store, "invalidateTags");
+    const metadata = encodeURIComponent(JSON.stringify({
+      keys: [],
+      tags: ["posts"],
+      version: 1,
+    }));
+    const routeModules = {
+      "./routes/posts.ts": {
+        GET: rawResponse(() => new Response("read", {
+          headers: { "x-demiurge-revalidate-tags": metadata },
+        })),
+      },
+    } satisfies Record<string, RouteModule>;
+    const handler = createRequestHandler({
+      cacheStore: {
+        namespace: { app: "test", environment: "test", schemaVersion: 1 },
+        store,
+      },
+      routeModules,
+      routes: Object.fromEntries(
+        Object.entries(routeModules).map(([file, module]) => [
+          file,
+          routeModule(module),
+        ]),
+      ),
+    });
+
+    const result = await handler(new Request("https://example.test/posts"));
+
+    expect(result.status).toBe(200);
+    expect(result.headers.has("x-demiurge-revalidate-tags")).toBe(false);
+    expect(invalidateTags).not.toHaveBeenCalled();
+  });
+
+  it("waits for redirect invalidation before it returns the redirect", async () => {
+    const store = createMemoryCacheStore();
+    let releaseInvalidation!: () => void;
+    const invalidation = new Promise<void>((resolve) => {
+      releaseInvalidation = resolve;
+    });
+    const invalidateTags = vi.spyOn(store, "invalidateTags")
+      .mockImplementation(async () => {
+        await invalidation;
+        return 0;
+      });
+    const routeModules = {
+      "./routes/posts.ts": {
+        POST: mutation({
+          revalidate: { tags: [{ id: "posts" }] },
+          handler: () => redirect("/done", 303),
+        }),
+      },
+    } satisfies Record<string, RouteModule>;
+    const handler = createRequestHandler({
+      cacheStore: {
+        namespace: { app: "test", environment: "test", schemaVersion: 1 },
+        store,
+      },
+      routeModules,
+      routes: Object.fromEntries(
+        Object.entries(routeModules).map(([file, module]) => [
+          file,
+          routeModule(module),
+        ]),
+      ),
+    });
+    let settled = false;
+    const pending = handler(
+      new Request("https://example.test/posts", { method: "POST" }),
+    ).then((response) => {
+      settled = true;
+      return response;
+    });
+
+    await vi.waitFor(() => expect(invalidateTags).toHaveBeenCalledOnce());
+    expect(settled).toBe(false);
+    releaseInvalidation();
+    const result = await pending;
+
+    expect(result.status).toBe(303);
+    expect(result.headers.get("location")).toBe("/done");
+    expect(result.headers.has("x-demiurge-revalidate-tags")).toBe(false);
+  });
+
+  it("uses the route error path when invalidation fails", async () => {
+    const store = createMemoryCacheStore();
+    vi.spyOn(store, "invalidateTags").mockRejectedValue(
+      new Error("private store failure"),
+    );
+    const onError = vi.fn();
+    const routeModules = {
+      "./routes/posts.ts": {
+        POST: mutation({
+          revalidate: { tags: [{ id: "posts" }] },
+          handler: () => new Response("committed"),
+        }),
+      },
+    } satisfies Record<string, RouteModule>;
+    const handler = createRequestHandler({
+      cacheStore: {
+        namespace: { app: "test", environment: "test", schemaVersion: 1 },
+        store,
+      },
+      onError,
+      routeModules,
+      routes: Object.fromEntries(
+        Object.entries(routeModules).map(([file, module]) => [
+          file,
+          routeModule(module),
+        ]),
+      ),
+    });
+
+    const result = await handler(
+      new Request("https://example.test/posts", { method: "POST" }),
+    );
+
+    expect(result.status).toBe(500);
+    expect(result.headers.has("x-demiurge-revalidate-tags")).toBe(false);
+    await expect(result.text()).resolves.not.toContain("private store failure");
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "private store failure" }),
+      { pathname: "/posts", site: "route" },
+    );
   });
 
   it("does not invalidate tags when a mutation fails", async () => {
     const store = createMemoryCacheStore();
     const invalidateTags = vi.spyOn(store, "invalidateTags");
-    const revalidate = vi.fn(() => [{ id: "posts" }] as const);
+    const revalidate = vi.fn(() => ({ tags: [{ id: "posts" }] } as const));
     const routeModules = {
       "./routes/posts.ts": {
         POST: mutation({
@@ -199,7 +335,7 @@ describe("request handler", () => {
     const store = createMemoryCacheStore();
     const invalidateTags = vi.spyOn(store, "invalidateTags");
     const idempotency = createMemoryIdempotencyStore();
-    const revalidate = vi.fn(() => [{ id: "posts" }] as const);
+    const revalidate = vi.fn(() => ({ tags: [{ id: "posts" }] } as const));
     const routeModules = {
       "./routes/posts.ts": {
         POST: mutation({
@@ -254,7 +390,7 @@ describe("request handler", () => {
           view: ({ data }) => <main>{data}</main>,
         }),
         POST: mutation({
-          revalidate: [{ id: "value" }],
+          revalidate: { tags: [{ id: "value" }] },
           handler: async () => {
             signalMutationStarted();
             value = "after";

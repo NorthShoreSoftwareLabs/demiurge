@@ -120,7 +120,7 @@ describe("mutation helper", () => {
 
   it("keeps cache-tag invalidation separate from browser route revalidation", async () => {
     const capability = mutation({
-      revalidate: [{ id: "posts" }],
+      revalidate: { tags: [{ id: "posts" }] },
       revalidateRoute: true,
       handler: () => json({ saved: true }),
     });
@@ -129,7 +129,11 @@ describe("mutation helper", () => {
       { headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE }, method: "POST" },
     )));
 
-    expect(response.headers.get("x-demiurge-revalidate-tags")).toBe("posts");
+    expect(readRevalidation(response)).toEqual({
+      keys: [],
+      tags: ["posts"],
+      version: 1,
+    });
     expect(response.headers.get("content-type")).toBe(MUTATION_RESPONSE_MEDIA_TYPE);
     await expect(response.json()).resolves.toMatchObject({
       version: 1,
@@ -225,6 +229,20 @@ describe("mutation helper", () => {
       headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE },
       method: "POST",
     }));
+
+    await expect(toResponse(capability, context)).rejects.toThrow(
+      "A mutation result contains a value that JSON cannot serialize.",
+    );
+  });
+
+  it("rejects an unsupported cache key in revalidation metadata", async () => {
+    const capability = mutation({
+      revalidate: { keys: [["post", Number.NaN]] },
+      handler: () => new Response("committed"),
+    });
+    const context = createContext(
+      new Request("https://example.test/posts", { method: "POST" }),
+    );
 
     await expect(toResponse(capability, context)).rejects.toThrow(
       "A mutation result contains a value that JSON cannot serialize.",
@@ -362,7 +380,7 @@ describe("mutation helper", () => {
 
   it("declares the cache tags that a successful mutation revalidates", async () => {
     const capability = mutation({
-      revalidate: [{ id: "posts" }],
+      revalidate: { tags: [{ id: "posts" }] },
       handler: () => new Response("ok"),
     });
 
@@ -371,11 +389,15 @@ describe("mutation helper", () => {
       createContext(new Request("https://example.test/posts", { method: "POST" })),
     );
 
-    expect(response.headers.get("x-demiurge-revalidate-tags")).toBe("posts");
+    expect(readRevalidation(response)).toEqual({
+      keys: [],
+      tags: ["posts"],
+      version: 1,
+    });
   });
 
   it("does not declare cache tags for a failed mutation", async () => {
-    const revalidate = vi.fn(() => [{ id: "posts" }] as const);
+    const revalidate = vi.fn(() => ({ tags: [{ id: "posts" }] } as const));
     const capability = mutation({
       revalidate,
       handler: () => new Response("failed", { status: 422 }),
@@ -390,3 +412,9 @@ describe("mutation helper", () => {
     expect(revalidate).not.toHaveBeenCalled();
   });
 });
+
+function readRevalidation(response: Response) {
+  const value = response.headers.get("x-demiurge-revalidate-tags");
+  if (!value) return undefined;
+  return JSON.parse(decodeURIComponent(value)) as unknown;
+}
