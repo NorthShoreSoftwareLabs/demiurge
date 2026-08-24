@@ -8,7 +8,7 @@ import {
 import { readMessage } from "./message-store";
 
 // A page `data` loader receives a fresh `cache` from the framework on every
-// request. An action route receives no `cache` at all. Reading and
+// request. A mutation route receives no `cache` at all. Reading and
 // invalidating the same tagged entry needs one shared cache, so this module
 // exports a single instance instead of relying on the framework-injected one.
 export const cache = createMemoryCache();

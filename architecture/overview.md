@@ -30,7 +30,7 @@ Route modules then declare what can happen at that address:
 
 ```ts
 export const GET = page(...)
-export const POST = action(...)
+export const POST = mutation(...)
 export const WS = socket(...)
 ```
 

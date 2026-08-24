@@ -34,34 +34,34 @@ test("production SSR hydrates and navigates without a document reload", async ({
   expect(pageErrors).toEqual([]);
 });
 
-test("production action forms use their typed redirect history operation", async ({
+test("production mutation forms use their typed redirect history operation", async ({
   page,
 }) => {
   const actionRequests: string[] = [];
   page.on("request", (request) => {
-    if (request.headers()["x-demiurge-action"] === "data;v=1") {
+    if (request.headers()["x-demiurge-mutation"] === "data;v=1") {
       actionRequests.push(request.url());
     }
   });
 
   await page.goto("/");
-  await page.getByRole("link", { name: "Test action forms" }).click();
-  await expect(page).toHaveURL("http://localhost:42177/action-forms");
+  await page.getByRole("link", { name: "Test mutation forms" }).click();
+  await expect(page).toHaveURL("http://localhost:42177/mutation-forms");
 
   await page.getByRole("button", { name: "Save with push" }).click();
-  await expect(page).toHaveURL("http://localhost:42177/action-forms?result=push");
+  await expect(page).toHaveURL("http://localhost:42177/mutation-forms?result=push");
   await expect(page.getByText("Result: push")).toBeVisible();
   await page.goBack();
-  await expect(page).toHaveURL("http://localhost:42177/action-forms");
+  await expect(page).toHaveURL("http://localhost:42177/mutation-forms");
 
   await page.getByRole("button", { name: "Save with replace" }).click();
-  await expect(page).toHaveURL("http://localhost:42177/action-forms?result=replace");
+  await expect(page).toHaveURL("http://localhost:42177/mutation-forms?result=replace");
   await expect(page.getByText("Result: replace")).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL("http://localhost:42177/");
   expect(actionRequests).toEqual([
-    "http://localhost:42177/action-forms",
-    "http://localhost:42177/action-forms",
+    "http://localhost:42177/mutation-forms",
+    "http://localhost:42177/mutation-forms",
   ]);
 });
 

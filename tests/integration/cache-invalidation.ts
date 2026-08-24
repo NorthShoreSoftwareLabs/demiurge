@@ -30,11 +30,11 @@ try {
   const second = parseMessage(await fetchDocument(origin));
   assertMessage(second, { message: "Welcome to Demiurge.", sourceReads: 1 });
 
-  // The action commits the mutation and invalidates the "message" tag.
+  // The mutation commits and invalidates the "message" tag.
   const updateResponse = await postMessage(origin, "Cache invalidation works.");
   if (updateResponse.status !== 303 || updateResponse.headers.get("location") !== "/") {
     throw new Error(
-      `Update action returned status ${updateResponse.status} with location ${updateResponse.headers.get("location")}.`,
+      `Update mutation returned status ${updateResponse.status} with location ${updateResponse.headers.get("location")}.`,
     );
   }
 

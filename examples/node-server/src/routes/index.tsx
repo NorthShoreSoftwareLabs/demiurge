@@ -39,7 +39,7 @@ function HomePage({
       {" | "}
       <Link to="/navigation">Test navigation</Link>
       {" | "}
-      <Link to="/action-forms">Test action forms</Link>
+      <Link to="/mutation-forms">Test mutation forms</Link>
       {" | "}
       <Link to="/items/%E0%A4%A">Test malformed URL</Link>
     </main>

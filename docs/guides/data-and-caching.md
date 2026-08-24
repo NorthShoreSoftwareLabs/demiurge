@@ -223,7 +223,7 @@ Keep query functions server-only when they access secrets or private services.
 ## Idempotent mutations
 
 `createMemoryIdempotencyStore(...)` and `runIdempotentMutation(...)` coordinate
-duplicate mutations. `action(...)` can combine input parsing with an idempotency
+duplicate mutations. `mutation(...)` can combine input parsing with an idempotency
 policy. Completed results have a finite lifetime. In-flight mutations are not
 expired or evicted while work is running.
 
@@ -233,10 +233,10 @@ boundary.
 
 ### Mutation revalidation
 
-An action can declare the cache tags that its successful result changes:
+A mutation can declare the cache tags that its successful result changes:
 
 ```ts
-export const POST = action({
+export const POST = mutation({
   revalidate: [tag("posts")],
   handler: async ({ input }) => {
     await savePost(input);
@@ -245,12 +245,12 @@ export const POST = action({
 });
 ```
 
-The server invalidates only the declared tags after the action resolves. The
-action does not trigger global route-data revalidation. A tag function can use
+The server invalidates only the declared tags after the mutation resolves. The
+mutation does not trigger global route-data revalidation. A tag function can use
 the parsed input or authenticated request context to select affected tags.
 
 The same invalidated cache is used by the next document or browser-data
-request. An action does not refresh an unrelated route or force a client
+request. A mutation does not refresh an unrelated route or force a client
 navigation.
 
 ## Static generation

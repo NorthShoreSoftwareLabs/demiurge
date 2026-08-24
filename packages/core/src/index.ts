@@ -8,7 +8,7 @@ export {
   useNavigation,
   useFormNavigation,
 } from "./browser";
-export type { ActionNavigationState, ActionResult, FormProps, LinkProps } from "./browser";
+export type { FormProps, LinkProps, MutationNavigationState, MutationResult } from "./browser";
 export {
   assertAdapterCapabilities,
   checkAdapterCapabilities,
@@ -140,13 +140,13 @@ export {
   renderPageResponse,
 } from "./server";
 export {
-  action,
-  actionInput,
-  ACTION_REQUEST_HEADER,
-  ACTION_REQUEST_VALUE,
-  ACTION_RESPONSE_MEDIA_TYPE,
+  mutation,
+  mutationInput,
+  MUTATION_REQUEST_HEADER,
+  MUTATION_REQUEST_VALUE,
+  MUTATION_RESPONSE_MEDIA_TYPE,
   defineMiddleware,
-  ActionValidationError,
+  MutationValidationError,
   html,
   httpError,
   HttpError,
@@ -173,12 +173,12 @@ export type {
   AdapterDefinition,
 } from "./adapter";
 export type {
-  ActionContext,
-  ActionIdempotency,
-  ActionInput,
-  ActionOptions,
-  ActionRevalidation,
-  ActionValidationIssue,
+  MutationContext,
+  MutationIdempotency,
+  MutationInput,
+  MutationOptions,
+  MutationRevalidation,
+  MutationValidationIssue,
   HttpErrorDetails,
   HttpErrorInit,
   HttpErrorStatus,

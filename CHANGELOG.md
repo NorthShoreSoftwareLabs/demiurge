@@ -284,9 +284,10 @@ Epic: #7
 - `createMemoryIdempotencyStore(...)` and `runIdempotentMutation(...)` provide
   the first retry-safe mutation primitive with in-flight dedupe, TTL-based
   replay, and failure retry behavior.
-- `action(...)` and `actionInput` provide the first server-side mutation helper
-  with JSON/form/text input parsing, existing response-helper returns, and
-  optional idempotent response replay.
+- The initial nightly API used `action(...)` and `actionInput` for server-side
+  mutations. The current API uses `mutation(...)` and `mutationInput`.
+- The mutation helper supports JSON, form, and text input parsing. It supports
+  response-helper returns and optional idempotent response replay.
 
 ## Rendering SSR Streaming And RSC
 
