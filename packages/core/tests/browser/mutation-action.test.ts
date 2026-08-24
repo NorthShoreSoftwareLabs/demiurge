@@ -7,8 +7,10 @@ import { useFormStatus } from "react-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createMutationAction,
+  createFileRouter,
   Form,
   MutationSubmit,
+  page,
   type MutationResult,
   type PathValue,
   type RouteMutationMethods,
@@ -268,11 +270,24 @@ describe("mutation actions", () => {
 
   it("provides pending FormData through React useFormStatus", async () => {
     let resolveResponse: ((response: Response) => void) | undefined;
-    vi.stubGlobal("fetch", vi.fn(async () => await new Promise<Response>((resolve) => {
-      resolveResponse = resolve;
-    })));
-    render(createElement(ProgressiveMutationForm));
-    const form = screen.getByRole("form");
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return await new Promise<Response>((resolve) => {
+          resolveResponse = resolve;
+        });
+      }
+      return Response.json(
+        { hasData: true },
+        { headers: { "x-demiurge-navigation": "data" } },
+      );
+    }));
+    const Router = createFileRouter({
+      routes: {
+        "./routes/index.tsx": async () => ({ GET: page(ProgressiveMutationForm) }),
+      },
+    });
+    render(createElement(Router));
+    const form = await screen.findByRole("form");
     const submit = new Event("submit", { bubbles: true, cancelable: true });
     Object.defineProperty(submit, "submitter", {
       value: screen.getByRole("button", { name: "Save" }),

@@ -11,9 +11,20 @@ import {
   type RouteProps,
 } from "@demiurgejs/core";
 import { useFormStatus } from "react-dom";
+import { readMutationVersion } from "../mutation-state.server";
 
 export const GET = page({
-  data: ({ search }) => search.get("result"),
+  data: async ({ search }) => {
+    const refreshKey = search.get("refreshKey") ?? "example";
+    if (search.has("refreshKey")) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+    return {
+      refreshKey,
+      result: search.get("result"),
+      version: readMutationVersion(refreshKey),
+    };
+  },
   view: MutationFormsPage,
 });
 
@@ -43,7 +54,10 @@ export const POST = mutation({
   },
 });
 
-function MutationFormsPage({ data }: RouteProps<"/mutation-forms", string | null>) {
+function MutationFormsPage({ data }: RouteProps<
+  "/mutation-forms",
+  { refreshKey: string; result: string | null; version: number }
+>) {
   const navigation = useFormNavigation("mutation-form-example");
   const [result, save] = useMutationAction({
     method: "POST",
@@ -53,10 +67,14 @@ function MutationFormsPage({ data }: RouteProps<"/mutation-forms", string | null
     method: "POST",
     route: "/mutation-forms/publish",
   }, undefined);
+  const [, refresh, refreshPending] = useMutationAction({
+    method: "POST",
+    route: "/mutation-forms/refresh",
+  }, undefined);
   return (
     <main>
       <h1>Mutation forms</h1>
-      <p>Result: {data ?? "none"}</p>
+      <p>Result: {data.result ?? "none"}</p>
       <Form action="/mutation-forms" method="post" submissionKey="mutation-form-example">
         <button name="history" type="submit" value="push">Save with push</button>
         <button name="history" type="submit" value="replace">Save with replace</button>
@@ -86,6 +104,16 @@ function MutationFormsPage({ data }: RouteProps<"/mutation-forms", string | null
           ? result.validation.issues.map((issue) => issue.message).join(" ")
           : "valid"}
       </output>
+      <h2>Authoritative route refresh</h2>
+      <p>Server version: <output aria-label="Server version">{data.version}</output></p>
+      <Form action={refresh}>
+        <input name="refreshKey" type="hidden" value={data.refreshKey} />
+        <button type="submit">Refresh server data</button>
+        <MutationRefreshPending />
+      </Form>
+      <output aria-label="Mutation refresh pending">
+        {refreshPending ? "pending" : "idle"}
+      </output>
     </main>
   );
 }
@@ -93,6 +121,11 @@ function MutationFormsPage({ data }: RouteProps<"/mutation-forms", string | null
 function MutationPending() {
   const status = useFormStatus();
   return <output aria-label="React form status">{status.pending ? "pending" : "idle"}</output>;
+}
+
+function MutationRefreshPending() {
+  const status = useFormStatus();
+  return <output aria-label="Refresh form status">{status.pending ? "pending" : "idle"}</output>;
 }
 
 function mutationResultUrl(intent: string, input: FormData) {
