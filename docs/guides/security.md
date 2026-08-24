@@ -326,6 +326,60 @@ a value above the browser limit.
 Static output rejects a response that commits a session cookie. A static build
 cannot publish request-specific session state.
 
+### Server-side sessions
+
+Use `createSessionManager(...)` when logout must revoke copied session values.
+The cookie contains only a signed, opaque identifier.
+
+```ts
+import { createSessionManager } from "@demiurgejs/core";
+import { createRedisSessionStore } from "@demiurgejs/core/redis";
+
+const store = createRedisSessionStore({
+  client: redis,
+  namespace: {
+    app: "storefront",
+    environment: "production",
+    schemaVersion: 1,
+  },
+});
+
+const sessions = createSessionManager({ keys, store });
+```
+
+The manager uses the same lifecycle operations and expiration defaults as a
+cookie session.
+
+The manager signs the identifier cookie. Session data stays in the selected
+store.
+
+The memory store is process-local. Do not use it when requests can reach more
+than one process or isolate.
+
+The Redis store runs create, update, and rotation checks through atomic Lua
+commands. Multiple clients observe immediate logout and rotation.
+
+The KV store requires `EdgeKvSessionNamespace.atomic(...)`. Adapt the provider
+transaction or compare-and-swap API to this method.
+
+A plain eventually consistent KV binding does not satisfy the contract. The KV
+integration rejects a client without the atomic method during construction.
+
+The KV adapter must provide read-after-write consistency for keys in a completed
+atomic operation.
+
+Each store requires an explicit application, environment, and schema namespace.
+This namespace prevents deployments from reading each other's sessions.
+
+A write conflict throws `SessionStoreConflictError`. Load the current session
+before another lifecycle operation.
+
+A provider failure during a lifecycle write throws
+`SessionStoreUnavailableError`. The manager does not emit a new cookie.
+
+A provider read or delete error remains a provider error. The application can
+apply its normal service failure policy.
+
 ## CSRF
 
 Cookie-authenticated unsafe methods receive double-submit CSRF protection by

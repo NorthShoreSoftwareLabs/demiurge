@@ -48,6 +48,9 @@ status live in GitHub issues and milestones.
   instead of leaving a browser to drop the cookie (#111).
 - Signed and encrypted cookie sessions provide secure lifecycle defaults. Both
   implementations support key rotation and reject modified values (#248).
+- A server-side session manager supports memory, Redis, and atomic KV stores.
+  Shared stores provide atomic rotation and immediate logout across replicas
+  (#249).
 - Host adapters stay subpath exports of `@demiurgejs/core`. `@vercel/routing-utils`
   is no longer a framework peer. The Vercel adapter uses the patched route
   pattern parser directly (#149, #287).
