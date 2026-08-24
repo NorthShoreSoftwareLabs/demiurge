@@ -12,3 +12,4 @@ after the implementing issue closes. They describe decisions, not task status.
 - [ADR 0007: Self-describing image variant paths](./0007-self-describing-image-variants.md)
 - [ADR 0008: Declared self-hosted fonts](./0008-declared-self-hosted-fonts.md)
 - [ADR 0009: Accessible browser navigation](./0009-accessible-browser-navigation.md)
+- [ADR 0010: Route mutation protocol](./0010-route-mutation-protocol.md)
