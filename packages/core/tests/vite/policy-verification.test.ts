@@ -89,14 +89,14 @@ export const GET = text("ok", {
 
   it("reports invalid literal rate limit policy", async () => {
     const source = `
-import { action } from "@demiurgejs/core";
-export const POST = action({
+import { mutation } from "@demiurgejs/core";
+export const POST = mutation({
   handler: () => new Response(),
   security: { rateLimit: { key: "ip", limit: 0, window: "1m" } },
 });`;
 
     await expect(
-      unstable_verifyRoutePolicySource(source, "/app/src/routes/action.ts"),
+      unstable_verifyRoutePolicySource(source, "/app/src/routes/mutation.ts"),
     ).resolves.toEqual([
       expect.objectContaining({
         code: "rate-limit-invalid",

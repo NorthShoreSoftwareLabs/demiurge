@@ -70,7 +70,7 @@ import {
   createCspNonce,
   securityPolicyRequiresNonce,
 } from "../security/policy";
-import { ACTION_REVALIDATION_HEADER } from "../route/action";
+import { MUTATION_REVALIDATION_HEADER } from "../route/mutation";
 
 export type RequestErrorReporter = (
   error: unknown,
@@ -522,7 +522,7 @@ async function handleMatchedRoute(
   // `timing` or `cors` value on an API route gives a problem+json response. It
   // cannot enter the negotiated path and produce HTML.
   try {
-    await revalidateActionTags(response, cache);
+    await revalidateMutationTags(response, cache);
     return withFetchMetadataVary(
       finalizeRouteResponse(response, capability, request, method),
     );
@@ -539,8 +539,8 @@ async function handleMatchedRoute(
   }
 }
 
-async function revalidateActionTags(response: Response, cache: Cache) {
-  const value = response.headers.get(ACTION_REVALIDATION_HEADER);
+async function revalidateMutationTags(response: Response, cache: Cache) {
+  const value = response.headers.get(MUTATION_REVALIDATION_HEADER);
   if (!value) return;
   const tags = value
     .split(",")
@@ -548,7 +548,7 @@ async function revalidateActionTags(response: Response, cache: Cache) {
     .filter(Boolean)
     .map((id) => ({ id }));
   if (tags.length > 0) await cache.invalidateTags(tags);
-  response.headers.delete(ACTION_REVALIDATION_HEADER);
+  response.headers.delete(MUTATION_REVALIDATION_HEADER);
 }
 
 function createRequestCache(options: RequestCacheStoreOptions | undefined) {
