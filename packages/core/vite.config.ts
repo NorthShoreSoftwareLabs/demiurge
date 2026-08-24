@@ -16,6 +16,9 @@ export default defineConfig({
         "data/testing": fileURLToPath(
           new URL("src/data/testing.ts", import.meta.url),
         ),
+        "security/testing": fileURLToPath(
+          new URL("src/security/testing.ts", import.meta.url),
+        ),
         index: fileURLToPath(new URL("src/index.ts", import.meta.url)),
         "internal/testing": fileURLToPath(
           new URL("src/internal/testing.ts", import.meta.url),

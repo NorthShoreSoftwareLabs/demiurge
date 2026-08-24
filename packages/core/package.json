@@ -49,6 +49,10 @@
       "types": "./dist/data/testing.d.ts",
       "default": "./dist/data/testing.js"
     },
+    "./security/testing": {
+      "types": "./dist/security/testing.d.ts",
+      "default": "./dist/security/testing.js"
+    },
     "./vite": {
       "types": "./dist/vite/index.d.ts",
       "default": "./dist/vite/index.js"
