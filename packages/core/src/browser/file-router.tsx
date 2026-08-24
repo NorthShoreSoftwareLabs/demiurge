@@ -77,11 +77,11 @@ export type NavigationAccessibility = {
   announce?: "title" | false | ((context: NavigationCommit) => string | null);
 };
 
-export type MutationNavigationState<T = unknown> =
-  | { state: "idle"; form?: HTMLFormElement; submissionKey?: string; result?: MutationResult<T> }
+export type MutationNavigationState<TData = unknown, TField extends string = string> =
+  | { state: "idle"; form?: HTMLFormElement; submissionKey?: string; result?: MutationResult<TData, TField> }
   | { state: "submitting"; form: HTMLFormElement; submissionKey?: string; formData: FormData }
-  | { state: "loading"; form: HTMLFormElement; submissionKey?: string; formData: FormData; result?: Extract<MutationResult<T>, { status: "success" }> }
-  | { state: "invalid"; form: HTMLFormElement; submissionKey?: string; formData: FormData; result: Extract<MutationResult<T>, { status: "invalid" }> }
+  | { state: "loading"; form: HTMLFormElement; submissionKey?: string; formData: FormData; result?: Extract<MutationResult<TData, TField>, { status: "success" }> }
+  | { state: "invalid"; form: HTMLFormElement; submissionKey?: string; formData: FormData; result: Extract<MutationResult<TData, TField>, { status: "invalid" }> }
   | { state: "error"; form: HTMLFormElement; submissionKey?: string; formData: FormData; response?: Response };
 
 export type FormProps = FormHTMLAttributes<HTMLFormElement> & {
@@ -742,17 +742,17 @@ export function Form(props: FormProps) {
   );
 }
 
-export function useNavigation<T = unknown>(options?: {
+export function useNavigation<TData = unknown, TField extends string = string>(options?: {
   form?: HTMLFormElement;
   submissionKey?: string;
-}): MutationNavigationState<T> {
+}): MutationNavigationState<TData, TField> {
   const contextKey = useContext(MutationFormContext);
   // TYPE-EVIDENCE: the router stores MutationNavigationState values and the generic only describes its application data.
-  return useRouter().getMutationNavigation(options?.form, options?.submissionKey ?? contextKey) as MutationNavigationState<T>;
+  return useRouter().getMutationNavigation(options?.form, options?.submissionKey ?? contextKey) as MutationNavigationState<TData, TField>;
 }
 
-export function useFormNavigation<T = unknown>(submissionKey?: string) {
-  return useNavigation<T>({ submissionKey });
+export function useFormNavigation<TData = unknown, TField extends string = string>(submissionKey?: string) {
+  return useNavigation<TData, TField>({ submissionKey });
 }
 
 function RouteRenderer({

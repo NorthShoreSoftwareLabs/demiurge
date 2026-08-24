@@ -2,10 +2,13 @@ import {
   MUTATION_REQUEST_HEADER,
   MUTATION_REQUEST_VALUE,
   MUTATION_RESPONSE_MEDIA_TYPE,
+  type MutationValidation,
+  type MutationValidationIssue,
 } from "../route";
 import {
   href,
   type MutationDataFor,
+  type MutationFieldsFor,
   type MutationMethodFor,
   type MutationRoute,
   type PathValue,
@@ -13,16 +16,16 @@ import {
   type RoutePathVars,
 } from "../routing";
 
-export type MutationResult<T = unknown> =
-  | { version: 1; status: "success"; data?: T; revalidate?: boolean }
-  | { version: 1; status: "invalid"; data?: T }
+export type MutationResult<TData = unknown, TField extends string = string> =
+  | { version: 1; status: "success"; data?: TData; revalidate?: boolean }
+  | { version: 1; status: "invalid"; validation: MutationValidation<TField> }
   | { version: 1; status: "redirect"; location: string; history: "push" | "replace" }
   | { version: 1; status: "failed"; message?: string };
 
-export type MutationAction<T = unknown> = (
-  previousState: MutationResult<T> | undefined,
+export type MutationAction<TData = unknown, TField extends string = string> = (
+  previousState: MutationResult<TData, TField> | undefined,
   formData: FormData,
-) => Promise<MutationResult<T>>;
+) => Promise<MutationResult<TData, TField>>;
 
 type MutationActionPath<TRoute extends MutationRoute> =
   TRoute extends keyof RoutePathVars & string
@@ -44,9 +47,9 @@ type MutationRouter = {
   refresh(): Promise<void>;
 };
 
-type MutationInvocation<T> = {
+type MutationInvocation<TData, TField extends string> = {
   controller: AbortController;
-  promise: Promise<MutationResult<T>>;
+  promise: Promise<MutationResult<TData, TField>>;
 };
 
 let mutationRouter: MutationRouter | undefined;
@@ -70,17 +73,19 @@ export function createMutationAction<
   const TRoute extends MutationRoute = MutationRoute,
   const TMethod extends MutationMethodFor<TRoute> = MutationMethodFor<TRoute>,
 >(options: MutationActionOptions<TRoute, TMethod>): MutationAction<
-  [TData] extends [never] ? MutationDataFor<TRoute, TMethod> : TData
+  [TData] extends [never] ? MutationDataFor<TRoute, TMethod> : TData,
+  MutationFieldsFor<TRoute, TMethod>
 > {
   type ResultData = [TData] extends [never]
     ? MutationDataFor<TRoute, TMethod>
     : TData;
-  let current: MutationInvocation<ResultData> | undefined;
+  type ResultField = MutationFieldsFor<TRoute, TMethod>;
+  let current: MutationInvocation<ResultData, ResultField> | undefined;
 
   return (previousState, formData) => {
     current?.controller.abort();
     const controller = new AbortController();
-    const invocation: MutationInvocation<ResultData> = {
+    const invocation: MutationInvocation<ResultData, ResultField> = {
       controller,
       // TYPE-EVIDENCE: the function assigns the promise before it exposes the invocation.
       promise: undefined as never,
@@ -92,7 +97,7 @@ export function createMutationAction<
       to: options.route,
       ...(options.path === undefined ? {} : { path: options.path }),
     } as never);
-    const request = submitMutation<ResultData>({
+    const request = submitMutation<ResultData, ResultField>({
       body: formData,
       method: options.method,
       signal: controller.signal,
@@ -126,21 +131,21 @@ export function createMutationAction<
   };
 }
 
-export async function submitMutation<T = unknown>(options: {
+export async function submitMutation<TData = unknown, TField extends string = string>(options: {
   body: BodyInit;
   contentType?: string;
   method: string;
   signal: AbortSignal;
   url: string;
 }) {
-  const { result } = await performMutationRequest<T>(options);
+  const { result } = await performMutationRequest<TData, TField>(options);
   if (!result) {
     throw new Error("Demiurge expected a versioned mutation result.");
   }
   return result;
 }
 
-export async function performMutationRequest<T = unknown>(options: {
+export async function performMutationRequest<TData = unknown, TField extends string = string>(options: {
   body: BodyInit;
   contentType?: string;
   method: string;
@@ -159,10 +164,12 @@ export async function performMutationRequest<T = unknown>(options: {
     redirect: "manual",
     signal: options.signal,
   });
-  return { response, result: await readMutationResult<T>(response) };
+  return { response, result: await readMutationResult<TData, TField>(response) };
 }
 
-export async function readMutationResult<T = unknown>(response: Response): Promise<MutationResult<T> | undefined> {
+export async function readMutationResult<TData = unknown, TField extends string = string>(
+  response: Response,
+): Promise<MutationResult<TData, TField> | undefined> {
   const mediaType = response.headers.get("content-type");
   if (!mediaType) return undefined;
   const [type, ...parameters] = mediaType?.split(";").map((value) => value.trim().toLowerCase()) ?? [];
@@ -182,20 +189,26 @@ export async function readMutationResult<T = unknown>(response: Response): Promi
     throw new Error("Demiurge received a malformed versioned mutation result.");
   }
   if (value.status === "success") {
-    if (value.revalidate !== undefined && typeof value.revalidate !== "boolean") throw malformedResult();
-    // TYPE-EVIDENCE: T describes application-owned serializable data. The protocol validates its envelope.
-    return { version: 1, status: "success", data: value.data as T, ...(value.revalidate === undefined ? {} : { revalidate: value.revalidate }) };
+    if (!hasOnlyKeys(value, ["data", "revalidate", "status", "version"]) ||
+        (value.revalidate !== undefined && typeof value.revalidate !== "boolean") ||
+        ("data" in value && !isJsonValue(value.data))) throw malformedResult();
+    // TYPE-EVIDENCE: TData describes application-owned JSON data. The parser validates the complete value before this assertion.
+    return { version: 1, status: "success", ...(value.data === undefined ? {} : { data: value.data as TData }), ...(value.revalidate === undefined ? {} : { revalidate: value.revalidate }) };
   }
   if (value.status === "invalid") {
-    // TYPE-EVIDENCE: T describes application-owned validation data. The protocol validates its envelope.
-    return { version: 1, status: "invalid", data: value.data as T };
+    if (!hasOnlyKeys(value, ["status", "validation", "version"]) ||
+        !isMutationValidation(value.validation)) throw malformedResult();
+    // TYPE-EVIDENCE: the parser validates every validation issue and path. TField supplies the application field-name refinement.
+    return { version: 1, status: "invalid", validation: value.validation as MutationValidation<TField> };
   }
   if (value.status === "failed") {
-    if (value.message !== undefined && typeof value.message !== "string") throw malformedResult();
+    if (!hasOnlyKeys(value, ["message", "status", "version"]) ||
+        (value.message !== undefined && typeof value.message !== "string")) throw malformedResult();
     return { version: 1, status: "failed", ...(value.message === undefined ? {} : { message: value.message }) };
   }
   if (value.status === "redirect" && typeof value.location === "string" &&
-      (value.history === "push" || value.history === "replace")) {
+      (value.history === "push" || value.history === "replace") &&
+      hasOnlyKeys(value, ["history", "location", "status", "version"])) {
     return { version: 1, status: "redirect", location: value.location, history: value.history };
   }
   throw malformedResult();
@@ -213,7 +226,7 @@ export function validateMutationRedirect(location: string) {
   }
 }
 
-function mutationFailure(message: string): MutationResult<never> {
+function mutationFailure(message: string): MutationResult<never, never> {
   return { version: 1, status: "failed", message };
 }
 
@@ -223,4 +236,28 @@ function malformedResult() {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]) {
+  return Object.keys(value).every((key) => keys.includes(key));
+}
+
+function isMutationValidation(value: unknown): value is MutationValidation {
+  return isRecord(value) && hasOnlyKeys(value, ["issues"]) &&
+    Array.isArray(value.issues) && value.issues.every(isMutationValidationIssue);
+}
+
+function isMutationValidationIssue(value: unknown): value is MutationValidationIssue {
+  return isRecord(value) && hasOnlyKeys(value, ["code", "message", "path"]) &&
+    typeof value.code === "string" && typeof value.message === "string" &&
+    Array.isArray(value.path) &&
+    (value.path.length === 0 || typeof value.path[0] === "string") &&
+    value.path.every((part) => typeof part === "string" || typeof part === "number");
+}
+
+function isJsonValue(value: unknown): boolean {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  return isRecord(value) && Object.values(value).every(isJsonValue);
 }

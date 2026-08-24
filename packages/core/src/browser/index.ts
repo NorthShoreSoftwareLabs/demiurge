@@ -18,7 +18,12 @@ export type {
   NavigationAccessibility,
   NavigationCommit,
 } from "./file-router";
-export type { MutationAction, MutationActionOptions, MutationResult } from "./mutation-action";
+export type {
+  MutationAction,
+  MutationActionOptions,
+  MutationResult,
+} from "./mutation-action";
+export type { MutationValidation } from "../route";
 export type {
   RouteFocusBoundaryElement,
   RouteFocusBoundaryProps,

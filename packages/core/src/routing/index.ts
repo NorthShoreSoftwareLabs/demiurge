@@ -5,6 +5,7 @@ export type {
   LinkTarget,
   LinkTo,
   MutationDataFor,
+  MutationFieldsFor,
   MutationMethodFor,
   MutationRoute,
   PathValue,

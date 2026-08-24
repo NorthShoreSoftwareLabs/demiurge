@@ -37,10 +37,14 @@ export type MutationMethod = "POST" | "PUT" | "PATCH" | "DELETE";
 
 export type MutationCapability<
   TResult = unknown,
+  TField extends string = string,
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
 > = RawResponseCapability<TPath, TValues> & {
-  readonly [mutationResultType]: TResult;
+  readonly [mutationResultType]: {
+    data: TResult;
+    fields: TField;
+  };
 };
 
 export type MutationMethodsOf<TModule> = {
@@ -48,26 +52,38 @@ export type MutationMethodsOf<TModule> = {
     TMethod extends MutationMethod
       ? TModule[TMethod] extends MutationCapability ? TMethod : never
       : never]: TModule[TMethod] extends MutationCapability<infer TResult>
-        ? TResult
+        ? TModule[TMethod] extends MutationCapability<TResult, infer TField>
+          ? { data: TResult; fields: TField }
+          : never
         : never;
 };
 
 type MutationResponseData<TResult> = Awaited<TResult> extends
   JsonCapability<infer TData, string, object> ? TData : unknown;
 
-export type MutationValidationIssue = {
+export type MutationValidationIssue<TField extends string = string> = {
   code: string;
   message: string;
-  path: readonly (string | number)[];
+  path: readonly [] | readonly [TField, ...(string | number)[]];
 };
 
-export class MutationValidationError extends Error {
-  readonly issues: readonly MutationValidationIssue[];
+export type MutationValidation<TField extends string = string> = {
+  issues: readonly MutationValidationIssue<TField>[];
+};
 
-  constructor(issues: readonly MutationValidationIssue[]) {
+export class MutationValidationError<TField extends string = string>
+  extends Error {
+  readonly validation: MutationValidation<TField>;
+
+  constructor(validation: MutationValidation<TField>) {
     super("Mutation input validation failed.");
     this.name = "MutationValidationError";
-    this.issues = issues.map((issue) => ({ ...issue, path: [...issue.path] }));
+    this.validation = {
+      issues: validation.issues.map((issue) => ({
+        ...issue,
+        path: [...issue.path],
+      })),
+    };
   }
 }
 
@@ -107,6 +123,7 @@ export type MutationOptions<
   TValues extends object = RouteRequestContextFor<TPath>,
   TResult extends Response | ResponseCapability<TPath, TValues> =
     Response | ResponseCapability<TPath, TValues>,
+  TField extends string = string,
 > = {
   cors?: CorsPolicy;
   handler: (
@@ -118,6 +135,9 @@ export type MutationOptions<
   revalidate?: MutationRevalidation<TInput, TPath, TValues>;
   security?: RouteSecurityPolicy;
   timing?: ServerTimingInput;
+  validation?: {
+    fields: readonly TField[];
+  };
 };
 
 export function mutation<
@@ -126,9 +146,10 @@ export function mutation<
   TValues extends object = RouteRequestContextFor<TPath>,
   TResult extends Response | ResponseCapability<TPath, TValues> =
     Response | ResponseCapability<TPath, TValues>,
+  TField extends string = string,
 >(
-  options: MutationOptions<TInput, TPath, TValues, TResult>,
-): MutationCapability<MutationResponseData<TResult>, TPath, TValues> {
+  options: MutationOptions<TInput, TPath, TValues, TResult, TField>,
+): MutationCapability<MutationResponseData<TResult>, TField, TPath, TValues> {
   const capability = response<TPath, TValues>(
     async (context) => {
       let input: TInput;
@@ -140,7 +161,7 @@ export function mutation<
           : absentInput;
       } catch (error) {
         if (!(error instanceof MutationValidationError)) throw error;
-        return mutationValidationResponse(context.request, error.issues);
+        return mutationValidationResponse(context.request, error.validation);
       }
       const mutationContext: MutationContext<TInput, TPath, TValues> = {
         ...context,
@@ -148,15 +169,23 @@ export function mutation<
       };
       const run = async () => {
         const result = await options.handler(mutationContext);
-        const raw = result instanceof Response;
-        const response = await resolveMutationResult(result, context);
-        return raw || !isMutationProtocolRequest(context.request)
+        const authoritative = result instanceof Response ||
+          result.kind === "response" || result.kind === "not-found";
+        const response = await resolveMutationResult(
+          await validateMutationCapability(result, context),
+          context,
+        );
+        return authoritative || !isMutationProtocolRequest(context.request)
           ? response
-          : await mutationProtocolResponse(response, options.revalidateRoute === true);
+          : await mutationProtocolResponse(
+            response,
+            options.revalidateRoute === true,
+          );
       };
 
       if (!options.idempotency) {
         const result = await run();
+        if (!isSuccessfulMutationResponse(result)) return result;
         const revalidation = await resolveRevalidation(
           options.revalidate,
           mutationContext,
@@ -174,6 +203,7 @@ export function mutation<
       });
 
       if (result.replayed) return result.value;
+      if (!isSuccessfulMutationResponse(result.value)) return result.value;
       const revalidation = await resolveRevalidation(
         options.revalidate,
         mutationContext,
@@ -191,6 +221,7 @@ export function mutation<
   // brand records the handler's JSON result type without adding runtime data.
   return capability as MutationCapability<
     MutationResponseData<TResult>,
+    TField,
     TPath,
     TValues
   >;
@@ -202,19 +233,19 @@ function isMutationProtocolRequest(request: Request) {
 
 function mutationValidationResponse(
   request: Request,
-  issues: readonly MutationValidationIssue[],
+  validation: MutationValidation,
 ) {
+  const body = isMutationProtocolRequest(request)
+    ? { version: 1, status: "invalid", validation }
+    : { type: "validation-error", validation };
+  const serialized = serializeMutationResult(body);
   if (isMutationProtocolRequest(request)) {
-    return new Response(JSON.stringify({
-      version: 1,
-      status: "invalid",
-      data: { issues },
-    }), {
+    return new Response(serialized, {
       headers: { "content-type": MUTATION_RESPONSE_MEDIA_TYPE },
       status: 400,
     });
   }
-  return new Response(JSON.stringify({ issues, type: "validation-error" }), {
+  return new Response(serialized, {
     headers: { "content-type": "application/json; charset=utf-8" },
     status: 400,
   });
@@ -224,7 +255,7 @@ async function mutationProtocolResponse(response: Response, revalidateRoute: boo
   if (response.status >= 300 && response.status < 400) {
     const location = response.headers.get("location");
     if (!location) return response;
-    return new Response(JSON.stringify({
+    return new Response(serializeMutationResult({
       version: 1,
       status: "redirect",
       location,
@@ -237,15 +268,79 @@ async function mutationProtocolResponse(response: Response, revalidateRoute: boo
   const data = response.headers.get("content-type")?.includes("json")
     ? await response.clone().json().catch(() => undefined)
     : undefined;
-  return new Response(JSON.stringify({
+  return new Response(serializeMutationResult({
     version: 1,
     status: response.ok ? "success" : "failed",
     ...(revalidateRoute && response.ok ? { revalidate: true } : {}),
-    ...(data === undefined ? {} : { data }),
+    ...(response.ok && data !== undefined ? { data } : {}),
   }), {
     headers: { "content-type": MUTATION_RESPONSE_MEDIA_TYPE },
     status: response.status,
   });
+}
+
+async function validateMutationCapability<
+  TPath extends string,
+  TValues extends object,
+>(
+  result: Response | ResponseCapability<TPath, TValues>,
+  context: HttpRouteContext<TPath, TValues>,
+) {
+  if (result instanceof Response || result.kind !== "json") return result;
+  const value = typeof result.value === "function"
+    ? await result.value(context)
+    : result.value;
+  assertJsonValue(value);
+  return { ...result, value };
+}
+
+function serializeMutationResult(value: unknown) {
+  assertJsonValue(value);
+  return JSON.stringify(value);
+}
+
+function assertJsonValue(value: unknown, seen = new Set<object>()): void {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
+    return;
+  }
+  if (typeof value === "number") {
+    if (Number.isFinite(value)) return;
+    throw unsupportedMutationValue();
+  }
+  if (typeof value !== "object") throw unsupportedMutationValue();
+  if (seen.has(value)) throw unsupportedMutationValue();
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    for (const key of Reflect.ownKeys(value)) {
+      if (key === "length") continue;
+      if (typeof key !== "string" || !/^(0|[1-9][0-9]*)$/.test(key)) {
+        throw unsupportedMutationValue();
+      }
+    }
+    for (let index = 0; index < value.length; index += 1) {
+      if (!(index in value)) throw unsupportedMutationValue();
+      assertJsonValue(value[index], seen);
+    }
+  } else {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw unsupportedMutationValue();
+    }
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key !== "string") throw unsupportedMutationValue();
+      assertJsonValue(Object.getOwnPropertyDescriptor(value, key)?.value, seen);
+    }
+  }
+  seen.delete(value);
+}
+
+function unsupportedMutationValue() {
+  return new TypeError("A mutation result contains a value that JSON cannot serialize.");
+}
+
+function isSuccessfulMutationResponse(response: Response) {
+  return response.status >= 200 && response.status < 400;
 }
 
 async function resolveRevalidation<

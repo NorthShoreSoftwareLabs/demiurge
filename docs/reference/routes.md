@@ -60,8 +60,19 @@ Implemented response helpers are:
 A mutation parser can use any application-owned parser or schema library. The
 parser returns the typed input that the handler receives as `context.input`.
 
-When input is invalid, the parser throws an application-created validation
-error. The response has status `400` and this stable JSON shape:
+When input is invalid, the parser throws `MutationValidationError`. The type
+parameter limits the first path segment to an application field name:
+
+```ts
+throw new MutationValidationError<"title" | "body">({
+  issues: [
+    { code: "required", message: "The title is required.", path: ["title"] },
+    { code: "conflict", message: "The post has conflicting values.", path: [] },
+  ],
+});
+```
+
+A native request receives status `400` and this stable JSON shape:
 
 ```ts
 {
@@ -70,9 +81,30 @@ error. The response has status `400` and this stable JSON shape:
 }
 ```
 
-An empty `path` reports a form-level error. A non-empty path reports a field or
-nested value. The framework does not select a parser or expose parser-specific
-diagnostics.
+An enhanced request receives the same issues in an `invalid` mutation result:
+
+```ts
+{
+  version: 1,
+  status: "invalid",
+  validation: {
+    issues: [{ code: "required", message: "Title is required", path: ["title"] }],
+  },
+}
+```
+
+An empty `path` reports a form error. A non-empty path reports a field or nested
+value. Demiurge does not select a parser or expose parser-specific diagnostics.
+
+Mutation data must contain JSON values. Demiurge accepts null values, booleans,
+finite numbers, strings, arrays, and plain objects with string keys.
+
+Demiurge rejects unsupported data before it writes a structured result. This
+rule rejects cycles, undefined values, non-finite numbers, and class instances.
+
+An unexpected exception uses the application error boundary and production
+redaction rules. A raw application `Response` keeps its original body, status,
+and headers. A React Action requires a structured mutation result instead.
 
 Each response helper accepts the response and route-policy options appropriate
 to its result. `serverTiming(...)` creates metrics for the `Server-Timing`
@@ -89,6 +121,9 @@ browser behavior.
 The router sends `X-Demiurge-Mutation: data;v=1` and accepts
 `application/vnd.demiurge.mutation+json;v=1`. A typed result has `version: 1` and
 one status: `success`, `invalid`, `redirect`, or `failed`.
+
+The `success` result can contain application data. The `invalid` result contains
+typed validation issues. The `failed` result does not contain application data.
 
 The mutation helper gives each redirect an explicit history operation. It uses
 `replace` for `301` and `308`. It uses `push` for `302`, `303`, and `307`.
@@ -292,6 +327,11 @@ export function EditPost() {
       <input name="title" />
       <button disabled={pending}>Save</button>
       {result?.status === "failed" ? <p>{result.message}</p> : null}
+      {result?.status === "invalid"
+        ? result.validation.issues.map((issue) => (
+            <p key={`${issue.code}:${issue.path.join(".")}`}>{issue.message}</p>
+          ))
+        : null}
     </form>
   );
 }
