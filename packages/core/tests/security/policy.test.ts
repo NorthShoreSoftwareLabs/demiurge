@@ -11,6 +11,7 @@ import {
   defineRoutePolicy,
   defineSecurityPolicy,
   enforceAllowedMethods,
+  enforceCsrfProtection,
   enforceRateLimit,
   json,
   issueCsrfToken,
@@ -1592,5 +1593,30 @@ describe("CSRF policy helpers", () => {
       "csrf-token": "hello world",
       session: "abc",
     });
+  });
+
+  it("accepts a configured form field without consuming the request body", async () => {
+    const request = new Request("https://example.test/profile", {
+      body: new URLSearchParams({ _csrf: "token", name: "Demo" }),
+      headers: { cookie: "csrf-token=token" },
+      method: "POST",
+    });
+
+    await expect(
+      enforceCsrfProtection({ field: "_csrf" }, request),
+    ).resolves.toBeNull();
+    expect((await request.formData()).get("name")).toBe("Demo");
+  });
+
+  it("rejects a configured form field when its token does not match", async () => {
+    const request = new Request("https://example.test/profile", {
+      body: new URLSearchParams({ _csrf: "wrong" }),
+      headers: { cookie: "csrf-token=token" },
+      method: "POST",
+    });
+
+    const response = await enforceCsrfProtection({ field: "_csrf" }, request);
+
+    expect(response?.status).toBe(403);
   });
 });

@@ -59,7 +59,7 @@ export function issueCsrfToken(options: CsrfCookieOptions = {}): IssuedCsrfToken
   };
 }
 
-export function enforceCsrfProtection(
+export async function enforceCsrfProtection(
   policy: CsrfPolicy | undefined,
   request: Request,
 ) {
@@ -80,8 +80,22 @@ export function enforceCsrfProtection(
   const cookies = parseCookieHeader(cookieHeader);
   const cookieToken = cookies.get(options.cookie);
   const headerToken = request.headers.get(options.header);
+  const headerMatches = Boolean(
+    cookieToken && headerToken && constantTimeEqual(cookieToken, headerToken),
+  );
 
-  if (!cookieToken || !headerToken || !constantTimeEqual(cookieToken, headerToken)) {
+  if (headerMatches) {
+    return null;
+  }
+
+  const fieldToken = options.field
+    ? await readFormToken(request.clone(), options.field)
+    : null;
+  const fieldMatches = Boolean(
+    cookieToken && fieldToken && constantTimeEqual(cookieToken, fieldToken),
+  );
+
+  if (!fieldMatches) {
     return new Response("Invalid CSRF token.", {
       status: 403,
     });
@@ -125,8 +139,27 @@ function normalizeCsrfPolicy(policy: Exclude<CsrfPolicy, false>) {
 
   return {
     cookie: policy.cookie ?? "csrf-token",
+    field: policy.field,
     header: policy.header ?? "x-csrf-token",
   };
+}
+
+async function readFormToken(request: Request, field: string) {
+  const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+
+  if (
+    !contentType.startsWith("application/x-www-form-urlencoded") &&
+    !contentType.startsWith("multipart/form-data")
+  ) {
+    return null;
+  }
+
+  try {
+    const value = (await request.formData()).get(field);
+    return typeof value === "string" ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 function decodeCookieValue(value: string) {

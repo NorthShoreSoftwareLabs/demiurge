@@ -11,6 +11,7 @@ import {
   type RouteProps,
 } from "@demiurgejs/core";
 import { useFormStatus } from "react-dom";
+import { useOptimistic } from "react";
 import { readMutationVersion } from "../mutation-state.server";
 
 export const GET = page({
@@ -67,10 +68,11 @@ function MutationFormsPage({ data }: RouteProps<
     method: "POST",
     route: "/mutation-forms/publish",
   }, undefined);
-  const [, refresh, refreshPending] = useMutationAction({
+  const [refreshResult, refresh, refreshPending] = useMutationAction({
     method: "POST",
     route: "/mutation-forms/refresh",
   }, undefined);
+  const [optimisticVersion, setOptimisticVersion] = useOptimistic(data.version);
   return (
     <main>
       <h1>Mutation forms</h1>
@@ -106,13 +108,31 @@ function MutationFormsPage({ data }: RouteProps<
       </output>
       <h2>Authoritative route refresh</h2>
       <p>Server version: <output aria-label="Server version">{data.version}</output></p>
-      <Form action={refresh}>
+      <p>
+        Optimistic version:{" "}
+        <output aria-label="Optimistic version">{optimisticVersion}</output>
+      </p>
+      <Form
+        action={refresh}
+        onSubmit={() => setOptimisticVersion(data.version + 1)}
+      >
         <input name="refreshKey" type="hidden" value={data.refreshKey} />
-        <button type="submit">Refresh server data</button>
+        <button name="outcome" type="submit" value="success">
+          Refresh server data
+        </button>
+        <button name="outcome" type="submit" value="invalid">
+          Reject optimistic change
+        </button>
+        <button name="outcome" type="submit" value="failed">
+          Fail optimistic change
+        </button>
         <MutationRefreshPending />
       </Form>
       <output aria-label="Mutation refresh pending">
         {refreshPending ? "pending" : "idle"}
+      </output>
+      <output aria-label="Mutation refresh result">
+        {refreshResult?.status ?? "none"}
       </output>
     </main>
   );
