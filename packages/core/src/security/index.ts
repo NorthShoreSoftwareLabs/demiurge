@@ -60,6 +60,20 @@ export {
   validateRateLimitPolicy,
 } from "./rate-limit";
 export {
+  createMemorySessionStore,
+  serializeSessionNamespace,
+} from "./session-store";
+export type {
+  MemorySessionStoreOptions,
+  SessionData,
+  SessionNamespace,
+  SessionPrimitive,
+  SessionRecord,
+  SessionStore,
+  SessionStoreCandidate,
+  SessionStoreWriteResult,
+} from "./session-store";
+export {
   createSecurityReportHandler,
 } from "./report";
 export {
