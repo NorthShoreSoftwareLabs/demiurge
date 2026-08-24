@@ -46,6 +46,8 @@ status live in GitHub issues and milestones.
   declaration. A cookie defaults to the `__Host-` prefix, `Secure`, `Path=/`,
   `HttpOnly`, and `SameSite=Lax`. The helper reports a broken prefix invariant
   instead of leaving a browser to drop the cookie (#111).
+- Signed and encrypted cookie sessions provide secure lifecycle defaults. Both
+  implementations support key rotation and reject modified values (#248).
 - Host adapters stay subpath exports of `@demiurgejs/core`. `@vercel/routing-utils`
   is no longer a framework peer. The Vercel adapter uses the patched route
   pattern parser directly (#149, #287).
