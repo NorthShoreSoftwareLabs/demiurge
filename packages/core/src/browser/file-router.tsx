@@ -34,9 +34,6 @@ import {
 } from "../document";
 import {
   HTTP_ERROR_STATUSES,
-  MUTATION_REQUEST_HEADER,
-  MUTATION_REQUEST_VALUE,
-  MUTATION_RESPONSE_MEDIA_TYPE,
   httpError,
   isHttpError,
   type NotFoundProps,
@@ -57,6 +54,13 @@ import {
 } from "../router";
 import { BuiltInNotFound } from "../server/fallbacks";
 import { href, type AppHref, type LinkTarget, type LinkTo } from "../routing";
+import {
+  abortMutationActions,
+  performMutationRequest,
+  registerMutationRouter,
+  type MutationResult,
+  validateMutationRedirect,
+} from "./mutation-action";
 
 export type NavigationDataLoader = (
   request: Request,
@@ -72,12 +76,6 @@ export type NavigationCommit = {
 export type NavigationAccessibility = {
   announce?: "title" | false | ((context: NavigationCommit) => string | null);
 };
-
-export type MutationResult<T = unknown> =
-  | { version: 1; status: "success"; data?: T; revalidate?: boolean }
-  | { version: 1; status: "invalid"; data?: T }
-  | { version: 1; status: "redirect"; location: string; history: "push" | "replace" }
-  | { version: 1; status: "failed"; message?: string };
 
 export type MutationNavigationState<T = unknown> =
   | { state: "idle"; form?: HTMLFormElement; submissionKey?: string; result?: MutationResult<T> }
@@ -116,6 +114,7 @@ export function createFileRouter(options: FileRouterOptions) {
     const submissionStates = useRef(new Map<string, MutationNavigationState>());
     const [submissionVersion, setSubmissionVersion] = useState(0);
     const [routeRefresh, setRouteRefresh] = useState(0);
+    const routeRefreshWaiters = useRef(new Set<() => void>());
     const navigationKind = useRef<"push" | "replace" | "pop">("push");
     const [pendingCommit, setPendingCommit] = useState<NavigationCommit | null>(null);
     const [committed, setCommitted] = useState<NavigationCommit | null>(null);
@@ -175,12 +174,16 @@ export function createFileRouter(options: FileRouterOptions) {
     }, [options.navigation]);
 
     useEffect(() => () => {
+      abortMutationActions();
+      for (const resolve of routeRefreshWaiters.current) resolve();
+      routeRefreshWaiters.current.clear();
       for (const controller of submissionControllers.current.values()) controller.abort();
       submissionControllers.current.clear();
       submissionStates.current.clear();
     }, []);
 
     function abortSubmissions(except?: AbortController) {
+      abortMutationActions(except);
       let changed = false;
       for (const [key, controller] of submissionControllers.current) {
         if (controller === except) continue;
@@ -289,6 +292,8 @@ export function createFileRouter(options: FileRouterOptions) {
               title: document.title || "Demiurge App",
               url: new URL(location.href),
             });
+            for (const resolve of routeRefreshWaiters.current) resolve();
+            routeRefreshWaiters.current.clear();
           }
         })
         .catch(async (error: unknown) => {
@@ -322,6 +327,8 @@ export function createFileRouter(options: FileRouterOptions) {
               title: navigationDocument?.title ?? "Navigation failed",
               url: new URL(location.href),
             });
+            for (const resolve of routeRefreshWaiters.current) resolve();
+            routeRefreshWaiters.current.clear();
           }
         });
 
@@ -415,20 +422,16 @@ export function createFileRouter(options: FileRouterOptions) {
           });
           let response: Response | undefined;
           try {
-            response = await fetch(request.url, {
+            const mutation = await performMutationRequest({
               body: request.body,
-              credentials: "same-origin",
-              headers: {
-                accept: MUTATION_RESPONSE_MEDIA_TYPE,
-                [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
-                ...(request.contentType ? { "content-type": request.contentType } : {}),
-              },
+              contentType: request.contentType,
               method: request.method,
-              redirect: "manual",
               signal: controller.signal,
+              url: request.url,
             });
+            response = mutation.response;
             if (!isCurrent()) return;
-            const result = await readMutationResult(response);
+            const result = mutation.result;
             if (!isCurrent()) return;
             if (result?.status === "invalid") {
               setSubmissionState(key, { state: "invalid", form, submissionKey, formData, result });
@@ -472,6 +475,23 @@ export function createFileRouter(options: FileRouterOptions) {
       }),
       [submissionVersion],
     );
+
+    useLayoutEffect(() => registerMutationRouter({
+      redirect(destination, history, controller) {
+        abortSubmissions(controller);
+        if (history === "replace") window.history.replaceState(null, "", destination);
+        else window.history.pushState(null, "", destination);
+        navigationKind.current = history;
+        lastLocation.current = getCurrentLocation();
+        setLocation(lastLocation.current);
+      },
+      refresh() {
+        return new Promise<void>((resolve) => {
+          routeRefreshWaiters.current.add(resolve);
+          setRouteRefresh((value) => value + 1);
+        });
+      },
+    }), []);
 
     return createElement(RouterContext.Provider, {
       value: router,
@@ -941,60 +961,6 @@ async function readNavigationPayload(response: Response) {
     return await response.json() as Partial<InitialRouteData>;
   } catch (error) {
     if (error instanceof Error && error.message.includes("malformed versioned")) throw error;
-    return undefined;
-  }
-}
-
-async function readMutationResult(response: Response): Promise<MutationResult | undefined> {
-  const mediaType = response.headers.get("content-type");
-  if (!mediaType) {
-    return undefined;
-  }
-  const [type, ...parameters] = mediaType
-    .split(";")
-    .map((value) => value.trim().toLowerCase());
-  const mutationType = MUTATION_RESPONSE_MEDIA_TYPE.split(";")[0];
-  if (type !== mutationType) return undefined;
-  if (parameters.length !== 1 || parameters[0] !== "v=1") {
-    throw new Error("Demiurge received a malformed versioned mutation result.");
-  }
-  try {
-    const value: unknown = await response.clone().json();
-    if (!isRecord(value) || value.version !== 1 || typeof value.status !== "string") {
-      throw new Error("Demiurge received a malformed versioned mutation result.");
-    }
-    if (value.status === "success") {
-      if (value.revalidate !== undefined && typeof value.revalidate !== "boolean") throw new Error("Demiurge received a malformed mutation result.");
-      return { version: 1, status: "success", data: value.data, ...(value.revalidate === undefined ? {} : { revalidate: value.revalidate }) };
-    }
-    if (value.status === "invalid") return { version: 1, status: "invalid", data: value.data };
-    if (value.status === "failed") {
-      if (value.message !== undefined && typeof value.message !== "string") throw new Error("Demiurge received a malformed mutation result.");
-      return { version: 1, status: "failed", ...(value.message === undefined ? {} : { message: value.message }) };
-    }
-    if (value.status === "redirect" && typeof value.location === "string" &&
-        (value.history === "push" || value.history === "replace")) {
-      return { version: 1, status: "redirect", location: value.location, history: value.history };
-    }
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("malformed")) throw error;
-    return undefined;
-  }
-  return undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function validateMutationRedirect(location: string) {
-  try {
-    const destination = new URL(location, window.location.href);
-    if (destination.protocol !== window.location.protocol) return undefined;
-    if (destination.origin !== window.location.origin) return undefined;
-    if (destination.username || destination.password) return undefined;
-    return `${destination.pathname}${destination.search}${destination.hash}`;
-  } catch {
     return undefined;
   }
 }

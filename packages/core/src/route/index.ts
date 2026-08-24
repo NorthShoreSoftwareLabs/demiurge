@@ -30,8 +30,11 @@ export {
 export { webhook } from "./webhook";
 export type {
   MutationContext,
+  MutationCapability,
   MutationIdempotency,
   MutationInput,
+  MutationMethod,
+  MutationMethodsOf,
   MutationOptions,
   MutationRevalidation,
   MutationValidationIssue,

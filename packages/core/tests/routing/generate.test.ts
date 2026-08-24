@@ -35,12 +35,38 @@ describe("typed route manifest generator", () => {
     expect(source).toContain('"/blog": {};');
     expect(source).toContain('"/blog/[slug]": { slug: PathValue };');
     expect(source).toContain('"/blog/[slug]": `/blog/${PathValue}`;');
+    expect(source).toContain(
+      '"/blog/[slug]": MutationMethodsOf<typeof import("./routes/blog/[slug]")>;',
+    );
     expect(source).toContain('"/users": {};');
     expect(source).not.toContain("@error");
     expect(source).not.toContain("@layout");
     expect(source).not.toContain("@loading");
     expect(source).not.toContain("@not-found");
     expect(source).not.toContain("@policy");
+  });
+
+  it("uses declaration-only route module types for mutation methods", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-route-mutations-"));
+    const routesDir = join(root, "src", "routes");
+    const outputFile = join(root, ".demiurge", "route-manifest.d.ts");
+
+    await mkdir(join(routesDir, "projects"), { recursive: true });
+    await writeFile(
+      join(routesDir, "projects", "[id].tsx"),
+      'export const PATCH = "server handler";',
+    );
+
+    await generateRoutes({ outputFile, routesDir });
+
+    const source = await readFile(outputFile, "utf8");
+    expect(source).toContain(
+      'import type { MiddlewareContextOf, MutationMethodsOf, PathValue } from "@demiurgejs/core";',
+    );
+    expect(source).toContain(
+      '"/projects/[id]": MutationMethodsOf<typeof import("../src/routes/projects/[id]")>;',
+    );
+    expect(source).not.toContain("server handler");
   });
 
   it("maps each route to the branded contributions from ancestor middleware", async () => {

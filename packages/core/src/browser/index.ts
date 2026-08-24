@@ -6,18 +6,19 @@ export {
   useNavigation,
   useFormNavigation,
 } from "./file-router";
+export { createMutationAction } from "./mutation-action";
 export {
   RouteFocusBoundary,
   useRouteFocusBoundary,
 } from "./focus";
 export type {
   MutationNavigationState,
-  MutationResult,
   FormProps,
   LinkProps,
   NavigationAccessibility,
   NavigationCommit,
 } from "./file-router";
+export type { MutationAction, MutationActionOptions, MutationResult } from "./mutation-action";
 export type {
   RouteFocusBoundaryElement,
   RouteFocusBoundaryProps,

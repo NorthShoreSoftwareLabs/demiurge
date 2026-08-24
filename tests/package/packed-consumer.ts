@@ -194,7 +194,7 @@ try {
   writeFileSync(
     join(scratch, "check.js"),
     [
-      `import { createMemoryCacheStore, createRequestHandler, createSecurityHeaders, hydrateFileRouter, mutation, mutationInput, page, security } from "@demiurgejs/core";`,
+      `import { createMemoryCacheStore, createMutationAction, createRequestHandler, createSecurityHeaders, hydrateFileRouter, mutation, mutationInput, page, security } from "@demiurgejs/core";`,
       `import { createNodeServer, nodeAdapter } from "@demiurgejs/core/node";`,
       `import { createEdgeAssetHandler, createEdgeRequestHandler, edgeAdapter, EdgeSharedStoreError } from "@demiurgejs/core/edge";`,
       `import { generateStaticOutput, staticAdapter } from "@demiurgejs/core/static";`,
@@ -205,7 +205,7 @@ try {
       `import { verifyAdapterContract } from "@demiurgejs/core/adapter/testing";`,
       `import { unstable_createRouteManifest } from "@demiurgejs/core/internal/testing";`,
       `import { demiurge } from "@demiurgejs/core/vite";`,
-      `for (const [name, value] of Object.entries({ createEdgeAssetHandler, createEdgeRequestHandler, createKvCacheStore, createNodeServer, createRedisCacheStore, createRequestHandler, demiurge, generateStaticOutput, hydrateFileRouter, mutation, page, unstable_createRouteManifest, verifyAdapterContract, verifyCacheStoreContract })) {`,
+      `for (const [name, value] of Object.entries({ createEdgeAssetHandler, createEdgeRequestHandler, createKvCacheStore, createMutationAction, createNodeServer, createRedisCacheStore, createRequestHandler, demiurge, generateStaticOutput, hydrateFileRouter, mutation, page, unstable_createRouteManifest, verifyAdapterContract, verifyCacheStoreContract })) {`,
       `  if (typeof value !== "function") {`,
       `    throw new Error(\`Expected \${name} to be exported as a function.\`);`,
       `  }`,
@@ -324,7 +324,8 @@ try {
   writeFileSync(
     join(scratch, "app", "src", "routes", "index.tsx"),
     [
-      `import { defineRoutePolicy, mutation, mutationInput, MutationValidationError, page, security, type MutationContext, type MutationIdempotency, type MutationInput, type MutationNavigationState, type MutationOptions, type MutationResult, type MutationRevalidation, type MutationValidationIssue, type RouteProps } from "@demiurgejs/core";`,
+      `import { createMutationAction, defineRoutePolicy, mutation, mutationInput, MutationValidationError, page, security, type MutationAction, type MutationContext, type MutationIdempotency, type MutationInput, type MutationNavigationState, type MutationOptions, type MutationResult, type MutationRevalidation, type MutationValidationIssue, type RouteProps } from "@demiurgejs/core";`,
+      `import { useActionState } from "react";`,
       `export type PackedMutationContract = {`,
       `  context: MutationContext<FormData>;`,
       `  idempotency: MutationIdempotency<FormData>;`,
@@ -334,6 +335,7 @@ try {
       `  result: MutationResult;`,
       `  revalidation: MutationRevalidation<FormData>;`,
       `  issue: MutationValidationIssue;`,
+      `  action: MutationAction;`,
       `};`,
       `export const policy = defineRoutePolicy({`,
       `  document: security.static({`,
@@ -345,7 +347,7 @@ try {
       `});`,
       `export const GET = page({`,
       `  render: { mode: "static" },`,
-      `  view: (_props: RouteProps) => <main>packed app</main>,`,
+      `  view: PackedPage,`,
       `});`,
       `const packedMutation = mutation({`,
       `  input: mutationInput.formData,`,
@@ -357,6 +359,31 @@ try {
       `  },`,
       `});`,
       `void packedMutation;`,
+      `const updatePackedItem = createMutationAction({ route: "/items/[id]", method: "PATCH", path: { id: "packed" } });`,
+      `// @ts-expect-error Generated mutation types reject an unknown route.`,
+      `createMutationAction({ route: "/missing", method: "POST" });`,
+      `// @ts-expect-error Generated mutation types require dynamic path values.`,
+      `createMutationAction({ route: "/items/[id]", method: "PATCH" });`,
+      `// @ts-expect-error Generated mutation types reject a method that the route does not export.`,
+      `createMutationAction({ route: "/items/[id]", method: "DELETE", path: { id: "packed" } });`,
+      `function PackedPage(_props: RouteProps) {`,
+      `  const [result, save, pending] = useActionState(updatePackedItem, undefined);`,
+      `  return <main><form action={save}><input name="title" /><button disabled={pending}>Save</button></form><output>{result?.status}</output></main>;`,
+      `}`,
+    ].join("\n"),
+  );
+  mkdirSync(join(scratch, "app", "src", "routes", "items"), { recursive: true });
+  writeFileSync(
+    join(scratch, "app", "src", "routes", "items", "[id].tsx"),
+    [
+      `import { mutation, mutationInput, page, type RouteProps } from "@demiurgejs/core";`,
+      `const serverMutationHandlerSentinel = "DEMIURGE_PACKED_SERVER_MUTATION_HANDLER";`,
+      `export const paths = () => [{ id: "packed" }];`,
+      `export const GET = page({ render: { mode: "static" }, view: ({ path }: RouteProps<"/items/[id]">) => <main>{path.id}</main> });`,
+      `export const PATCH = mutation({`,
+      `  input: mutationInput.formData,`,
+      `  handler: () => Response.json({ serverMutationHandlerSentinel }),`,
+      `});`,
     ].join("\n"),
   );
   writeFileSync(
@@ -375,7 +402,7 @@ try {
       `import { vercelStatic } from "@demiurgejs/core/static";`,
       `import { demiurge } from "@demiurgejs/core/vite";`,
       `export default defineConfig({`,
-      `  plugins: [demiurge({ static: { deployment: vercelStatic() } }), react()],`,
+      `  plugins: [demiurge({ static: { deployment: vercelStatic() }, typedRoutes: { outputFile: "src/route-manifest.d.ts" } }), react()],`,
       `  root: "app",`,
       `});`,
     ].join("\n"),
@@ -401,7 +428,34 @@ try {
     ),
   );
 
+  run("pnpm", ["exec", "vite", "build"], scratch);
   run("pnpm", ["exec", "tsc", "--noEmit"], scratch);
+  const packedBrowserJavaScript = readdirSync(
+    join(scratch, "app", "dist", "assets"),
+  )
+    .filter((file) => file.endsWith(".js"))
+    .map((file) => readFileSync(join(scratch, "app", "dist", "assets", file), "utf8"))
+    .join("\n");
+  assert(
+    !packedBrowserJavaScript.includes("DEMIURGE_PACKED_SERVER_MUTATION_HANDLER"),
+    "The browser output contains a server mutation handler.",
+  );
+  writeFileSync(
+    join(scratch, "app", "src", "routes", "items", "[id].tsx"),
+    [
+      `import { page, type RouteProps } from "@demiurgejs/core";`,
+      `export const paths = () => [{ id: "packed" }];`,
+      `export const GET = page({ render: { mode: "static" }, view: ({ path }: RouteProps<"/items/[id]">) => <main>{path.id}</main> });`,
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(scratch, "app", "src", "routes", "index.tsx"),
+    [
+      `import { defineRoutePolicy, page, security, type RouteProps } from "@demiurgejs/core";`,
+      `export const policy = defineRoutePolicy({ document: security.static({ csp: { objectSrc: false, styleSrc: { replace: ["'unsafe-inline'"] } } }) });`,
+      `export const GET = page({ render: { mode: "static" }, view: (_props: RouteProps) => <main>packed app</main> });`,
+    ].join("\n"),
+  );
   run(
     "node",
     [

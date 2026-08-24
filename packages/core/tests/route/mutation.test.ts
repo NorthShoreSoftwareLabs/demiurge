@@ -11,6 +11,8 @@ import {
   redirect,
   toResponse,
   type HttpRouteContext,
+  type MutationCapability,
+  type MutationMethodsOf,
 } from "@demiurgejs/core";
 
 function createContext(request: Request): HttpRouteContext {
@@ -27,6 +29,19 @@ function createContext(request: Request): HttpRouteContext {
 }
 
 describe("mutation helper", () => {
+  it("brands the accepted JSON result type for generated route declarations", () => {
+    const POST = mutation({
+      handler: () => json({ saved: true }),
+    });
+    const typed: MutationCapability<{ saved: boolean }> = POST;
+    const methods: MutationMethodsOf<{ POST: typeof POST; GET: string }> = {
+      POST: { saved: true },
+    };
+
+    expect(typed.kind).toBe("response");
+    expect(methods.POST.saved).toBe(true);
+  });
+
   it("returns a versioned invalid result for protocol requests", async () => {
     const capability = mutation({
       input: async () => {
