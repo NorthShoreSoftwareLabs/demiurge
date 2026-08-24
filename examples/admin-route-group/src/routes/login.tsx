@@ -31,11 +31,7 @@ export const GET = page({
 });
 
 export const POST = response(async ({ request, search }) => {
-  const form = await request.formData();
-  const principal = await authenticate(
-    String(form.get("username") ?? ""),
-    String(form.get("password") ?? ""),
-  );
+  const principal = await authenticate(request);
 
   if (!principal) {
     return new Response("The credentials are not valid.", {
