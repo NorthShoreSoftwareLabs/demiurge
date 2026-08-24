@@ -12,6 +12,7 @@ import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cspHash,
+  createSignedCookieSession,
   defineFonts,
   defineImages,
   defineMetadata,
@@ -709,6 +710,31 @@ describe("static output adapter", () => {
 
     await expect(generateStaticOutput({ outDir, routes })).rejects.toThrow(
       /attempted to set a cookie/,
+    );
+  });
+
+  it("rejects cookie session state added by route middleware", async () => {
+    const { outDir } = await createOutputDirectory();
+    const sessions = createSignedCookieSession<{ userId: string }>({
+      keys: [{ id: "static-test", value: new Uint8Array(32).fill(41) }],
+    });
+    const middleware: RouteMiddleware = async ({ request }, next) => {
+      const session = await sessions.open(request);
+      session.create({ userId: "build-user" });
+      const response = await next();
+
+      for (const cookie of await session.commit()) {
+        response.headers.append("set-cookie", cookie);
+      }
+
+      return response;
+    };
+    const routes = appRoutes({
+      "./routes/@middleware.ts": routeModule({ middleware }),
+    });
+
+    await expect(generateStaticOutput({ outDir, routes })).rejects.toThrow(
+      /Build artifacts cannot contain per-user response state/,
     );
   });
 
