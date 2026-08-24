@@ -3,8 +3,9 @@
 This example keeps authentication and authorization in the application.
 Demiurge manages only the session boundary.
 
-`src/auth.server.ts` defines the application-owned `authenticate` function.
-Replace that function with an adapter for any authentication library.
+`src/auth.server.ts` defines the application-owned `authenticate(request)`
+function. It accepts the native web `Request` and returns a typed principal.
+Replace it with an adapter for a credential verifier or an OIDC callback.
 Demiurge does not provide an identity-provider API.
 
 `src/session.server.ts` configures a `SessionManager` and a store.
@@ -37,3 +38,30 @@ Use `operator` and `demiurge-demo` on the login page.
 
 The committed key is for this example only.
 Load session keys from a secret manager in a deployed application.
+
+## Choose one authentication session owner
+
+This example shows an authenticator that returns identity without owning a
+session. Demiurge owns the local application session in this model.
+
+Auth0, Okta, Passport, or an OIDC client can verify an identity first.
+The callback then maps that identity to `Principal` and creates this session.
+The provider still owns its authorization-server session and logout protocol.
+
+Some authentication libraries already own the complete application session.
+Examples include Auth.js, NextAuth.js, Better Auth, Clerk, and SuperTokens.
+Do not copy their session into a second Demiurge authentication session.
+
+For a session-owning library, middleware performs these actions:
+
+1. It gives the request to the library.
+2. It maps the verified user or claims to `Principal`.
+3. It adds the principal to the typed route context.
+4. It forwards all response headers that the library returns.
+
+The library remains responsible for its routes, cookies, renewal, and logout.
+Demiurge remains responsible for routing, context, policy, and rendering.
+
+An application can also use both systems for different purposes.
+For example, Auth.js can own authentication while Demiurge owns an anonymous
+cart session. Use different cookie names and store namespaces in that case.
