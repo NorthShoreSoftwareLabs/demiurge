@@ -9,6 +9,7 @@ import {
   createMemoryIdempotencyStore,
   json,
   redirect,
+  response,
   toResponse,
   type HttpRouteContext,
   type MutationCapability,
@@ -32,24 +33,27 @@ describe("mutation helper", () => {
   it("brands the accepted JSON result type for generated route declarations", () => {
     const POST = mutation({
       handler: () => json({ saved: true }),
+      validation: { fields: ["title"] },
     });
-    const typed: MutationCapability<{ saved: boolean }> = POST;
+    const typed: MutationCapability<{ saved: boolean }, "title"> = POST;
     const methods: MutationMethodsOf<{ POST: typeof POST; GET: string }> = {
-      POST: { saved: true },
+      POST: { data: { saved: true }, fields: "title" },
     };
 
     expect(typed.kind).toBe("response");
-    expect(methods.POST.saved).toBe(true);
+    expect(methods.POST.data.saved).toBe(true);
   });
 
   it("returns a versioned invalid result for protocol requests", async () => {
     const capability = mutation({
       input: async () => {
-        throw new MutationValidationError([{
-          code: "required",
-          message: "Title is required",
-          path: ["title"],
-        }]);
+        throw new MutationValidationError<"title">({
+          issues: [{
+            code: "required",
+            message: "Title is required",
+            path: ["title"],
+          }],
+        });
       },
       handler: () => new Response("unreachable"),
     });
@@ -61,6 +65,9 @@ describe("mutation helper", () => {
     await expect(response.json()).resolves.toMatchObject({
       version: 1,
       status: "invalid",
+      validation: {
+        issues: [{ path: ["title"] }],
+      },
     });
   });
 
@@ -147,14 +154,33 @@ describe("mutation helper", () => {
     await expect(response.text()).resolves.toBe("raw mutation response");
   });
 
+  it("keeps a response capability opaque for protocol requests", async () => {
+    const capability = mutation({
+      handler: () => response(() => new Response("application response", {
+        headers: { "content-type": "text/plain" },
+        status: 409,
+      })),
+    });
+    const result = await toResponse(capability, createContext(new Request(
+      "https://example.test/posts",
+      { headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE }, method: "POST" },
+    )));
+
+    expect(result.status).toBe(409);
+    expect(result.headers.get("content-type")).toBe("text/plain");
+    await expect(result.text()).resolves.toBe("application response");
+  });
+
   it("returns a stable response for application validation errors", async () => {
     const capability = mutation({
       input: async () => {
-        throw new MutationValidationError([{
-          code: "required",
-          message: "Title is required",
-          path: ["title"],
-        }]);
+        throw new MutationValidationError<"title">({
+          issues: [{
+            code: "required",
+            message: "Title is required",
+            path: ["title"],
+          }],
+        });
       },
       handler: () => new Response("unreachable"),
     });
@@ -166,9 +192,43 @@ describe("mutation helper", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
-      issues: [{ code: "required", message: "Title is required", path: ["title"] }],
       type: "validation-error",
+      validation: {
+        issues: [{ code: "required", message: "Title is required", path: ["title"] }],
+      },
     });
+  });
+
+  it.each([
+    ["undefined", { saved: undefined }],
+    ["a function", { saved: () => true }],
+    ["a bigint", { saved: 1n }],
+    ["a non-finite number", { saved: Number.NaN }],
+    ["a custom object", { saved: new Date(0) }],
+  ])("rejects %s in a structured result", async (_name, data) => {
+    const capability = mutation({ handler: () => json(data) });
+    const context = createContext(new Request("https://example.test/posts", {
+      headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE },
+      method: "POST",
+    }));
+
+    await expect(toResponse(capability, context)).rejects.toThrow(
+      "A mutation result contains a value that JSON cannot serialize.",
+    );
+  });
+
+  it("rejects a cyclic structured result", async () => {
+    const data: { self?: unknown } = {};
+    data.self = data;
+    const capability = mutation({ handler: () => json(data) });
+    const context = createContext(new Request("https://example.test/posts", {
+      headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE },
+      method: "POST",
+    }));
+
+    await expect(toResponse(capability, context)).rejects.toThrow(
+      "A mutation result contains a value that JSON cannot serialize.",
+    );
   });
   it("parses JSON input and returns response capabilities", async () => {
     const capability = mutation({
@@ -312,5 +372,21 @@ describe("mutation helper", () => {
     );
 
     expect(response.headers.get("x-demiurge-revalidate-tags")).toBe("posts");
+  });
+
+  it("does not declare cache tags for a failed mutation", async () => {
+    const revalidate = vi.fn(() => [{ id: "posts" }] as const);
+    const capability = mutation({
+      revalidate,
+      handler: () => new Response("failed", { status: 422 }),
+    });
+
+    const result = await toResponse(
+      capability,
+      createContext(new Request("https://example.test/posts", { method: "POST" })),
+    );
+
+    expect(result.headers.has("x-demiurge-revalidate-tags")).toBe(false);
+    expect(revalidate).not.toHaveBeenCalled();
   });
 });

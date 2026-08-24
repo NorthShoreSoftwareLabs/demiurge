@@ -2,6 +2,9 @@ import type { ComponentType } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
   mutation,
+  MutationValidationError,
+  MUTATION_REQUEST_HEADER,
+  MUTATION_REQUEST_VALUE,
   createMemoryCacheStore,
   createMemoryIdempotencyStore,
   createRequestHandler,
@@ -56,6 +59,67 @@ function routeModule(module: RouteModule) {
 }
 
 describe("request handler", () => {
+  it("returns expected mutation validation without the error path", async () => {
+    const onError = vi.fn();
+    const handler = createRequestHandler({
+      onError,
+      routes: {
+        "./routes/posts.ts": routeModule({
+          POST: mutation({
+            input: () => {
+              throw new MutationValidationError({
+                issues: [{ code: "required", message: "Add a title.", path: ["title"] }],
+              });
+            },
+            handler: () => json({ saved: true }),
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(new Request("https://example.test/posts", {
+      headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE },
+      method: "POST",
+    }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      status: "invalid",
+      validation: {
+        issues: [{ code: "required", message: "Add a title.", path: ["title"] }],
+      },
+      version: 1,
+    });
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("sends unsupported mutation data through the error path", async () => {
+    const onError = vi.fn();
+    const handler = createRequestHandler({
+      onError,
+      routes: {
+        "./routes/posts.ts": routeModule({
+          POST: mutation({ handler: () => json({ savedAt: new Date() }) }),
+        }),
+      },
+    });
+
+    const response = await handler(new Request("https://example.test/posts", {
+      headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE },
+      method: "POST",
+    }));
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("content-type")).toContain("application/problem+json");
+    await expect(response.text()).resolves.not.toContain("savedAt");
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "A mutation result contains a value that JSON cannot serialize.",
+      }),
+      { pathname: "/posts", site: "route" },
+    );
+  });
+
   it("invalidates declared mutation tags and strips the transport header", async () => {
     const store = createMemoryCacheStore();
     const invalidateTags = vi.spyOn(store, "invalidateTags");

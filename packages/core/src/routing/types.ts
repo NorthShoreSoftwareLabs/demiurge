@@ -31,9 +31,22 @@ export type MutationDataFor<
   TMethod extends MutationMethodFor<TPath>,
 > = TPath extends KnownMutationPath
   ? TMethod extends keyof RouteMutationMethods[TPath]
-    ? RouteMutationMethods[TPath][TMethod]
+    ? RouteMutationMethods[TPath][TMethod] extends { data: infer TData }
+      ? TData
+      : never
     : never
   : unknown;
+
+export type MutationFieldsFor<
+  TPath extends MutationRoute,
+  TMethod extends MutationMethodFor<TPath>,
+> = TPath extends KnownMutationPath
+  ? TMethod extends keyof RouteMutationMethods[TPath]
+    ? RouteMutationMethods[TPath][TMethod] extends { fields: infer TField extends string }
+      ? TField
+      : never
+    : never
+  : string;
 
 type KnownRoutePath = keyof RoutePathVars & string;
 type KnownConcretePath = RouteConcretePaths[keyof RouteConcretePaths] & string;
