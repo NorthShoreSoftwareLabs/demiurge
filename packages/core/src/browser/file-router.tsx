@@ -1,5 +1,6 @@
 import {
   AnchorHTMLAttributes,
+  ButtonHTMLAttributes,
   Component,
   ComponentType,
   ForwardedRef,
@@ -56,8 +57,10 @@ import { BuiltInNotFound } from "../server/fallbacks";
 import { href, type AppHref, type LinkTarget, type LinkTo } from "../routing";
 import {
   abortMutationActions,
+  mutationFormActionDetails,
   performMutationRequest,
   registerMutationRouter,
+  type MutationFormAction,
   type MutationResult,
   validateMutationRedirect,
 } from "./mutation-action";
@@ -84,9 +87,22 @@ export type MutationNavigationState<TData = unknown, TField extends string = str
   | { state: "invalid"; form: HTMLFormElement; submissionKey?: string; formData: FormData; result: Extract<MutationResult<TData, TField>, { status: "invalid" }> }
   | { state: "error"; form: HTMLFormElement; submissionKey?: string; formData: FormData; response?: Response };
 
-export type FormProps = FormHTMLAttributes<HTMLFormElement> & {
-  submissionKey?: string;
-};
+export type FormProps =
+  | (Omit<FormHTMLAttributes<HTMLFormElement>, "action"> & {
+    action?: string;
+    submissionKey?: string;
+  })
+  | (Omit<FormHTMLAttributes<HTMLFormElement>, "action" | "method"> & {
+    action: MutationFormAction;
+    method?: never;
+    submissionKey?: never;
+  });
+
+export type MutationSubmitProps =
+  Omit<ButtonHTMLAttributes<HTMLButtonElement>, "formAction" | "formMethod"> & {
+    formAction: MutationFormAction;
+    formMethod?: never;
+  };
 
 export type FileRouterOptions = {
   initialMatch?: PendingRouteMatch;
@@ -701,6 +717,14 @@ export function Form(props: FormProps) {
   const generatedKey = useId();
   const formKey = props.submissionKey ?? generatedKey;
   const formRef = useRef<HTMLFormElement | null>(null);
+  const hydrated = useHydratedFormAction();
+  // TYPE-EVIDENCE: FormProps permits a function action only for a branded MutationFormAction.
+  const progressiveAction = typeof props.action === "function"
+    ? props.action as MutationFormAction
+    : undefined;
+  const progressiveDetails = progressiveAction
+    ? mutationFormActionDetails(progressiveAction)
+    : undefined;
 
   useLayoutEffect(() => () => {
     if (formRef.current) {
@@ -714,6 +738,7 @@ export function Form(props: FormProps) {
       | ((value: FormEvent<HTMLFormElement>) => void)
       | undefined;
     applicationHandler?.(event);
+    if (progressiveAction) return;
     if (event.defaultPrevented || router.navigation !== "server") return;
     // TYPE-EVIDENCE: React forwards the browser SubmitEvent as nativeEvent for form submissions.
     const submitter = (event.nativeEvent as SubmitEvent).submitter;
@@ -727,19 +752,45 @@ export function Form(props: FormProps) {
   }
 
   const { submissionKey: _submissionKey, ...formProps } = props;
+  const action = progressiveAction
+    ? hydrated ? progressiveAction : progressiveDetails?.url
+    : formProps.action;
   return createElement(
     MutationFormContext.Provider,
     {
       value: formKey,
       children: createElement("form", {
         ...formProps,
-        onSubmit,
+        action,
+        ...(progressiveAction
+          ? {
+              encType: hydrated ? undefined : formProps.encType,
+              method: hydrated ? undefined : "post",
+              onSubmit: formProps.onSubmit,
+            }
+          : { onSubmit }),
         ref: (element: HTMLFormElement | null) => {
           formRef.current = element;
         },
       }),
     },
   );
+}
+
+export function MutationSubmit(props: MutationSubmitProps) {
+  const hydrated = useHydratedFormAction();
+  const details = mutationFormActionDetails(props.formAction);
+  return createElement("button", {
+    ...props,
+    formAction: hydrated ? props.formAction : details.url,
+    formMethod: hydrated ? undefined : "post",
+  });
+}
+
+function useHydratedFormAction() {
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
+  return hydrated;
 }
 
 export function useNavigation<TData = unknown, TField extends string = string>(options?: {

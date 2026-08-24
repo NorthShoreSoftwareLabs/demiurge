@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 import {
   mutation,
   mutationInput,
@@ -33,7 +34,7 @@ describe("mutation helper", () => {
   it("brands the accepted JSON result type for generated route declarations", () => {
     const POST = mutation({
       handler: () => json({ saved: true }),
-      validation: { fields: ["title"] },
+      input: mutationInput.custom<"title", undefined>(() => undefined),
     });
     const typed: MutationCapability<{ saved: boolean }, "title"> = POST;
     const methods: MutationMethodsOf<{ POST: typeof POST; GET: string }> = {
@@ -298,6 +299,87 @@ describe("mutation helper", () => {
 
     await expect(formResponse.json()).resolves.toEqual({ title: "Hello" });
     await expect(textResponse.text()).resolves.toBe("HELLO");
+  });
+
+  it("validates and transforms form input with a Standard Schema", async () => {
+    const schema: StandardSchemaV1<
+      { title: FormDataEntryValue | null },
+      { title: string }
+    > = {
+      "~standard": {
+        version: 1 as const,
+        vendor: "test",
+        validate(value: unknown) {
+          const title = value && typeof value === "object" && "title" in value
+            ? value.title
+            : undefined;
+          if (typeof title !== "string" || !title.trim()) {
+            return {
+              issues: [{ message: "Enter a title.", path: ["title"] }],
+            };
+          }
+          return { value: { title: title.trim() } };
+        },
+      },
+    };
+    const capability = mutation({
+      input: mutationInput.form(schema, (form) => ({
+        title: form.get("title"),
+      })),
+      handler: ({ input }) => json({ title: input.title }),
+    });
+    const typed: MutationCapability<{ title: string }, "title"> = capability;
+    const form = new FormData();
+    form.set("title", "  Hello  ");
+
+    const result = await toResponse(
+      typed,
+      createContext(new Request("https://example.test/posts", {
+        body: form,
+        method: "POST",
+      })),
+    );
+
+    await expect(result.json()).resolves.toEqual({ title: "Hello" });
+  });
+
+  it("normalizes Standard Schema issues for mutation results", async () => {
+    const schema = {
+      "~standard": {
+        version: 1 as const,
+        vendor: "test",
+        validate: () => ({
+          issues: [{
+            message: "Enter a title.",
+            path: [{ key: "title" }, { key: "value" }],
+          }],
+        }),
+      },
+    };
+    const capability = mutation({
+      input: mutationInput.form(schema, () => ({})),
+      handler: () => new Response("unreachable"),
+    });
+
+    const result = await toResponse(
+      capability,
+      createContext(new Request("https://example.test/posts", {
+        body: new FormData(),
+        headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE },
+        method: "POST",
+      })),
+    );
+
+    await expect(result.json()).resolves.toMatchObject({
+      status: "invalid",
+      validation: {
+        issues: [{
+          code: "invalid",
+          message: "Enter a title.",
+          path: ["title", "value"],
+        }],
+      },
+    });
   });
 
   it("replays idempotent mutation responses for matching keys", async () => {
