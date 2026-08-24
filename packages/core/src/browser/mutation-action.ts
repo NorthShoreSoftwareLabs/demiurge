@@ -15,6 +15,10 @@ import {
   type PathVarsFor,
   type RoutePathVars,
 } from "../routing";
+import { useActionState, useMemo } from "react";
+
+const mutationFormActionMetadata = Symbol("Demiurge mutation form action");
+declare const mutationFormActionResult: unique symbol;
 
 export type MutationResult<TData = unknown, TField extends string = string> =
   | { version: 1; status: "success"; data?: TData; revalidate?: boolean }
@@ -26,6 +30,15 @@ export type MutationAction<TData = unknown, TField extends string = string> = (
   previousState: MutationResult<TData, TField> | undefined,
   formData: FormData,
 ) => Promise<MutationResult<TData, TField>>;
+
+export type MutationFormAction<TData = unknown, TField extends string = string> =
+  ((formData: FormData) => void) & {
+    readonly [mutationFormActionMetadata]: {
+      method: "POST";
+      url: string;
+    };
+    readonly [mutationFormActionResult]?: MutationResult<TData, TField>;
+  };
 
 type MutationActionPath<TRoute extends MutationRoute> =
   TRoute extends keyof RoutePathVars & string
@@ -129,6 +142,54 @@ export function createMutationAction<
     current = invocation;
     return invocation.promise;
   };
+}
+
+export function useMutationAction<
+  TData = never,
+  const TRoute extends MutationRoute = MutationRoute,
+  const TMethod extends MutationMethodFor<TRoute> = MutationMethodFor<TRoute>,
+>(
+  options: MutationActionOptions<TRoute, TMethod> & { method: TMethod & "POST" },
+  initialState?: MutationResult<
+    [TData] extends [never] ? MutationDataFor<TRoute, TMethod> : TData,
+    MutationFieldsFor<TRoute, TMethod>
+  >,
+) {
+  type ResultData = [TData] extends [never]
+    ? MutationDataFor<TRoute, TMethod>
+    : TData;
+  type ResultField = MutationFieldsFor<TRoute, TMethod>;
+  // TYPE-EVIDENCE: MutationActionPath applies the generated path requirement that href expects.
+  const url = href({
+    to: options.route,
+    ...(options.path === undefined ? {} : { path: options.path }),
+  } as never);
+  const mutation = useMemo(
+    () => {
+      const generated = createMutationAction(options);
+      // TYPE-EVIDENCE: ResultData either keeps the generated data type or applies the caller's explicit data refinement.
+      return generated as MutationAction<ResultData, ResultField>;
+    },
+    [options.method, url],
+  );
+  const [state, dispatch, pending] = useActionState<
+    MutationResult<ResultData, ResultField> | undefined,
+    FormData
+  >(mutation, initialState);
+  const action = useMemo(() => {
+    const branded = (formData: FormData) => dispatch(formData);
+    Object.defineProperty(branded, mutationFormActionMetadata, {
+      value: { method: "POST", url },
+    });
+    // TYPE-EVIDENCE: the wrapper has the FormData dispatch signature and the metadata property required by MutationFormAction.
+    return branded as MutationFormAction<ResultData, ResultField>;
+  }, [dispatch, url]);
+
+  return [state, action, pending] as const;
+}
+
+export function mutationFormActionDetails(action: MutationFormAction) {
+  return action[mutationFormActionMetadata];
 }
 
 export async function submitMutation<TData = unknown, TField extends string = string>(options: {

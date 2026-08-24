@@ -65,6 +65,83 @@ test("production mutation forms use their typed redirect history operation", asy
   ]);
 });
 
+test("React mutation forms preserve pending state, validation, files, and submitters", async ({
+  page,
+}) => {
+  const mutationRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.headers()["x-demiurge-mutation"] === "data;v=1") {
+      mutationRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/mutation-forms");
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page.getByLabel("React mutation validation")).toHaveText(
+    "Enter a title.",
+  );
+
+  await page.getByLabel("Title").fill("Release notes");
+  await page.getByLabel("Attachment").setInputFiles({
+    buffer: Buffer.from("typed mutation"),
+    mimeType: "text/plain",
+    name: "notes.txt",
+  });
+  await page.getByRole("button", { name: "Publish draft" }).click();
+  await expect(page.getByLabel("React form status")).toHaveText("pending");
+  await expect(page).toHaveURL(
+    "http://localhost:42177/mutation-forms?attachment=notes.txt&result=publish&title=Release+notes",
+  );
+  await expect(page.getByText("Result: publish")).toBeVisible();
+  expect(mutationRequests).toEqual([
+    "http://localhost:42177/mutation-forms",
+    "http://localhost:42177/mutation-forms/publish",
+  ]);
+});
+
+test("mutation forms keep native validation and multipart redirects without JavaScript", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    baseURL: "http://localhost:42177",
+    javaScriptEnabled: false,
+  });
+  const page = await context.newPage();
+
+  try {
+    await page.goto("/mutation-forms");
+    const validationResponse = await Promise.all([
+      page.waitForResponse((response) =>
+        response.url() === "http://localhost:42177/mutation-forms" &&
+        response.request().method() === "POST"
+      ),
+      page.getByRole("button", { name: "Save draft" }).click(),
+    ]).then(([response]) => response);
+    expect(validationResponse.status()).toBe(400);
+    expect(await validationResponse.json()).toMatchObject({
+      type: "validation-error",
+      validation: {
+        issues: [{ path: ["title"] }],
+      },
+    });
+
+    await page.goto("/mutation-forms");
+    await page.getByLabel("Title").fill("Native release");
+    await page.getByLabel("Attachment").setInputFiles({
+      buffer: Buffer.from("native mutation"),
+      mimeType: "text/plain",
+      name: "native.txt",
+    });
+    await page.getByRole("button", { name: "Publish draft" }).click();
+    await expect(page).toHaveURL(
+      "http://localhost:42177/mutation-forms?attachment=native.txt&result=publish&title=Native+release",
+    );
+    await expect(page.getByText("Result: publish")).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
 test("accessible browser navigation commits status, focus, and hash behavior", async ({
   page,
 }) => {

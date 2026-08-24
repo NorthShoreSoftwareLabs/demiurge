@@ -114,9 +114,11 @@ pages.
 
 ### Mutation forms
 
-Use `Form` for client mutation submissions. The browser router intercepts only
-same-origin forms with a supported method and target. Other forms keep native
-browser behavior.
+Use `useMutationAction(...)` with `Form` for a typed progressive mutation. The
+server-rendered form contains a real HTTP URL and the `post` method.
+
+After hydration, React submits the same `FormData` through the typed mutation
+client. React owns the pending state through `useFormStatus`.
 
 The router sends `X-Demiurge-Mutation: data;v=1` and accepts
 `application/vnd.demiurge.mutation+json;v=1`. A typed result has `version: 1` and
@@ -129,40 +131,69 @@ The mutation helper gives each redirect an explicit history operation. It uses
 `replace` for `301` and `308`. It uses `push` for `302`, `303`, and `307`.
 
 ```tsx
-import { Form, useFormNavigation } from "@demiurgejs/core";
+import {
+  Form,
+  MutationSubmit,
+  useMutationAction,
+} from "@demiurgejs/core";
+import { useFormStatus } from "react-dom";
 
 export function SaveForm() {
-  const navigation = useFormNavigation("profile");
+  const [result, save] = useMutationAction(
+    { route: "/profile", method: "POST" },
+    undefined,
+  );
+  const [, publish] = useMutationAction(
+    { route: "/profile/publish", method: "POST" },
+    undefined,
+  );
+
   return (
-    <Form action="/profile" method="post" submissionKey="profile">
-      <button disabled={navigation.state === "submitting"}>Save</button>
+    <Form action={save}>
+      <input name="displayName" />
+      <PendingButton />
+      <MutationSubmit formAction={publish} name="intent" value="publish">
+        Publish
+      </MutationSubmit>
+      {result?.status === "invalid"
+        ? result.validation.issues.map((issue) => (
+            <p key={`${issue.code}:${issue.path.join(".")}`}>{issue.message}</p>
+          ))
+        : null}
     </Form>
   );
 }
+
+function PendingButton() {
+  const { pending } = useFormStatus();
+  return <button disabled={pending}>{pending ? "Saving" : "Save"}</button>;
+}
 ```
 
-`useFormNavigation` reads the nearest `Form` state. `useNavigation` accepts a
-form or `submissionKey` for another scope. The router preserves submitter
-values and submitter overrides for action, method, target, and encoding. The
-router sends URL-encoded, multipart, or plain-text bodies that match the form.
-Set `revalidateRoute` to `true` to refresh the current route after success.
-Use `revalidate` to invalidate cache tags. The two operations are separate.
+`MutationSubmit` preserves a real `formAction` URL before hydration. After
+hydration, it uses the selected React Action. The submitted data includes the
+submitter name and value.
+
+Typed progressive forms support `POST`. Native HTML forms cannot submit `PUT`,
+`PATCH`, or `DELETE`. Use `createMutationAction(...)` for a client-only call to
+one of these methods.
+
+The client preserves multipart values and files. It does not set the multipart
+content type because the browser must add the boundary.
+
+Set `revalidateRoute` to `true` on `mutation(...)` to refresh the current route
+after success. Use `revalidate` to invalidate cache tags. The operations are
+separate.
 
 #### React Action state
 
-Demiurge `Form` does not wrap React `useActionState`. The APIs manage different
-state.
+`useMutationAction` uses React `useActionState`. React owns component result,
+pending, and optimistic state. Demiurge owns transport, result validation,
+redirects, cancellation, and route refresh.
 
-- `Form` and `useNavigation` manage HTTP submission, cancellation, redirects,
-  history, and route revalidation.
-- `useActionState` manages component result state, ordered React Actions, and
-  a React transition pending flag.
-
-Use `Form` when a submission must participate in browser routing. Use
-`useActionState` when a React Action must update component-local result state.
-
-Both clients can submit to the same application endpoint. They do not share
-pending state or mutation-result state.
+`Form` also accepts a string `action` for compatibility. This form uses the
+browser router and exposes state through `useFormNavigation` and
+`useNavigation`.
 
 ### Migration from action names
 
