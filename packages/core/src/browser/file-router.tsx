@@ -126,11 +126,14 @@ export function createFileRouter(options: FileRouterOptions) {
     );
     const initialMatchPending = useRef(Boolean(options.initialMatch));
     const navigationSequence = useRef(0);
+    const routeLoadController = useRef<AbortController | undefined>(undefined);
+    const routeLoadCause = useRef<"navigation" | "refresh">("navigation");
     const submissionControllers = useRef(new Map<string, AbortController>());
     const submissionStates = useRef(new Map<string, MutationNavigationState>());
     const [submissionVersion, setSubmissionVersion] = useState(0);
     const [routeRefresh, setRouteRefresh] = useState(0);
     const routeRefreshWaiters = useRef(new Set<() => void>());
+    const [resolvedRouteVersion, setResolvedRouteVersion] = useState(0);
     const navigationKind = useRef<"push" | "replace" | "pop">("push");
     const [pendingCommit, setPendingCommit] = useState<NavigationCommit | null>(null);
     const [committed, setCommitted] = useState<NavigationCommit | null>(null);
@@ -219,12 +222,22 @@ export function createFileRouter(options: FileRouterOptions) {
       if (changed) setSubmissionVersion((value) => value + 1);
     }
 
+    function supersedeRouteLoad() {
+      navigationSequence.current++;
+      routeLoadController.current?.abort();
+      routeLoadController.current = undefined;
+    }
+
     useEffect(() => {
       function onPopState() {
         abortSubmissions();
         navigationKind.current = "pop";
         const next = getCurrentLocation();
         const previous = lastLocation.current;
+        if (previous.pathname !== next.pathname || previous.search !== next.search) {
+          supersedeRouteLoad();
+          routeLoadCause.current = "navigation";
+        }
         lastLocation.current = next;
         if (
           previous.pathname === next.pathname &&
@@ -245,6 +258,8 @@ export function createFileRouter(options: FileRouterOptions) {
       let settled = false;
       const sequence = ++navigationSequence.current;
       const controller = new AbortController();
+      routeLoadController.current = controller;
+      const cause = routeLoadCause.current;
       const isCurrent = () =>
         !cancelled && sequence === navigationSequence.current;
 
@@ -258,19 +273,25 @@ export function createFileRouter(options: FileRouterOptions) {
         initialMatchPending.current = false;
         return () => {
           cancelled = true;
+          controller.abort();
+          if (routeLoadController.current === controller) {
+            routeLoadController.current = undefined;
+          }
         };
       }
 
-      setMatch({ status: "loading" });
-      loadLoadingFallback(manifest, location.pathname).then((Loading) => {
-        if (isCurrent() && !settled && Loading) {
-          setMatch({ loading: Loading, status: "loading" });
-        }
-      }).catch(() => {
-        // Loading UI is optional. A malformed pathname or broken loading
-        // module must not become an unhandled rejection while the main route
-        // pipeline resolves the controlled error state.
-      });
+      if (cause !== "refresh") {
+        setMatch({ status: "loading" });
+        loadLoadingFallback(manifest, location.pathname).then((Loading) => {
+          if (isCurrent() && !settled && Loading) {
+            setMatch({ loading: Loading, status: "loading" });
+          }
+        }).catch(() => {
+          // Loading UI is optional. A malformed pathname or broken loading
+          // module must not become an unhandled rejection while the main route
+          // pipeline resolves the controlled error state.
+        });
+      }
       const request = new Request(location.href, { signal: controller.signal });
       Promise.resolve(navigationDataLoader(request))
         .then(async (initialData) => ({
@@ -291,25 +312,15 @@ export function createFileRouter(options: FileRouterOptions) {
               applyNavigationDocument(initialData.document);
             }
             setMatch(nextMatch);
-            for (const [key, state] of submissionStates.current) {
-              if (state.state === "loading") {
-                submissionStates.current.set(key, {
-                  state: "idle",
-                  form: state.form,
-                  submissionKey: state.submissionKey,
-                  result: state.result,
-                });
-              }
+            setResolvedRouteVersion((value) => value + 1);
+            if (cause !== "refresh") {
+              setPendingCommit({
+                kind: navigationKind.current,
+                outcome: nextMatch.status === "not-found" ? "not-found" : "ready",
+                title: document.title || "Demiurge App",
+                url: new URL(location.href),
+              });
             }
-            setSubmissionVersion((value) => value + 1);
-            setPendingCommit({
-              kind: navigationKind.current,
-              outcome: nextMatch.status === "not-found" ? "not-found" : "ready",
-              title: document.title || "Demiurge App",
-              url: new URL(location.href),
-            });
-            for (const resolve of routeRefreshWaiters.current) resolve();
-            routeRefreshWaiters.current.clear();
           }
         })
         .catch(async (error: unknown) => {
@@ -337,20 +348,24 @@ export function createFileRouter(options: FileRouterOptions) {
               pathname: location.pathname,
               status: "error",
             });
-            setPendingCommit({
-              kind: navigationKind.current,
-              outcome: "error",
-              title: navigationDocument?.title ?? "Navigation failed",
-              url: new URL(location.href),
-            });
-            for (const resolve of routeRefreshWaiters.current) resolve();
-            routeRefreshWaiters.current.clear();
+            setPendingCommit(cause === "refresh"
+              ? null
+              : {
+                kind: navigationKind.current,
+                outcome: "error",
+                title: navigationDocument?.title ?? "Navigation failed",
+                url: new URL(location.href),
+              });
+            setResolvedRouteVersion((value) => value + 1);
           }
         });
 
       return () => {
         cancelled = true;
         controller.abort();
+        if (routeLoadController.current === controller) {
+          routeLoadController.current = undefined;
+        }
       };
     }, [location.pathname, location.search, routeRefresh]);
 
@@ -407,6 +422,10 @@ export function createFileRouter(options: FileRouterOptions) {
           const previous = getCurrentLocation();
           window.history.pushState(null, "", to);
           const next = getCurrentLocation();
+          if (previous.pathname !== next.pathname || previous.search !== next.search) {
+            supersedeRouteLoad();
+            routeLoadCause.current = "navigation";
+          }
           lastLocation.current = next;
           setLocation(next);
 
@@ -459,13 +478,16 @@ export function createFileRouter(options: FileRouterOptions) {
                 setSubmissionState(key, { state: "error", form, submissionKey, formData, response });
                 return;
               }
+              supersedeRouteLoad();
               abortSubmissions(controller);
+              routeLoadCause.current = "navigation";
               setSubmissionState(key, { state: "loading", form, submissionKey, formData });
               if (result.history === "replace") window.history.replaceState(null, "", destination);
               else window.history.pushState(null, "", destination);
               navigationKind.current = result.history;
               lastLocation.current = getCurrentLocation();
               setLocation(lastLocation.current);
+              setRouteRefresh((value) => value + 1);
               return;
             }
             if (result?.status === "failed" || !response.ok) {
@@ -474,6 +496,8 @@ export function createFileRouter(options: FileRouterOptions) {
             }
             if (result?.status === "success" && result.revalidate) {
               setSubmissionState(key, { state: "loading", form, submissionKey, formData, result });
+              supersedeRouteLoad();
+              routeLoadCause.current = "refresh";
               setRouteRefresh((value) => value + 1);
             } else {
               setSubmissionState(key, { state: "idle", form, submissionKey, result });
@@ -494,15 +518,20 @@ export function createFileRouter(options: FileRouterOptions) {
 
     useLayoutEffect(() => registerMutationRouter({
       redirect(destination, history, controller) {
+        supersedeRouteLoad();
         abortSubmissions(controller);
+        routeLoadCause.current = "navigation";
         if (history === "replace") window.history.replaceState(null, "", destination);
         else window.history.pushState(null, "", destination);
         navigationKind.current = history;
         lastLocation.current = getCurrentLocation();
         setLocation(lastLocation.current);
+        setRouteRefresh((value) => value + 1);
       },
       refresh() {
         return new Promise<void>((resolve) => {
+          supersedeRouteLoad();
+          routeLoadCause.current = "refresh";
           routeRefreshWaiters.current.add(resolve);
           setRouteRefresh((value) => value + 1);
         });
@@ -519,6 +548,7 @@ export function createFileRouter(options: FileRouterOptions) {
           NotFound: options.notFound,
           match,
           pendingCommit,
+          resolvedRouteVersion,
           onCommitted: (value) => {
             if (pendingCommitRef.current === value) setCommitted(value);
           },
@@ -526,10 +556,28 @@ export function createFileRouter(options: FileRouterOptions) {
             setCommitted(pendingCommit
               ? { ...pendingCommit, outcome: "error", title: "Navigation failed" }
               : null);
+            settleRouteRefreshes();
           },
+          onRouteCommitted: settleRouteRefreshes,
         }),
       }),
     });
+
+    function settleRouteRefreshes() {
+      for (const resolve of routeRefreshWaiters.current) resolve();
+      routeRefreshWaiters.current.clear();
+      for (const [key, state] of submissionStates.current) {
+        if (state.state === "loading") {
+          submissionStates.current.set(key, {
+            state: "idle",
+            form: state.form,
+            submissionKey: state.submissionKey,
+            result: state.result,
+          });
+        }
+      }
+      setSubmissionVersion((value) => value + 1);
+    }
   };
 }
 
@@ -725,6 +773,9 @@ export function Form(props: FormProps) {
   const progressiveDetails = progressiveAction
     ? mutationFormActionDetails(progressiveAction)
     : undefined;
+  const enhanceProgressiveAction = Boolean(
+    progressiveAction && hydrated && router.navigation === "server",
+  );
 
   useLayoutEffect(() => () => {
     if (formRef.current) {
@@ -753,7 +804,7 @@ export function Form(props: FormProps) {
 
   const { submissionKey: _submissionKey, ...formProps } = props;
   const action = progressiveAction
-    ? hydrated ? progressiveAction : progressiveDetails?.url
+    ? enhanceProgressiveAction ? progressiveAction : progressiveDetails?.url
     : formProps.action;
   return createElement(
     MutationFormContext.Provider,
@@ -764,8 +815,8 @@ export function Form(props: FormProps) {
         action,
         ...(progressiveAction
           ? {
-              encType: hydrated ? undefined : formProps.encType,
-              method: hydrated ? undefined : "post",
+              encType: enhanceProgressiveAction ? undefined : formProps.encType,
+              method: enhanceProgressiveAction ? undefined : "post",
               onSubmit: formProps.onSubmit,
             }
           : { onSubmit }),
@@ -778,12 +829,14 @@ export function Form(props: FormProps) {
 }
 
 export function MutationSubmit(props: MutationSubmitProps) {
+  const router = useRouter();
   const hydrated = useHydratedFormAction();
   const details = mutationFormActionDetails(props.formAction);
+  const enhance = hydrated && router.navigation === "server";
   return createElement("button", {
     ...props,
-    formAction: hydrated ? props.formAction : details.url,
-    formMethod: hydrated ? undefined : "post",
+    formAction: enhance ? props.formAction : details.url,
+    formMethod: enhance ? undefined : "post",
   });
 }
 
@@ -813,6 +866,8 @@ function RouteRenderer({
   onRenderError,
   onCommitted,
   pendingCommit,
+  resolvedRouteVersion,
+  onRouteCommitted,
 }: {
   Loading?: ComponentType;
   NotFound?: ComponentType<{ pathname: string }>;
@@ -820,6 +875,8 @@ function RouteRenderer({
   onCommitted: (value: NavigationCommit) => void;
   onRenderError: () => void;
   pendingCommit: NavigationCommit | null;
+  resolvedRouteVersion: number;
+  onRouteCommitted: () => void;
 }) {
   if (match.status === "loading") {
     const AppLoading = match.loading ?? Loading;
@@ -838,7 +895,7 @@ function RouteRenderer({
           pathname: match.pathname,
         }),
       createElement(AppNotFound, { pathname: match.pathname }),
-    ), createElement(NavigationCommitMarker, { commit: pendingCommit, onCommit: onCommitted }));
+    ), createElement(NavigationCommitMarker, { commit: pendingCommit, onCommit: onCommitted, onRouteCommitted, resolvedRouteVersion }));
   }
 
   if (match.status === "error") {
@@ -848,7 +905,7 @@ function RouteRenderer({
           pathname: match.pathname,
           status: errorStatus(match.error),
         })
-      : null, createElement(NavigationCommitMarker, { commit: pendingCommit, onCommit: onCommitted }));
+      : null, createElement(NavigationCommitMarker, { commit: pendingCommit, onCommit: onCommitted, onRouteCommitted, resolvedRouteVersion }));
   }
 
   const { data, error, page, layouts, path, pathname } = match.match;
@@ -860,7 +917,7 @@ function RouteRenderer({
 
   return createElement(RouteErrorBoundary, {
     Error: error,
-      children: createElement(Fragment, null, routeElement, createElement(NavigationCommitMarker, { commit: pendingCommit, onCommit: onCommitted })),
+      children: createElement(Fragment, null, routeElement, createElement(NavigationCommitMarker, { commit: pendingCommit, onCommit: onCommitted, onRouteCommitted, resolvedRouteVersion })),
     onError: onRenderError,
     pathname,
   });
@@ -869,17 +926,26 @@ function RouteRenderer({
 function NavigationCommitMarker({
   commit,
   onCommit,
+  onRouteCommitted,
+  resolvedRouteVersion,
 }: {
   commit: NavigationCommit | null;
   onCommit: (value: NavigationCommit) => void;
+  onRouteCommitted: () => void;
+  resolvedRouteVersion: number;
 }) {
   const signaled = useRef<NavigationCommit | null>(null);
+  const signaledRouteVersion = useRef(0);
   useLayoutEffect(() => {
+    if (resolvedRouteVersion > signaledRouteVersion.current) {
+      signaledRouteVersion.current = resolvedRouteVersion;
+      onRouteCommitted();
+    }
     if (commit && signaled.current !== commit) {
       signaled.current = commit;
       onCommit(commit);
     }
-  }, [commit, onCommit]);
+  }, [commit, onCommit, onRouteCommitted, resolvedRouteVersion]);
   return null;
 }
 

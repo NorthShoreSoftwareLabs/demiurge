@@ -217,6 +217,24 @@ Set `revalidateRoute` to `true` on `mutation(...)` to refresh the current route
 after success. Use `revalidate` to invalidate cache tags. The operations are
 separate.
 
+The server controls route refresh. A client cannot add or change the
+`revalidateRoute` declaration.
+
+A refresh retrieves the current pathname and search from the server. It keeps
+the current URL, history, scroll position, and focus.
+
+React Action pending state remains active until the requested refresh settles.
+If the refresh fails, the router renders the resolved route error boundary.
+The mutation can remain successful because its server commit already finished.
+
+An `invalid` or `failed` result does not refresh the route. A redirect takes
+precedence over refresh. The router does not refresh the previous route before
+it follows the redirect.
+
+Cache invalidation and route refresh have different purposes. The `revalidate`
+option changes cached server authority. The `revalidateRoute` option retrieves
+the current authority for the browser.
+
 #### React Action state
 
 `useMutationAction` uses React `useActionState`. React owns component result,

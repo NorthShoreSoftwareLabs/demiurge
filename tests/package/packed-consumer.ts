@@ -407,7 +407,9 @@ try {
       `  // @ts-expect-error Progressive HTML forms accept POST mutations only.`,
       `  useMutationAction({ route: "/items/[id]", method: "PATCH", path: { id: "packed" } }, undefined);`,
       `  const issues = result?.status === "invalid" ? result.validation.issues : [];`,
-      `  return <main><Form action={save}><input name="title" /><PackedPendingButton /><MutationSubmit formAction={publish} name="intent" value="publish">Publish</MutationSubmit></Form><output>{issues.map((issue) => issue.message).join(", ")}</output></main>;`,
+      `  const saved: boolean | undefined = result?.status === "success" ? result.data?.saved : undefined;`,
+      `  const refresh: boolean | undefined = result?.status === "success" ? result.revalidate : undefined;`,
+      `  return <main><Form action={save}><input name="title" /><PackedPendingButton /><MutationSubmit formAction={publish} name="intent" value="publish">Publish</MutationSubmit></Form><output>{issues.map((issue) => issue.message).join(", ")}{String(saved)}{String(refresh)}</output></main>;`,
       `}`,
       `function PackedPendingButton() {`,
       `  const { pending } = useFormStatus();`,
@@ -419,7 +421,7 @@ try {
   writeFileSync(
     join(scratch, "app", "src", "routes", "items", "[id].tsx"),
     [
-      `import { mutation, mutationInput, page, type RouteProps } from "@demiurgejs/core";`,
+      `import { json, mutation, mutationInput, page, type RouteProps } from "@demiurgejs/core";`,
       `const serverMutationHandlerSentinel = "DEMIURGE_PACKED_SERVER_MUTATION_HANDLER";`,
       `export const paths = () => [{ id: "packed" }];`,
       `export const GET = page({ render: { mode: "static" }, view: ({ path }: RouteProps<"/items/[id]">) => <main>{path.id}</main> });`,
@@ -427,7 +429,10 @@ try {
       `  input: mutationInput.formData,`,
       `  handler: () => Response.json({ serverMutationHandlerSentinel }),`,
       `});`,
-      `export const POST = PATCH;`,
+      `export const POST = mutation({`,
+      `  revalidateRoute: true,`,
+      `  handler: () => json({ saved: true, serverMutationHandlerSentinel }),`,
+      `});`,
     ].join("\n"),
   );
   writeFileSync(

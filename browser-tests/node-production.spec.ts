@@ -142,6 +142,64 @@ test("mutation forms keep native validation and multipart redirects without Java
   }
 });
 
+test("mutation refresh retrieves authority without changing navigation state", async ({
+  page,
+}) => {
+  const refreshUrl =
+    "http://localhost:42177/mutation-forms?refreshKey=playwright-refresh";
+  const routeDataRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.headers()["x-demiurge-navigation"] === "data") {
+      routeDataRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/mutation-forms?refreshKey=playwright-refresh");
+  const version = page.getByLabel("Server version");
+  const initialVersion = Number(await version.textContent());
+  const historyLength = await page.evaluate(() => window.history.length);
+  const refresh = page.getByRole("button", { name: "Refresh server data" });
+
+  await refresh.focus();
+  await refresh.click();
+  await expect(page.getByLabel("Refresh form status")).toHaveText("pending");
+  await expect(page.getByLabel("Mutation refresh pending")).toHaveText(
+    "pending",
+  );
+  await expect(version).toHaveText(String(initialVersion + 1));
+  await expect(page.getByLabel("Refresh form status")).toHaveText("idle");
+  await expect(page.getByLabel("Mutation refresh pending")).toHaveText("idle");
+
+  await expect(page).toHaveURL(refreshUrl);
+  await expect(refresh).toBeFocused();
+  expect(await page.evaluate(() => window.history.length)).toBe(historyLength);
+  expect(routeDataRequests).toEqual([refreshUrl]);
+});
+
+test("navigation cancels an obsolete mutation refresh", async ({ page }) => {
+  const refreshUrl =
+    "http://localhost:42177/mutation-forms?refreshKey=playwright-race";
+  await page.goto(refreshUrl);
+  const refreshRequest = page.waitForRequest((request) =>
+    request.url() === refreshUrl &&
+    request.headers()["x-demiurge-navigation"] === "data"
+  );
+
+  await page.getByRole("button", { name: "Refresh server data" }).click();
+  const obsoleteRequest = await refreshRequest;
+  const obsoleteRequestSettled = Promise.race([
+    page.waitForResponse((response) => response.request() === obsoleteRequest),
+    page.waitForEvent("requestfailed", {
+      predicate: (request) => request === obsoleteRequest,
+    }),
+  ]);
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+
+  await obsoleteRequestSettled;
+  await expect(page).toHaveURL("http://localhost:42177/");
+  await expect(page.getByRole("heading", { name: "SSR is running" })).toBeVisible();
+});
+
 test("accessible browser navigation commits status, focus, and hash behavior", async ({
   page,
 }) => {
