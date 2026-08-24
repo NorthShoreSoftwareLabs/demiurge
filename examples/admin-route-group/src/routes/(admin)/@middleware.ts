@@ -1,26 +1,35 @@
-import { defineMiddleware } from "@demiurgejs/core";
+import { defineMiddleware, issueCsrfToken } from "@demiurgejs/core";
+import {
+  appendSessionCookies,
+  sessions,
+  type AuthenticationContext,
+} from "../../session.server";
 
-const SESSION_COOKIE = "session=1";
+export const middleware = defineMiddleware<AuthenticationContext>(async (
+  { context, request, url },
+  next,
+) => {
+  const session = await sessions.open(request);
+  const record = session.get();
 
-// Every route inside the `(admin)` group inherits this middleware, so
-// `/dashboard` and `/settings` both redirect to `/login` without a session
-// cookie. Neither route repeats the check on its own.
-export const middleware = defineMiddleware(({ request, url }, next) => {
-  if (hasSessionCookie(request)) {
-    return next();
+  if (!record) {
+    const target = new URL("/login", url);
+    target.searchParams.set("from", url.pathname);
+    const response = new Response(null, {
+      headers: { location: target.toString() },
+      status: 302,
+    });
+
+    return appendSessionCookies(response, await session.commit());
   }
 
-  const target = new URL("/login", url);
-  target.searchParams.set("from", url.pathname);
+  context.principal = record.data.principal;
+  context.session = session;
+  const csrf = issueCsrfToken();
+  context.csrfToken = csrf.token;
+  const response = await next();
 
-  return Response.redirect(target, 302);
+  response.headers.set("cache-control", "private, no-store");
+  response.headers.append("set-cookie", csrf.cookie);
+  return appendSessionCookies(response, await session.commit());
 });
-
-function hasSessionCookie(request: Request) {
-  const cookie = request.headers.get("cookie") ?? "";
-
-  return cookie
-    .split(";")
-    .map((entry) => entry.trim())
-    .includes(SESSION_COOKIE);
-}

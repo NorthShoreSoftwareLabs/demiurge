@@ -5,6 +5,8 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- Added a bring-your-own authentication example with typed principals,
+  application authorization, and explicit authenticated cache behavior. (#250)
 - A `cache.get(...)` loader may call `cacheNotFound(message?)` to report a
   negative result the cache should still store. `notFoundTtl` sets the
   negative entry's lifetime, and `isCacheNotFoundError(...)` identifies the

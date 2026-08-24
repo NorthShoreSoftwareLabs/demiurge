@@ -26,6 +26,16 @@ nav {
   gap: 1rem;
 }
 
+form,
+label {
+  display: flex;
+  gap: 0.5rem;
+}
+
+label {
+  flex-direction: column;
+}
+
 main {
   padding: 4rem 0;
 }

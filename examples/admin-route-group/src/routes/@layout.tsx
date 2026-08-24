@@ -4,7 +4,7 @@ export default function RootLayout({ children }: LayoutProps) {
   return (
     <div className="shell">
       <header>
-        <Link to="/">Admin route group</Link>
+        <Link to="/">Application authentication</Link>
         <nav>
           <Link to="/">Home</Link>
           <Link to="/dashboard">Dashboard</Link>
