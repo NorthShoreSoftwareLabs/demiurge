@@ -1635,6 +1635,110 @@ describe("request handler", () => {
     expect(handlerSpy).not.toHaveBeenCalled();
   });
 
+  it("rejects a marked mutation before mutation side effects", async () => {
+    const input = vi.fn(async ({ request }: { request: Request }) =>
+      (await request.formData()).get("name")
+    );
+    const mutationHandler = vi.fn(() => new Response("updated"));
+    const revalidate = vi.fn(() => ({ tags: [{ id: "profile" }] } as const));
+    const idempotency = createMemoryIdempotencyStore();
+    const idempotencyRun = vi.spyOn(idempotency, "run");
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          POST: mutation({
+            handler: mutationHandler,
+            idempotency: { key: ["profile", "update"], store: idempotency },
+            input,
+            revalidate,
+            security: { csrf: { field: "_csrf" } },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        body: new URLSearchParams({ _csrf: "wrong", name: "Demo" }),
+        headers: {
+          cookie: "csrf-token=token",
+          [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(input).not.toHaveBeenCalled();
+    expect(mutationHandler).not.toHaveBeenCalled();
+    expect(revalidate).not.toHaveBeenCalled();
+    expect(idempotencyRun).not.toHaveBeenCalled();
+  });
+
+  it("accepts a marked mutation with a matching CSRF form field", async () => {
+    const input = vi.fn(async ({ request }: { request: Request }) =>
+      (await request.formData()).get("name")
+    );
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          POST: mutation({
+            handler: ({ input }) => json({ name: input }),
+            input,
+            security: { csrf: { field: "_csrf" } },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        body: new URLSearchParams({ _csrf: "token", name: "Demo" }),
+        headers: {
+          cookie: "csrf-token=token",
+          [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      data: { name: "Demo" },
+      status: "success",
+      version: 1,
+    });
+    expect(input).toHaveBeenCalledOnce();
+  });
+
+  it("accepts a marked mutation with a matching CSRF header", async () => {
+    const mutationHandler = vi.fn(() => json({ updated: true }));
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          POST: mutation({
+            handler: mutationHandler,
+            security: { csrf: { field: "_csrf" } },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        headers: {
+          cookie: "csrf-token=token",
+          [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
+          "x-csrf-token": "token",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mutationHandler).toHaveBeenCalledOnce();
+  });
+
   it("protects cookie-authenticated unsafe requests by default", async () => {
     const handlerSpy = vi.fn(() => "updated");
     const handler = createRequestHandler({

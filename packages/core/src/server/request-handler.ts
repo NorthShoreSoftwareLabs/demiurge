@@ -304,7 +304,7 @@ async function handleMatchedRoute(
     );
   }
 
-  const csrfResponse = enforceCsrfProtection(routeSecurity?.csrf, request);
+  const csrfResponse = await enforceCsrfProtection(routeSecurity?.csrf, request);
 
   if (csrfResponse) {
     return withFetchMetadataVary(

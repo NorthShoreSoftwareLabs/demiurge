@@ -156,12 +156,14 @@ test("mutation refresh retrieves authority without changing navigation state", a
 
   await page.goto("/mutation-forms?refreshKey=playwright-refresh");
   const version = page.getByLabel("Server version");
+  const optimisticVersion = page.getByLabel("Optimistic version");
   const initialVersion = Number(await version.textContent());
   const historyLength = await page.evaluate(() => window.history.length);
   const refresh = page.getByRole("button", { name: "Refresh server data" });
 
   await refresh.focus();
   await refresh.click();
+  await expect(optimisticVersion).toHaveText(String(initialVersion + 1));
   await expect(page.getByLabel("Refresh form status")).toHaveText("pending");
   await expect(page.getByLabel("Mutation refresh pending")).toHaveText(
     "pending",
@@ -174,6 +176,27 @@ test("mutation refresh retrieves authority without changing navigation state", a
   await expect(refresh).toBeFocused();
   expect(await page.evaluate(() => window.history.length)).toBe(historyLength);
   expect(routeDataRequests).toEqual([refreshUrl]);
+});
+
+test("optimistic mutation state rolls back after validation and expected failure", async ({
+  page,
+}) => {
+  await page.goto("/mutation-forms?refreshKey=playwright-rollback");
+  const authoritativeVersion = page.getByLabel("Server version");
+  const optimisticVersion = page.getByLabel("Optimistic version");
+  const initialVersion = Number(await authoritativeVersion.textContent());
+
+  await page.getByRole("button", { name: "Reject optimistic change" }).click();
+  await expect(optimisticVersion).toHaveText(String(initialVersion + 1));
+  await expect(page.getByLabel("Mutation refresh result")).toHaveText("invalid");
+  await expect(optimisticVersion).toHaveText(String(initialVersion));
+  await expect(authoritativeVersion).toHaveText(String(initialVersion));
+
+  await page.getByRole("button", { name: "Fail optimistic change" }).click();
+  await expect(optimisticVersion).toHaveText(String(initialVersion + 1));
+  await expect(page.getByLabel("Mutation refresh result")).toHaveText("failed");
+  await expect(optimisticVersion).toHaveText(String(initialVersion));
+  await expect(authoritativeVersion).toHaveText(String(initialVersion));
 });
 
 test("navigation cancels an obsolete mutation refresh", async ({ page }) => {

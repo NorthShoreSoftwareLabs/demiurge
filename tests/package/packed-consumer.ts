@@ -433,6 +433,8 @@ try {
     [
       `import { json, mutation, mutationInput, page, tag, type RouteProps } from "@demiurgejs/core";`,
       `const serverMutationHandlerSentinel = "DEMIURGE_PACKED_SERVER_MUTATION_HANDLER";`,
+      `const serverMutationRevalidationSentinel = "DEMIURGE_PACKED_SERVER_MUTATION_REVALIDATION";`,
+      `const serverMutationSecuritySentinel = "x-demiurge-packed-security-sentinel";`,
       `export const paths = () => [{ id: "packed" }];`,
       `export const GET = page({ render: { mode: "static" }, view: ({ path }: RouteProps<"/items/[id]">) => <main>{path.id}</main> });`,
       `export const PATCH = mutation({`,
@@ -440,8 +442,9 @@ try {
       `  handler: () => Response.json({ serverMutationHandlerSentinel }),`,
       `});`,
       `export const POST = mutation({`,
-      `  revalidate: { keys: [["item", "packed"]], tags: [tag("items")] },`,
+      `  revalidate: () => { void serverMutationRevalidationSentinel; return { keys: [["item", "packed"]], tags: [tag("items")] }; },`,
       `  revalidateRoute: true,`,
+      `  security: { csrf: { header: serverMutationSecuritySentinel } },`,
       `  handler: () => json({ saved: true, serverMutationHandlerSentinel }),`,
       `});`,
     ].join("\n"),
@@ -499,6 +502,14 @@ try {
   assert(
     !packedBrowserJavaScript.includes("DEMIURGE_PACKED_SERVER_MUTATION_HANDLER"),
     "The browser output contains a server mutation handler.",
+  );
+  assert(
+    !packedBrowserJavaScript.includes("DEMIURGE_PACKED_SERVER_MUTATION_REVALIDATION"),
+    "The browser output contains a server mutation revalidation declaration.",
+  );
+  assert(
+    !packedBrowserJavaScript.includes("x-demiurge-packed-security-sentinel"),
+    "The browser output contains a server mutation security declaration.",
   );
   writeFileSync(
     join(scratch, "app", "src", "routes", "items", "[id].tsx"),

@@ -1,5 +1,5 @@
 import { page, type RouteProps } from "@demiurgejs/core";
-import { cache, messageQuery } from "../cache";
+import { messageQuery } from "../cache";
 
 type MessageData = {
   message: string;
@@ -7,7 +7,7 @@ type MessageData = {
 };
 
 export const GET = page<string, MessageData>({
-  data: () => cache.get(messageQuery()),
+  data: ({ cache }) => cache.get(messageQuery()),
   view: MessagePage,
 });
 
