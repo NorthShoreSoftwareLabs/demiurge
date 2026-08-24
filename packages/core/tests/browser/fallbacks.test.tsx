@@ -22,6 +22,12 @@ import {
   type RouteProps,
 } from "@demiurgejs/core";
 
+declare module "@demiurgejs/core" {
+  interface RoutePathVars {
+    "/next": {};
+  }
+}
+
 describe("browser router fallbacks", () => {
   beforeEach(() => {
     window.history.replaceState(null, "", "/");
@@ -266,11 +272,53 @@ describe("browser router fallbacks", () => {
       routes: { "./routes/index.tsx": routeModule({ GET: page(RefreshMutationFormPage) }) },
     });
     render(<Router />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeTruthy());
-    fireEvent.submit(screen.getByRole("button", { name: "Save" }).closest("form")!);
+    const save = await screen.findByRole("button", { name: "Save" });
+    const historyLength = window.history.length;
+    const statusText = document.querySelector("[data-demiurge-navigation-status]")?.textContent;
+    save.focus();
+    fireEvent.submit(save.closest("form")!);
     await waitFor(() => expect(screen.getByLabelText("context state").textContent).toBe("loading"));
+    expect(document.activeElement).toBe(save);
     refresh.resolve({ hasData: true });
     await waitFor(() => expect(screen.getByLabelText("mutation result").textContent).toBe("refreshed"));
+    expect(document.activeElement).toBe(save);
+    expect(window.history.length).toBe(historyLength);
+    expect(document.querySelector("[data-demiurge-navigation-status]")?.textContent).toBe(statusText);
+  });
+
+  it("does not let a late refresh replace a newer navigation", async () => {
+    const refresh = deferred<{ hasData: true }>();
+    let refreshSignal: AbortSignal | undefined;
+    let loads = 0;
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === "POST"
+        ? actionResponse({ revalidate: true, status: "success", version: 1 })
+        : Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } }),
+    ));
+    const Router = createFileRouter({
+      loadNavigationData: async (request) => {
+        loads++;
+        if (loads === 2) {
+          refreshSignal = request.signal;
+          return await refresh.promise;
+        }
+        return { hasData: true };
+      },
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(RefreshRacePage) }),
+        "./routes/next.tsx": routeModule({ GET: page(NextPage) }),
+      },
+    });
+    render(<Router />);
+    const save = await screen.findByRole("button", { name: "Refresh data" });
+    fireEvent.submit(save.closest("form")!);
+    await waitFor(() => expect(loads).toBe(2));
+    fireEvent.click(screen.getByRole("link", { name: "Next route" }));
+    await screen.findByText("Next page");
+    expect(refreshSignal?.aborted).toBe(true);
+    refresh.resolve({ hasData: true });
+    await Promise.resolve();
+    expect(screen.getByText("Next page")).toBeTruthy();
   });
 
   it("aborts and clears a keyed Form when the component unmounts", async () => {
@@ -1185,6 +1233,19 @@ function RefreshMutationFormPage() {
       </output>
     </>
   );
+}
+
+function RefreshRacePage() {
+  return (
+    <div>
+      <Form action="/save" method="post"><button type="submit">Refresh data</button></Form>
+      <Link to="/next">Next route</Link>
+    </div>
+  );
+}
+
+function NextPage() {
+  return <p>Next page</p>;
 }
 
 function RefreshMutationFormState() {
