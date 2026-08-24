@@ -57,19 +57,50 @@ Implemented response helpers are:
 
 ### Mutation validation
 
-A mutation parser can use any application-owned parser or schema library. The
-parser returns the typed input that the handler receives as `context.input`.
-
-When input is invalid, the parser throws `MutationValidationError`. The type
-parameter limits the first path segment to an application field name:
+A mutation can validate form input with a Standard Schema library. The schema
+provides runtime validation and the handler input type.
 
 ```ts
-throw new MutationValidationError<"title" | "body">({
-  issues: [
-    { code: "required", message: "The title is required.", path: ["title"] },
-    { code: "conflict", message: "The post has conflicting values.", path: [] },
-  ],
+const publishInput = z.object({
+  title: z.preprocess(
+    (value) => typeof value === "string" ? value : "",
+    z.string().trim().min(1, "Enter a title."),
+  ),
 });
+
+export const POST = mutation({
+  input: mutationInput.form(publishInput, (form) => ({
+    title: form.get("title"),
+  })),
+  handler: ({ input }) => json({ title: input.title }),
+});
+```
+
+The mapping function defines how form fields become schema input. The schema
+can transform that input before the handler receives it.
+
+`mutationInput.form` accepts all Standard Schema implementations. The core
+package does not require a specific schema library.
+
+Use `mutationInput.custom` for application-owned validation. The type parameter
+limits the first path segment to an application field name:
+
+```ts
+const input = mutationInput.custom<"title" | "body", FormData>(
+  async (context) => {
+    const form = await mutationInput.formData(context);
+    if (!form.has("title")) {
+      throw new MutationValidationError<"title" | "body">({
+        issues: [{
+          code: "required",
+          message: "The title is required.",
+          path: ["title"],
+        }],
+      });
+    }
+    return form;
+  },
+);
 ```
 
 A native request receives status `400` and this stable JSON shape:
@@ -94,7 +125,8 @@ An enhanced request receives the same issues in an `invalid` mutation result:
 ```
 
 An empty `path` reports a form error. A non-empty path reports a field or nested
-value. Demiurge does not select a parser or expose parser-specific diagnostics.
+value. Schema issues use the stable `invalid` code. Demiurge does not expose
+schema-library diagnostics.
 
 Mutation data must contain JSON values. Demiurge accepts null values, booleans,
 finite numbers, strings, arrays, and plain objects with string keys.
@@ -114,9 +146,11 @@ pages.
 
 ### Mutation forms
 
-Use `Form` for client mutation submissions. The browser router intercepts only
-same-origin forms with a supported method and target. Other forms keep native
-browser behavior.
+Use `useMutationAction(...)` with `Form` for a typed progressive mutation. The
+server-rendered form contains a real HTTP URL and the `post` method.
+
+After hydration, React submits the same `FormData` through the typed mutation
+client. React owns the pending state through `useFormStatus`.
 
 The router sends `X-Demiurge-Mutation: data;v=1` and accepts
 `application/vnd.demiurge.mutation+json;v=1`. A typed result has `version: 1` and
@@ -129,40 +163,87 @@ The mutation helper gives each redirect an explicit history operation. It uses
 `replace` for `301` and `308`. It uses `push` for `302`, `303`, and `307`.
 
 ```tsx
-import { Form, useFormNavigation } from "@demiurgejs/core";
+import {
+  Form,
+  MutationSubmit,
+  useMutationAction,
+} from "@demiurgejs/core";
+import { useFormStatus } from "react-dom";
 
 export function SaveForm() {
-  const navigation = useFormNavigation("profile");
+  const [result, save] = useMutationAction(
+    { route: "/profile", method: "POST" },
+    undefined,
+  );
+  const [, publish] = useMutationAction(
+    { route: "/profile/publish", method: "POST" },
+    undefined,
+  );
+
   return (
-    <Form action="/profile" method="post" submissionKey="profile">
-      <button disabled={navigation.state === "submitting"}>Save</button>
+    <Form action={save}>
+      <input name="displayName" />
+      <PendingButton />
+      <MutationSubmit formAction={publish} name="intent" value="publish">
+        Publish
+      </MutationSubmit>
+      {result?.status === "invalid"
+        ? result.validation.issues.map((issue) => (
+            <p key={`${issue.code}:${issue.path.join(".")}`}>{issue.message}</p>
+          ))
+        : null}
     </Form>
   );
 }
+
+function PendingButton() {
+  const { pending } = useFormStatus();
+  return <button disabled={pending}>{pending ? "Saving" : "Save"}</button>;
+}
 ```
 
-`useFormNavigation` reads the nearest `Form` state. `useNavigation` accepts a
-form or `submissionKey` for another scope. The router preserves submitter
-values and submitter overrides for action, method, target, and encoding. The
-router sends URL-encoded, multipart, or plain-text bodies that match the form.
-Set `revalidateRoute` to `true` to refresh the current route after success.
-Use `revalidate` to invalidate cache tags. The two operations are separate.
+`MutationSubmit` preserves a real `formAction` URL before hydration. After
+hydration, it uses the selected React Action. The submitted data includes the
+submitter name and value.
+
+Typed progressive forms support `POST`. Native HTML forms cannot submit `PUT`,
+`PATCH`, or `DELETE`. Use `createMutationAction(...)` for a client-only call to
+one of these methods.
+
+The client preserves multipart values and files. It does not set the multipart
+content type because the browser must add the boundary.
+
+Set `revalidateRoute` to `true` on `mutation(...)` to refresh the current route
+after success. Use `revalidate` to invalidate cache tags. The operations are
+separate.
+
+The server controls route refresh. A client cannot add or change the
+`revalidateRoute` declaration.
+
+A refresh retrieves the current pathname and search from the server. It keeps
+the current URL, history, scroll position, and focus.
+
+React Action pending state remains active until the requested refresh settles.
+If the refresh fails, the router renders the resolved route error boundary.
+The mutation can remain successful because its server commit already finished.
+
+An `invalid` or `failed` result does not refresh the route. A redirect takes
+precedence over refresh. The router does not refresh the previous route before
+it follows the redirect.
+
+Cache invalidation and route refresh have different purposes. The `revalidate`
+option changes cached server authority. The `revalidateRoute` option retrieves
+the current authority for the browser.
 
 #### React Action state
 
-Demiurge `Form` does not wrap React `useActionState`. The APIs manage different
-state.
+`useMutationAction` uses React `useActionState`. React owns component result,
+pending, and optimistic state. Demiurge owns transport, result validation,
+redirects, cancellation, and route refresh.
 
-- `Form` and `useNavigation` manage HTTP submission, cancellation, redirects,
-  history, and route revalidation.
-- `useActionState` manages component result state, ordered React Actions, and
-  a React transition pending flag.
-
-Use `Form` when a submission must participate in browser routing. Use
-`useActionState` when a React Action must update component-local result state.
-
-Both clients can submit to the same application endpoint. They do not share
-pending state or mutation-result state.
+`Form` also accepts a string `action` for compatibility. This form uses the
+browser router and exposes state through `useFormNavigation` and
+`useNavigation`.
 
 ### Migration from action names
 

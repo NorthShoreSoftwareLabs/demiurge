@@ -17,15 +17,35 @@ import type {
   RouteRequestContextFor,
   ServerTimingInput,
 } from "./types";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { response, toResponse } from "./response";
+
+declare const mutationInputFields: unique symbol;
 
 export type MutationInput<
   TInput,
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
-> = (
-  context: HttpRouteContext<TPath, TValues>,
-) => MaybePromise<TInput>;
+> = {
+  (context: HttpRouteContext<TPath, TValues>): MaybePromise<TInput>;
+};
+
+type TypedMutationInput<
+  TInput,
+  TPath extends string,
+  TValues extends object,
+  TField extends string,
+> = MutationInput<TInput, TPath, TValues> & {
+  readonly [mutationInputFields]: { field: TField; input: TInput };
+};
+
+type MutationInputValue<TParser> = TParser extends {
+  readonly [mutationInputFields]: { input: infer TInput };
+} ? TInput : never;
+
+type MutationInputField<TParser> = TParser extends {
+  readonly [mutationInputFields]: { field: infer TField extends string };
+} ? TField : never;
 
 export const MUTATION_REQUEST_HEADER = "x-demiurge-mutation";
 export const MUTATION_REQUEST_VALUE = "data;v=1";
@@ -123,22 +143,63 @@ export type MutationOptions<
   TValues extends object = RouteRequestContextFor<TPath>,
   TResult extends Response | ResponseCapability<TPath, TValues> =
     Response | ResponseCapability<TPath, TValues>,
-  TField extends string = string,
 > = {
   cors?: CorsPolicy;
   handler: (
-    context: MutationContext<TInput, TPath, TValues>,
+    context: MutationContext<NoInfer<TInput>, TPath, TValues>,
   ) => MaybePromise<TResult>;
-  idempotency?: MutationIdempotency<TInput, TPath, TValues>;
+  idempotency?: MutationIdempotency<NoInfer<TInput>, TPath, TValues>;
   input?: MutationInput<TInput, TPath, TValues>;
   revalidateRoute?: boolean;
-  revalidate?: MutationRevalidation<TInput, TPath, TValues>;
+  revalidate?: MutationRevalidation<NoInfer<TInput>, TPath, TValues>;
   security?: RouteSecurityPolicy;
   timing?: ServerTimingInput;
-  validation?: {
-    fields: readonly TField[];
-  };
 };
+
+export function mutation<
+  TParser extends TypedMutationInput<unknown, TPath, TValues, string>,
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+  TResult extends Response | ResponseCapability<TPath, TValues> =
+    Response | ResponseCapability<TPath, TValues>,
+>(
+  options: Omit<MutationOptions<
+    MutationInputValue<TParser>,
+    TPath,
+    TValues,
+    TResult
+  >, "input"> & {
+    input: TParser;
+  },
+): MutationCapability<
+  MutationResponseData<TResult>,
+  MutationInputField<TParser>,
+  TPath,
+  TValues
+>;
+
+export function mutation<
+  TInput,
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+  TResult extends Response | ResponseCapability<TPath, TValues> =
+    Response | ResponseCapability<TPath, TValues>,
+>(
+  options: MutationOptions<TInput, TPath, TValues, TResult> & {
+    input: MutationInput<TInput, TPath, TValues>;
+  },
+): MutationCapability<MutationResponseData<TResult>, string, TPath, TValues>;
+
+export function mutation<
+  TPath extends string = string,
+  TValues extends object = RouteRequestContextFor<TPath>,
+  TResult extends Response | ResponseCapability<TPath, TValues> =
+    Response | ResponseCapability<TPath, TValues>,
+>(
+  options: MutationOptions<undefined, TPath, TValues, TResult> & {
+    input?: undefined;
+  },
+): MutationCapability<MutationResponseData<TResult>, string, TPath, TValues>;
 
 export function mutation<
   TInput = undefined,
@@ -148,7 +209,7 @@ export function mutation<
     Response | ResponseCapability<TPath, TValues>,
   TField extends string = string,
 >(
-  options: MutationOptions<TInput, TPath, TValues, TResult, TField>,
+  options: MutationOptions<TInput, TPath, TValues, TResult>,
 ): MutationCapability<MutationResponseData<TResult>, TField, TPath, TValues> {
   const capability = response<TPath, TValues>(
     async (context) => {
@@ -375,6 +436,58 @@ async function addRevalidationHeader(
 }
 
 export const mutationInput = {
+  custom<
+    TField extends string = string,
+    TInput = unknown,
+    TPath extends string = string,
+    TValues extends object = RouteRequestContextFor<TPath>,
+  >(
+    parse: (
+      context: HttpRouteContext<TPath, TValues>,
+    ) => MaybePromise<TInput>,
+  ): TypedMutationInput<TInput, TPath, TValues, TField> {
+    // TYPE-EVIDENCE: the brand records parser types and does not require runtime data.
+    return parse as TypedMutationInput<TInput, TPath, TValues, TField>;
+  },
+  form<
+    TSchema extends StandardSchemaV1,
+    TPath extends string = string,
+    TValues extends object = RouteRequestContextFor<TPath>,
+  >(
+    schema: TSchema,
+    map: (
+      form: FormData,
+      context: HttpRouteContext<TPath, TValues>,
+    ) => MaybePromise<StandardSchemaV1.InferInput<TSchema>>,
+  ): TypedMutationInput<
+    StandardSchemaV1.InferOutput<TSchema>,
+    TPath,
+    TValues,
+    Extract<keyof StandardSchemaV1.InferOutput<TSchema>, string>
+  > {
+    const parse = async (context: HttpRouteContext<TPath, TValues>) => {
+      const form = await context.request.formData();
+      const candidate = await map(form, context);
+      const result = await schema["~standard"].validate(candidate);
+      if (result.issues) {
+        throw new MutationValidationError({
+          issues: result.issues.map((issue) => ({
+            code: "invalid",
+            message: issue.message,
+            path: normalizeStandardSchemaPath(issue.path),
+          })),
+        });
+      }
+      return result.value;
+    };
+    // TYPE-EVIDENCE: the brand records the verified schema output and field types without adding runtime data.
+    return parse as TypedMutationInput<
+      StandardSchemaV1.InferOutput<TSchema>,
+      TPath,
+      TValues,
+      Extract<keyof StandardSchemaV1.InferOutput<TSchema>, string>
+    >;
+  },
   async formData({ request }: HttpRouteContext) {
     return await request.formData();
   },
@@ -386,6 +499,21 @@ export const mutationInput = {
     return await request.text();
   },
 };
+
+function normalizeStandardSchemaPath(
+  path: StandardSchemaV1.Issue["path"],
+): readonly [] | readonly [string, ...(string | number)[]] {
+  if (!path) return [];
+  const normalized = path.map((segment) =>
+    typeof segment === "object" ? segment.key : segment
+  );
+  if (typeof normalized[0] !== "string") return [];
+  if (normalized.some((segment) =>
+    typeof segment !== "string" && typeof segment !== "number"
+  )) return [];
+  // TYPE-EVIDENCE: the checks above prove that the first segment is a string and each remaining segment is a string or number.
+  return normalized as [string, ...(string | number)[]];
+}
 
 async function resolveMutationResult<
   TPath extends string,
