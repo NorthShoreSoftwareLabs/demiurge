@@ -37,6 +37,7 @@ export type {
   MutationMethodsOf,
   MutationOptions,
   MutationRevalidation,
+  MutationRevalidationDeclaration,
   MutationValidation,
   MutationValidationIssue,
 } from "./mutation";

@@ -23,6 +23,7 @@ import {
   serializeCacheNamespace,
   type Cache,
   type CacheDuration,
+  type CacheKey,
   type CacheNamespace,
   type CacheStore,
 } from "../data";
@@ -522,7 +523,7 @@ async function handleMatchedRoute(
   // `timing` or `cors` value on an API route gives a problem+json response. It
   // cannot enter the negotiated path and produce HTML.
   try {
-    await revalidateMutationTags(response, cache);
+    await revalidateMutation(response, cache, "mutation" in capability && capability.mutation === true);
     return withFetchMetadataVary(
       finalizeRouteResponse(response, capability, request, method),
     );
@@ -539,16 +540,72 @@ async function handleMatchedRoute(
   }
 }
 
-async function revalidateMutationTags(response: Response, cache: Cache) {
+async function revalidateMutation(
+  response: Response,
+  cache: Cache,
+  mutation: boolean,
+) {
   const value = response.headers.get(MUTATION_REVALIDATION_HEADER);
-  if (!value) return;
-  const tags = value
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean)
-    .map((id) => ({ id }));
-  if (tags.length > 0) await cache.invalidateTags(tags);
   response.headers.delete(MUTATION_REVALIDATION_HEADER);
+  if (!value) return;
+  if (!mutation || response.status < 200 || response.status >= 400) return;
+  const invalidation = parseMutationInvalidation(value);
+  for (const key of invalidation.keys) await cache.invalidateKey(key);
+  if (invalidation.tags.length > 0) {
+    await cache.invalidateTags(
+      invalidation.tags.map((id) => ({ id })),
+    );
+  }
+}
+
+function parseMutationInvalidation(value: string) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(decodeURIComponent(value));
+  } catch {
+    throw invalidMutationInvalidation();
+  }
+  if (!isRecord(parsed) || parsed.version !== 1) {
+    throw invalidMutationInvalidation();
+  }
+  const names = Object.keys(parsed).sort();
+  if (names.join(",") !== "keys,tags,version") {
+    throw invalidMutationInvalidation();
+  }
+  if (
+    !Array.isArray(parsed.keys) ||
+    !parsed.keys.every(isCacheKey) ||
+    !Array.isArray(parsed.tags) ||
+    !parsed.tags.every((tag) => typeof tag === "string")
+  ) {
+    throw invalidMutationInvalidation();
+  }
+  return { keys: parsed.keys, tags: parsed.tags };
+}
+
+function isCacheKey(value: unknown): value is CacheKey {
+  return Array.isArray(value) && value.every(isCacheKeyPart);
+}
+
+function isCacheKeyPart(value: unknown): boolean {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
+    return true;
+  }
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isCacheKeyPart);
+  return isRecord(value) && Object.values(value).every(isCacheKeyPart);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function invalidMutationInvalidation() {
+  return new Error("Demiurge received invalid internal mutation invalidation metadata.");
 }
 
 function createRequestCache(options: RequestCacheStoreOptions | undefined) {
