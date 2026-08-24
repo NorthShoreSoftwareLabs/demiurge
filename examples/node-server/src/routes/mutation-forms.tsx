@@ -29,7 +29,7 @@ export const GET = page({
 });
 
 export const POST = mutation({
-  input: async (context) => {
+  input: mutationInput.custom<"title", FormData>(async (context) => {
     const input = await mutationInput.formData(context);
     if (input.get("mode") === "enhanced" && !input.get("title")) {
       throw new MutationValidationError<"title">({
@@ -41,8 +41,7 @@ export const POST = mutation({
       });
     }
     return input;
-  },
-  validation: { fields: ["title"] },
+  }),
   handler: async ({ input }) => {
     if (input.get("mode") === "enhanced") {
       await new Promise((resolve) => setTimeout(resolve, 250));

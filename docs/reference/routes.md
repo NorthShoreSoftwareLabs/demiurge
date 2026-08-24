@@ -57,19 +57,50 @@ Implemented response helpers are:
 
 ### Mutation validation
 
-A mutation parser can use any application-owned parser or schema library. The
-parser returns the typed input that the handler receives as `context.input`.
-
-When input is invalid, the parser throws `MutationValidationError`. The type
-parameter limits the first path segment to an application field name:
+A mutation can validate form input with a Standard Schema library. The schema
+provides runtime validation and the handler input type.
 
 ```ts
-throw new MutationValidationError<"title" | "body">({
-  issues: [
-    { code: "required", message: "The title is required.", path: ["title"] },
-    { code: "conflict", message: "The post has conflicting values.", path: [] },
-  ],
+const publishInput = z.object({
+  title: z.preprocess(
+    (value) => typeof value === "string" ? value : "",
+    z.string().trim().min(1, "Enter a title."),
+  ),
 });
+
+export const POST = mutation({
+  input: mutationInput.form(publishInput, (form) => ({
+    title: form.get("title"),
+  })),
+  handler: ({ input }) => json({ title: input.title }),
+});
+```
+
+The mapping function defines how form fields become schema input. The schema
+can transform that input before the handler receives it.
+
+`mutationInput.form` accepts all Standard Schema implementations. The core
+package does not require a specific schema library.
+
+Use `mutationInput.custom` for application-owned validation. The type parameter
+limits the first path segment to an application field name:
+
+```ts
+const input = mutationInput.custom<"title" | "body", FormData>(
+  async (context) => {
+    const form = await mutationInput.formData(context);
+    if (!form.has("title")) {
+      throw new MutationValidationError<"title" | "body">({
+        issues: [{
+          code: "required",
+          message: "The title is required.",
+          path: ["title"],
+        }],
+      });
+    }
+    return form;
+  },
+);
 ```
 
 A native request receives status `400` and this stable JSON shape:
@@ -94,7 +125,8 @@ An enhanced request receives the same issues in an `invalid` mutation result:
 ```
 
 An empty `path` reports a form error. A non-empty path reports a field or nested
-value. Demiurge does not select a parser or expose parser-specific diagnostics.
+value. Schema issues use the stable `invalid` code. Demiurge does not expose
+schema-library diagnostics.
 
 Mutation data must contain JSON values. Demiurge accepts null values, booleans,
 finite numbers, strings, arrays, and plain objects with string keys.

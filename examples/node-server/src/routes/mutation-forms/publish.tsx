@@ -1,32 +1,30 @@
 import {
   mutation,
   mutationInput,
-  MutationValidationError,
   redirect,
 } from "@demiurgejs/core";
+import { z } from "zod";
 
 export const POST = mutation({
-  input: async (context) => {
-    const input = await mutationInput.formData(context);
-    if (!input.get("title")) {
-      throw new MutationValidationError<"title">({
-        issues: [{
-          code: "required",
-          message: "Enter a title.",
-          path: ["title"],
-        }],
-      });
-    }
-    return input;
-  },
-  validation: { fields: ["title"] },
+  input: mutationInput.form(z.object({
+    attachment: z.preprocess(
+      (value) => value instanceof File ? value : undefined,
+      z.instanceof(File).optional(),
+    ),
+    title: z.preprocess(
+      (value) => typeof value === "string" ? value : "",
+      z.string().trim().min(1, "Enter a title."),
+    ),
+  }), (form) => ({
+    attachment: form.get("attachment") || undefined,
+    title: form.get("title"),
+  })),
   handler: async ({ input }) => {
     await new Promise((resolve) => setTimeout(resolve, 250));
-    const attachment = input.get("attachment");
     const search = new URLSearchParams({
-      attachment: attachment instanceof File ? attachment.name : "none",
+      attachment: input.attachment?.name ?? "none",
       result: "publish",
-      title: String(input.get("title") ?? ""),
+      title: input.title,
     });
     return redirect(`/mutation-forms?${search}`, 303);
   },
