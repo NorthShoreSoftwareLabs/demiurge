@@ -194,6 +194,7 @@ export type {
   MutationMethodsOf,
   MutationOptions,
   MutationRevalidation,
+  MutationRevalidationDeclaration,
   MutationValidationIssue,
   HttpErrorDetails,
   HttpErrorInit,
