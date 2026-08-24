@@ -1,5 +1,6 @@
 export {
   createFileRouter,
+  createMutationAction,
   Form,
   hydrateFileRouter,
   Link,
@@ -8,7 +9,14 @@ export {
   useNavigation,
   useFormNavigation,
 } from "./browser";
-export type { FormProps, LinkProps, MutationNavigationState, MutationResult } from "./browser";
+export type {
+  FormProps,
+  LinkProps,
+  MutationAction,
+  MutationActionOptions,
+  MutationNavigationState,
+  MutationResult,
+} from "./browser";
 export {
   assertAdapterCapabilities,
   checkAdapterCapabilities,
@@ -174,8 +182,11 @@ export type {
 } from "./adapter";
 export type {
   MutationContext,
+  MutationCapability,
   MutationIdempotency,
   MutationInput,
+  MutationMethod,
+  MutationMethodsOf,
   MutationOptions,
   MutationRevalidation,
   MutationValidationIssue,
@@ -291,12 +302,16 @@ export type {
   AppPath,
   LinkTarget,
   LinkTo,
+  MutationDataFor,
+  MutationMethodFor,
+  MutationRoute,
   PathValue,
   PathVarsFor,
   RouteParamsFor,
   RouteConcretePaths,
   RoutePathVars,
   RouteRequestContexts,
+  RouteMutationMethods,
 } from "./routing";
 export type {
   HydrateFileRouterOptions,
