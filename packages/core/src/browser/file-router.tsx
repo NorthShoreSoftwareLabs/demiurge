@@ -34,9 +34,9 @@ import {
 } from "../document";
 import {
   HTTP_ERROR_STATUSES,
-  ACTION_REQUEST_HEADER,
-  ACTION_REQUEST_VALUE,
-  ACTION_RESPONSE_MEDIA_TYPE,
+  MUTATION_REQUEST_HEADER,
+  MUTATION_REQUEST_VALUE,
+  MUTATION_RESPONSE_MEDIA_TYPE,
   httpError,
   isHttpError,
   type NotFoundProps,
@@ -73,17 +73,17 @@ export type NavigationAccessibility = {
   announce?: "title" | false | ((context: NavigationCommit) => string | null);
 };
 
-export type ActionResult<T = unknown> =
+export type MutationResult<T = unknown> =
   | { version: 1; status: "success"; data?: T; revalidate?: boolean }
   | { version: 1; status: "invalid"; data?: T }
   | { version: 1; status: "redirect"; location: string; history: "push" | "replace" }
   | { version: 1; status: "failed"; message?: string };
 
-export type ActionNavigationState<T = unknown> =
-  | { state: "idle"; form?: HTMLFormElement; submissionKey?: string; result?: ActionResult<T> }
+export type MutationNavigationState<T = unknown> =
+  | { state: "idle"; form?: HTMLFormElement; submissionKey?: string; result?: MutationResult<T> }
   | { state: "submitting"; form: HTMLFormElement; submissionKey?: string; formData: FormData }
-  | { state: "loading"; form: HTMLFormElement; submissionKey?: string; formData: FormData; result?: Extract<ActionResult<T>, { status: "success" }> }
-  | { state: "invalid"; form: HTMLFormElement; submissionKey?: string; formData: FormData; result: Extract<ActionResult<T>, { status: "invalid" }> }
+  | { state: "loading"; form: HTMLFormElement; submissionKey?: string; formData: FormData; result?: Extract<MutationResult<T>, { status: "success" }> }
+  | { state: "invalid"; form: HTMLFormElement; submissionKey?: string; formData: FormData; result: Extract<MutationResult<T>, { status: "invalid" }> }
   | { state: "error"; form: HTMLFormElement; submissionKey?: string; formData: FormData; response?: Response };
 
 export type FormProps = FormHTMLAttributes<HTMLFormElement> & {
@@ -113,7 +113,7 @@ export function createFileRouter(options: FileRouterOptions) {
     const initialMatchPending = useRef(Boolean(options.initialMatch));
     const navigationSequence = useRef(0);
     const submissionControllers = useRef(new Map<string, AbortController>());
-    const submissionStates = useRef(new Map<string, ActionNavigationState>());
+    const submissionStates = useRef(new Map<string, MutationNavigationState>());
     const [submissionVersion, setSubmissionVersion] = useState(0);
     const [routeRefresh, setRouteRefresh] = useState(0);
     const navigationKind = useRef<"push" | "replace" | "pop">("push");
@@ -350,13 +350,13 @@ export function createFileRouter(options: FileRouterOptions) {
       options.navigationAccessibility,
     ]);
 
-    function setSubmissionState(key: string, state: ActionNavigationState) {
+    function setSubmissionState(key: string, state: MutationNavigationState) {
       submissionStates.current.set(key, state);
       setSubmissionVersion((value) => value + 1);
     }
 
-    function releaseActionNavigation(form: HTMLFormElement, submissionKey?: string) {
-      const key = actionSubmissionKey(form, submissionKey);
+    function releaseMutationNavigation(form: HTMLFormElement, submissionKey?: string) {
+      const key = mutationSubmissionKey(form, submissionKey);
       const state = submissionStates.current.get(key);
       if (state?.form !== form) return;
       if (state.state === "loading" && state.result) return;
@@ -370,15 +370,15 @@ export function createFileRouter(options: FileRouterOptions) {
       () => ({
         navigation: options.navigation ?? "server",
         submissionVersion,
-        getActionNavigation(form?: HTMLFormElement, submissionKey?: string) {
-          const key = actionSubmissionKey(form, submissionKey);
+        getMutationNavigation(form?: HTMLFormElement, submissionKey?: string) {
+          const key = mutationSubmissionKey(form, submissionKey);
           return submissionStates.current.get(key) ?? {
             state: "idle",
             form,
             submissionKey,
           };
         },
-        releaseActionNavigation,
+        releaseMutationNavigation,
         push(to: string) {
           abortSubmissions();
           const previous = getCurrentLocation();
@@ -396,11 +396,11 @@ export function createFileRouter(options: FileRouterOptions) {
           }
           navigationKind.current = "push";
         },
-        async submitAction(form: HTMLFormElement, submitter: HTMLElement | null, submissionKey?: string) {
+        async submitMutation(form: HTMLFormElement, submitter: HTMLElement | null, submissionKey?: string) {
           if ((options.navigation ?? "server") !== "server") return;
-          const request = createActionRequest(form, submitter);
+          const request = createMutationRequest(form, submitter);
           if (!request) return;
-          const key = actionSubmissionKey(form, submissionKey);
+          const key = mutationSubmissionKey(form, submissionKey);
           submissionControllers.current.get(key)?.abort();
           const controller = new AbortController();
           submissionControllers.current.set(key, controller);
@@ -419,8 +419,8 @@ export function createFileRouter(options: FileRouterOptions) {
               body: request.body,
               credentials: "same-origin",
               headers: {
-                accept: ACTION_RESPONSE_MEDIA_TYPE,
-                [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE,
+                accept: MUTATION_RESPONSE_MEDIA_TYPE,
+                [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
                 ...(request.contentType ? { "content-type": request.contentType } : {}),
               },
               method: request.method,
@@ -428,14 +428,14 @@ export function createFileRouter(options: FileRouterOptions) {
               signal: controller.signal,
             });
             if (!isCurrent()) return;
-            const result = await readActionResult(response);
+            const result = await readMutationResult(response);
             if (!isCurrent()) return;
             if (result?.status === "invalid") {
               setSubmissionState(key, { state: "invalid", form, submissionKey, formData, result });
               return;
             }
             if (result?.status === "redirect") {
-              const destination = validateActionRedirect(result.location);
+              const destination = validateMutationRedirect(result.location);
               if (!destination) {
                 setSubmissionState(key, { state: "error", form, submissionKey, formData, response });
                 return;
@@ -499,7 +499,7 @@ export function createFileRouter(options: FileRouterOptions) {
 
 // Hydration is safe only when the client reproduces the server output. The
 // client replaces a page document when its route no longer matches. The client
-// hydrates a document that the server marked as a 404. This action preserves
+// hydrates a document that the server marked as a 404. This operation preserves
 // the layouts that the server resolved.
 function isHydratableMatch(match: PendingRouteMatch, root: Element) {
   const fallback = root.getAttribute(HYDRATION_FALLBACK_ATTRIBUTE);
@@ -672,7 +672,7 @@ export function Link<const TTo extends AppHref>(
   return LinkImplementation(props, props.ref ?? null);
 }
 
-const ActionFormContext = createContext<string | undefined>(undefined);
+const MutationFormContext = createContext<string | undefined>(undefined);
 
 export function Form(props: FormProps) {
   const router = useRouter();
@@ -684,7 +684,7 @@ export function Form(props: FormProps) {
 
   useLayoutEffect(() => () => {
     if (formRef.current) {
-      routerRef.current.releaseActionNavigation(formRef.current, formKey);
+      routerRef.current.releaseMutationNavigation(formRef.current, formKey);
     }
   }, [formKey]);
 
@@ -697,9 +697,9 @@ export function Form(props: FormProps) {
     if (event.defaultPrevented || router.navigation !== "server") return;
     // TYPE-EVIDENCE: React forwards the browser SubmitEvent as nativeEvent for form submissions.
     const submitter = (event.nativeEvent as SubmitEvent).submitter;
-    if (!canInterceptAction(event.currentTarget, submitter)) return;
+    if (!canInterceptMutation(event.currentTarget, submitter)) return;
     event.preventDefault();
-    void router.submitAction(
+    void router.submitMutation(
       event.currentTarget,
       submitter,
       formKey,
@@ -708,7 +708,7 @@ export function Form(props: FormProps) {
 
   const { submissionKey: _submissionKey, ...formProps } = props;
   return createElement(
-    ActionFormContext.Provider,
+    MutationFormContext.Provider,
     {
       value: formKey,
       children: createElement("form", {
@@ -725,10 +725,10 @@ export function Form(props: FormProps) {
 export function useNavigation<T = unknown>(options?: {
   form?: HTMLFormElement;
   submissionKey?: string;
-}): ActionNavigationState<T> {
-  const contextKey = useContext(ActionFormContext);
-  // TYPE-EVIDENCE: the router stores ActionNavigationState values and the generic only describes its application data.
-  return useRouter().getActionNavigation(options?.form, options?.submissionKey ?? contextKey) as ActionNavigationState<T>;
+}): MutationNavigationState<T> {
+  const contextKey = useContext(MutationFormContext);
+  // TYPE-EVIDENCE: the router stores MutationNavigationState values and the generic only describes its application data.
+  return useRouter().getMutationNavigation(options?.form, options?.submissionKey ?? contextKey) as MutationNavigationState<T>;
 }
 
 export function useFormNavigation<T = unknown>(submissionKey?: string) {
@@ -945,7 +945,7 @@ async function readNavigationPayload(response: Response) {
   }
 }
 
-async function readActionResult(response: Response): Promise<ActionResult | undefined> {
+async function readMutationResult(response: Response): Promise<MutationResult | undefined> {
   const mediaType = response.headers.get("content-type");
   if (!mediaType) {
     return undefined;
@@ -953,23 +953,23 @@ async function readActionResult(response: Response): Promise<ActionResult | unde
   const [type, ...parameters] = mediaType
     .split(";")
     .map((value) => value.trim().toLowerCase());
-  const actionType = ACTION_RESPONSE_MEDIA_TYPE.split(";")[0];
-  if (type !== actionType) return undefined;
+  const mutationType = MUTATION_RESPONSE_MEDIA_TYPE.split(";")[0];
+  if (type !== mutationType) return undefined;
   if (parameters.length !== 1 || parameters[0] !== "v=1") {
-    throw new Error("Demiurge received a malformed versioned action result.");
+    throw new Error("Demiurge received a malformed versioned mutation result.");
   }
   try {
     const value: unknown = await response.clone().json();
     if (!isRecord(value) || value.version !== 1 || typeof value.status !== "string") {
-      throw new Error("Demiurge received a malformed versioned action result.");
+      throw new Error("Demiurge received a malformed versioned mutation result.");
     }
     if (value.status === "success") {
-      if (value.revalidate !== undefined && typeof value.revalidate !== "boolean") throw new Error("Demiurge received a malformed action result.");
+      if (value.revalidate !== undefined && typeof value.revalidate !== "boolean") throw new Error("Demiurge received a malformed mutation result.");
       return { version: 1, status: "success", data: value.data, ...(value.revalidate === undefined ? {} : { revalidate: value.revalidate }) };
     }
     if (value.status === "invalid") return { version: 1, status: "invalid", data: value.data };
     if (value.status === "failed") {
-      if (value.message !== undefined && typeof value.message !== "string") throw new Error("Demiurge received a malformed action result.");
+      if (value.message !== undefined && typeof value.message !== "string") throw new Error("Demiurge received a malformed mutation result.");
       return { version: 1, status: "failed", ...(value.message === undefined ? {} : { message: value.message }) };
     }
     if (value.status === "redirect" && typeof value.location === "string" &&
@@ -987,7 +987,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function validateActionRedirect(location: string) {
+function validateMutationRedirect(location: string) {
   try {
     const destination = new URL(location, window.location.href);
     if (destination.protocol !== window.location.protocol) return undefined;
@@ -999,7 +999,7 @@ function validateActionRedirect(location: string) {
   }
 }
 
-function actionSubmissionKey(form: HTMLFormElement | undefined, submissionKey?: string) {
+function mutationSubmissionKey(form: HTMLFormElement | undefined, submissionKey?: string) {
   if (submissionKey) return submissionKey;
   if (!form) return "default";
   let id = formIds.get(form);
@@ -1013,8 +1013,8 @@ function actionSubmissionKey(form: HTMLFormElement | undefined, submissionKey?: 
 const formIds = new WeakMap<HTMLFormElement, string>();
 let nextFormId = 1;
 
-function canInterceptAction(form: HTMLFormElement, submitter: HTMLElement | null) {
-  const options = actionFormOptions(form, submitter);
+function canInterceptMutation(form: HTMLFormElement, submitter: HTMLElement | null) {
+  const options = formSubmissionOptions(form, submitter);
   if (!options) return false;
   const { action, enctype, method, target } = options;
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return false;
@@ -1028,9 +1028,9 @@ function canInterceptAction(form: HTMLFormElement, submitter: HTMLElement | null
   return ["application/x-www-form-urlencoded", "multipart/form-data", "text/plain"].includes(enctype);
 }
 
-function createActionRequest(form: HTMLFormElement, submitter: HTMLElement | null) {
-  if (!canInterceptAction(form, submitter)) return undefined;
-  const { action, enctype, method } = actionFormOptions(form, submitter)!;
+function createMutationRequest(form: HTMLFormElement, submitter: HTMLElement | null) {
+  if (!canInterceptMutation(form, submitter)) return undefined;
+  const { action, enctype, method } = formSubmissionOptions(form, submitter)!;
   const formData = submitter
     ? new FormData(form, submitter)
     : new FormData(form);
@@ -1064,27 +1064,27 @@ function createActionRequest(form: HTMLFormElement, submitter: HTMLElement | nul
   };
 }
 
-function actionFormOptions(form: HTMLFormElement, submitter: HTMLElement | null) {
-  if (!isSupportedActionSubmitter(submitter)) return undefined;
+function formSubmissionOptions(form: HTMLFormElement, submitter: HTMLElement | null) {
+  if (!isSupportedMutationSubmitter(submitter)) return undefined;
   const button = submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement
     ? submitter
     : undefined;
   return {
-    action: (actionSubmitterAttribute(button, "formaction") ?? form.action) || window.location.href,
-    enctype: ((actionSubmitterAttribute(button, "formenctype") ?? form.enctype) || "application/x-www-form-urlencoded").toLowerCase(),
-    method: ((actionSubmitterAttribute(button, "formmethod") ?? form.method) || "get").toUpperCase(),
-    target: actionSubmitterAttribute(button, "formtarget") ?? form.target,
+    action: (submitterFormAttribute(button, "formaction") ?? form.action) || window.location.href,
+    enctype: ((submitterFormAttribute(button, "formenctype") ?? form.enctype) || "application/x-www-form-urlencoded").toLowerCase(),
+    method: ((submitterFormAttribute(button, "formmethod") ?? form.method) || "get").toUpperCase(),
+    target: submitterFormAttribute(button, "formtarget") ?? form.target,
   };
 }
 
-function actionSubmitterAttribute(
+function submitterFormAttribute(
   submitter: HTMLButtonElement | HTMLInputElement | undefined,
   name: "formaction" | "formenctype" | "formmethod" | "formtarget",
 ) {
   return submitter?.hasAttribute(name) ? submitter.getAttribute(name) ?? "" : undefined;
 }
 
-function isSupportedActionSubmitter(submitter: HTMLElement | null) {
+function isSupportedMutationSubmitter(submitter: HTMLElement | null) {
   if (!submitter) return true;
   if (submitter instanceof HTMLButtonElement) {
     return !submitter.disabled && submitter.type === "submit";
@@ -1166,9 +1166,9 @@ type RouterApi = {
   navigation: "document" | "server";
   submissionVersion: number;
   push(to: string): void;
-  getActionNavigation(form?: HTMLFormElement, submissionKey?: string): ActionNavigationState;
-  releaseActionNavigation(form: HTMLFormElement, submissionKey?: string): void;
-  submitAction(form: HTMLFormElement, submitter: HTMLElement | null, submissionKey?: string): Promise<void>;
+  getMutationNavigation(form?: HTMLFormElement, submissionKey?: string): MutationNavigationState;
+  releaseMutationNavigation(form: HTMLFormElement, submissionKey?: string): void;
+  submitMutation(form: HTMLFormElement, submitter: HTMLElement | null, submissionKey?: string): Promise<void>;
 };
 
 const RouterContext = createContext<RouterApi>({
@@ -1177,11 +1177,11 @@ const RouterContext = createContext<RouterApi>({
   push(to) {
     window.location.href = to;
   },
-  getActionNavigation() {
+  getMutationNavigation() {
     return { state: "idle" };
   },
-  releaseActionNavigation() {},
-  async submitAction(form) {
+  releaseMutationNavigation() {},
+  async submitMutation(form) {
     form.submit();
   },
 });

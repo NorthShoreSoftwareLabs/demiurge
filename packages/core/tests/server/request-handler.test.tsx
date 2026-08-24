@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
-  action,
+  mutation,
   createMemoryCacheStore,
   createMemoryIdempotencyStore,
   createRequestHandler,
@@ -56,13 +56,13 @@ function routeModule(module: RouteModule) {
 }
 
 describe("request handler", () => {
-  it("invalidates declared action tags and strips the transport header", async () => {
+  it("invalidates declared mutation tags and strips the transport header", async () => {
     const store = createMemoryCacheStore();
     const invalidateTags = vi.spyOn(store, "invalidateTags");
     const revalidate = vi.fn(() => [{ id: "posts" }] as const);
     const routeModules = {
       "./routes/posts.ts": {
-        POST: action({
+        POST: mutation({
           revalidate,
           handler: () => new Response("updated"),
         }),
@@ -97,13 +97,13 @@ describe("request handler", () => {
     ]);
   });
 
-  it("does not invalidate tags when an action fails", async () => {
+  it("does not invalidate tags when a mutation fails", async () => {
     const store = createMemoryCacheStore();
     const invalidateTags = vi.spyOn(store, "invalidateTags");
     const revalidate = vi.fn(() => [{ id: "posts" }] as const);
     const routeModules = {
       "./routes/posts.ts": {
-        POST: action({
+        POST: mutation({
           revalidate,
           handler: () => {
             throw new Error("failed");
@@ -138,7 +138,7 @@ describe("request handler", () => {
     const revalidate = vi.fn(() => [{ id: "posts" }] as const);
     const routeModules = {
       "./routes/posts.ts": {
-        POST: action({
+        POST: mutation({
           idempotency: { key: ["create", "one"], store: idempotency },
           revalidate,
           handler: () => new Response("created"),
@@ -168,13 +168,13 @@ describe("request handler", () => {
 
   it("coordinates mutation invalidation with document and data navigation", async () => {
     let value = "before";
-    let signalActionStarted!: () => void;
-    const actionStarted = new Promise<void>((resolve) => {
-      signalActionStarted = resolve;
+    let signalMutationStarted!: () => void;
+    const mutationStarted = new Promise<void>((resolve) => {
+      signalMutationStarted = resolve;
     });
-    let releaseAction!: () => void;
-    const actionRelease = new Promise<void>((resolve) => {
-      releaseAction = resolve;
+    let releaseMutation!: () => void;
+    const mutationRelease = new Promise<void>((resolve) => {
+      releaseMutation = resolve;
     });
     const store = createMemoryCacheStore();
     const routeModules = {
@@ -189,12 +189,12 @@ describe("request handler", () => {
           }),
           view: ({ data }) => <main>{data}</main>,
         }),
-        POST: action({
+        POST: mutation({
           revalidate: [{ id: "value" }],
           handler: async () => {
-            signalActionStarted();
+            signalMutationStarted();
             value = "after";
-            await actionRelease;
+            await mutationRelease;
             return new Response("updated");
           },
         }),
@@ -220,10 +220,10 @@ describe("request handler", () => {
     }));
     await expect(primed.json()).resolves.toMatchObject({ data: "before" });
 
-    const mutation = handler(
+    const mutationRequest = handler(
       new Request("https://example.test/", { method: "POST" }),
     );
-    await actionStarted;
+    await mutationStarted;
     const documentNavigation = handler(new Request("https://example.test/"));
     const browserNavigation = handler(new Request("https://example.test/", {
       headers: { "x-demiurge-navigation": "data" },
@@ -236,8 +236,8 @@ describe("request handler", () => {
     await expect(browserResponse.json()).resolves.toMatchObject({
       data: "before",
     });
-    releaseAction();
-    await mutation;
+    releaseMutation();
+    await mutationRequest;
 
     const refreshed = await handler(new Request("https://example.test/", {
       headers: { "x-demiurge-navigation": "data" },

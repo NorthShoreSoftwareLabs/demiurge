@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  action,
-  actionInput,
-  ActionValidationError,
-  ACTION_REQUEST_HEADER,
-  ACTION_REQUEST_VALUE,
-  ACTION_RESPONSE_MEDIA_TYPE,
+  mutation,
+  mutationInput,
+  MutationValidationError,
+  MUTATION_REQUEST_HEADER,
+  MUTATION_REQUEST_VALUE,
+  MUTATION_RESPONSE_MEDIA_TYPE,
   createMemoryIdempotencyStore,
   json,
   redirect,
@@ -26,11 +26,11 @@ function createContext(request: Request): HttpRouteContext {
   };
 }
 
-describe("action helper", () => {
+describe("mutation helper", () => {
   it("returns a versioned invalid result for protocol requests", async () => {
-    const capability = action({
+    const capability = mutation({
       input: async () => {
-        throw new ActionValidationError([{
+        throw new MutationValidationError([{
           code: "required",
           message: "Title is required",
           path: ["title"],
@@ -40,7 +40,7 @@ describe("action helper", () => {
     });
     const response = await toResponse(capability, createContext(new Request(
       "https://example.test/posts",
-      { headers: { [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE }, method: "POST" },
+      { headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE }, method: "POST" },
     )));
     expect(response.headers.get("content-type")).toContain("v=1");
     await expect(response.json()).resolves.toMatchObject({
@@ -50,10 +50,10 @@ describe("action helper", () => {
   });
 
   it("returns a versioned redirect for protocol requests", async () => {
-    const capability = action({ handler: () => redirect("/posts", 303) });
+    const capability = mutation({ handler: () => redirect("/posts", 303) });
     const response = await toResponse(capability, createContext(new Request(
       "https://example.test/posts",
-      { headers: { [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE }, method: "POST" },
+      { headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE }, method: "POST" },
     )));
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -64,11 +64,11 @@ describe("action helper", () => {
     });
   });
 
-  it("uses replace only for permanent action redirects", async () => {
-    const capability = action({ handler: () => redirect("/posts", 308) });
+  it("uses replace only for permanent mutation redirects", async () => {
+    const capability = mutation({ handler: () => redirect("/posts", 308) });
     const response = await toResponse(capability, createContext(new Request(
       "https://example.test/posts",
-      { headers: { [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE }, method: "POST" },
+      { headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE }, method: "POST" },
     )));
 
     await expect(response.json()).resolves.toEqual({
@@ -80,13 +80,13 @@ describe("action helper", () => {
   });
 
   it("marks protocol success results for route revalidation", async () => {
-    const capability = action({
+    const capability = mutation({
       revalidateRoute: true,
       handler: () => json({ saved: true }),
     });
     const response = await toResponse(capability, createContext(new Request(
       "https://example.test/posts",
-      { headers: { [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE }, method: "POST" },
+      { headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE }, method: "POST" },
     )));
     await expect(response.json()).resolves.toMatchObject({
       version: 1,
@@ -97,18 +97,18 @@ describe("action helper", () => {
   });
 
   it("keeps cache-tag invalidation separate from browser route revalidation", async () => {
-    const capability = action({
+    const capability = mutation({
       revalidate: [{ id: "posts" }],
       revalidateRoute: true,
       handler: () => json({ saved: true }),
     });
     const response = await toResponse(capability, createContext(new Request(
       "https://example.test/posts",
-      { headers: { [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE }, method: "POST" },
+      { headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE }, method: "POST" },
     )));
 
     expect(response.headers.get("x-demiurge-revalidate-tags")).toBe("posts");
-    expect(response.headers.get("content-type")).toBe(ACTION_RESPONSE_MEDIA_TYPE);
+    expect(response.headers.get("content-type")).toBe(MUTATION_RESPONSE_MEDIA_TYPE);
     await expect(response.json()).resolves.toMatchObject({
       version: 1,
       status: "success",
@@ -117,25 +117,25 @@ describe("action helper", () => {
   });
 
   it("keeps a raw response opaque for protocol requests", async () => {
-    const capability = action({
-      handler: () => new Response("raw action response", {
+    const capability = mutation({
+      handler: () => new Response("raw mutation response", {
         headers: { "content-type": "text/plain" },
         status: 422,
       }),
     });
     const response = await toResponse(capability, createContext(new Request(
       "https://example.test/posts",
-      { headers: { [ACTION_REQUEST_HEADER]: ACTION_REQUEST_VALUE }, method: "POST" },
+      { headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE }, method: "POST" },
     )));
 
     expect(response.headers.get("content-type")).toBe("text/plain");
-    await expect(response.text()).resolves.toBe("raw action response");
+    await expect(response.text()).resolves.toBe("raw mutation response");
   });
 
   it("returns a stable response for application validation errors", async () => {
-    const capability = action({
+    const capability = mutation({
       input: async () => {
-        throw new ActionValidationError([{
+        throw new MutationValidationError([{
           code: "required",
           message: "Title is required",
           path: ["title"],
@@ -156,8 +156,8 @@ describe("action helper", () => {
     });
   });
   it("parses JSON input and returns response capabilities", async () => {
-    const capability = action({
-      input: actionInput.json,
+    const capability = mutation({
+      input: mutationInput.json,
       handler({ input }) {
         return json({
           received: input,
@@ -184,17 +184,17 @@ describe("action helper", () => {
     });
   });
 
-  it("supports form and text action inputs", async () => {
-    const formCapability = action({
-      input: actionInput.formData,
+  it("supports form and text mutation inputs", async () => {
+    const formCapability = mutation({
+      input: mutationInput.formData,
       handler({ input }) {
         return json({
           title: input.get("title"),
         });
       },
     });
-    const textCapability = action({
-      input: actionInput.text,
+    const textCapability = mutation({
+      input: mutationInput.text,
       handler({ input }) {
         return new Response(input.toUpperCase());
       },
@@ -225,12 +225,12 @@ describe("action helper", () => {
     await expect(textResponse.text()).resolves.toBe("HELLO");
   });
 
-  it("replays idempotent action responses for matching keys", async () => {
+  it("replays idempotent mutation responses for matching keys", async () => {
     const store = createMemoryIdempotencyStore();
     const createPost = vi.fn(async () =>
       redirect(`/posts/${createPost.mock.calls.length}`, 303),
     );
-    const capability = action({
+    const capability = mutation({
       idempotency: {
         key: ({ request }) => [
           "create-post",
@@ -258,13 +258,13 @@ describe("action helper", () => {
     expect(createPost).toHaveBeenCalledTimes(1);
   });
 
-  it("does not replay failed idempotent actions", async () => {
+  it("does not replay failed idempotent mutations", async () => {
     const store = createMemoryIdempotencyStore();
     const createPost = vi
       .fn()
       .mockRejectedValueOnce(new Error("unavailable"))
       .mockResolvedValueOnce(json({ ok: true }));
-    const capability = action({
+    const capability = mutation({
       idempotency: {
         key: ["create-post", "retry-key"],
         store,
@@ -286,7 +286,7 @@ describe("action helper", () => {
   });
 
   it("declares the cache tags that a successful mutation revalidates", async () => {
-    const capability = action({
+    const capability = mutation({
       revalidate: [{ id: "posts" }],
       handler: () => new Response("ok"),
     });

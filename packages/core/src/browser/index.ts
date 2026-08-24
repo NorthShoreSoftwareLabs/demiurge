@@ -11,8 +11,8 @@ export {
   useRouteFocusBoundary,
 } from "./focus";
 export type {
-  ActionNavigationState,
-  ActionResult,
+  MutationNavigationState,
+  MutationResult,
   FormProps,
   LinkProps,
   NavigationAccessibility,

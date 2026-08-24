@@ -1,8 +1,8 @@
 # Cache Invalidation
 
 This example shows the one flow the cache API makes easy to get wrong: tag
-invalidation triggered by an action. A page route reads a `public` cache
-entry tagged `"message"`. A form POST to an action route mutates the
+invalidation triggered by a mutation. A page route reads a `public` cache
+entry tagged `"message"`. A form POST to a mutation route mutates the
 underlying value. It then invalidates that tag, so the next read reaches the
 source instead of the stale cached one.
 
@@ -18,10 +18,10 @@ mutation reached the source rather than a stale cache entry.
 
 ## Why this flow is easy to get wrong
 
-**Page `data` loaders and action handlers do not share a cache the same
+**Page `data` loaders and mutation handlers do not share a cache the same
 way.** The framework hands a page `data` function a fresh `cache` argument on
-every request. An action handler gets no `cache` argument at all. If the
-action builds its own cache instance instead of reusing the page's, calling
+every request. A mutation handler gets no `cache` argument at all. If the
+mutation builds its own cache instance instead of reusing the page's, calling
 `invalidateTags` deletes nothing from an unrelated store. `src/cache.ts`
 exports one shared cache instance for exactly this reason.
 
@@ -29,16 +29,16 @@ exports one shared cache instance for exactly this reason.
 count of deleted entries rather than throwing when nothing matched. A typo in
 a tag id, or a tag the query never declares, leaves the old value cached with
 no error to notice. `cacheTags.message()` is the one function both the query
-and the action call, so a typo has nowhere to hide.
+and the mutation call, so a typo has nowhere to hide.
 
-**Invalidating before the mutation commits creates a race.** The action in
+**Invalidating before the mutation commits creates a race.** The mutation in
 this example writes the new message and only then invalidates the tag. An
 earlier invalidation could let a concurrent read repopulate the cache with
 the old value before the write finishes. That stale value would then survive
 until the next explicit invalidation.
 
 The query itself declares no `ttl`, so the message never expires on its own.
-Any change the reader sees came from the action's invalidation, not from a
+Any change the reader sees came from the mutation's invalidation, not from a
 timer, which is what the integration test in
 `tests/integration/cache-invalidation.ts` checks.
 

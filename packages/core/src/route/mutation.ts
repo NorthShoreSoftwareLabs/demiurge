@@ -17,7 +17,7 @@ import type {
 } from "./types";
 import { response, toResponse } from "./response";
 
-export type ActionInput<
+export type MutationInput<
   TInput,
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
@@ -25,27 +25,27 @@ export type ActionInput<
   context: HttpRouteContext<TPath, TValues>,
 ) => MaybePromise<TInput>;
 
-export const ACTION_REQUEST_HEADER = "x-demiurge-action";
-export const ACTION_REQUEST_VALUE = "data;v=1";
-export const ACTION_RESPONSE_MEDIA_TYPE = "application/vnd.demiurge.action+json;v=1";
+export const MUTATION_REQUEST_HEADER = "x-demiurge-mutation";
+export const MUTATION_REQUEST_VALUE = "data;v=1";
+export const MUTATION_RESPONSE_MEDIA_TYPE = "application/vnd.demiurge.mutation+json;v=1";
 
-export type ActionValidationIssue = {
+export type MutationValidationIssue = {
   code: string;
   message: string;
   path: readonly (string | number)[];
 };
 
-export class ActionValidationError extends Error {
-  readonly issues: readonly ActionValidationIssue[];
+export class MutationValidationError extends Error {
+  readonly issues: readonly MutationValidationIssue[];
 
-  constructor(issues: readonly ActionValidationIssue[]) {
-    super("Action input validation failed.");
-    this.name = "ActionValidationError";
+  constructor(issues: readonly MutationValidationIssue[]) {
+    super("Mutation input validation failed.");
+    this.name = "MutationValidationError";
     this.issues = issues.map((issue) => ({ ...issue, path: [...issue.path] }));
   }
 }
 
-export type ActionContext<
+export type MutationContext<
   TInput,
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
@@ -53,51 +53,51 @@ export type ActionContext<
   input: TInput;
 };
 
-export type ActionIdempotency<
+export type MutationIdempotency<
   TInput,
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
 > = {
-  key: CacheKey | ((context: ActionContext<TInput, TPath, TValues>) => CacheKey);
+  key: CacheKey | ((context: MutationContext<TInput, TPath, TValues>) => CacheKey);
   store: IdempotencyStore;
   ttl?: CacheDuration;
 };
 
-export type ActionRevalidation<
+export type MutationRevalidation<
   TInput,
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
 > =
   | readonly CacheTag[]
   | ((
-    context: ActionContext<TInput, TPath, TValues>,
+    context: MutationContext<TInput, TPath, TValues>,
   ) => MaybePromise<readonly CacheTag[]>);
 
-export const ACTION_REVALIDATION_HEADER = "x-demiurge-revalidate-tags";
+export const MUTATION_REVALIDATION_HEADER = "x-demiurge-revalidate-tags";
 
-export type ActionOptions<
+export type MutationOptions<
   TInput,
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
 > = {
   cors?: CorsPolicy;
   handler: (
-    context: ActionContext<TInput, TPath, TValues>,
+    context: MutationContext<TInput, TPath, TValues>,
   ) => MaybePromise<Response | ResponseCapability<TPath, TValues>>;
-  idempotency?: ActionIdempotency<TInput, TPath, TValues>;
-  input?: ActionInput<TInput, TPath, TValues>;
+  idempotency?: MutationIdempotency<TInput, TPath, TValues>;
+  input?: MutationInput<TInput, TPath, TValues>;
   revalidateRoute?: boolean;
-  revalidate?: ActionRevalidation<TInput, TPath, TValues>;
+  revalidate?: MutationRevalidation<TInput, TPath, TValues>;
   security?: RouteSecurityPolicy;
   timing?: ServerTimingInput;
 };
 
-export function action<
+export function mutation<
   TInput = undefined,
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
 >(
-  options: ActionOptions<TInput, TPath, TValues>,
+  options: MutationOptions<TInput, TPath, TValues>,
 ) {
   return response<TPath, TValues>(
     async (context) => {
@@ -109,33 +109,33 @@ export function action<
           ? await options.input(context)
           : absentInput;
       } catch (error) {
-        if (!(error instanceof ActionValidationError)) throw error;
-        return actionValidationResponse(context.request, error.issues);
+        if (!(error instanceof MutationValidationError)) throw error;
+        return mutationValidationResponse(context.request, error.issues);
       }
-      const actionContext: ActionContext<TInput, TPath, TValues> = {
+      const mutationContext: MutationContext<TInput, TPath, TValues> = {
         ...context,
         input,
       };
       const run = async () => {
-        const result = await options.handler(actionContext);
+        const result = await options.handler(mutationContext);
         const raw = result instanceof Response;
-        const response = await resolveActionResult(result, context);
-        return raw || !isActionProtocolRequest(context.request)
+        const response = await resolveMutationResult(result, context);
+        return raw || !isMutationProtocolRequest(context.request)
           ? response
-          : await actionProtocolResponse(response, options.revalidateRoute === true);
+          : await mutationProtocolResponse(response, options.revalidateRoute === true);
       };
 
       if (!options.idempotency) {
         const result = await run();
         const revalidation = await resolveRevalidation(
           options.revalidate,
-          actionContext,
+          mutationContext,
         );
         return await addRevalidationHeader(result, revalidation);
       }
 
       const key = typeof options.idempotency.key === "function"
-        ? options.idempotency.key(actionContext)
+        ? options.idempotency.key(mutationContext)
         : options.idempotency.key;
       const result = await options.idempotency.store.run({
         fn: run,
@@ -146,7 +146,7 @@ export function action<
       if (result.replayed) return result.value;
       const revalidation = await resolveRevalidation(
         options.revalidate,
-        actionContext,
+        mutationContext,
       );
       return await addRevalidationHeader(result.value, revalidation);
     },
@@ -158,21 +158,21 @@ export function action<
   );
 }
 
-function isActionProtocolRequest(request: Request) {
-  return request.headers.get(ACTION_REQUEST_HEADER) === ACTION_REQUEST_VALUE;
+function isMutationProtocolRequest(request: Request) {
+  return request.headers.get(MUTATION_REQUEST_HEADER) === MUTATION_REQUEST_VALUE;
 }
 
-function actionValidationResponse(
+function mutationValidationResponse(
   request: Request,
-  issues: readonly ActionValidationIssue[],
+  issues: readonly MutationValidationIssue[],
 ) {
-  if (isActionProtocolRequest(request)) {
+  if (isMutationProtocolRequest(request)) {
     return new Response(JSON.stringify({
       version: 1,
       status: "invalid",
       data: { issues },
     }), {
-      headers: { "content-type": ACTION_RESPONSE_MEDIA_TYPE },
+      headers: { "content-type": MUTATION_RESPONSE_MEDIA_TYPE },
       status: 400,
     });
   }
@@ -182,7 +182,7 @@ function actionValidationResponse(
   });
 }
 
-async function actionProtocolResponse(response: Response, revalidateRoute: boolean) {
+async function mutationProtocolResponse(response: Response, revalidateRoute: boolean) {
   if (response.status >= 300 && response.status < 400) {
     const location = response.headers.get("location");
     if (!location) return response;
@@ -192,7 +192,7 @@ async function actionProtocolResponse(response: Response, revalidateRoute: boole
       location,
       history: response.status === 301 || response.status === 308 ? "replace" : "push",
     }), {
-      headers: { "content-type": ACTION_RESPONSE_MEDIA_TYPE },
+      headers: { "content-type": MUTATION_RESPONSE_MEDIA_TYPE },
       status: 200,
     });
   }
@@ -205,7 +205,7 @@ async function actionProtocolResponse(response: Response, revalidateRoute: boole
     ...(revalidateRoute && response.ok ? { revalidate: true } : {}),
     ...(data === undefined ? {} : { data }),
   }), {
-    headers: { "content-type": ACTION_RESPONSE_MEDIA_TYPE },
+    headers: { "content-type": MUTATION_RESPONSE_MEDIA_TYPE },
     status: response.status,
   });
 }
@@ -215,8 +215,8 @@ async function resolveRevalidation<
   TPath extends string,
   TValues extends object,
 >(
-  revalidate: ActionRevalidation<TInput, TPath, TValues> | undefined,
-  context: ActionContext<TInput, TPath, TValues>,
+  revalidate: MutationRevalidation<TInput, TPath, TValues> | undefined,
+  context: MutationContext<TInput, TPath, TValues>,
 ) {
   if (!revalidate) return [];
   return typeof revalidate === "function"
@@ -231,7 +231,7 @@ async function addRevalidationHeader(
   if (tags.length === 0) return result;
   const headers = new Headers(result.headers);
   headers.set(
-    ACTION_REVALIDATION_HEADER,
+    MUTATION_REVALIDATION_HEADER,
     tags.map((value) => value.id).join(","),
   );
   return new Response(result.body, {
@@ -241,7 +241,7 @@ async function addRevalidationHeader(
   });
 }
 
-export const actionInput = {
+export const mutationInput = {
   async formData({ request }: HttpRouteContext) {
     return await request.formData();
   },
@@ -254,7 +254,7 @@ export const actionInput = {
   },
 };
 
-async function resolveActionResult<
+async function resolveMutationResult<
   TPath extends string,
   TValues extends object,
 >(

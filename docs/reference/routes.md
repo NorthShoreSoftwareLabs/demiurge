@@ -52,12 +52,12 @@ Implemented response helpers are:
 - `redirect(...)` and `notFound(...)`
 - `response(...)` for an application-owned Web `Response`
 - `stream(...)`, `sse(...)`, and `jsonl(...)` for streamed HTTP bodies
-- `action(...)` for parsed, optionally idempotent mutations
+- `mutation(...)` for parsed, optionally idempotent mutations
 - `webhook(...)` for verified HMAC webhook requests
 
-### Action validation
+### Mutation validation
 
-An action parser can use any application-owned parser or schema library. The
+A mutation parser can use any application-owned parser or schema library. The
 parser returns the typed input that the handler receives as `context.input`.
 
 When input is invalid, the parser throws an application-created validation
@@ -80,17 +80,17 @@ header. `throw httpError(status, details)` creates an intentional HTTP failure
 that becomes a problem response for APIs or an app-owned error document for
 pages.
 
-### Action forms
+### Mutation forms
 
-Use `Form` for client action submissions. The browser router intercepts only
+Use `Form` for client mutation submissions. The browser router intercepts only
 same-origin forms with a supported method and target. Other forms keep native
 browser behavior.
 
-The router sends `X-Demiurge-Action: data;v=1` and accepts
-`application/vnd.demiurge.action+json;v=1`. A typed result has `version: 1` and
+The router sends `X-Demiurge-Mutation: data;v=1` and accepts
+`application/vnd.demiurge.mutation+json;v=1`. A typed result has `version: 1` and
 one status: `success`, `invalid`, `redirect`, or `failed`.
 
-The action helper gives each redirect an explicit history operation. It uses
+The mutation helper gives each redirect an explicit history operation. It uses
 `replace` for `301` and `308`. It uses `push` for `302`, `303`, and `307`.
 
 ```tsx
@@ -113,21 +113,43 @@ router sends URL-encoded, multipart, or plain-text bodies that match the form.
 Set `revalidateRoute` to `true` to refresh the current route after success.
 Use `revalidate` to invalidate cache tags. The two operations are separate.
 
-#### React action state
+#### React Action state
 
 Demiurge `Form` does not wrap React `useActionState`. The APIs manage different
 state.
 
 - `Form` and `useNavigation` manage HTTP submission, cancellation, redirects,
   history, and route revalidation.
-- `useActionState` manages component result state, ordered reducer actions, and
+- `useActionState` manages component result state, ordered React Actions, and
   a React transition pending flag.
 
 Use `Form` when a submission must participate in browser routing. Use
-`useActionState` when an action must update component-local result state.
+`useActionState` when a React Action must update component-local result state.
 
 Both clients can submit to the same application endpoint. They do not share
-pending state or action-result state.
+pending state or mutation-result state.
+
+### Migration from action names
+
+Version 0.2.0 removes the earlier nightly action names. It does not provide
+deprecated aliases. Apply these direct replacements:
+
+| Old name | New name |
+| --- | --- |
+| `action` | `mutation` |
+| `actionInput` | `mutationInput` |
+| `ActionContext` | `MutationContext` |
+| `ActionIdempotency` | `MutationIdempotency` |
+| `ActionInput` | `MutationInput` |
+| `ActionOptions` | `MutationOptions` |
+| `ActionRevalidation` | `MutationRevalidation` |
+| `ActionValidationError` | `MutationValidationError` |
+| `ActionValidationIssue` | `MutationValidationIssue` |
+| `ActionResult` | `MutationResult` |
+| `ActionNavigationState` | `MutationNavigationState` |
+
+HTML `action` and `formAction` properties keep their platform names. React API
+names such as `useActionState` also keep their names.
 
 ## Page routes
 

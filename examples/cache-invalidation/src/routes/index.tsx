@@ -15,7 +15,7 @@ function MessagePage({ data }: RouteProps<"/", MessageData>) {
   return (
     <main>
       <section className="summary">
-        <p className="eyebrow">Tag invalidation from an action</p>
+        <p className="eyebrow">Tag invalidation from a mutation</p>
         <h1>Cache invalidation</h1>
         <div className="message">
           <p data-testid="message">{data.message}</p>
