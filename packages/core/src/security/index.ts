@@ -23,6 +23,18 @@ export type {
   SecureCookieDefinition,
 } from "./cookies";
 export {
+  createEncryptedCookieSession,
+  createSignedCookieSession,
+} from "./cookie-session";
+export type {
+  CookieSession,
+  CookieSessionCreateOptions,
+  CookieSessionManager,
+  CookieSessionOptions,
+  SessionCookieDefinition,
+  SessionCookieKey,
+} from "./cookie-session";
+export {
   createCsrfCookie,
   createCsrfToken,
   enforceCsrfProtection,

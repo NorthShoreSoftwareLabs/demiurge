@@ -259,6 +259,73 @@ same-origin script sent the request. It is not a credential, so a reader gains
 nothing from it. Keep every session and authentication cookie on the `HttpOnly`
 default.
 
+### Cookie sessions
+
+Use a signed cookie session when the application does not need to hide session
+data from the browser.
+
+Use an encrypted cookie session when the data also needs confidentiality. Both
+implementations reject a modified value.
+
+```ts
+import { createEncryptedCookieSession } from "@demiurgejs/core";
+
+const sessions = createEncryptedCookieSession<{
+  authenticated: boolean;
+  userId: string;
+}>({
+  keys: [
+    { id: "current", value: currentKey },
+    { id: "previous", value: previousKey },
+  ],
+});
+```
+
+Each key must contain at least 32 bytes. Generate key material with a secure
+random source.
+
+Put the current key first. The reader accepts each configured previous key and
+commits the next value with the current key.
+
+Open one request-scoped session for each request:
+
+```ts
+const session = await sessions.open(request);
+
+if (!session.get()) {
+  session.create({ authenticated: true, userId: "user-123" });
+}
+
+const headers = new Headers();
+for (const cookie of await session.commit()) {
+  headers.append("set-cookie", cookie);
+}
+```
+
+Call `rotate()` after login or a privilege change. Call `destroy()` during
+logout.
+
+The default absolute lifetime is seven days. The default idle lifetime is 24
+hours.
+
+Set `idleExpirationMs: false` to disable idle expiration. Set `renewal: false`
+to disable automatic idle renewal.
+
+A signed cookie provides integrity only. Its data remains readable to the
+browser owner.
+
+An encrypted cookie provides confidentiality and integrity. Neither cookie
+implementation can revoke a copied value before it expires.
+
+Use a server-side session store when logout must revoke all copied session
+values immediately.
+
+Cookie size includes the protected value and all attributes. Demiurge rejects
+a value above the browser limit.
+
+Static output rejects a response that commits a session cookie. A static build
+cannot publish request-specific session state.
+
 ## CSRF
 
 Cookie-authenticated unsafe methods receive double-submit CSRF protection by
