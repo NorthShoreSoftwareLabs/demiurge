@@ -1,9 +1,10 @@
-import { action, actionInput, httpError, redirect } from "@demiurgejs/core";
-import { cacheTags, invalidation } from "../../cache";
+import { httpError, mutation, mutationInput, redirect } from "@demiurgejs/core";
+import { cacheTags } from "../../cache";
 import { writeMessage } from "../../message-store";
 
-export const POST = action({
-  input: actionInput.formData,
+export const POST = mutation({
+  input: mutationInput.formData,
+  revalidate: { tags: [cacheTags.message()] },
   async handler({ input }) {
     const next = input.get("message");
 
@@ -11,11 +12,7 @@ export const POST = action({
       throw httpError(400, "The message field cannot be empty.");
     }
 
-    // Commit the mutation before invalidating the tag. Invalidating first
-    // would leave a window where a concurrent read repopulates the cache
-    // with the value this action is about to replace.
     writeMessage(next.trim());
-    await invalidation.tags([cacheTags.message()]);
 
     return redirect("/", 303);
   },

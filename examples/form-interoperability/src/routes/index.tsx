@@ -29,7 +29,7 @@ function FormPage({ data }: RouteProps<"/", FormData>) {
       });
 
       if (response.status === 422) {
-        // TYPE-EVIDENCE: A 422 response from this action always contains field error arrays.
+        // TYPE-EVIDENCE: A 422 response from this mutation always contains field error arrays.
         const payload = await response.json() as {
           errors: Record<string, string[]>;
         };
@@ -46,7 +46,7 @@ function FormPage({ data }: RouteProps<"/", FormData>) {
       if (response.ok && response.redirected) {
         const target = new URL(response.url);
         if (target.origin !== window.location.origin) {
-          throw new Error("The feedback action returned an unsafe redirect.");
+          throw new Error("The feedback mutation returned an unsafe redirect.");
         }
         window.location.assign(
           `${target.pathname}${target.search}${target.hash}`,
@@ -57,7 +57,7 @@ function FormPage({ data }: RouteProps<"/", FormData>) {
 
   return (
     <main>
-      <p className="eyebrow">One action endpoint, two clients</p>
+      <p className="eyebrow">One mutation endpoint, two clients</p>
       <h1>Form interoperability</h1>
       <p>
         Disable JavaScript to use the native form. With JavaScript enabled,

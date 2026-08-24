@@ -22,6 +22,12 @@ import {
   type RouteProps,
 } from "@demiurgejs/core";
 
+declare module "@demiurgejs/core" {
+  interface RoutePathVars {
+    "/next": {};
+  }
+}
+
 describe("browser router fallbacks", () => {
   beforeEach(() => {
     window.history.replaceState(null, "", "/");
@@ -33,13 +39,13 @@ describe("browser router fallbacks", () => {
       )));
   });
 
-  it("submits an explicit Form with a versioned action request", async () => {
+  it("submits an explicit Form with a versioned mutation request", async () => {
     const calls: RequestInit[] = [];
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init) calls.push(init);
       if (init?.method === "POST") {
         return new Response(JSON.stringify({ version: 1, status: "success" }), {
-          headers: { "content-type": "application/vnd.demiurge.action+json;v=1" },
+          headers: { "content-type": "application/vnd.demiurge.mutation+json;v=1" },
         });
       }
       return Response.json(
@@ -48,22 +54,22 @@ describe("browser router fallbacks", () => {
       );
     }));
     const Router = createFileRouter({
-      routes: { "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }) },
+      routes: { "./routes/index.tsx": routeModule({ GET: page(MutationFormPage) }) },
     });
     render(<Router />);
     await waitFor(() => expect(screen.getByRole("button")).toBeTruthy());
     fireEvent.submit(screen.getByRole("form"));
     await waitFor(() => expect(calls.some((init) => init.method === "POST")).toBe(true));
-    const action = calls.find((init) => init.method === "POST");
-    expect(new Headers(action?.headers).get("x-demiurge-action")).toBe("data;v=1");
-    expect(new Headers(action?.headers).get("content-type")).toContain("application/x-www-form-urlencoded");
-    expect(String(action?.body)).toContain("title=Draft");
+    const mutation = calls.find((init) => init.method === "POST");
+    expect(new Headers(mutation?.headers).get("x-demiurge-mutation")).toBe("data;v=1");
+    expect(new Headers(mutation?.headers).get("content-type")).toContain("application/x-www-form-urlencoded");
+    expect(String(mutation?.body)).toContain("title=Draft");
     await waitFor(() => expect(screen.getByText("idle")).toBeTruthy());
   });
 
-  it("keeps external action forms native", async () => {
+  it("keeps external mutation forms native", async () => {
     const fetchSpy = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "POST") throw new Error("unexpected action request");
+      if (init?.method === "POST") throw new Error("unexpected mutation request");
       return Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } });
     });
     vi.stubGlobal("fetch", fetchSpy);
@@ -77,13 +83,13 @@ describe("browser router fallbacks", () => {
   });
 
   it.each([
-    ["invalid", { version: 1, status: "invalid", data: { issues: [] } }, "invalid"],
+    ["invalid", { version: 1, status: "invalid", validation: { issues: [] } }, "invalid"],
     ["failed", { version: 1, status: "failed", message: "Save failed" }, "error"],
-  ])("reports a %s action result", async (_name, result, expectedState) => {
+  ])("reports a %s mutation result", async (_name, result, expectedState) => {
     vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
       init?.method === "POST"
         ? new Response(JSON.stringify(result), {
-            headers: { "content-type": "application/vnd.demiurge.action+json;v=1" },
+            headers: { "content-type": "application/vnd.demiurge.mutation+json;v=1" },
             status: result.status === "failed" ? 500 : 400,
           })
         : Response.json(
@@ -92,7 +98,7 @@ describe("browser router fallbacks", () => {
           ),
     ));
     const Router = createFileRouter({
-      routes: { "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }) },
+      routes: { "./routes/index.tsx": routeModule({ GET: page(MutationFormPage) }) },
     });
     render(<Router />);
     await waitFor(() => expect(screen.getByRole("form")).toBeTruthy());
@@ -100,16 +106,16 @@ describe("browser router fallbacks", () => {
     await waitFor(() => expect(screen.getByText(expectedState)).toBeTruthy());
   });
 
-  it.each(["push", "replace"] as const)("follows a valid %s action redirect", async (history) => {
+  it.each(["push", "replace"] as const)("follows a valid %s mutation redirect", async (history) => {
     const historySpy = vi.spyOn(window.history, history === "push" ? "pushState" : "replaceState");
     vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
       init?.method === "POST"
         ? new Response(JSON.stringify({
             version: 1,
             status: "redirect",
-            location: "/saved?from=action#result",
+            location: "/saved?from=mutation#result",
             history,
-          }), { headers: { "content-type": "application/vnd.demiurge.action+json;v=1" } })
+          }), { headers: { "content-type": "application/vnd.demiurge.mutation+json;v=1" } })
         : Response.json(
             { hasData: true },
             { headers: { "x-demiurge-navigation": "data" } },
@@ -117,19 +123,19 @@ describe("browser router fallbacks", () => {
     ));
     const Router = createFileRouter({
       routes: {
-        "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }),
-        "./routes/saved.tsx": routeModule({ GET: page(ActionFormPage) }),
+        "./routes/index.tsx": routeModule({ GET: page(MutationFormPage) }),
+        "./routes/saved.tsx": routeModule({ GET: page(MutationFormPage) }),
       },
     });
     render(<Router />);
     await waitFor(() => expect(screen.getByRole("form")).toBeTruthy());
     fireEvent.submit(screen.getByRole("form"));
     await waitFor(() => expect(window.location.pathname).toBe("/saved"));
-    expect(historySpy).toHaveBeenCalledWith(null, "", "/saved?from=action#result");
+    expect(historySpy).toHaveBeenCalledWith(null, "", "/saved?from=mutation#result");
     await waitFor(() => expect(screen.getByText("idle")).toBeTruthy());
   });
 
-  it("rejects an external action redirect", async () => {
+  it("rejects an external mutation redirect", async () => {
     vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
       init?.method === "POST"
         ? new Response(JSON.stringify({
@@ -137,14 +143,14 @@ describe("browser router fallbacks", () => {
             status: "redirect",
             location: "https://other.example/saved",
             history: "push",
-          }), { headers: { "content-type": "application/vnd.demiurge.action+json;v=1" } })
+          }), { headers: { "content-type": "application/vnd.demiurge.mutation+json;v=1" } })
         : Response.json(
             { hasData: true },
             { headers: { "x-demiurge-navigation": "data" } },
           ),
     ));
     const Router = createFileRouter({
-      routes: { "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }) },
+      routes: { "./routes/index.tsx": routeModule({ GET: page(MutationFormPage) }) },
     });
     render(<Router />);
     await waitFor(() => expect(screen.getByRole("form")).toBeTruthy());
@@ -153,7 +159,7 @@ describe("browser router fallbacks", () => {
     expect(window.location.pathname).toBe("/");
   });
 
-  it("revalidates the route after a successful action", async () => {
+  it("revalidates the route after a successful mutation", async () => {
     let navigationLoads = 0;
     vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") {
@@ -161,7 +167,7 @@ describe("browser router fallbacks", () => {
           version: 1,
           status: "success",
           revalidate: true,
-        }), { headers: { "content-type": "application/vnd.demiurge.action+json;v=1" } });
+        }), { headers: { "content-type": "application/vnd.demiurge.mutation+json;v=1" } });
       }
       navigationLoads += 1;
       return Response.json(
@@ -170,7 +176,7 @@ describe("browser router fallbacks", () => {
       );
     }));
     const Router = createFileRouter({
-      routes: { "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }) },
+      routes: { "./routes/index.tsx": routeModule({ GET: page(MutationFormPage) }) },
     });
     render(<Router />);
     await waitFor(() => expect(screen.getByRole("form")).toBeTruthy());
@@ -180,7 +186,7 @@ describe("browser router fallbacks", () => {
     await waitFor(() => expect(screen.getByText("idle")).toBeTruthy());
   });
 
-  it("reports a failed action request", async () => {
+  it("reports a failed mutation request", async () => {
     vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") throw new Error("network unavailable");
       return Response.json(
@@ -189,7 +195,7 @@ describe("browser router fallbacks", () => {
       );
     }));
     const Router = createFileRouter({
-      routes: { "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }) },
+      routes: { "./routes/index.tsx": routeModule({ GET: page(MutationFormPage) }) },
     });
     render(<Router />);
     await waitFor(() => expect(screen.getByRole("form")).toBeTruthy());
@@ -199,8 +205,8 @@ describe("browser router fallbacks", () => {
 
   it.each([
     ["an unmarked response", { status: "success", version: 1 }, "application/json", "idle"],
-    ["a malformed response", { status: "success", version: 1, revalidate: "yes" }, "application/vnd.demiurge.action+json;v=1", "error"],
-    ["a non-revalidating success", { status: "success", version: 1, revalidate: false }, "application/vnd.demiurge.action+json;v=1", "idle"],
+    ["a malformed response", { status: "success", version: 1, revalidate: "yes" }, "application/vnd.demiurge.mutation+json;v=1", "error"],
+    ["a non-revalidating success", { status: "success", version: 1, revalidate: false }, "application/vnd.demiurge.mutation+json;v=1", "idle"],
   ])("handles %s", async (_name, result, contentType, expectedState) => {
     vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
       init?.method === "POST"
@@ -211,7 +217,7 @@ describe("browser router fallbacks", () => {
           ),
     ));
     const Router = createFileRouter({
-      routes: { "./routes/index.tsx": routeModule({ GET: page(ActionFormPage) }) },
+      routes: { "./routes/index.tsx": routeModule({ GET: page(MutationFormPage) }) },
     });
     render(<Router />);
     await waitFor(() => expect(screen.getByRole("form")).toBeTruthy());
@@ -219,13 +225,13 @@ describe("browser router fallbacks", () => {
     await waitFor(() => expect(screen.getByText(expectedState)).toBeTruthy());
   });
 
-  it("serializes multipart and plain-text action forms", async () => {
+  it("serializes multipart and plain-text mutation forms", async () => {
     const calls: RequestInit[] = [];
     vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method === "POST") {
         calls.push(init);
         return new Response(JSON.stringify({ version: 1, status: "success" }), {
-          headers: { "content-type": "application/vnd.demiurge.action+json;v=1" },
+          headers: { "content-type": "application/vnd.demiurge.mutation+json;v=1" },
         });
       }
       return Response.json(
@@ -238,8 +244,8 @@ describe("browser router fallbacks", () => {
     });
     render(<Router />);
     await waitFor(() => expect(screen.getAllByRole("form")).toHaveLength(2));
-    fireEvent.submit(screen.getByRole("form", { name: "multipart action" }));
-    fireEvent.submit(screen.getByRole("form", { name: "text action" }));
+    fireEvent.submit(screen.getByRole("form", { name: "multipart mutation" }));
+    fireEvent.submit(screen.getByRole("form", { name: "text mutation" }));
     await waitFor(() => expect(calls).toHaveLength(2));
     expect(calls[0]?.body).toBeInstanceOf(FormData);
     expect(new Headers(calls[0]?.headers).has("content-type")).toBe(false);
@@ -257,20 +263,62 @@ describe("browser router fallbacks", () => {
           revalidate: true,
           status: "success",
           version: 1,
-        }), { headers: { "content-type": "application/vnd.demiurge.action+json;v=1" } });
+        }), { headers: { "content-type": "application/vnd.demiurge.mutation+json;v=1" } });
       }
       return Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } });
     }));
     const Router = createFileRouter({
       loadNavigationData: async () => ++loads === 1 ? { hasData: true } : await refresh.promise,
-      routes: { "./routes/index.tsx": routeModule({ GET: page(RefreshActionFormPage) }) },
+      routes: { "./routes/index.tsx": routeModule({ GET: page(RefreshMutationFormPage) }) },
     });
     render(<Router />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeTruthy());
-    fireEvent.submit(screen.getByRole("button", { name: "Save" }).closest("form")!);
+    const save = await screen.findByRole("button", { name: "Save" });
+    const historyLength = window.history.length;
+    const statusText = document.querySelector("[data-demiurge-navigation-status]")?.textContent;
+    save.focus();
+    fireEvent.submit(save.closest("form")!);
     await waitFor(() => expect(screen.getByLabelText("context state").textContent).toBe("loading"));
+    expect(document.activeElement).toBe(save);
     refresh.resolve({ hasData: true });
-    await waitFor(() => expect(screen.getByLabelText("action result").textContent).toBe("refreshed"));
+    await waitFor(() => expect(screen.getByLabelText("mutation result").textContent).toBe("refreshed"));
+    expect(document.activeElement).toBe(save);
+    expect(window.history.length).toBe(historyLength);
+    expect(document.querySelector("[data-demiurge-navigation-status]")?.textContent).toBe(statusText);
+  });
+
+  it("does not let a late refresh replace a newer navigation", async () => {
+    const refresh = deferred<{ hasData: true }>();
+    let refreshSignal: AbortSignal | undefined;
+    let loads = 0;
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === "POST"
+        ? actionResponse({ revalidate: true, status: "success", version: 1 })
+        : Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } }),
+    ));
+    const Router = createFileRouter({
+      loadNavigationData: async (request) => {
+        loads++;
+        if (loads === 2) {
+          refreshSignal = request.signal;
+          return await refresh.promise;
+        }
+        return { hasData: true };
+      },
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(RefreshRacePage) }),
+        "./routes/next.tsx": routeModule({ GET: page(NextPage) }),
+      },
+    });
+    render(<Router />);
+    const save = await screen.findByRole("button", { name: "Refresh data" });
+    fireEvent.submit(save.closest("form")!);
+    await waitFor(() => expect(loads).toBe(2));
+    fireEvent.click(screen.getByRole("link", { name: "Next route" }));
+    await screen.findByText("Next page");
+    expect(refreshSignal?.aborted).toBe(true);
+    refresh.resolve({ hasData: true });
+    await Promise.resolve();
+    expect(screen.getByText("Next page")).toBeTruthy();
   });
 
   it("aborts and clears a keyed Form when the component unmounts", async () => {
@@ -283,7 +331,7 @@ describe("browser router fallbacks", () => {
       return Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } });
     }));
     const Router = createFileRouter({
-      routes: { "./routes/index.tsx": routeModule({ GET: page(UnmountActionFormPage) }) },
+      routes: { "./routes/index.tsx": routeModule({ GET: page(UnmountMutationFormPage) }) },
     });
     render(<Router />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Save" })).toBeTruthy());
@@ -302,7 +350,7 @@ describe("browser router fallbacks", () => {
       return Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } });
     }));
     const Router = createFileRouter({
-      routes: { "./routes/index.tsx": routeModule({ GET: page(SubmitterActionFormPage) }) },
+      routes: { "./routes/index.tsx": routeModule({ GET: page(SubmitterMutationFormPage) }) },
     });
     render(<Router />);
     const publish = await screen.findByRole("button", { name: "Publish" });
@@ -310,15 +358,15 @@ describe("browser router fallbacks", () => {
     Object.defineProperty(submit, "submitter", { value: publish });
     fireEvent((publish as HTMLButtonElement).form!, submit);
     await waitFor(() => expect(calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
-    const [url, action] = calls.find(([, init]) => init?.method === "PATCH")!;
+    const [url, mutation] = calls.find(([, init]) => init?.method === "PATCH")!;
     expect(String(url)).toContain("/publish");
-    expect(new Headers(action?.headers).get("content-type")).toContain("text/plain");
-    expect(action?.body).toBe("title=Draft\r\nintent=publish\r\n");
+    expect(new Headers(mutation?.headers).get("content-type")).toContain("text/plain");
+    expect(mutation?.body).toBe("title=Draft\r\nintent=publish\r\n");
   });
 
   it("rejects malformed and credentialed protocol redirects", async () => {
     const responses = [
-      new Response("malformed", { headers: { "content-type": "application/vnd.demiurge.action+json;v=2" } }),
+      new Response("malformed", { headers: { "content-type": "application/vnd.demiurge.mutation+json;v=2" } }),
       actionResponse({ history: "replace", location: "http://user@localhost/credentialed", status: "redirect", version: 1 }),
     ];
     vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
@@ -328,7 +376,7 @@ describe("browser router fallbacks", () => {
     ));
     const replace = vi.spyOn(window.history, "replaceState");
     const Router = createFileRouter({
-      routes: { "./routes/index.tsx": routeModule({ GET: page(ProtocolActionFormPage) }) },
+      routes: { "./routes/index.tsx": routeModule({ GET: page(ProtocolMutationFormPage) }) },
     });
     render(<Router />);
     const form = (await screen.findByRole("button", { name: "Save" })).closest("form")!;
@@ -346,7 +394,7 @@ describe("browser router fallbacks", () => {
       return Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } });
     }));
     const Router = createFileRouter({
-      routes: { "./routes/index.tsx": routeModule({ GET: page(ReplaceActionFormPage) }) },
+      routes: { "./routes/index.tsx": routeModule({ GET: page(ReplaceMutationFormPage) }) },
     });
     render(<Router />);
     const form = (await screen.findByRole("button", { name: "Save" })).closest("form")!;
@@ -356,18 +404,18 @@ describe("browser router fallbacks", () => {
     await waitFor(() => expect(actions).toHaveLength(2));
     actions[1](actionResponse({ data: { saved: "current" }, status: "success", version: 1 }));
     await waitFor(() => expect(screen.getByLabelText("replace result").textContent).toBe("current"));
-    actions[0](actionResponse({ data: { issues: [] }, status: "invalid", version: 1 }, 400));
+    actions[0](actionResponse({ status: "invalid", validation: { issues: [] }, version: 1 }, 400));
     await waitFor(() => expect(screen.getByLabelText("replace result").textContent).toBe("current"));
   });
 
   it("leaves targeted, disabled, and image submissions native", async () => {
     const fetchSpy = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "POST") throw new Error("unexpected action request");
+      if (init?.method === "POST") throw new Error("unexpected mutation request");
       return Response.json({ hasData: true }, { headers: { "x-demiurge-navigation": "data" } });
     });
     vi.stubGlobal("fetch", fetchSpy);
     const Router = createFileRouter({
-      routes: { "./routes/index.tsx": routeModule({ GET: page(NativeActionFormsPage) }) },
+      routes: { "./routes/index.tsx": routeModule({ GET: page(NativeMutationFormsPage) }) },
     });
     render(<Router />);
     const targeted = await screen.findByRole("button", { name: "Targeted" });
@@ -1159,10 +1207,10 @@ function HomePage(_props: RouteProps) {
   );
 }
 
-function ActionFormPage() {
-  const navigation = useNavigation({ submissionKey: "action-form" });
+function MutationFormPage() {
+  const navigation = useNavigation({ submissionKey: "mutation-form" });
   return (
-    <Form action="/" method="post" submissionKey="action-form" aria-label="action form">
+    <Form action="/" method="post" submissionKey="mutation-form" aria-label="mutation form">
       <input name="title" defaultValue="Draft" />
       <button type="submit">Save</button>
       <output>{navigation.state}</output>
@@ -1170,15 +1218,15 @@ function ActionFormPage() {
   );
 }
 
-function RefreshActionFormPage() {
-  const navigation = useFormNavigation<{ saved: string }>("refresh-action");
+function RefreshMutationFormPage() {
+  const navigation = useFormNavigation<{ saved: string }>("refresh-mutation");
   return (
     <>
-      <Form action="/save" method="post" submissionKey="refresh-action">
-        <RefreshActionFormState />
+      <Form action="/save" method="post" submissionKey="refresh-mutation">
+        <RefreshMutationFormState />
         <button type="submit">Save</button>
       </Form>
-      <output aria-label="action result">
+      <output aria-label="mutation result">
         {navigation.state === "idle" && navigation.result?.status === "success"
           ? navigation.result.data?.saved
           : ""}
@@ -1187,18 +1235,31 @@ function RefreshActionFormPage() {
   );
 }
 
-function RefreshActionFormState() {
+function RefreshRacePage() {
+  return (
+    <div>
+      <Form action="/save" method="post"><button type="submit">Refresh data</button></Form>
+      <Link to="/next">Next route</Link>
+    </div>
+  );
+}
+
+function NextPage() {
+  return <p>Next page</p>;
+}
+
+function RefreshMutationFormState() {
   const navigation = useFormNavigation();
   return <output aria-label="context state">{navigation.state}</output>;
 }
 
-function UnmountActionFormPage() {
+function UnmountMutationFormPage() {
   const [visible, setVisible] = useState(true);
-  const navigation = useFormNavigation("unmount-action");
+  const navigation = useFormNavigation("unmount-mutation");
   return (
     <>
       {visible ? (
-        <Form action="/save" method="post" submissionKey="unmount-action">
+        <Form action="/save" method="post" submissionKey="unmount-mutation">
           <button type="submit">Save</button>
         </Form>
       ) : null}
@@ -1208,7 +1269,7 @@ function UnmountActionFormPage() {
   );
 }
 
-function SubmitterActionFormPage() {
+function SubmitterMutationFormPage() {
   return (
     <Form action="/draft" method="post">
       <input name="title" defaultValue="Draft" />
@@ -1219,20 +1280,20 @@ function SubmitterActionFormPage() {
   );
 }
 
-function ProtocolActionFormPage() {
-  return <Form action="/save" method="post"><ProtocolActionFormState /><button type="submit">Save</button></Form>;
+function ProtocolMutationFormPage() {
+  return <Form action="/save" method="post"><ProtocolMutationFormState /><button type="submit">Save</button></Form>;
 }
 
-function ProtocolActionFormState() {
+function ProtocolMutationFormState() {
   const navigation = useFormNavigation();
   return <output aria-label="protocol state">{navigation.state}</output>;
 }
 
-function ReplaceActionFormPage() {
-  const navigation = useFormNavigation<{ saved: string }>("replace-action");
+function ReplaceMutationFormPage() {
+  const navigation = useFormNavigation<{ saved: string }>("replace-mutation");
   return (
     <>
-      <Form action="/save" method="post" submissionKey="replace-action"><button type="submit">Save</button></Form>
+      <Form action="/save" method="post" submissionKey="replace-mutation"><button type="submit">Save</button></Form>
       <output aria-label="replace result">
         {navigation.state === "idle" && navigation.result?.status === "success"
           ? navigation.result.data?.saved
@@ -1242,7 +1303,7 @@ function ReplaceActionFormPage() {
   );
 }
 
-function NativeActionFormsPage() {
+function NativeMutationFormsPage() {
   return (
     <>
       <Form action="/target" method="post"><button formTarget="_blank" type="submit">Targeted</button></Form>
@@ -1254,7 +1315,7 @@ function NativeActionFormsPage() {
 
 function actionResponse(value: object, status = 200) {
   return new Response(JSON.stringify(value), {
-    headers: { "content-type": "application/vnd.demiurge.action+json;v=1" },
+    headers: { "content-type": "application/vnd.demiurge.mutation+json;v=1" },
     status,
   });
 }
@@ -1266,10 +1327,10 @@ function ExternalFormPage() {
 function EncodingFormsPage() {
   return (
     <>
-      <Form action="/" method="post" encType="multipart/form-data" aria-label="multipart action">
+      <Form action="/" method="post" encType="multipart/form-data" aria-label="multipart mutation">
         <input name="title" defaultValue="Draft" />
       </Form>
-      <Form action="/" method="post" encType="text/plain" aria-label="text action">
+      <Form action="/" method="post" encType="text/plain" aria-label="text mutation">
         <input name="title" defaultValue="Draft" />
       </Form>
     </>

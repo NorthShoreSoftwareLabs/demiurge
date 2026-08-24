@@ -3,6 +3,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createMemoryCacheStore } from "@demiurgejs/core";
 import { createNodeServer, renderNodePageResponse } from "@demiurgejs/core/node";
 import { createHandler } from "./dist/server/server-entry.js";
 
@@ -11,6 +12,14 @@ const manifest = JSON.parse(
   await readFile(join(root, "demiurge-manifest.json"), "utf8"),
 );
 const handler = createHandler({
+  cacheStore: {
+    namespace: {
+      app: "demiurge-cache-invalidation",
+      environment: process.env.NODE_ENV ?? "development",
+      schemaVersion: 1,
+    },
+    store: createMemoryCacheStore(),
+  },
   clientEntry: manifest.clientEntry,
   renderPage: renderNodePageResponse,
   styles: manifest.styles,

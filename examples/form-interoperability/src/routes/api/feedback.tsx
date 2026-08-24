@@ -1,13 +1,13 @@
 import {
-  action,
-  actionInput,
+  mutation,
+  mutationInput,
   json,
   redirect,
 } from "@demiurgejs/core";
 import { feedbackFromFormData, saveFeedback } from "../../feedback";
 
-export const POST = action({
-  input: actionInput.formData,
+export const POST = mutation({
+  input: mutationInput.formData,
   async handler({ input }) {
     const parsed = feedbackFromFormData(input);
 

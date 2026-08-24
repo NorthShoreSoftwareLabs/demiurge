@@ -70,10 +70,11 @@ export function createMemoryIdempotencyStore(
 
       if (existing && (existing.pending || existing.expiresAt > currentTime)) {
         // TYPE-EVIDENCE: the entry stores the promise from a request typed TResult. The cast restores that generic type.
+        const stored = await (existing.value as Promise<TResult>);
         return {
           key,
           replayed: true,
-          value: await (existing.value as Promise<TResult>),
+          value: cloneIdempotencyResult(stored),
         };
       }
 
@@ -104,7 +105,7 @@ export function createMemoryIdempotencyStore(
         return {
           key,
           replayed: false,
-          value: result,
+          value: cloneIdempotencyResult(result),
         };
       } catch (error) {
         if (entries.get(key) === entry) {
@@ -115,6 +116,12 @@ export function createMemoryIdempotencyStore(
       }
     },
   };
+}
+
+function cloneIdempotencyResult<TResult>(value: TResult): TResult {
+  if (!(value instanceof Response)) return value;
+  // TYPE-EVIDENCE: Response.clone() has the same runtime type and representation as the stored Response value.
+  return value.clone() as TResult;
 }
 
 function sweepExpiredIdempotencyEntries(

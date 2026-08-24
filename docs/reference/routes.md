@@ -52,16 +52,58 @@ Implemented response helpers are:
 - `redirect(...)` and `notFound(...)`
 - `response(...)` for an application-owned Web `Response`
 - `stream(...)`, `sse(...)`, and `jsonl(...)` for streamed HTTP bodies
-- `action(...)` for parsed, optionally idempotent mutations
+- `mutation(...)` for parsed, optionally idempotent mutations
 - `webhook(...)` for verified HMAC webhook requests
 
-### Action validation
+### Mutation validation
 
-An action parser can use any application-owned parser or schema library. The
-parser returns the typed input that the handler receives as `context.input`.
+A mutation can validate form input with a Standard Schema library. The schema
+provides runtime validation and the handler input type.
 
-When input is invalid, the parser throws an application-created validation
-error. The response has status `400` and this stable JSON shape:
+```ts
+const publishInput = z.object({
+  title: z.preprocess(
+    (value) => typeof value === "string" ? value : "",
+    z.string().trim().min(1, "Enter a title."),
+  ),
+});
+
+export const POST = mutation({
+  input: mutationInput.form(publishInput, (form) => ({
+    title: form.get("title"),
+  })),
+  handler: ({ input }) => json({ title: input.title }),
+});
+```
+
+The mapping function defines how form fields become schema input. The schema
+can transform that input before the handler receives it.
+
+`mutationInput.form` accepts all Standard Schema implementations. The core
+package does not require a specific schema library.
+
+Use `mutationInput.custom` for application-owned validation. The type parameter
+limits the first path segment to an application field name:
+
+```ts
+const input = mutationInput.custom<"title" | "body", FormData>(
+  async (context) => {
+    const form = await mutationInput.formData(context);
+    if (!form.has("title")) {
+      throw new MutationValidationError<"title" | "body">({
+        issues: [{
+          code: "required",
+          message: "The title is required.",
+          path: ["title"],
+        }],
+      });
+    }
+    return form;
+  },
+);
+```
+
+A native request receives status `400` and this stable JSON shape:
 
 ```ts
 {
@@ -70,9 +112,31 @@ error. The response has status `400` and this stable JSON shape:
 }
 ```
 
-An empty `path` reports a form-level error. A non-empty path reports a field or
-nested value. The framework does not select a parser or expose parser-specific
-diagnostics.
+An enhanced request receives the same issues in an `invalid` mutation result:
+
+```ts
+{
+  version: 1,
+  status: "invalid",
+  validation: {
+    issues: [{ code: "required", message: "Title is required", path: ["title"] }],
+  },
+}
+```
+
+An empty `path` reports a form error. A non-empty path reports a field or nested
+value. Schema issues use the stable `invalid` code. Demiurge does not expose
+schema-library diagnostics.
+
+Mutation data must contain JSON values. Demiurge accepts null values, booleans,
+finite numbers, strings, arrays, and plain objects with string keys.
+
+Demiurge rejects unsupported data before it writes a structured result. This
+rule rejects cycles, undefined values, non-finite numbers, and class instances.
+
+An unexpected exception uses the application error boundary and production
+redaction rules. A raw application `Response` keeps its original body, status,
+and headers. A React Action requires a structured mutation result instead.
 
 Each response helper accepts the response and route-policy options appropriate
 to its result. `serverTiming(...)` creates metrics for the `Server-Timing`
@@ -80,54 +144,184 @@ header. `throw httpError(status, details)` creates an intentional HTTP failure
 that becomes a problem response for APIs or an app-owned error document for
 pages.
 
-### Action forms
+### Mutation forms
 
-Use `Form` for client action submissions. The browser router intercepts only
-same-origin forms with a supported method and target. Other forms keep native
-browser behavior.
+Use `useMutationAction(...)` with `Form` for a typed progressive mutation. The
+server-rendered form contains a real HTTP URL and the `post` method.
 
-The router sends `X-Demiurge-Action: data;v=1` and accepts
-`application/vnd.demiurge.action+json;v=1`. A typed result has `version: 1` and
+After hydration, React submits the same `FormData` through the typed mutation
+client. React owns the pending state through `useFormStatus`.
+
+The router sends `X-Demiurge-Mutation: data;v=1` and accepts
+`application/vnd.demiurge.mutation+json;v=1`. A typed result has `version: 1` and
 one status: `success`, `invalid`, `redirect`, or `failed`.
 
-The action helper gives each redirect an explicit history operation. It uses
+The `success` result can contain application data. The `invalid` result contains
+typed validation issues. The `failed` result does not contain application data.
+
+The mutation helper gives each redirect an explicit history operation. It uses
 `replace` for `301` and `308`. It uses `push` for `302`, `303`, and `307`.
 
 ```tsx
-import { Form, useFormNavigation } from "@demiurgejs/core";
+import {
+  Form,
+  MutationSubmit,
+  useMutationAction,
+} from "@demiurgejs/core";
+import { useFormStatus } from "react-dom";
 
 export function SaveForm() {
-  const navigation = useFormNavigation("profile");
+  const [result, save] = useMutationAction(
+    { route: "/profile", method: "POST" },
+    undefined,
+  );
+  const [, publish] = useMutationAction(
+    { route: "/profile/publish", method: "POST" },
+    undefined,
+  );
+
   return (
-    <Form action="/profile" method="post" submissionKey="profile">
-      <button disabled={navigation.state === "submitting"}>Save</button>
+    <Form action={save}>
+      <input name="displayName" />
+      <PendingButton />
+      <MutationSubmit formAction={publish} name="intent" value="publish">
+        Publish
+      </MutationSubmit>
+      {result?.status === "invalid"
+        ? result.validation.issues.map((issue) => (
+            <p key={`${issue.code}:${issue.path.join(".")}`}>{issue.message}</p>
+          ))
+        : null}
     </Form>
   );
 }
+
+function PendingButton() {
+  const { pending } = useFormStatus();
+  return <button disabled={pending}>{pending ? "Saving" : "Save"}</button>;
+}
 ```
 
-`useFormNavigation` reads the nearest `Form` state. `useNavigation` accepts a
-form or `submissionKey` for another scope. The router preserves submitter
-values and submitter overrides for action, method, target, and encoding. The
-router sends URL-encoded, multipart, or plain-text bodies that match the form.
-Set `revalidateRoute` to `true` to refresh the current route after success.
-Use `revalidate` to invalidate cache tags. The two operations are separate.
+`MutationSubmit` preserves a real `formAction` URL before hydration. After
+hydration, it uses the selected React Action. The submitted data includes the
+submitter name and value.
 
-#### React action state
+Typed progressive forms support `POST`. Native HTML forms cannot submit `PUT`,
+`PATCH`, or `DELETE`. Use `createMutationAction(...)` for a client-only call to
+one of these methods.
 
-Demiurge `Form` does not wrap React `useActionState`. The APIs manage different
-state.
+The client preserves multipart values and files. It does not set the multipart
+content type because the browser must add the boundary.
 
-- `Form` and `useNavigation` manage HTTP submission, cancellation, redirects,
-  history, and route revalidation.
-- `useActionState` manages component result state, ordered reducer actions, and
-  a React transition pending flag.
+Set `revalidateRoute` to `true` on `mutation(...)` to refresh the current route
+after success. Use `revalidate` to invalidate declared cache keys and tags. The
+operations are separate.
 
-Use `Form` when a submission must participate in browser routing. Use
-`useActionState` when an action must update component-local result state.
+The server controls route refresh. A client cannot add or change the
+`revalidateRoute` declaration.
 
-Both clients can submit to the same application endpoint. They do not share
-pending state or action-result state.
+A refresh retrieves the current pathname and search from the server. It keeps
+the current URL, history, scroll position, and focus.
+
+React Action pending state remains active until the requested refresh settles.
+If the refresh fails, the router renders the resolved route error boundary.
+The mutation can remain successful because its server commit already finished.
+
+An `invalid` or `failed` result does not refresh the route. A redirect takes
+precedence over refresh. The router does not refresh the previous route before
+it follows the redirect.
+
+Cache invalidation and route refresh have different purposes. The `revalidate`
+option changes cached server authority. The `revalidateRoute` option retrieves
+the current authority for the browser.
+
+The server resolves `revalidate` only after a successful handler result. It
+completes invalidation before it returns a success or redirect response.
+
+Validation, failed, and not-found results do not invalidate cached data. An
+idempotent replay does not repeat the original invalidation.
+
+If invalidation fails, the route uses the normal error and redaction path. The
+application change can already be committed, and Demiurge cannot roll it back.
+
+The browser cannot supply keys or tags. Only the server route owns the
+declaration.
+
+#### React Action state
+
+`useMutationAction` uses React `useActionState`. React owns component result,
+pending, and optimistic state. Demiurge owns transport, result validation,
+redirects, cancellation, and route refresh.
+
+`Form` also accepts a string `action` for compatibility. This form uses the
+browser router and exposes state through `useFormNavigation` and
+`useNavigation`.
+
+#### CSRF tokens in progressive forms
+
+Cookie-authenticated mutations use CSRF protection by default. The default
+policy accepts a matching token in the configured request header.
+
+If a form must work without JavaScript, configure a field on the route policy:
+
+```tsx
+export const policy = defineRoutePolicy({
+  security: { csrf: { field: "_csrf" } },
+});
+```
+
+Issue a token on the server. Then, include the same token in the form:
+
+```tsx
+<Form action={save}>
+  <input type="hidden" name="_csrf" value={token} />
+  <input name="title" />
+  <button type="submit">Save</button>
+</Form>
+```
+
+The configured field or header must match the CSRF cookie. Do not put a
+session token or another credential in the field.
+
+#### Mutation conformance limits
+
+Request cancellation is advisory. An aborted request can complete its server
+commit after the browser stops waiting for the result.
+
+A process can stop after a commit and before cache invalidation completes.
+Demiurge cannot roll back the application commit.
+
+A memory cache applies to one process. Use a shared cache store when all
+application instances must observe one invalidation.
+
+React owns optimistic state and conflict policy. Application tests must cover
+rollback, overlapping edits, and authoritative refresh for each optimistic UI.
+
+The framework tests simulate transport cancellation and stale browser results.
+They do not simulate a process failure during a commit or a network partition
+between application instances.
+
+### Migration from action names
+
+Version 0.2.0 removes the earlier nightly action names. It does not provide
+deprecated aliases. Apply these direct replacements:
+
+| Old name | New name |
+| --- | --- |
+| `action` | `mutation` |
+| `actionInput` | `mutationInput` |
+| `ActionContext` | `MutationContext` |
+| `ActionIdempotency` | `MutationIdempotency` |
+| `ActionInput` | `MutationInput` |
+| `ActionOptions` | `MutationOptions` |
+| `ActionRevalidation` | `MutationRevalidation` |
+| `ActionValidationError` | `MutationValidationError` |
+| `ActionValidationIssue` | `MutationValidationIssue` |
+| `ActionResult` | `MutationResult` |
+| `ActionNavigationState` | `MutationNavigationState` |
+
+HTML `action` and `formAction` properties keep their platform names. React API
+names such as `useActionState` also keep their names.
 
 ## Page routes
 
@@ -247,6 +441,49 @@ href({ to: "/blog/[slug]", path: { slug: "hello" } });
   Read the post
 </Link>
 ```
+
+The generated declarations also identify each route mutation method. Use
+`createMutationAction(...)` to create a client function for React
+`useActionState`:
+
+```tsx
+import { createMutationAction } from "@demiurgejs/core";
+import { useActionState } from "react";
+
+const savePost = createMutationAction<{ title: string }>({
+  route: "/blog/[slug]",
+  method: "PATCH",
+  path: { slug: "hello" },
+});
+
+export function EditPost() {
+  const [result, save, pending] = useActionState(savePost, undefined);
+
+  return (
+    <form action={save}>
+      <input name="title" />
+      <button disabled={pending}>Save</button>
+      {result?.status === "failed" ? <p>{result.message}</p> : null}
+      {result?.status === "invalid"
+        ? result.validation.issues.map((issue) => (
+            <p key={`${issue.code}:${issue.path.join(".")}`}>{issue.message}</p>
+          ))
+        : null}
+    </form>
+  );
+}
+```
+
+The route must export `mutation(...)` under the selected unsafe HTTP method.
+Generated types reject an unknown route, an unavailable method, or missing path
+values.
+
+Each client function owns one current submission. A new call cancels the old
+request when possible. An obsolete response cannot replace the new result.
+
+The function submits `FormData` through the HTTP route. It sends same-origin
+credentials and the mutation protocol headers. The browser does not import the
+server mutation handler.
 
 Generated route declarations live under the application's `.demiurge`
 directory and should not be edited by hand.

@@ -1,5 +1,5 @@
 import { page, type RouteProps } from "@demiurgejs/core";
-import { cache, messageQuery } from "../cache";
+import { messageQuery } from "../cache";
 
 type MessageData = {
   message: string;
@@ -7,7 +7,7 @@ type MessageData = {
 };
 
 export const GET = page<string, MessageData>({
-  data: () => cache.get(messageQuery()),
+  data: ({ cache }) => cache.get(messageQuery()),
   view: MessagePage,
 });
 
@@ -15,7 +15,7 @@ function MessagePage({ data }: RouteProps<"/", MessageData>) {
   return (
     <main>
       <section className="summary">
-        <p className="eyebrow">Tag invalidation from an action</p>
+        <p className="eyebrow">Tag invalidation from a mutation</p>
         <h1>Cache invalidation</h1>
         <div className="message">
           <p data-testid="message">{data.message}</p>

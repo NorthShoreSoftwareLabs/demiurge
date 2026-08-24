@@ -34,35 +34,193 @@ test("production SSR hydrates and navigates without a document reload", async ({
   expect(pageErrors).toEqual([]);
 });
 
-test("production action forms use their typed redirect history operation", async ({
+test("production mutation forms use their typed redirect history operation", async ({
   page,
 }) => {
   const actionRequests: string[] = [];
   page.on("request", (request) => {
-    if (request.headers()["x-demiurge-action"] === "data;v=1") {
+    if (request.headers()["x-demiurge-mutation"] === "data;v=1") {
       actionRequests.push(request.url());
     }
   });
 
   await page.goto("/");
-  await page.getByRole("link", { name: "Test action forms" }).click();
-  await expect(page).toHaveURL("http://localhost:42177/action-forms");
+  await page.getByRole("link", { name: "Test mutation forms" }).click();
+  await expect(page).toHaveURL("http://localhost:42177/mutation-forms");
 
   await page.getByRole("button", { name: "Save with push" }).click();
-  await expect(page).toHaveURL("http://localhost:42177/action-forms?result=push");
+  await expect(page).toHaveURL("http://localhost:42177/mutation-forms?result=push");
   await expect(page.getByText("Result: push")).toBeVisible();
   await page.goBack();
-  await expect(page).toHaveURL("http://localhost:42177/action-forms");
+  await expect(page).toHaveURL("http://localhost:42177/mutation-forms");
 
   await page.getByRole("button", { name: "Save with replace" }).click();
-  await expect(page).toHaveURL("http://localhost:42177/action-forms?result=replace");
+  await expect(page).toHaveURL("http://localhost:42177/mutation-forms?result=replace");
   await expect(page.getByText("Result: replace")).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL("http://localhost:42177/");
   expect(actionRequests).toEqual([
-    "http://localhost:42177/action-forms",
-    "http://localhost:42177/action-forms",
+    "http://localhost:42177/mutation-forms",
+    "http://localhost:42177/mutation-forms",
   ]);
+});
+
+test("React mutation forms preserve pending state, validation, files, and submitters", async ({
+  page,
+}) => {
+  const mutationRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.headers()["x-demiurge-mutation"] === "data;v=1") {
+      mutationRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/mutation-forms");
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page.getByLabel("React mutation validation")).toHaveText(
+    "Enter a title.",
+  );
+
+  await page.getByLabel("Title").fill("Release notes");
+  await page.getByLabel("Attachment").setInputFiles({
+    buffer: Buffer.from("typed mutation"),
+    mimeType: "text/plain",
+    name: "notes.txt",
+  });
+  await page.getByRole("button", { name: "Publish draft" }).click();
+  await expect(page.getByLabel("React form status")).toHaveText("pending");
+  await expect(page).toHaveURL(
+    "http://localhost:42177/mutation-forms?attachment=notes.txt&result=publish&title=Release+notes",
+  );
+  await expect(page.getByText("Result: publish")).toBeVisible();
+  expect(mutationRequests).toEqual([
+    "http://localhost:42177/mutation-forms",
+    "http://localhost:42177/mutation-forms/publish",
+  ]);
+});
+
+test("mutation forms keep native validation and multipart redirects without JavaScript", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    baseURL: "http://localhost:42177",
+    javaScriptEnabled: false,
+  });
+  const page = await context.newPage();
+
+  try {
+    await page.goto("/mutation-forms");
+    const validationResponse = await Promise.all([
+      page.waitForResponse((response) =>
+        response.url() === "http://localhost:42177/mutation-forms" &&
+        response.request().method() === "POST"
+      ),
+      page.getByRole("button", { name: "Save draft" }).click(),
+    ]).then(([response]) => response);
+    expect(validationResponse.status()).toBe(400);
+    expect(await validationResponse.json()).toMatchObject({
+      type: "validation-error",
+      validation: {
+        issues: [{ path: ["title"] }],
+      },
+    });
+
+    await page.goto("/mutation-forms");
+    await page.getByLabel("Title").fill("Native release");
+    await page.getByLabel("Attachment").setInputFiles({
+      buffer: Buffer.from("native mutation"),
+      mimeType: "text/plain",
+      name: "native.txt",
+    });
+    await page.getByRole("button", { name: "Publish draft" }).click();
+    await expect(page).toHaveURL(
+      "http://localhost:42177/mutation-forms?attachment=native.txt&result=publish&title=Native+release",
+    );
+    await expect(page.getByText("Result: publish")).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
+test("mutation refresh retrieves authority without changing navigation state", async ({
+  page,
+}) => {
+  const refreshUrl =
+    "http://localhost:42177/mutation-forms?refreshKey=playwright-refresh";
+  const routeDataRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.headers()["x-demiurge-navigation"] === "data") {
+      routeDataRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/mutation-forms?refreshKey=playwright-refresh");
+  const version = page.getByLabel("Server version");
+  const optimisticVersion = page.getByLabel("Optimistic version");
+  const initialVersion = Number(await version.textContent());
+  const historyLength = await page.evaluate(() => window.history.length);
+  const refresh = page.getByRole("button", { name: "Refresh server data" });
+
+  await refresh.focus();
+  await refresh.click();
+  await expect(optimisticVersion).toHaveText(String(initialVersion + 1));
+  await expect(page.getByLabel("Refresh form status")).toHaveText("pending");
+  await expect(page.getByLabel("Mutation refresh pending")).toHaveText(
+    "pending",
+  );
+  await expect(version).toHaveText(String(initialVersion + 1));
+  await expect(page.getByLabel("Refresh form status")).toHaveText("idle");
+  await expect(page.getByLabel("Mutation refresh pending")).toHaveText("idle");
+
+  await expect(page).toHaveURL(refreshUrl);
+  await expect(refresh).toBeFocused();
+  expect(await page.evaluate(() => window.history.length)).toBe(historyLength);
+  expect(routeDataRequests).toEqual([refreshUrl]);
+});
+
+test("optimistic mutation state rolls back after validation and expected failure", async ({
+  page,
+}) => {
+  await page.goto("/mutation-forms?refreshKey=playwright-rollback");
+  const authoritativeVersion = page.getByLabel("Server version");
+  const optimisticVersion = page.getByLabel("Optimistic version");
+  const initialVersion = Number(await authoritativeVersion.textContent());
+
+  await page.getByRole("button", { name: "Reject optimistic change" }).click();
+  await expect(optimisticVersion).toHaveText(String(initialVersion + 1));
+  await expect(page.getByLabel("Mutation refresh result")).toHaveText("invalid");
+  await expect(optimisticVersion).toHaveText(String(initialVersion));
+  await expect(authoritativeVersion).toHaveText(String(initialVersion));
+
+  await page.getByRole("button", { name: "Fail optimistic change" }).click();
+  await expect(optimisticVersion).toHaveText(String(initialVersion + 1));
+  await expect(page.getByLabel("Mutation refresh result")).toHaveText("failed");
+  await expect(optimisticVersion).toHaveText(String(initialVersion));
+  await expect(authoritativeVersion).toHaveText(String(initialVersion));
+});
+
+test("navigation cancels an obsolete mutation refresh", async ({ page }) => {
+  const refreshUrl =
+    "http://localhost:42177/mutation-forms?refreshKey=playwright-race";
+  await page.goto(refreshUrl);
+  const refreshRequest = page.waitForRequest((request) =>
+    request.url() === refreshUrl &&
+    request.headers()["x-demiurge-navigation"] === "data"
+  );
+
+  await page.getByRole("button", { name: "Refresh server data" }).click();
+  const obsoleteRequest = await refreshRequest;
+  const obsoleteRequestSettled = Promise.race([
+    page.waitForResponse((response) => response.request() === obsoleteRequest),
+    page.waitForEvent("requestfailed", {
+      predicate: (request) => request === obsoleteRequest,
+    }),
+  ]);
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+
+  await obsoleteRequestSettled;
+  await expect(page).toHaveURL("http://localhost:42177/");
+  await expect(page.getByRole("heading", { name: "SSR is running" })).toBeVisible();
 });
 
 test("accessible browser navigation commits status, focus, and hash behavior", async ({

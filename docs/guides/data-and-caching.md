@@ -223,7 +223,7 @@ Keep query functions server-only when they access secrets or private services.
 ## Idempotent mutations
 
 `createMemoryIdempotencyStore(...)` and `runIdempotentMutation(...)` coordinate
-duplicate mutations. `action(...)` can combine input parsing with an idempotency
+duplicate mutations. `mutation(...)` can combine input parsing with an idempotency
 policy. Completed results have a finite lifetime. In-flight mutations are not
 expired or evicted while work is running.
 
@@ -233,11 +233,16 @@ boundary.
 
 ### Mutation revalidation
 
-An action can declare the cache tags that its successful result changes:
+A mutation can declare the cache keys and tags that its successful result
+changes:
 
 ```ts
-export const POST = action({
-  revalidate: [tag("posts")],
+export const POST = mutation({
+  input: parsePostInput,
+  revalidate: ({ input }) => ({
+    keys: [["post", input.id]],
+    tags: [tag("posts")],
+  }),
   handler: async ({ input }) => {
     await savePost(input);
     return redirect("/posts", 303);
@@ -245,12 +250,26 @@ export const POST = action({
 });
 ```
 
-The server invalidates only the declared tags after the action resolves. The
-action does not trigger global route-data revalidation. A tag function can use
-the parsed input or authenticated request context to select affected tags.
+The server resolves the declaration after the handler returns a successful
+result. A declaration function can use parsed input, path values, or request
+context.
+
+The server invalidates each declared key and tag before it returns a success or
+redirect. A validation result, failed result, or thrown error does not
+invalidate cached data.
+
+If invalidation fails, the route uses the normal failure and redaction path.
+The application mutation can already be committed. Demiurge cannot roll back
+the application transaction.
+
+An idempotent replay does not repeat invalidation. The original successful
+request completed the declared invalidation before it stored the response.
+
+The browser cannot supply or change a revalidation declaration. The declaration
+stays in server route code.
 
 The same invalidated cache is used by the next document or browser-data
-request. An action does not refresh an unrelated route or force a client
+request. A mutation does not refresh an unrelated route or force a client
 navigation.
 
 ## Static generation

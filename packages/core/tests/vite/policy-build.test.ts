@@ -51,8 +51,8 @@ export const GET = json({}, {
     {
       code: "rate-limit-invalid",
       source: `
-import { action } from "@demiurgejs/core";
-export const POST = action({
+import { mutation } from "@demiurgejs/core";
+export const POST = mutation({
   handler: () => new Response(),
   security: { rateLimit: { key: "ip", limit: 0, window: "1m" } },
 });`,

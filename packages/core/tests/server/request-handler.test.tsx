@@ -1,7 +1,10 @@
 import type { ComponentType } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
-  action,
+  mutation,
+  MutationValidationError,
+  MUTATION_REQUEST_HEADER,
+  MUTATION_REQUEST_VALUE,
   createMemoryCacheStore,
   createMemoryIdempotencyStore,
   createRequestHandler,
@@ -56,13 +59,78 @@ function routeModule(module: RouteModule) {
 }
 
 describe("request handler", () => {
-  it("invalidates declared action tags and strips the transport header", async () => {
+  it("returns expected mutation validation without the error path", async () => {
+    const onError = vi.fn();
+    const handler = createRequestHandler({
+      onError,
+      routes: {
+        "./routes/posts.ts": routeModule({
+          POST: mutation({
+            input: () => {
+              throw new MutationValidationError({
+                issues: [{ code: "required", message: "Add a title.", path: ["title"] }],
+              });
+            },
+            handler: () => json({ saved: true }),
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(new Request("https://example.test/posts", {
+      headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE },
+      method: "POST",
+    }));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      status: "invalid",
+      validation: {
+        issues: [{ code: "required", message: "Add a title.", path: ["title"] }],
+      },
+      version: 1,
+    });
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("sends unsupported mutation data through the error path", async () => {
+    const onError = vi.fn();
+    const handler = createRequestHandler({
+      onError,
+      routes: {
+        "./routes/posts.ts": routeModule({
+          POST: mutation({ handler: () => json({ savedAt: new Date() }) }),
+        }),
+      },
+    });
+
+    const response = await handler(new Request("https://example.test/posts", {
+      headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE },
+      method: "POST",
+    }));
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("content-type")).toContain("application/problem+json");
+    await expect(response.text()).resolves.not.toContain("savedAt");
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "A mutation result contains a value that JSON cannot serialize.",
+      }),
+      { pathname: "/posts", site: "route" },
+    );
+  });
+
+  it("invalidates declared mutation tags and strips the transport header", async () => {
     const store = createMemoryCacheStore();
+    const invalidateKey = vi.spyOn(store, "delete");
     const invalidateTags = vi.spyOn(store, "invalidateTags");
-    const revalidate = vi.fn(() => [{ id: "posts" }] as const);
+    const revalidate = vi.fn(() => ({
+      keys: [["post", 1]],
+      tags: [{ id: "posts,archive" }],
+    } as const));
     const routeModules = {
       "./routes/posts.ts": {
-        POST: action({
+        POST: mutation({
           revalidate,
           handler: () => new Response("updated"),
         }),
@@ -89,21 +157,153 @@ describe("request handler", () => {
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toBe("updated");
     expect(response.headers.has("x-demiurge-revalidate-tags")).toBe(false);
+    expect(invalidateKey).toHaveBeenCalledTimes(3);
     expect(invalidateTags).toHaveBeenCalledTimes(1);
+    expect(invalidateKey.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      invalidateTags.mock.invocationCallOrder[0]!,
+    );
     expect(invalidateTags.mock.calls[0]?.[0]).toEqual([
-      "test:test:1:build:tag:posts",
-      "test:test:1:private:tag:posts",
-      "test:test:1:public:tag:posts",
+      "test:test:1:build:tag:posts,archive",
+      "test:test:1:private:tag:posts,archive",
+      "test:test:1:public:tag:posts,archive",
     ]);
   });
 
-  it("does not invalidate tags when an action fails", async () => {
+  it("ignores invalidation metadata from a non-mutation route", async () => {
     const store = createMemoryCacheStore();
     const invalidateTags = vi.spyOn(store, "invalidateTags");
-    const revalidate = vi.fn(() => [{ id: "posts" }] as const);
+    const metadata = encodeURIComponent(JSON.stringify({
+      keys: [],
+      tags: ["posts"],
+      version: 1,
+    }));
     const routeModules = {
       "./routes/posts.ts": {
-        POST: action({
+        GET: rawResponse(() => new Response("read", {
+          headers: { "x-demiurge-revalidate-tags": metadata },
+        })),
+      },
+    } satisfies Record<string, RouteModule>;
+    const handler = createRequestHandler({
+      cacheStore: {
+        namespace: { app: "test", environment: "test", schemaVersion: 1 },
+        store,
+      },
+      routeModules,
+      routes: Object.fromEntries(
+        Object.entries(routeModules).map(([file, module]) => [
+          file,
+          routeModule(module),
+        ]),
+      ),
+    });
+
+    const result = await handler(new Request("https://example.test/posts"));
+
+    expect(result.status).toBe(200);
+    expect(result.headers.has("x-demiurge-revalidate-tags")).toBe(false);
+    expect(invalidateTags).not.toHaveBeenCalled();
+  });
+
+  it("waits for redirect invalidation before it returns the redirect", async () => {
+    const store = createMemoryCacheStore();
+    let releaseInvalidation!: () => void;
+    const invalidation = new Promise<void>((resolve) => {
+      releaseInvalidation = resolve;
+    });
+    const invalidateTags = vi.spyOn(store, "invalidateTags")
+      .mockImplementation(async () => {
+        await invalidation;
+        return 0;
+      });
+    const routeModules = {
+      "./routes/posts.ts": {
+        POST: mutation({
+          revalidate: { tags: [{ id: "posts" }] },
+          handler: () => redirect("/done", 303),
+        }),
+      },
+    } satisfies Record<string, RouteModule>;
+    const handler = createRequestHandler({
+      cacheStore: {
+        namespace: { app: "test", environment: "test", schemaVersion: 1 },
+        store,
+      },
+      routeModules,
+      routes: Object.fromEntries(
+        Object.entries(routeModules).map(([file, module]) => [
+          file,
+          routeModule(module),
+        ]),
+      ),
+    });
+    let settled = false;
+    const pending = handler(
+      new Request("https://example.test/posts", { method: "POST" }),
+    ).then((response) => {
+      settled = true;
+      return response;
+    });
+
+    await vi.waitFor(() => expect(invalidateTags).toHaveBeenCalledOnce());
+    expect(settled).toBe(false);
+    releaseInvalidation();
+    const result = await pending;
+
+    expect(result.status).toBe(303);
+    expect(result.headers.get("location")).toBe("/done");
+    expect(result.headers.has("x-demiurge-revalidate-tags")).toBe(false);
+  });
+
+  it("uses the route error path when invalidation fails", async () => {
+    const store = createMemoryCacheStore();
+    vi.spyOn(store, "invalidateTags").mockRejectedValue(
+      new Error("private store failure"),
+    );
+    const onError = vi.fn();
+    const routeModules = {
+      "./routes/posts.ts": {
+        POST: mutation({
+          revalidate: { tags: [{ id: "posts" }] },
+          handler: () => new Response("committed"),
+        }),
+      },
+    } satisfies Record<string, RouteModule>;
+    const handler = createRequestHandler({
+      cacheStore: {
+        namespace: { app: "test", environment: "test", schemaVersion: 1 },
+        store,
+      },
+      onError,
+      routeModules,
+      routes: Object.fromEntries(
+        Object.entries(routeModules).map(([file, module]) => [
+          file,
+          routeModule(module),
+        ]),
+      ),
+    });
+
+    const result = await handler(
+      new Request("https://example.test/posts", { method: "POST" }),
+    );
+
+    expect(result.status).toBe(500);
+    expect(result.headers.has("x-demiurge-revalidate-tags")).toBe(false);
+    await expect(result.text()).resolves.not.toContain("private store failure");
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "private store failure" }),
+      { pathname: "/posts", site: "route" },
+    );
+  });
+
+  it("does not invalidate tags when a mutation fails", async () => {
+    const store = createMemoryCacheStore();
+    const invalidateTags = vi.spyOn(store, "invalidateTags");
+    const revalidate = vi.fn(() => ({ tags: [{ id: "posts" }] } as const));
+    const routeModules = {
+      "./routes/posts.ts": {
+        POST: mutation({
           revalidate,
           handler: () => {
             throw new Error("failed");
@@ -135,10 +335,10 @@ describe("request handler", () => {
     const store = createMemoryCacheStore();
     const invalidateTags = vi.spyOn(store, "invalidateTags");
     const idempotency = createMemoryIdempotencyStore();
-    const revalidate = vi.fn(() => [{ id: "posts" }] as const);
+    const revalidate = vi.fn(() => ({ tags: [{ id: "posts" }] } as const));
     const routeModules = {
       "./routes/posts.ts": {
-        POST: action({
+        POST: mutation({
           idempotency: { key: ["create", "one"], store: idempotency },
           revalidate,
           handler: () => new Response("created"),
@@ -168,13 +368,13 @@ describe("request handler", () => {
 
   it("coordinates mutation invalidation with document and data navigation", async () => {
     let value = "before";
-    let signalActionStarted!: () => void;
-    const actionStarted = new Promise<void>((resolve) => {
-      signalActionStarted = resolve;
+    let signalMutationStarted!: () => void;
+    const mutationStarted = new Promise<void>((resolve) => {
+      signalMutationStarted = resolve;
     });
-    let releaseAction!: () => void;
-    const actionRelease = new Promise<void>((resolve) => {
-      releaseAction = resolve;
+    let releaseMutation!: () => void;
+    const mutationRelease = new Promise<void>((resolve) => {
+      releaseMutation = resolve;
     });
     const store = createMemoryCacheStore();
     const routeModules = {
@@ -189,12 +389,12 @@ describe("request handler", () => {
           }),
           view: ({ data }) => <main>{data}</main>,
         }),
-        POST: action({
-          revalidate: [{ id: "value" }],
+        POST: mutation({
+          revalidate: { tags: [{ id: "value" }] },
           handler: async () => {
-            signalActionStarted();
+            signalMutationStarted();
             value = "after";
-            await actionRelease;
+            await mutationRelease;
             return new Response("updated");
           },
         }),
@@ -220,10 +420,10 @@ describe("request handler", () => {
     }));
     await expect(primed.json()).resolves.toMatchObject({ data: "before" });
 
-    const mutation = handler(
+    const mutationRequest = handler(
       new Request("https://example.test/", { method: "POST" }),
     );
-    await actionStarted;
+    await mutationStarted;
     const documentNavigation = handler(new Request("https://example.test/"));
     const browserNavigation = handler(new Request("https://example.test/", {
       headers: { "x-demiurge-navigation": "data" },
@@ -236,8 +436,8 @@ describe("request handler", () => {
     await expect(browserResponse.json()).resolves.toMatchObject({
       data: "before",
     });
-    releaseAction();
-    await mutation;
+    releaseMutation();
+    await mutationRequest;
 
     const refreshed = await handler(new Request("https://example.test/", {
       headers: { "x-demiurge-navigation": "data" },
@@ -1433,6 +1633,110 @@ describe("request handler", () => {
     expect(response.status).toBe(403);
     await expect(response.text()).resolves.toBe("Invalid CSRF token.");
     expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a marked mutation before mutation side effects", async () => {
+    const input = vi.fn(async ({ request }: { request: Request }) =>
+      (await request.formData()).get("name")
+    );
+    const mutationHandler = vi.fn(() => new Response("updated"));
+    const revalidate = vi.fn(() => ({ tags: [{ id: "profile" }] } as const));
+    const idempotency = createMemoryIdempotencyStore();
+    const idempotencyRun = vi.spyOn(idempotency, "run");
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          POST: mutation({
+            handler: mutationHandler,
+            idempotency: { key: ["profile", "update"], store: idempotency },
+            input,
+            revalidate,
+            security: { csrf: { field: "_csrf" } },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        body: new URLSearchParams({ _csrf: "wrong", name: "Demo" }),
+        headers: {
+          cookie: "csrf-token=token",
+          [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(input).not.toHaveBeenCalled();
+    expect(mutationHandler).not.toHaveBeenCalled();
+    expect(revalidate).not.toHaveBeenCalled();
+    expect(idempotencyRun).not.toHaveBeenCalled();
+  });
+
+  it("accepts a marked mutation with a matching CSRF form field", async () => {
+    const input = vi.fn(async ({ request }: { request: Request }) =>
+      (await request.formData()).get("name")
+    );
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          POST: mutation({
+            handler: ({ input }) => json({ name: input }),
+            input,
+            security: { csrf: { field: "_csrf" } },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        body: new URLSearchParams({ _csrf: "token", name: "Demo" }),
+        headers: {
+          cookie: "csrf-token=token",
+          [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      data: { name: "Demo" },
+      status: "success",
+      version: 1,
+    });
+    expect(input).toHaveBeenCalledOnce();
+  });
+
+  it("accepts a marked mutation with a matching CSRF header", async () => {
+    const mutationHandler = vi.fn(() => json({ updated: true }));
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/profile.tsx": routeModule({
+          POST: mutation({
+            handler: mutationHandler,
+            security: { csrf: { field: "_csrf" } },
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/profile", {
+        headers: {
+          cookie: "csrf-token=token",
+          [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
+          "x-csrf-token": "token",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mutationHandler).toHaveBeenCalledOnce();
   });
 
   it("protects cookie-authenticated unsafe requests by default", async () => {

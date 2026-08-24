@@ -56,7 +56,7 @@ const httpMethods = [
   "HEAD",
 ] as const satisfies readonly HttpMethod[];
 const responseHelpers = new Set([
-  "action",
+  "mutation",
   "html",
   "json",
   "jsonl",
@@ -162,7 +162,7 @@ function extractCapability(
 
   if (!helper || !responseHelpers.has(helper)) return undefined;
   const arguments_ = asNodeArray(node.arguments);
-  const optionsNode = helper === "action" ? arguments_[0] : arguments_[1];
+  const optionsNode = helper === "mutation" ? arguments_[0] : arguments_[1];
   if (!optionsNode) return {};
   const cors = evaluateObjectProperty(optionsNode, "cors", constants);
   const securityPolicy = evaluateObjectProperty(

@@ -1,11 +1,11 @@
 export {
-  action,
-  actionInput,
-  ActionValidationError,
-  ACTION_REQUEST_HEADER,
-  ACTION_REQUEST_VALUE,
-  ACTION_RESPONSE_MEDIA_TYPE,
-} from "./action";
+  mutation,
+  mutationInput,
+  MutationValidationError,
+  MUTATION_REQUEST_HEADER,
+  MUTATION_REQUEST_VALUE,
+  MUTATION_RESPONSE_MEDIA_TYPE,
+} from "./mutation";
 export { page } from "./page";
 export { defineMiddleware } from "./middleware";
 export {
@@ -29,13 +29,18 @@ export {
 } from "./response";
 export { webhook } from "./webhook";
 export type {
-  ActionContext,
-  ActionIdempotency,
-  ActionInput,
-  ActionOptions,
-  ActionRevalidation,
-  ActionValidationIssue,
-} from "./action";
+  MutationContext,
+  MutationCapability,
+  MutationIdempotency,
+  MutationInput,
+  MutationMethod,
+  MutationMethodsOf,
+  MutationOptions,
+  MutationRevalidation,
+  MutationRevalidationDeclaration,
+  MutationValidation,
+  MutationValidationIssue,
+} from "./mutation";
 export type {
   HttpErrorDetails,
   HttpErrorInit,
