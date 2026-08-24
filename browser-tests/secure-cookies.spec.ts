@@ -73,3 +73,39 @@ test("Chromium rejects prefixed cookies that break the invariants", async ({
   expect(payload.reported[1]).toContain("cannot carry a Domain attribute");
   expect(payload.reported[2]).toContain("requires Secure");
 });
+
+test("a signed session cookie fails closed after tampering", async ({
+  context,
+  page,
+}) => {
+  await page.goto("/api/session-cookie?login=1");
+  const original = (await context.cookies("http://localhost:42177/"))
+    .find((cookie) => cookie.name === "__Host-account-session");
+
+  expect(original).toMatchObject({
+    httpOnly: true,
+    path: "/",
+    sameSite: "Lax",
+    secure: true,
+  });
+
+  const authenticated = await page.evaluate(() => JSON.parse(
+    document.body.textContent ?? "{}",
+  ) as { session: { authenticated: boolean } | null });
+  expect(authenticated.session?.authenticated).toBe(true);
+
+  await context.addCookies([{
+    ...original!,
+    value: `${original!.value.slice(0, -1)}${original!.value.endsWith("a") ? "b" : "a"}`,
+  }]);
+  await page.goto("/api/session-cookie");
+  const rejected = await page.evaluate(() => JSON.parse(
+    document.body.textContent ?? "{}",
+  ) as { session: { authenticated: boolean } | null });
+
+  expect(rejected.session).toBeNull();
+  expect(
+    (await context.cookies("http://localhost:42177/"))
+      .some((cookie) => cookie.name === "__Host-account-session"),
+  ).toBe(false);
+});

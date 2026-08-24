@@ -7,11 +7,15 @@ import {
   expect,
   it,
 } from "vitest";
-import { createRedisCacheStore } from "@demiurgejs/core/redis";
+import {
+  createRedisCacheStore,
+  createRedisSessionStore,
+} from "@demiurgejs/core/redis";
 import {
   verifyCacheStoreContract,
   verifyCacheStoreRefreshContract,
 } from "../../src/data/testing";
+import { verifySessionStoreContract } from "../../src/security/testing";
 import type { CacheStoreEntry } from "../../src/data/cache";
 
 // These tests run against a real `redis-server` binary rather than a mock.
@@ -85,6 +89,19 @@ describe.skipIf(!hasRedisServer)("createRedisCacheStore", () => {
       verifyCacheStoreRefreshContract(() =>
         createRedisCacheStore({ client: clientA, keyPrefix: `refresh:${Date.now()}:` })
       ),
+    ).resolves.toBeUndefined();
+  });
+
+  it("satisfies the session store contract across client connections", async () => {
+    const keyPrefix = `session-contract:${Date.now()}:`;
+    let useFirstClient = true;
+
+    await expect(
+      verifySessionStoreContract((namespace) => {
+        const client = useFirstClient ? clientA : clientB;
+        useFirstClient = !useFirstClient;
+        return createRedisSessionStore({ client, keyPrefix, namespace });
+      }),
     ).resolves.toBeUndefined();
   });
 
@@ -209,5 +226,17 @@ describe("createRedisCacheStore without a client", () => {
     ).toThrow(
       "Demiurge Redis cache store requires an ioredis client. Pass a connected ioredis Redis instance as `client`.",
     );
+  });
+});
+
+describe("createRedisSessionStore without a client", () => {
+  it("throws a clear error instead of storing sessions locally", () => {
+    expect(() =>
+      createRedisSessionStore({
+        // @ts-expect-error deliberately omitting the required client
+        client: undefined,
+        namespace: { app: "test", environment: "test", schemaVersion: 1 },
+      })
+    ).toThrow("Redis session store requires an ioredis client");
   });
 });

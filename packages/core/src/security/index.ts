@@ -23,6 +23,18 @@ export type {
   SecureCookieDefinition,
 } from "./cookies";
 export {
+  createEncryptedCookieSession,
+  createSignedCookieSession,
+} from "./cookie-session";
+export type {
+  CookieSession,
+  CookieSessionCreateOptions,
+  CookieSessionManager,
+  CookieSessionOptions,
+  SessionCookieDefinition,
+  SessionCookieKey,
+} from "./cookie-session";
+export {
   createCsrfCookie,
   createCsrfToken,
   enforceCsrfProtection,
@@ -59,6 +71,30 @@ export {
   parseRateLimitWindow,
   validateRateLimitPolicy,
 } from "./rate-limit";
+export {
+  createMemorySessionStore,
+  serializeSessionNamespace,
+} from "./session-store";
+export {
+  createSessionManager,
+  SessionStoreConflictError,
+  SessionStoreUnavailableError,
+} from "./session-manager";
+export type {
+  ServerSession,
+  SessionManager,
+  SessionManagerOptions,
+} from "./session-manager";
+export type {
+  MemorySessionStoreOptions,
+  SessionData,
+  SessionNamespace,
+  SessionPrimitive,
+  SessionRecord,
+  SessionStore,
+  SessionStoreCandidate,
+  SessionStoreWriteResult,
+} from "./session-store";
 export {
   createSecurityReportHandler,
 } from "./report";

@@ -1,15 +1,28 @@
 import { Link, page, response } from "@demiurgejs/core";
+import { authenticate } from "../auth.server";
+import { appendSessionCookies, sessions } from "../session.server";
 
 export const GET = page({
   view: () => (
     <main>
       <h1>Log in</h1>
       <p>
-        The <code>(admin)</code> group middleware sent you here because no
-        session cookie was present. Submit the form to set a demo session
-        cookie and return to the page you asked for.
+        The application authentication function checks the credentials. The
+        Demiurge session boundary stores only the returned principal.
       </p>
       <form method="post">
+        <label>
+          Username
+          <input name="username" defaultValue="operator" />
+        </label>
+        <label>
+          Password
+          <input
+            name="password"
+            type="password"
+            defaultValue="demiurge-demo"
+          />
+        </label>
         <button type="submit">Log in</button>
       </form>
       <Link to="/">Return home</Link>
@@ -17,16 +30,27 @@ export const GET = page({
   ),
 });
 
-// A real application would verify credentials here. This demo only shows
-// that the group session policy actually gates every route under it.
-export const POST = response(({ search }) => {
-  const target = search.get("from") ?? "/dashboard";
+export const POST = response(async ({ request, search }) => {
+  const principal = await authenticate(request);
 
-  return new Response(null, {
-    headers: {
-      location: target,
-      "set-cookie": "session=1; Path=/",
-    },
+  if (!principal) {
+    return new Response("The credentials are not valid.", {
+      headers: { "cache-control": "no-store" },
+      status: 401,
+    });
+  }
+
+  const session = await sessions.open(request);
+  await session.create({ principal });
+  const requestedTarget = search.get("from");
+  const target = requestedTarget?.startsWith("/") &&
+      !requestedTarget.startsWith("//")
+    ? requestedTarget
+    : "/dashboard";
+  const result = new Response(null, {
+    headers: { location: target },
     status: 303,
   });
+
+  return appendSessionCookies(result, await session.commit());
 });

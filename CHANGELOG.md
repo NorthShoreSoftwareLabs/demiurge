@@ -5,6 +5,9 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- Added a bring-your-own authentication example with session-owner guidance,
+  typed principals, application authorization, and explicit cache behavior.
+  (#250)
 - A `cache.get(...)` loader may call `cacheNotFound(message?)` to report a
   negative result the cache should still store. `notFoundTtl` sets the
   negative entry's lifetime, and `isCacheNotFoundError(...)` identifies the
@@ -46,6 +49,11 @@ status live in GitHub issues and milestones.
   declaration. A cookie defaults to the `__Host-` prefix, `Secure`, `Path=/`,
   `HttpOnly`, and `SameSite=Lax`. The helper reports a broken prefix invariant
   instead of leaving a browser to drop the cookie (#111).
+- Signed and encrypted cookie sessions provide secure lifecycle defaults. Both
+  implementations support key rotation and reject modified values (#248).
+- A server-side session manager supports memory, Redis, and atomic KV stores.
+  Shared stores provide atomic rotation and immediate logout across replicas
+  (#249).
 - Host adapters stay subpath exports of `@demiurgejs/core`. `@vercel/routing-utils`
   is no longer a framework peer. The Vercel adapter uses the patched route
   pattern parser directly (#149, #287).
