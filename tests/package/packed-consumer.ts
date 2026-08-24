@@ -194,7 +194,7 @@ try {
   writeFileSync(
     join(scratch, "check.js"),
     [
-      `import { createMemoryCacheStore, createMutationAction, createRequestHandler, createSecurityHeaders, hydrateFileRouter, mutation, mutationInput, MutationValidationError, page, security } from "@demiurgejs/core";`,
+      `import { createMemoryCacheStore, createMutationAction, createRequestHandler, createSecurityHeaders, hydrateFileRouter, mutation, mutationInput, MutationSubmit, MutationValidationError, page, security, useMutationAction } from "@demiurgejs/core";`,
       `import { createNodeServer, nodeAdapter } from "@demiurgejs/core/node";`,
       `import { createEdgeAssetHandler, createEdgeRequestHandler, edgeAdapter, EdgeSharedStoreError } from "@demiurgejs/core/edge";`,
       `import { generateStaticOutput, staticAdapter } from "@demiurgejs/core/static";`,
@@ -205,12 +205,12 @@ try {
       `import { verifyAdapterContract } from "@demiurgejs/core/adapter/testing";`,
       `import { unstable_createRouteManifest } from "@demiurgejs/core/internal/testing";`,
       `import { demiurge } from "@demiurgejs/core/vite";`,
-      `for (const [name, value] of Object.entries({ createEdgeAssetHandler, createEdgeRequestHandler, createKvCacheStore, createMutationAction, createNodeServer, createRedisCacheStore, createRequestHandler, demiurge, generateStaticOutput, hydrateFileRouter, mutation, MutationValidationError, page, unstable_createRouteManifest, verifyAdapterContract, verifyCacheStoreContract })) {`,
+      `for (const [name, value] of Object.entries({ createEdgeAssetHandler, createEdgeRequestHandler, createKvCacheStore, createMutationAction, createNodeServer, createRedisCacheStore, createRequestHandler, demiurge, generateStaticOutput, hydrateFileRouter, mutation, MutationSubmit, MutationValidationError, page, unstable_createRouteManifest, useMutationAction, verifyAdapterContract, verifyCacheStoreContract })) {`,
       `  if (typeof value !== "function") {`,
       `    throw new Error(\`Expected \${name} to be exported as a function.\`);`,
       `  }`,
       `}`,
-      `if (typeof mutationInput.formData !== "function" || typeof mutationInput.json !== "function" || typeof mutationInput.text !== "function") {`,
+      `if (typeof mutationInput.custom !== "function" || typeof mutationInput.form !== "function" || typeof mutationInput.formData !== "function" || typeof mutationInput.json !== "function" || typeof mutationInput.text !== "function") {`,
       `  throw new Error("Expected the packed mutation input helpers.");`,
       `}`,
       `if (nodeAdapter.name !== "node" || !nodeAdapter.capabilities.streaming) {`,
@@ -298,6 +298,29 @@ try {
     throw new Error("Packed consumer check did not run to completion.");
   }
 
+  writeFileSync(
+    join(scratch, "ssr-mutation-form.js"),
+    [
+      `import React from "react";`,
+      `import { renderToStaticMarkup } from "react-dom/server";`,
+      `import { Form, MutationSubmit, useMutationAction } from "@demiurgejs/core";`,
+      `function PackedMutationForm() {`,
+      `  const [, save] = useMutationAction({ route: "/items/[id]", method: "POST", path: { id: "packed" } }, undefined);`,
+      `  const [, publish] = useMutationAction({ route: "/items/[id]", method: "POST", path: { id: "publish" } }, undefined);`,
+      `  return React.createElement(Form, { action: save }, React.createElement("input", { name: "title" }), React.createElement(MutationSubmit, { formAction: publish }, "Publish"));`,
+      `}`,
+      `const html = renderToStaticMarkup(React.createElement(PackedMutationForm));`,
+      `if (!html.includes('action="/items/packed"') || !html.includes('method="post"') || !html.includes('formAction="/items/publish"') || html.includes("React form unexpectedly submitted")) {`,
+      `  throw new Error(\`Expected real mutation URLs in server HTML. \${html}\`);`,
+      `}`,
+      `console.log("packed mutation form SSR ok");`,
+    ].join("\n"),
+  );
+  const mutationFormSsrOutput = run("node", ["ssr-mutation-form.js"], scratch);
+  if (!mutationFormSsrOutput.includes("packed mutation form SSR ok")) {
+    throw new Error("Packed mutation form SSR check did not run to completion.");
+  }
+
   const cliHelp = run(
     "node",
     [join(installedRoot, "bin", "demiurge.mjs"), "--help"],
@@ -324,8 +347,8 @@ try {
   writeFileSync(
     join(scratch, "app", "src", "routes", "index.tsx"),
     [
-      `import { createMutationAction, defineRoutePolicy, mutation, mutationInput, MutationValidationError, page, security, type MutationAction, type MutationContext, type MutationIdempotency, type MutationInput, type MutationNavigationState, type MutationOptions, type MutationResult, type MutationRevalidation, type MutationValidation, type MutationValidationIssue, type RouteProps } from "@demiurgejs/core";`,
-      `import { useActionState } from "react";`,
+      `import { createMutationAction, defineRoutePolicy, Form, mutation, mutationInput, MutationSubmit, MutationValidationError, page, security, useMutationAction, type MutationAction, type MutationContext, type MutationFormAction, type MutationIdempotency, type MutationInput, type MutationNavigationState, type MutationOptions, type MutationResult, type MutationRevalidation, type MutationValidation, type MutationValidationIssue, type RouteProps } from "@demiurgejs/core";`,
+      `import { useFormStatus } from "react-dom";`,
       `export type PackedMutationContract = {`,
       `  context: MutationContext<FormData>;`,
       `  idempotency: MutationIdempotency<FormData>;`,
@@ -337,6 +360,7 @@ try {
       `  validation: MutationValidation<"title" | "body">;`,
       `  issue: MutationValidationIssue<"title" | "body">;`,
       `  action: MutationAction<{ saved: boolean }, "title" | "body">;`,
+      `  formAction: MutationFormAction<{ saved: boolean }, "title" | "body">;`,
       `};`,
       `type PackedValidationResult = Extract<PackedMutationContract["result"], { status: "invalid" }>;`,
       `type PackedValidationField = NonNullable<PackedValidationResult["validation"]["issues"][number]["path"][0]>;`,
@@ -357,14 +381,17 @@ try {
       `  render: { mode: "static" },`,
       `  view: PackedPage,`,
       `});`,
-      `const packedMutation = mutation({`,
-      `  input: mutationInput.formData,`,
-      `  handler: ({ input }) => {`,
-      `    if (!input.has("title")) {`,
-      `      throw new MutationValidationError<"title" | "body">({ issues: [{ code: "required", message: "The title is required.", path: ["title"] }] });`,
-      `    }`,
-      `    return new Response(null, { status: 204 });`,
+      `const packedSchema = {`,
+      `  "~standard": {`,
+      `    version: 1 as const,`,
+      `    vendor: "packed-test",`,
+      `    validate: (value: unknown) => ({ value: value as { title: string } }),`,
+      `    types: undefined as unknown as { input: { title: FormDataEntryValue | null }; output: { title: string } },`,
       `  },`,
+      `};`,
+      `const packedMutation = mutation({`,
+      `  input: mutationInput.form(packedSchema, (form) => ({ title: form.get("title") })),`,
+      `  handler: ({ input }) => new Response(input.title, { status: 200 }),`,
       `});`,
       `void packedMutation;`,
       `const updatePackedItem = createMutationAction({ route: "/items/[id]", method: "PATCH", path: { id: "packed" } });`,
@@ -375,9 +402,16 @@ try {
       `// @ts-expect-error Generated mutation types reject a method that the route does not export.`,
       `createMutationAction({ route: "/items/[id]", method: "DELETE", path: { id: "packed" } });`,
       `function PackedPage(_props: RouteProps) {`,
-      `  const [result, save, pending] = useActionState(updatePackedItem, undefined);`,
+      `  const [result, save] = useMutationAction({ route: "/items/[id]", method: "POST", path: { id: "packed" } }, undefined);`,
+      `  const [, publish] = useMutationAction({ route: "/items/[id]", method: "POST", path: { id: "packed" } }, undefined);`,
+      `  // @ts-expect-error Progressive HTML forms accept POST mutations only.`,
+      `  useMutationAction({ route: "/items/[id]", method: "PATCH", path: { id: "packed" } }, undefined);`,
       `  const issues = result?.status === "invalid" ? result.validation.issues : [];`,
-      `  return <main><form action={save}><input name="title" /><button disabled={pending}>Save</button></form><output>{issues.map((issue) => issue.message).join(", ")}</output></main>;`,
+      `  return <main><Form action={save}><input name="title" /><PackedPendingButton /><MutationSubmit formAction={publish} name="intent" value="publish">Publish</MutationSubmit></Form><output>{issues.map((issue) => issue.message).join(", ")}</output></main>;`,
+      `}`,
+      `function PackedPendingButton() {`,
+      `  const { pending } = useFormStatus();`,
+      `  return <button disabled={pending}>{pending ? "Saving" : "Save"}</button>;`,
       `}`,
     ].join("\n"),
   );
@@ -393,6 +427,7 @@ try {
       `  input: mutationInput.formData,`,
       `  handler: () => Response.json({ serverMutationHandlerSentinel }),`,
       `});`,
+      `export const POST = PATCH;`,
     ].join("\n"),
   );
   writeFileSync(

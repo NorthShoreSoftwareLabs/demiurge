@@ -1,11 +1,18 @@
 // @vitest-environment jsdom
 
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createElement } from "react";
+import { renderToString } from "react-dom/server";
+import { useFormStatus } from "react-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createMutationAction,
+  Form,
+  MutationSubmit,
   type MutationResult,
   type PathValue,
   type RouteMutationMethods,
+  useMutationAction,
 } from "@demiurgejs/core";
 import {
   abortMutationActions,
@@ -20,12 +27,16 @@ declare module "@demiurgejs/core" {
   }
 
   interface RouteMutationMethods {
-    "/items/[id]": { PATCH: { data: unknown; fields: "title" } };
+    "/items/[id]": {
+      PATCH: { data: unknown; fields: "title" };
+      POST: { data: unknown; fields: "title" };
+    };
   }
 }
 
 describe("mutation actions", () => {
   afterEach(() => {
+    cleanup();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -247,7 +258,69 @@ describe("mutation actions", () => {
     expect(action).toBeTypeOf("function");
     expect(inferred.validation.issues[0]?.path[0]).toBe("title");
   });
+
+  it("renders real fallback destinations for a progressive form and submitter", () => {
+    const html = renderToString(createElement(ProgressiveMutationForm));
+    expect(html).toContain('action="/items/1"');
+    expect(html).toContain('method="post"');
+    expect(html).toContain('formAction="/items/2"');
+  });
+
+  it("provides pending FormData through React useFormStatus", async () => {
+    let resolveResponse: ((response: Response) => void) | undefined;
+    vi.stubGlobal("fetch", vi.fn(async () => await new Promise<Response>((resolve) => {
+      resolveResponse = resolve;
+    })));
+    render(createElement(ProgressiveMutationForm));
+    const form = screen.getByRole("form");
+    const submit = new Event("submit", { bubbles: true, cancelable: true });
+    Object.defineProperty(submit, "submitter", {
+      value: screen.getByRole("button", { name: "Save" }),
+    });
+    fireEvent(form, submit);
+
+    await waitFor(() => expect(screen.getByTestId("form-pending").textContent).toBe("pending:Draft"));
+    resolveResponse?.(mutationResponse({ status: "success", version: 1 }));
+    await waitFor(() => expect(screen.getByTestId("form-pending").textContent).toBe("idle"));
+  });
 });
+
+function ProgressiveMutationForm() {
+  const [, save] = useMutationAction({
+    method: "POST",
+    path: { id: 1 },
+    route: "/items/[id]",
+  });
+  const [, publish] = useMutationAction({
+    method: "POST",
+    path: { id: 2 },
+    route: "/items/[id]",
+  });
+  return createElement(Form, {
+    action: save,
+    "aria-label": "progressive mutation",
+    children: [
+      createElement("input", { defaultValue: "Draft", key: "title", name: "title" }),
+      createElement(FormStatus, { key: "status" }),
+      createElement("button", { children: "Save", key: "save", type: "submit" }),
+      createElement(MutationSubmit, {
+        children: "Publish",
+        formAction: publish,
+        key: "publish",
+        name: "intent",
+        value: "publish",
+      }),
+    ],
+  });
+}
+
+function FormStatus() {
+  const status = useFormStatus();
+  return createElement("output", {
+    "data-testid": "form-pending",
+    children: status.pending ? `pending:${status.data.get("title")}` : "idle",
+  });
+}
 
 function mutationResponse(value: unknown) {
   return new Response(JSON.stringify(value), {

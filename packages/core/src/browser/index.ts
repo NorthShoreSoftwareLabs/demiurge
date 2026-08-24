@@ -3,10 +3,11 @@ export {
   Form,
   hydrateFileRouter,
   Link,
+  MutationSubmit,
   useNavigation,
   useFormNavigation,
 } from "./file-router";
-export { createMutationAction } from "./mutation-action";
+export { createMutationAction, useMutationAction } from "./mutation-action";
 export {
   RouteFocusBoundary,
   useRouteFocusBoundary,
@@ -15,12 +16,14 @@ export type {
   MutationNavigationState,
   FormProps,
   LinkProps,
+  MutationSubmitProps,
   NavigationAccessibility,
   NavigationCommit,
 } from "./file-router";
 export type {
   MutationAction,
   MutationActionOptions,
+  MutationFormAction,
   MutationResult,
 } from "./mutation-action";
 export type { MutationValidation } from "../route";
