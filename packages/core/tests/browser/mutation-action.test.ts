@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createMutationAction,
+  type MutationResult,
   type PathValue,
   type RouteMutationMethods,
 } from "@demiurgejs/core";
@@ -19,7 +20,7 @@ declare module "@demiurgejs/core" {
   }
 
   interface RouteMutationMethods {
-    "/items/[id]": { PATCH: unknown };
+    "/items/[id]": { PATCH: { data: unknown; fields: "title" } };
   }
 }
 
@@ -198,6 +199,9 @@ describe("mutation actions", () => {
     ["invalid JSON", "not JSON", "application/vnd.demiurge.mutation+json;v=1", "malformed versioned"],
     ["an invalid envelope", { status: "success", version: 2 }, "application/vnd.demiurge.mutation+json;v=1", "malformed versioned"],
     ["an invalid refresh flag", { revalidate: "yes", status: "success", version: 1 }, "application/vnd.demiurge.mutation+json;v=1", "malformed mutation result"],
+    ["an extra success field", { extra: true, status: "success", version: 1 }, "application/vnd.demiurge.mutation+json;v=1", "malformed mutation result"],
+    ["missing validation", { status: "invalid", version: 1 }, "application/vnd.demiurge.mutation+json;v=1", "malformed mutation result"],
+    ["an invalid issue path", { status: "invalid", validation: { issues: [{ code: "required", message: "Required", path: [0] }] }, version: 1 }, "application/vnd.demiurge.mutation+json;v=1", "malformed mutation result"],
     ["an invalid failure message", { message: 5, status: "failed", version: 1 }, "application/vnd.demiurge.mutation+json;v=1", "malformed mutation result"],
     ["an invalid redirect", { history: "push", status: "redirect", version: 1 }, "application/vnd.demiurge.mutation+json;v=1", "malformed mutation result"],
     ["an unknown status", { status: "other", version: 1 }, "application/vnd.demiurge.mutation+json;v=1", "malformed mutation result"],
@@ -210,7 +214,7 @@ describe("mutation actions", () => {
   });
 
   it.each([
-    [{ data: { title: "Saved" }, status: "invalid", version: 1 }, "invalid"],
+    [{ status: "invalid", validation: { issues: [{ code: "required", message: "Required", path: ["title"] }] }, version: 1 }, "invalid"],
     [{ message: "Try again", status: "failed", version: 1 }, "failed"],
     [{ history: "replace", location: "/saved", status: "redirect", version: 1 }, "redirect"],
   ])("reads a %s protocol result", async (body, status) => {
@@ -223,6 +227,25 @@ describe("mutation actions", () => {
     expect(validateMutationRedirect("http://localhost/saved")).toBeUndefined();
     expect(validateMutationRedirect("https://user:secret@localhost/saved")).toBeUndefined();
     expect(validateMutationRedirect("http://[invalid")).toBeUndefined();
+  });
+
+  it("preserves application field names in invalid results", () => {
+    const result: MutationResult<{ saved: boolean }, "title"> = {
+      status: "invalid",
+      validation: { issues: [{ code: "required", message: "Required", path: ["title"] }] },
+      version: 1,
+    };
+    expect(result.validation.issues[0]?.path[0]).toBe("title");
+
+    const action = createMutationAction({
+      method: "PATCH",
+      path: { id: 1 },
+      route: "/items/[id]",
+    });
+    type ActionResult = Awaited<ReturnType<typeof action>>;
+    const inferred: Extract<ActionResult, { status: "invalid" }> = result;
+    expect(action).toBeTypeOf("function");
+    expect(inferred.validation.issues[0]?.path[0]).toBe("title");
   });
 });
 

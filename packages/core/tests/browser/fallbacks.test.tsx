@@ -77,7 +77,7 @@ describe("browser router fallbacks", () => {
   });
 
   it.each([
-    ["invalid", { version: 1, status: "invalid", data: { issues: [] } }, "invalid"],
+    ["invalid", { version: 1, status: "invalid", validation: { issues: [] } }, "invalid"],
     ["failed", { version: 1, status: "failed", message: "Save failed" }, "error"],
   ])("reports a %s mutation result", async (_name, result, expectedState) => {
     vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
@@ -356,7 +356,7 @@ describe("browser router fallbacks", () => {
     await waitFor(() => expect(actions).toHaveLength(2));
     actions[1](actionResponse({ data: { saved: "current" }, status: "success", version: 1 }));
     await waitFor(() => expect(screen.getByLabelText("replace result").textContent).toBe("current"));
-    actions[0](actionResponse({ data: { issues: [] }, status: "invalid", version: 1 }, 400));
+    actions[0](actionResponse({ status: "invalid", validation: { issues: [] }, version: 1 }, 400));
     await waitFor(() => expect(screen.getByLabelText("replace result").textContent).toBe("current"));
   });
 

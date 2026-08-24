@@ -16,6 +16,7 @@ export type {
   MutationActionOptions,
   MutationNavigationState,
   MutationResult,
+  MutationValidation,
 } from "./browser";
 export {
   assertAdapterCapabilities,
@@ -303,6 +304,7 @@ export type {
   LinkTarget,
   LinkTo,
   MutationDataFor,
+  MutationFieldsFor,
   MutationMethodFor,
   MutationRoute,
   PathValue,
