@@ -75,6 +75,16 @@ export {
   createMemorySessionStore,
   serializeSessionNamespace,
 } from "./session-store";
+export {
+  createSessionManager,
+  SessionStoreConflictError,
+  SessionStoreUnavailableError,
+} from "./session-manager";
+export type {
+  ServerSession,
+  SessionManager,
+  SessionManagerOptions,
+} from "./session-manager";
 export type {
   MemorySessionStoreOptions,
   SessionData,
