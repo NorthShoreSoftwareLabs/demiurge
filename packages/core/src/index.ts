@@ -328,9 +328,12 @@ export type {
   RouteMutationMethods,
 } from "./routing";
 export type {
+  FileRouterOptions,
   HydrateFileRouterOptions,
   NavigationAccessibility,
   NavigationCommit,
+  NavigationScrollContext,
+  NavigationScrollOption,
   RouteFocusBoundaryElement,
   RouteFocusBoundaryProps,
 } from "./browser";

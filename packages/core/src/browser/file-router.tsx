@@ -76,6 +76,16 @@ export type NavigationCommit = {
   title: string;
 };
 
+export type NavigationScrollContext = NavigationCommit & {
+  navigation: NavigationCommit["kind"];
+  position?: { x: number; y: number };
+};
+
+export type NavigationScrollOption =
+  | false
+  | "top"
+  | ((context: NavigationScrollContext) => void);
+
 export type NavigationAccessibility = {
   announce?: "title" | false | ((context: NavigationCommit) => string | null);
 };
@@ -111,6 +121,7 @@ export type FileRouterOptions = {
   routes: Record<string, RouteImporter>;
   loading?: ComponentType;
   navigationAccessibility?: NavigationAccessibility;
+  navigationScroll?: NavigationScrollOption;
   notFound?: ComponentType<NotFoundProps>;
 };
 
@@ -125,6 +136,7 @@ export function createFileRouter(options: FileRouterOptions) {
       () => options.initialMatch ?? { status: "loading" },
     );
     const initialMatchPending = useRef(Boolean(options.initialMatch));
+    const initialNavigationPending = useRef(true);
     const navigationSequence = useRef(0);
     const routeLoadController = useRef<AbortController | undefined>(undefined);
     const routeLoadCause = useRef<"navigation" | "refresh">("navigation");
@@ -139,11 +151,23 @@ export function createFileRouter(options: FileRouterOptions) {
     const [committed, setCommitted] = useState<NavigationCommit | null>(null);
     const pendingCommitRef = useRef<NavigationCommit | null>(null);
     pendingCommitRef.current = pendingCommit;
+    const pendingScroll = useRef<PendingScroll | undefined>(undefined);
+    const pendingPopPosition = useRef<ScrollPosition | undefined>(undefined);
+    const activeHistoryEntry = useRef<string | undefined>(undefined);
+    const restoringScroll = useRef(false);
+    const scrollPositions = useRef(new Map<string, ScrollPosition>());
     const boundaryRegistrations = useRef<{
       element: RouteFocusBoundaryElement;
       order: number;
     }[]>([]);
     const nextBoundaryOrder = useRef(0);
+
+    function saveCurrentScrollPosition() {
+      const entry = activeHistoryEntry.current;
+      const position = currentScrollPosition();
+      if (entry) scrollPositions.current.set(entry, position);
+      rememberScrollPosition(entry, position);
+    }
     const focusRegistration = useMemo(() => ({
       register(element: RouteFocusBoundaryElement) {
         const registration = {
@@ -229,9 +253,35 @@ export function createFileRouter(options: FileRouterOptions) {
     }
 
     useEffect(() => {
+      if (options.navigation === "document") {
+        return;
+      }
+
+      const previousRestoration = window.history.scrollRestoration;
+      window.history.scrollRestoration = "manual";
+      activeHistoryEntry.current = ensureHistoryEntry();
+      saveCurrentScrollPosition();
+      const onScroll = () => {
+        if (!restoringScroll.current) {
+          saveCurrentScrollPosition();
+        }
+      };
+      window.addEventListener("scroll", onScroll, { passive: true });
+      return () => {
+        window.removeEventListener("scroll", onScroll);
+        window.history.scrollRestoration = previousRestoration;
+      };
+    }, [options.navigation]);
+
+    useEffect(() => {
       function onPopState() {
         abortSubmissions();
         navigationKind.current = "pop";
+        restoringScroll.current = true;
+        activeHistoryEntry.current = ensureHistoryEntry();
+        pendingPopPosition.current = scrollPositions.current.get(
+          activeHistoryEntry.current,
+        ) ?? readScrollPosition();
         const next = getCurrentLocation();
         const previous = lastLocation.current;
         if (previous.pathname !== next.pathname || previous.search !== next.search) {
@@ -240,6 +290,7 @@ export function createFileRouter(options: FileRouterOptions) {
         }
         lastLocation.current = next;
         if (
+          options.navigation !== "document" &&
           previous.pathname === next.pathname &&
           previous.search === next.search &&
           previous.hash !== next.hash
@@ -271,6 +322,7 @@ export function createFileRouter(options: FileRouterOptions) {
         getMatchPathname(options.initialMatch) === location.pathname
       ) {
         initialMatchPending.current = false;
+        initialNavigationPending.current = false;
         return () => {
           cancelled = true;
           controller.abort();
@@ -278,6 +330,23 @@ export function createFileRouter(options: FileRouterOptions) {
             routeLoadController.current = undefined;
           }
         };
+      }
+
+      const initialNavigation = initialNavigationPending.current;
+      initialNavigationPending.current = false;
+
+      if (
+        cause !== "refresh" &&
+        options.navigation !== "document" &&
+        !initialNavigation
+      ) {
+        pendingScroll.current = {
+          navigation: navigationKind.current,
+          position: navigationKind.current === "pop"
+            ? pendingPopPosition.current
+            : undefined,
+        };
+        pendingPopPosition.current = undefined;
       }
 
       if (cause !== "refresh") {
@@ -375,17 +444,33 @@ export function createFileRouter(options: FileRouterOptions) {
       }
 
       if (committed.url.hash) {
-        scrollToHash(committed.url.hash);
+        if (pendingScroll.current) {
+          pendingScroll.current = undefined;
+          scrollToHash(committed.url.hash);
+        }
+        restoringScroll.current = false;
         return;
       }
 
       focusRegistration.focus();
+      if (pendingScroll.current) {
+        const pending = pendingScroll.current;
+        pendingScroll.current = undefined;
+        applyNavigationScroll(options.navigationScroll, {
+          ...committed,
+          kind: pending.navigation,
+          navigation: pending.navigation,
+          position: pending.position,
+        });
+      }
+      restoringScroll.current = false;
       announceNavigation(committed, options.navigationAccessibility);
     }, [
       committed,
       focusRegistration,
-      options.navigation,
-      options.navigationAccessibility,
+        options.navigation,
+        options.navigationAccessibility,
+        options.navigationScroll,
     ]);
 
     function setSubmissionState(key: string, state: MutationNavigationState) {
@@ -419,8 +504,15 @@ export function createFileRouter(options: FileRouterOptions) {
         releaseMutationNavigation,
         push(to: string) {
           abortSubmissions();
+          restoringScroll.current = false;
           const previous = getCurrentLocation();
-          window.history.pushState(null, "", to);
+          navigationKind.current = "push";
+          if (options.navigation !== "document") {
+            saveCurrentScrollPosition();
+          }
+          const entry = createHistoryEntry();
+          window.history.pushState(entry.state, "", to);
+          activeHistoryEntry.current = entry.key;
           const next = getCurrentLocation();
           if (previous.pathname !== next.pathname || previous.search !== next.search) {
             supersedeRouteLoad();
@@ -436,7 +528,36 @@ export function createFileRouter(options: FileRouterOptions) {
           ) {
             scrollToHash(next.hash);
           }
-          navigationKind.current = "push";
+        },
+        replace(to: string) {
+          abortSubmissions();
+          restoringScroll.current = false;
+          const previous = getCurrentLocation();
+          navigationKind.current = "replace";
+          if (options.navigation !== "document") {
+            saveCurrentScrollPosition();
+          }
+          window.history.replaceState(
+            withHistoryEntry(window.history.state, activeHistoryEntry.current),
+            "",
+            to,
+          );
+          const next = getCurrentLocation();
+          if (previous.pathname !== next.pathname || previous.search !== next.search) {
+            supersedeRouteLoad();
+            routeLoadCause.current = "navigation";
+          }
+          lastLocation.current = next;
+          setLocation(next);
+
+          if (
+            options.navigation !== "document" &&
+            previous.pathname === next.pathname &&
+            previous.search === next.search &&
+            previous.hash !== next.hash
+          ) {
+            scrollToHash(next.hash);
+          }
         },
         async submitMutation(form: HTMLFormElement, submitter: HTMLElement | null, submissionKey?: string) {
           if ((options.navigation ?? "server") !== "server") return;
@@ -482,8 +603,18 @@ export function createFileRouter(options: FileRouterOptions) {
               abortSubmissions(controller);
               routeLoadCause.current = "navigation";
               setSubmissionState(key, { state: "loading", form, submissionKey, formData });
-              if (result.history === "replace") window.history.replaceState(null, "", destination);
-              else window.history.pushState(null, "", destination);
+              saveCurrentScrollPosition();
+              if (result.history === "replace") {
+                window.history.replaceState(
+                  withHistoryEntry(null, activeHistoryEntry.current),
+                  "",
+                  destination,
+                );
+              } else {
+                const entry = createHistoryEntry();
+                window.history.pushState(entry.state, "", destination);
+                activeHistoryEntry.current = entry.key;
+              }
               navigationKind.current = result.history;
               lastLocation.current = getCurrentLocation();
               setLocation(lastLocation.current);
@@ -521,8 +652,18 @@ export function createFileRouter(options: FileRouterOptions) {
         supersedeRouteLoad();
         abortSubmissions(controller);
         routeLoadCause.current = "navigation";
-        if (history === "replace") window.history.replaceState(null, "", destination);
-        else window.history.pushState(null, "", destination);
+        saveCurrentScrollPosition();
+        if (history === "replace") {
+          window.history.replaceState(
+            withHistoryEntry(null, activeHistoryEntry.current),
+            "",
+            destination,
+          );
+        } else {
+          const entry = createHistoryEntry();
+          window.history.pushState(entry.state, "", destination);
+          activeHistoryEntry.current = entry.key;
+        }
         navigationKind.current = history;
         lastLocation.current = getCurrentLocation();
         setLocation(lastLocation.current);
@@ -703,6 +844,7 @@ type DataAttributes = {
 export type LinkProps<TTo extends AppHref = AppHref> = LinkTo<TTo> &
   Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
     reloadDocument?: boolean;
+    replace?: boolean;
   } & DataAttributes;
 
 function LinkImplementation<const TTo extends AppHref>(
@@ -717,6 +859,7 @@ function LinkImplementation<const TTo extends AppHref>(
     onClick,
     path: _path,
     reloadDocument,
+    replace,
     search: _search,
     target,
     to: _to,
@@ -741,7 +884,11 @@ function LinkImplementation<const TTo extends AppHref>(
           shouldHandleLinkClick(event, { download, target, to })
         ) {
           event.preventDefault();
-          router.push(to);
+          if (replace) {
+            router.replace(to);
+          } else {
+            router.push(to);
+          }
         }
       }}
     >
@@ -1010,6 +1157,97 @@ function getCurrentLocation() {
   };
 }
 
+type PendingScroll = {
+  navigation: NavigationCommit["kind"];
+  position?: ScrollPosition;
+};
+
+type ScrollPosition = { x: number; y: number };
+
+const SCROLL_STATE_KEY = "__demiurge_scroll";
+const HISTORY_ENTRY_STATE_KEY = "__demiurge_history_entry";
+let nextHistoryEntry = 0;
+
+function ensureHistoryEntry() {
+  const existing = readHistoryEntry(window.history.state);
+  if (existing) return existing;
+  const entry = createHistoryEntry(window.history.state);
+  window.history.replaceState(entry.state, "", window.location.href);
+  return entry.key;
+}
+
+function createHistoryEntry(state?: unknown) {
+  const key = `entry:${++nextHistoryEntry}`;
+  return { key, state: withHistoryEntry(state, key) };
+}
+
+function withHistoryEntry(state: unknown, key = `entry:${++nextHistoryEntry}`) {
+  return state && typeof state === "object"
+    ? { ...state, [HISTORY_ENTRY_STATE_KEY]: key }
+    : { [HISTORY_ENTRY_STATE_KEY]: key };
+}
+
+function readHistoryEntry(state: unknown) {
+  if (!state || typeof state !== "object") return undefined;
+  const key = Reflect.get(state, HISTORY_ENTRY_STATE_KEY);
+  return typeof key === "string" ? key : undefined;
+}
+
+function currentScrollPosition(): ScrollPosition {
+  return { x: window.scrollX, y: window.scrollY };
+}
+
+function rememberScrollPosition(
+  activeEntry?: string,
+  position = currentScrollPosition(),
+) {
+  const state = window.history.state;
+  if (activeEntry && readHistoryEntry(state) !== activeEntry) return;
+  const nextState = state && typeof state === "object"
+    ? { ...state, [SCROLL_STATE_KEY]: position }
+    : { [SCROLL_STATE_KEY]: position };
+
+  try {
+    window.history.replaceState(nextState, "", window.location.href);
+  } catch {
+    // A history implementation can reject state writes. Navigation remains safe.
+  }
+}
+
+function readScrollPosition() {
+  const value = window.history.state?.[SCROLL_STATE_KEY];
+  return value && typeof value === "object" &&
+      typeof value.x === "number" && typeof value.y === "number"
+    ? { x: value.x, y: value.y }
+    : undefined;
+}
+
+function applyNavigationScroll(
+  option: NavigationScrollOption | undefined,
+  context: NavigationScrollContext,
+) {
+  if (context.kind === "pop" && context.url.hash) {
+    return;
+  }
+
+  if (option === false) {
+    return;
+  }
+
+  if (typeof option === "function") {
+    try {
+      option(context);
+    } catch {
+      // An application scroll callback cannot break route rendering.
+    }
+    return;
+  }
+
+  const x = context.kind === "pop" ? context.position?.x ?? 0 : 0;
+  const y = context.kind === "pop" ? context.position?.y ?? 0 : 0;
+  window.scrollTo?.(x, y);
+}
+
 async function loadNavigationData(request: Request) {
   const headers = new Headers(request.headers);
   headers.set("accept", "application/json");
@@ -1252,6 +1490,7 @@ type RouterApi = {
   getMutationNavigation(form?: HTMLFormElement, submissionKey?: string): MutationNavigationState;
   releaseMutationNavigation(form: HTMLFormElement, submissionKey?: string): void;
   submitMutation(form: HTMLFormElement, submitter: HTMLElement | null, submissionKey?: string): Promise<void>;
+  replace(to: string): void;
 };
 
 const RouterContext = createContext<RouterApi>({
@@ -1266,6 +1505,9 @@ const RouterContext = createContext<RouterApi>({
   releaseMutationNavigation() {},
   async submitMutation(form) {
     form.submit();
+  },
+  replace(to) {
+    window.location.replace(to);
   },
 });
 

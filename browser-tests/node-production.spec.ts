@@ -275,6 +275,22 @@ test("accessible browser navigation commits status, focus, and hash behavior", a
   )).toBe(1);
 });
 
+test("browser navigation scrolls to the top after a committed route", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    document.body.style.minHeight = "2400px";
+    window.scrollTo(0, 800);
+  });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(800);
+  await expect.poll(() => page.evaluate(() =>
+    history.state?.__demiurge_scroll?.y,
+  )).toBe(800);
+
+  await page.getByRole("link", { name: "Test navigation" }).click();
+  await expect(page).toHaveURL("http://localhost:42177/navigation");
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
 test("SPA navigation keeps request callbacks server-only across query history", async ({
   page,
 }) => {

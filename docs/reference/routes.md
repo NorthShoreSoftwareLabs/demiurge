@@ -527,6 +527,47 @@ announcement.
 An application `onClick` handler runs before the router. If the handler
 prevents the default action, the router does not navigate.
 
+## Browser scroll restoration
+
+The server navigation router controls the scroll position after it commits a
+route. A new path scrolls to the top of the document. This applies to ready,
+not-found, and error content. The router waits for the final content before it
+changes the scroll position.
+
+The router saves each entry position in its history state. Back and forward
+navigation restores the saved position. The router preserves other values in
+the history state. It uses manual restoration while the router is mounted.
+
+The router applies a URL fragment after it commits the route. A matching
+fragment target receives normal browser fragment behavior. A missing target
+does not change the scroll position. A hash-only navigation does not load a
+route or apply the top position.
+
+Set `replace` on a `Link` when the destination must replace the current history
+entry. The router applies the same scroll rules to push and replace.
+
+Applications can disable or replace the default behavior:
+
+```tsx
+createFileRouter({
+  navigationScroll: false,
+  routes,
+});
+
+createFileRouter({
+  navigationScroll: ({ navigation, outcome, position }) => {
+    if (navigation === "pop" && position) {
+      window.scrollTo(position.x, position.y);
+    }
+  },
+  routes,
+});
+```
+
+The callback runs after a committed ready, not-found, or error route. It does
+not run for initial hydration, hash-only navigation, or cancelled navigation.
+The router catches callback errors so they cannot break route rendering.
+
 Use `LinkProps` to preserve typed destinations in an application wrapper:
 
 ```tsx
