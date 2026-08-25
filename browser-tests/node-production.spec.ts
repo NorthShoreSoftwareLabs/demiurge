@@ -275,7 +275,7 @@ test("accessible browser navigation commits status, focus, and hash behavior", a
   )).toBe(1);
 });
 
-test("browser navigation scrolls to the top after a committed route", async ({ page }) => {
+test("browser navigation manages push and pop scroll positions", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => {
     document.body.style.minHeight = "2400px";
@@ -286,7 +286,17 @@ test("browser navigation scrolls to the top after a committed route", async ({ p
     history.state?.__demiurge_scroll?.y,
   )).toBe(800);
 
-  await page.getByRole("link", { name: "Test navigation" }).click();
+  await page.evaluate(() => {
+    document.querySelector<HTMLAnchorElement>('a[href="/navigation"]')?.click();
+  });
+  await expect(page).toHaveURL("http://localhost:42177/navigation");
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+  await page.goBack();
+  await expect(page).toHaveURL("http://localhost:42177/");
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(800);
+
+  await page.goForward();
   await expect(page).toHaveURL("http://localhost:42177/navigation");
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 });
