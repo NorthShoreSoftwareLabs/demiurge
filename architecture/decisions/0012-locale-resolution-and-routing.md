@@ -312,10 +312,15 @@ A canonical path or domain is the preferred cache identity. A response at that
 URL does not vary by the locale cookie or `Accept-Language`.
 
 Framework render and data caches add the canonical locale identity to every
-locale-aware route key. Applications do not add this scope manually.
+locale-aware route key and data-cache operation. Applications do not add this
+scope manually.
 
 A route can declare locale-neutral output. Only that declaration removes locale
 from its framework cache key.
+
+An individual data-cache operation can declare locale-neutral data. Core then
+omits locale scope for that operation only. The application must use this option
+only when the cached value is identical for all locales.
 
 Locale-aware cache tags receive an internal locale scope before storage and
 invalidation. Invalidating a route tag affects the active locale by default.
@@ -323,9 +328,13 @@ invalidation. Invalidating a route tag affects the active locale by default.
 An application can request all-locale invalidation explicitly. The cache expands
 that request to each configured locale scope.
 
+An invalidation without an active request must supply one canonical locale or
+request all-locale invalidation. Core rejects an implicit active-locale scope
+when no active locale exists.
+
 A negotiation redirect varies on every preference input that can affect its
-selection. The default resolver declares `Cookie` and `Accept-Language` when
-both inputs are enabled.
+selection. When both inputs are enabled, the default resolver declares the
+configured preference cookie in `cookies` and `Accept-Language` in `headers`.
 
 Core merges resolver declarations with existing `Vary` values. Header names use
 case-insensitive deduplication, and an existing `Vary: *` remains authoritative.
