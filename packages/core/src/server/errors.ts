@@ -69,6 +69,7 @@ export async function renderFailureResponse(
         metadata: resolveMetadata(),
         title: options.title,
       }),
+      locale: options.locale,
       error: {
         detail: isHttpError(error)
           ? error.detail
@@ -176,7 +177,7 @@ async function renderErrorDocument(
   );
 
   return renderDocument({
-    body: { data: undefined, html, navigation: options.navigation },
+    body: { data: undefined, html, locale: options.locale, navigation: options.navigation },
     entrySrc: options.clientEntry,
     lang: options.lang,
     nonce: options.nonce,
