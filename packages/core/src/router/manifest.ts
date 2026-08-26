@@ -73,6 +73,7 @@ export type LoadedRouteMatch = {
   links: LinkTag[];
   page: ComponentType<RouteProps<string, unknown>>;
   layouts: ComponentType<LayoutProps>[];
+  locale?: string;
   metadata: ResolvedMetadata;
   path: PathVars;
   pathname: string;
@@ -89,6 +90,7 @@ export type StaticRoutePath = {
 
 export type LoadedNotFoundMatch = {
   layouts: ComponentType<LayoutProps>[];
+  locale?: string;
   metadata: ResolvedMetadata;
   notFound?: ComponentType<NotFoundProps>;
   pathname: string;
@@ -98,6 +100,7 @@ export type PendingRouteMatch =
   | {
       error: unknown;
       Error?: ComponentType<RouteErrorProps>;
+      locale?: string;
       pathname: string;
       status: "error";
     }
@@ -311,6 +314,7 @@ export async function loadPageRoute(
   cache: Cache = createMemoryCache(),
   options: {
     documentContributions?: boolean;
+    locale?: string;
     requestContext?: Record<string, unknown>;
   } = {},
 ): Promise<PendingRouteMatch> {
@@ -321,6 +325,7 @@ export async function loadPageRoute(
     return {
       ...(await loadNotFoundMatch(manifest, pathname, {
         documentContributions,
+        locale: options.locale,
       })),
       status: "not-found",
     };
@@ -341,6 +346,7 @@ export async function loadPageRoute(
         ),
         documentContributions,
         layouts: matchingLayouts,
+        locale: options.locale,
       })),
       status: "not-found",
     };
@@ -354,6 +360,7 @@ export async function loadPageRoute(
   const context = {
     cache,
     context: options.requestContext ?? {},
+    locale: options.locale,
     path: routeMatch.path,
     pathname,
     request,
@@ -383,6 +390,7 @@ export async function loadPageRoute(
       layouts: layoutModules.map(
         (module) => module.default as ComponentType<LayoutProps>,
       ),
+      locale: options.locale,
       metadata: documentContributions
         ? resolveMetadata(
           ...layoutModules.map((module) => module.metadata),
@@ -538,6 +546,7 @@ export async function loadNotFoundMatch(
     fallback?: FallbackRoute;
     layouts?: LayoutRoute[];
     onLayoutError?: (error: unknown) => void;
+    locale?: string;
   } = {},
 ): Promise<LoadedNotFoundMatch> {
   const fallback =
@@ -553,6 +562,7 @@ export async function loadNotFoundMatch(
   if (fallbackModule?.layout === false) {
     return {
       layouts: [],
+      locale: options.locale,
       metadata: documentContributions
         ? resolveMetadata(fallbackModule.metadata)
         : resolveMetadata(),
@@ -573,6 +583,7 @@ export async function loadNotFoundMatch(
       layouts: layoutModules.map(
         (module) => module.default as ComponentType<LayoutProps>,
       ),
+      locale: options.locale,
       metadata: documentContributions
         ? resolveMetadata(
           ...layoutModules.map((module) => module.metadata),
@@ -587,6 +598,7 @@ export async function loadNotFoundMatch(
 
     return {
       layouts: [],
+      locale: options.locale,
       metadata: documentContributions
         ? resolveMetadata(fallbackModule?.metadata)
         : resolveMetadata(),

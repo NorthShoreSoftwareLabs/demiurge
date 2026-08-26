@@ -24,6 +24,7 @@ import type { SsrRenderOptions } from "./ssr";
 export type ErrorRenderOptions = SsrRenderOptions & {
   dev?: boolean;
   onError?: (error: unknown, site: FailureSite) => void;
+  pathname?: string;
   transformDocument?: (html: string) => string | Promise<string>;
 };
 
@@ -69,6 +70,7 @@ export async function renderFailureResponse(
         metadata: resolveMetadata(),
         title: options.title,
       }),
+      locale: options.locale,
       error: {
         detail: isHttpError(error)
           ? error.detail
@@ -126,7 +128,7 @@ async function renderErrorDocumentResponse(
   try {
     const html = await renderErrorDocument(
       manifest,
-      url.pathname,
+      options.pathname ?? url.pathname,
       error,
       options,
     );
@@ -171,12 +173,12 @@ async function renderErrorDocument(
   const html = renderToString(
     withScriptContext(
       scripts,
-      createElement(Error, { error, pathname, status: errorStatus(error) }),
+      createElement(Error, { error, locale: options.locale, pathname, status: errorStatus(error) }),
     ),
   );
 
   return renderDocument({
-    body: { data: undefined, html, navigation: options.navigation },
+    body: { data: undefined, html, locale: options.locale, navigation: options.navigation },
     entrySrc: options.clientEntry,
     lang: options.lang,
     nonce: options.nonce,

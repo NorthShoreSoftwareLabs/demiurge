@@ -5,6 +5,17 @@ import { describe, expect, it } from "vitest";
 import { generateRoutes } from "../../src/routing/generate";
 
 describe("typed route manifest generator", () => {
+  it("rejects a route that collides with a locale URL namespace", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-locale-routes-"));
+    const routesDir = join(root, "routes");
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(join(routesDir, "fr.tsx"), "export {}");
+    await expect(generateRoutes({
+      localeNamespaces: ["fr"],
+      outputFile: join(root, "routes.d.ts"),
+      routesDir,
+    })).rejects.toThrow("conflicts with the locale URL namespace");
+  });
   it("generates module augmentation for actual file-based URLs", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-routes-"));
     const routesDir = join(root, "routes");
@@ -27,11 +38,13 @@ describe("typed route manifest generator", () => {
     await writeFile(join(routesDir, "@not-found.tsx"), "export {}");
     await writeFile(join(routesDir, "@policy.ts"), "export {}");
 
-    await generateRoutes({ outputFile, routesDir });
+    await generateRoutes({ locales: ["en", "fr"], outputFile, routesDir });
 
     const source = await readFile(outputFile, "utf8");
 
     expect(source).toContain('"/": {};');
+    expect(source).toContain('"en": true;');
+    expect(source).toContain('"fr": true;');
     expect(source).toContain('"/blog": {};');
     expect(source).toContain('"/blog/[slug]": { slug: PathValue };');
     expect(source).toContain('"/blog/[slug]": `/blog/${PathValue}`;');

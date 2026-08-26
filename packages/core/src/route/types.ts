@@ -12,6 +12,7 @@ import type {
   RoutePathVars,
   RouteRequestContexts,
 } from "../routing/types";
+import type { AppLocale } from "../routing/locale";
 import type {
   CorsPolicy,
   RoutePolicy,
@@ -58,6 +59,7 @@ type RequestContextField<TValues extends object> = {
 };
 
 export type RouteContext<TPath extends string = string> = {
+  locale?: AppLocale;
   path: RouteParamsFor<TPath>;
   pathname: string;
 };
@@ -136,11 +138,13 @@ export type LayoutProps<TPath extends string = string> = RouteContext<TPath> & {
 };
 
 export type NotFoundProps = {
+  locale?: AppLocale;
   pathname: string;
 };
 
 export type RouteErrorProps = {
   error: unknown;
+  locale?: AppLocale;
   pathname: string;
   status: HttpErrorStatus;
 };

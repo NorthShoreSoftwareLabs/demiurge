@@ -72,6 +72,7 @@ import {
   securityPolicyRequiresNonce,
 } from "../security/policy";
 import { MUTATION_REVALIDATION_HEADER } from "../route/mutation";
+import { defineLocales, localizeHref, resolveLocale, type LocaleConfiguration } from "../routing";
 
 export type RequestErrorReporter = (
   error: unknown,
@@ -85,6 +86,7 @@ export type RequestHandlerOptions = {
   renderPage?: PageRenderer;
   rateLimitStore?: RateLimitStore;
   routes: Record<string, RouteImporter>;
+  locales?: LocaleConfiguration;
   routeModules?: Readonly<Record<string, RouteModule>>;
   ssr?: SsrOptions;
 };
@@ -106,6 +108,7 @@ type RequestRuntimeOptions = {
   dev?: boolean;
   onError?: RequestErrorReporter;
   renderPage?: PageRenderer;
+  routePathname?: string;
   rateLimitStore?: RateLimitStore;
   ssr?: SsrOptions;
   transformDocument?: (html: string) => string | Promise<string>;
@@ -136,6 +139,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
   }
 
   const manifest = createRouteManifest(options.routes);
+  const locales = options.locales ? defineLocales(options.locales) : undefined;
   const rateLimitStore = options.rateLimitStore ?? createMemoryRateLimitStore();
 
   if (options.cacheStore) {
@@ -143,14 +147,82 @@ export function createRequestHandler(options: RequestHandlerOptions) {
   }
 
   return async function handleRequest(request: Request) {
+    let ssr = options.ssr;
+    if (locales) {
+      const resolution = resolveLocale(request, locales);
+      if (resolution.unsupported) {
+        return await renderNotFoundResponse(manifest, request, {
+          ...options.ssr,
+          locale: resolution.locale,
+          pathname: resolution.pathname,
+        });
+      }
+      if (resolution.redirect) {
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          return createProblemResponse({ status: 400, title: "The locale URL is not canonical." });
+        }
+        const preference = resolution.source === "cookie" || resolution.source === "accept-language";
+        if (preference && !(await isPagePath(manifest, resolution.pathname))) {
+          return await handleRequestWithManifest(manifest, request, {
+            cacheStore: options.cacheStore,
+            onError: options.onError,
+            rateLimitStore,
+            renderPage: options.renderPage,
+            routePathname: resolution.pathname,
+            ssr: { ...options.ssr, locale: locales.defaultLocale },
+          });
+        }
+        const headers = new Headers({ location: resolution.redirect.href });
+        if (preference) {
+          headers.set("cache-control", "private, no-store");
+          headers.set("vary", [locales.cookie ? "Cookie" : undefined, "Accept-Language"].filter(Boolean).join(", "));
+        }
+        return new Response(null, { headers, status: preference ? 307 : 308 });
+      }
+      ssr = { ...options.ssr, locale: resolution.locale };
+      const response = await handleRequestWithManifest(manifest, request, {
+        cacheStore: options.cacheStore,
+        onError: options.onError,
+        rateLimitStore,
+        renderPage: options.renderPage,
+        routePathname: resolution.pathname,
+        ssr,
+      });
+      localizeResponseLocation(response, request, resolution.locale, locales);
+      return response;
+    }
     return await handleRequestWithManifest(manifest, request, {
       cacheStore: options.cacheStore,
       onError: options.onError,
       rateLimitStore,
       renderPage: options.renderPage,
-      ssr: options.ssr,
+      ssr,
     });
   };
+}
+
+async function isPagePath(manifest: RouteManifest, pathname: string) {
+  const match = findRouteMatch(manifest.routes, pathname);
+  if (!match) return true;
+  const module = await match.route.load();
+  return module.GET?.kind === "page";
+}
+
+function localizeResponseLocation(
+  response: Response,
+  request: Request,
+  locale: string,
+  configuration: LocaleConfiguration,
+) {
+  const location = response.headers.get("location");
+  if (!location) return;
+  const requestUrl = new URL(request.url);
+  const destination = new URL(location, requestUrl);
+  if (destination.origin !== requestUrl.origin) return;
+  response.headers.set(
+    "location",
+    localizeHref(location, locale, configuration, requestUrl.href),
+  );
 }
 
 export async function handleRequestWithManifest(
@@ -161,12 +233,13 @@ export async function handleRequestWithManifest(
   },
 ) {
   const url = new URL(request.url);
+  const routePathname = options.routePathname ?? url.pathname;
   const fallbackOptions = createFallbackOptions(url, options);
   const navigationDataRequest = isNavigationDataRequest(request);
   let routeMatch: ReturnType<typeof findRouteMatch>;
 
   try {
-    routeMatch = findRouteMatch(manifest.routes, url.pathname);
+    routeMatch = findRouteMatch(manifest.routes, routePathname);
   } catch (error) {
     if (!(error instanceof MalformedPathnameError)) {
       throw error;
@@ -209,6 +282,7 @@ export async function handleRequestWithManifest(
       request,
       url,
       routeMatch,
+      routePathname,
       options,
       fallbackOptions,
     );
@@ -250,6 +324,7 @@ async function handleMatchedRoute(
   request: Request,
   url: URL,
   routeMatch: NonNullable<ReturnType<typeof findRouteMatch>>,
+  routePathname: string,
   options: RequestRuntimeOptions,
   fallbackOptions: ReturnType<typeof createFallbackOptions>,
 ) {
@@ -350,8 +425,9 @@ async function handleMatchedRoute(
 
   if (capability.kind === "page") {
     const context = {
+      locale: options.ssr?.locale,
       path: routeMatch.path,
-      pathname: url.pathname,
+      pathname: routePathname,
       request,
       context: requestContext,
       search: url.searchParams,
@@ -375,11 +451,11 @@ async function handleMatchedRoute(
         try {
           const match = await loadPageRoute(
             manifest,
-            url.pathname,
+            routePathname,
             request,
             undefined,
             cache,
-            { requestContext },
+            { locale: options.ssr?.locale, requestContext },
           );
 
           if (match.status !== "ready") {
@@ -397,6 +473,7 @@ async function handleMatchedRoute(
                 scripts: match.match.scripts,
                 title: options.ssr?.title,
               }),
+              locale: options.ssr?.locale,
             });
           }
 
@@ -472,8 +549,9 @@ async function handleMatchedRoute(
   }
 
   const context = {
+    locale: options.ssr?.locale,
     path: routeMatch.path,
-    pathname: url.pathname,
+    pathname: routePathname,
     request,
     context: requestContext,
     search: url.searchParams,
@@ -618,6 +696,7 @@ function createFallbackOptions(url: URL, options: RequestRuntimeOptions) {
   return {
     ...options.ssr,
     dev: options.dev,
+    pathname: options.routePathname ?? url.pathname,
     onError: (error: unknown, site: FailureSite) => {
       options.onError?.(error, { pathname: url.pathname, site });
     },

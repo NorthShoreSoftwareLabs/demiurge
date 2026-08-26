@@ -72,7 +72,7 @@ export {
   startDeferredScripts,
   structuredData,
 } from "./document";
-export { href } from "./routing";
+export { applicationPathname, defineLocales, href, localizeHref, resolveLocale } from "./routing";
 export {
   analytics,
   COLLECTED_WEB_VITAL_NAMES,
@@ -311,6 +311,7 @@ export type {
 } from "./platform";
 export type { InitialRouteData } from "./router";
 export type {
+  AppLocale,
   AppHref,
   AppPath,
   LinkTarget,
@@ -326,6 +327,10 @@ export type {
   RoutePathVars,
   RouteRequestContexts,
   RouteMutationMethods,
+  LocaleConfiguration,
+  LocaleResolution,
+  LocaleSource,
+  RouteLocales,
 } from "./routing";
 export type {
   FileRouterOptions,

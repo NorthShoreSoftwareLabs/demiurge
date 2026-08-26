@@ -12,6 +12,7 @@ export function createPageRenderTree(
 ) {
   const page = createElement(match.page, {
     data: match.data,
+    locale: match.locale,
     path: match.path,
     pathname: match.pathname,
   });
@@ -20,6 +21,7 @@ export function createPageRenderTree(
     (children, Layout) =>
       createElement(Layout, {
         children,
+        locale: match.locale,
         path: match.path,
         pathname: match.pathname,
       }),
