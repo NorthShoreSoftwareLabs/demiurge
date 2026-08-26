@@ -14,3 +14,4 @@ after the implementing issue closes. They describe decisions, not task status.
 - [ADR 0009: Accessible browser navigation](./0009-accessible-browser-navigation.md)
 - [ADR 0010: Route mutation protocol](./0010-route-mutation-protocol.md)
 - [ADR 0011: Session management](./0011-session-management.md)
+- [ADR 0012: Locale resolution and routing](./0012-locale-resolution-and-routing.md)
