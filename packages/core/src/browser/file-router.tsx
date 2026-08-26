@@ -54,7 +54,7 @@ import {
   type PendingRouteMatch,
 } from "../router";
 import { BuiltInNotFound } from "../server/fallbacks";
-import { href, type AppHref, type LinkTarget, type LinkTo } from "../routing";
+import { applicationPathname, href, localizeHref, type AppHref, type AppLocale, type LinkTarget, type LinkTo, type LocaleConfiguration } from "../routing";
 import {
   abortMutationActions,
   mutationFormActionDetails,
@@ -100,10 +100,12 @@ export type MutationNavigationState<TData = unknown, TField extends string = str
 export type FormProps =
   | (Omit<FormHTMLAttributes<HTMLFormElement>, "action"> & {
     action?: string;
+    locale?: AppLocale;
     submissionKey?: string;
   })
   | (Omit<FormHTMLAttributes<HTMLFormElement>, "action" | "method"> & {
     action: MutationFormAction;
+    locale?: AppLocale;
     method?: never;
     submissionKey?: never;
   });
@@ -112,6 +114,7 @@ export type MutationSubmitProps =
   Omit<ButtonHTMLAttributes<HTMLButtonElement>, "formAction" | "formMethod"> & {
     formAction: MutationFormAction;
     formMethod?: never;
+    locale?: AppLocale;
   };
 
 export type FileRouterOptions = {
@@ -119,6 +122,8 @@ export type FileRouterOptions = {
   loadNavigationData?: NavigationDataLoader;
   navigation?: "document" | "server";
   routes: Record<string, RouteImporter>;
+  locales?: LocaleConfiguration;
+  locale?: string;
   loading?: ComponentType;
   navigationAccessibility?: NavigationAccessibility;
   navigationScroll?: NavigationScrollOption;
@@ -131,6 +136,8 @@ export function createFileRouter(options: FileRouterOptions) {
 
   return function FileRouter() {
     const [location, setLocation] = useState(() => getCurrentLocation());
+    const [locale, setLocale] = useState(options.locale);
+    const routePathname = applicationPathname(location.pathname, options.locales);
     const lastLocation = useRef(location);
     const [match, setMatch] = useState<PendingRouteMatch>(
       () => options.initialMatch ?? { status: "loading" },
@@ -319,7 +326,7 @@ export function createFileRouter(options: FileRouterOptions) {
 
       if (
         initialMatchPending.current &&
-        getMatchPathname(options.initialMatch) === location.pathname
+        getMatchPathname(options.initialMatch) === routePathname
       ) {
         initialMatchPending.current = false;
         initialNavigationPending.current = false;
@@ -351,7 +358,7 @@ export function createFileRouter(options: FileRouterOptions) {
 
       if (cause !== "refresh") {
         setMatch({ status: "loading" });
-        loadLoadingFallback(manifest, location.pathname).then((Loading) => {
+        loadLoadingFallback(manifest, routePathname).then((Loading) => {
           if (isCurrent() && !settled && Loading) {
             setMatch({ loading: Loading, status: "loading" });
           }
@@ -363,22 +370,36 @@ export function createFileRouter(options: FileRouterOptions) {
       }
       const request = new Request(location.href, { signal: controller.signal });
       Promise.resolve(navigationDataLoader(request))
-        .then(async (initialData) => ({
-          initialData,
-          nextMatch: await loadPageRoute(
+        .then(async (initialData) => {
+          const responseUrl = initialData.url ? new URL(initialData.url, location.href) : new URL(location.href);
+          if (!responseUrl.hash) responseUrl.hash = location.hash;
+          return {
+            initialData,
+            responseUrl,
+            nextMatch: await loadPageRoute(
             manifest,
-            location.pathname,
-            request,
+            applicationPathname(responseUrl.pathname, options.locales),
+            new Request(responseUrl.href, { signal: controller.signal }),
             initialData,
             undefined,
-            { documentContributions: false },
+            { documentContributions: false, locale: initialData.locale ?? locale },
           ),
-        }))
-        .then(({ initialData, nextMatch }) => {
+          };
+        })
+        .then(({ initialData, nextMatch, responseUrl }) => {
           settled = true;
           if (isCurrent()) {
             if (initialData.document) {
               applyNavigationDocument(initialData.document);
+            }
+            if ("locale" in initialData && initialData.locale) {
+              setLocale(initialData.locale);
+            }
+            if (responseUrl.href !== location.href) {
+              window.history.replaceState(window.history.state, "", responseUrl);
+              const canonicalLocation = getCurrentLocation();
+              lastLocation.current = canonicalLocation;
+              setLocation(canonicalLocation);
             }
             setMatch(nextMatch);
             setResolvedRouteVersion((value) => value + 1);
@@ -401,7 +422,7 @@ export function createFileRouter(options: FileRouterOptions) {
 
           const ErrorFallback = await loadErrorFallback(
             manifest,
-            location.pathname,
+            routePathname,
           );
 
           if (isCurrent()) {
@@ -414,7 +435,8 @@ export function createFileRouter(options: FileRouterOptions) {
             setMatch({
               Error: ErrorFallback,
               error,
-              pathname: location.pathname,
+              locale,
+              pathname: routePathname,
               status: "error",
             });
             setPendingCommit(cause === "refresh"
@@ -436,7 +458,7 @@ export function createFileRouter(options: FileRouterOptions) {
           routeLoadController.current = undefined;
         }
       };
-    }, [location.pathname, location.search, routeRefresh]);
+    }, [routePathname, location.search, routeRefresh]);
 
     useLayoutEffect(() => {
       if (!committed || options.navigation === "document") {
@@ -492,6 +514,8 @@ export function createFileRouter(options: FileRouterOptions) {
     const router = useMemo(
       () => ({
         navigation: options.navigation ?? "server",
+        locale,
+        locales: options.locales,
         submissionVersion,
         getMutationNavigation(form?: HTMLFormElement, submissionKey?: string) {
           const key = mutationSubmissionKey(form, submissionKey);
@@ -677,7 +701,7 @@ export function createFileRouter(options: FileRouterOptions) {
           setRouteRefresh((value) => value + 1);
         });
       },
-    }), []);
+    }), [locale, options.locales, options.navigation]);
 
     return createElement(RouterContext.Provider, {
       value: router,
@@ -768,17 +792,18 @@ export async function hydrateFileRouter(options: HydrateFileRouterOptions) {
   const initialData = options.initialData ?? readInitialRouteData(document);
   const match = await loadPageRoute(
     manifest,
-    window.location.pathname,
+    applicationPathname(window.location.pathname, options.locales),
     new Request(window.location.href),
     initialData ?? await navigationDataLoader(new Request(window.location.href)),
     undefined,
-    { documentContributions: false },
+    { documentContributions: false, locale: initialData?.locale ?? options.locale },
   );
   const hydratable = isHydratableMatch(match, root);
   const Router = createFileRouter(
     hydratable
       ? {
         ...options,
+        locale: initialData?.locale ?? options.locale,
         initialMatch: match,
         loadNavigationData: navigationDataLoader,
         navigation: initialData?.navigation ?? options.navigation,
@@ -845,6 +870,7 @@ export type LinkProps<TTo extends AppHref = AppHref> = LinkTo<TTo> &
   Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
     reloadDocument?: boolean;
     replace?: boolean;
+    locale?: AppLocale;
   } & DataAttributes;
 
 function LinkImplementation<const TTo extends AppHref>(
@@ -856,6 +882,7 @@ function LinkImplementation<const TTo extends AppHref>(
     children,
     download,
     hash: _hash,
+    locale: _locale,
     onClick,
     path: _path,
     reloadDocument,
@@ -866,7 +893,16 @@ function LinkImplementation<const TTo extends AppHref>(
     ...anchorProps
   } = props;
   // TYPE-EVIDENCE: href reads only the typed destination fields from LinkProps.
-  const to = href(props as LinkTarget<TTo>);
+  const baseHref = href(props as LinkTarget<TTo>);
+  const explicitLocale = _locale;
+  const to = router.locales && (explicitLocale ?? router.locale)
+    ? localizeHref(
+      baseHref,
+      (explicitLocale ?? router.locale)!,
+      router.locales,
+      typeof window === "undefined" ? "http://demiurge.local" : window.location.href,
+    )
+    : baseHref;
 
   return (
     <a
@@ -953,13 +989,17 @@ export function Form(props: FormProps) {
   const action = progressiveAction
     ? enhanceProgressiveAction ? progressiveAction : progressiveDetails?.url
     : formProps.action;
+  const localizedAction = typeof action === "string" && router.locales && (props.locale ?? router.locale)
+    ? localizeHref(action, (props.locale ?? router.locale)!, router.locales, typeof window === "undefined" ? "http://demiurge.local" : window.location.href)
+    : action;
   return createElement(
     MutationFormContext.Provider,
     {
       value: formKey,
       children: createElement("form", {
         ...formProps,
-        action,
+        action: localizedAction,
+        locale: undefined,
         ...(progressiveAction
           ? {
               encType: enhanceProgressiveAction ? undefined : formProps.encType,
@@ -980,9 +1020,13 @@ export function MutationSubmit(props: MutationSubmitProps) {
   const hydrated = useHydratedFormAction();
   const details = mutationFormActionDetails(props.formAction);
   const enhance = hydrated && router.navigation === "server";
+  const action = router.locales && (props.locale ?? router.locale)
+    ? localizeHref(details.url, (props.locale ?? router.locale)!, router.locales, typeof window === "undefined" ? "http://demiurge.local" : window.location.href)
+    : details.url;
   return createElement("button", {
     ...props,
-    formAction: enhance ? props.formAction : details.url,
+    locale: undefined,
+    formAction: enhance ? props.formAction : action,
     formMethod: enhance ? undefined : "post",
   });
 }
@@ -1017,7 +1061,7 @@ function RouteRenderer({
   onRouteCommitted,
 }: {
   Loading?: ComponentType;
-  NotFound?: ComponentType<{ pathname: string }>;
+  NotFound?: ComponentType<NotFoundProps>;
   match: PendingRouteMatch;
   onCommitted: (value: NavigationCommit) => void;
   onRenderError: () => void;
@@ -1038,10 +1082,11 @@ function RouteRenderer({
       (children, Layout) =>
         createElement(Layout, {
           children,
+          locale: match.locale,
           path: {},
           pathname: match.pathname,
         }),
-      createElement(AppNotFound, { pathname: match.pathname }),
+      createElement(AppNotFound, { locale: match.locale, pathname: match.pathname }),
     ), createElement(NavigationCommitMarker, { commit: pendingCommit, onCommit: onCommitted, onRouteCommitted, resolvedRouteVersion }));
   }
 
@@ -1049,16 +1094,17 @@ function RouteRenderer({
     return createElement(Fragment, null, match.Error
       ? createElement(match.Error, {
           error: match.error,
+          locale: "locale" in match ? match.locale : undefined,
           pathname: match.pathname,
           status: errorStatus(match.error),
         })
       : null, createElement(NavigationCommitMarker, { commit: pendingCommit, onCommit: onCommitted, onRouteCommitted, resolvedRouteVersion }));
   }
 
-  const { data, error, page, layouts, path, pathname } = match.match;
-  const pageElement = createElement(page, { data, path, pathname });
+  const { data, error, locale, page, layouts, path, pathname } = match.match;
+  const pageElement = createElement(page, { data, locale, path, pathname });
   const routeElement = layouts.reduceRight<ReactNode>(
-    (children, Layout) => createElement(Layout, { path, pathname, children }),
+    (children, Layout) => createElement(Layout, { path, pathname, locale, children }),
     pageElement,
   );
 
@@ -1270,6 +1316,8 @@ async function loadNavigationData(request: Request) {
       data: value.data,
       document: value.document,
       hasData: true,
+      locale: value.locale,
+      url: response.url,
     };
   }
 
@@ -1278,6 +1326,8 @@ async function loadNavigationData(request: Request) {
     return {
       document: value?.document,
       hasData: true,
+      locale: value?.locale,
+      url: response.url,
     };
   }
 
@@ -1484,6 +1534,8 @@ function announceNavigationRegion(message: string) {
 }
 
 type RouterApi = {
+  locale?: string;
+  locales?: LocaleConfiguration;
   navigation: "document" | "server";
   submissionVersion: number;
   push(to: string): void;

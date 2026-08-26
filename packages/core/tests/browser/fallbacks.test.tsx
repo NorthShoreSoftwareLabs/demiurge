@@ -1306,6 +1306,56 @@ function routeModule(module: Record<string, unknown>) {
   return async () => module;
 }
 
+describe("localized browser navigation", () => {
+  const locales = {
+    defaultLocale: "en",
+    path: { labels: { en: "en", fr: "fr" } },
+    supportedLocales: ["en", "fr"],
+  } as const;
+
+  it("preserves the active locale and supports an explicit switch", async () => {
+    window.history.replaceState(null, "", "/fr");
+    const Router = createFileRouter({
+      locale: "fr",
+      locales,
+      loadNavigationData: async () => ({ hasData: true, locale: "fr" }),
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(() => (
+          <>
+            <Link to="/blog">French blog</Link>
+            <Link locale="en" to="/blog">English blog</Link>
+            <Form action="/save" aria-label="Save" />
+          </>
+        )) }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+    render(<Router />);
+    expect((await screen.findByRole("link", { name: "French blog" })).getAttribute("href")).toBe("/fr/blog");
+    expect(screen.getByRole("link", { name: "English blog" }).getAttribute("href")).toBe("/blog");
+    expect(screen.getByRole("form", { name: "Save" }).getAttribute("action")).toBe("/fr/save");
+  });
+
+  it("reconciles the history URL with the canonical navigation response URL", async () => {
+    window.history.replaceState(null, "", "/blog#section");
+    const Router = createFileRouter({
+      locales,
+      loadNavigationData: async () => ({
+        hasData: true,
+        locale: "fr",
+        url: `${window.location.origin}/fr/blog`,
+      }),
+      routes: {
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+    render(<Router />);
+    await waitFor(() => expect(window.location.pathname).toBe("/fr/blog"));
+    expect(window.location.hash).toBe("#section");
+    expect(screen.getByText("Blog page at /blog")).toBeTruthy();
+  });
+});
+
 function runtimeLinkProps(to: string) {
   // TYPE-EVIDENCE: this helper exercises runtime protection for a destination that generated application route types reject at compile time.
   return { to } as LinkProps;

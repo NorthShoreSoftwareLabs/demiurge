@@ -8,7 +8,9 @@ export type InitialRouteData = {
     title?: string;
   };
   hasData: boolean;
+  locale?: string;
   navigation?: "document";
+  url?: string;
 };
 
 export const HYDRATION_DATA_ELEMENT_ID = "__demiurge_data";
@@ -20,7 +22,7 @@ export const HYDRATION_FALLBACK_ATTRIBUTE = "data-demiurge-fallback";
 
 export function serializeInitialRouteData(
   data: unknown,
-  options: { navigation?: "document" } = {},
+  options: { locale?: string; navigation?: "document" } = {},
 ) {
   return escapeJsonScript(
     JSON.stringify({ data, hasData: true, ...options }),

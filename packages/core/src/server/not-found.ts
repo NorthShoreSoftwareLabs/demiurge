@@ -25,6 +25,7 @@ import type { SsrRenderOptions } from "./ssr";
 
 export type NotFoundRenderOptions = SsrRenderOptions & {
   onError?: (error: unknown, site: FailureSite) => void;
+  pathname?: string;
   // Dev passes Vite's `transformIndexHtml` here so a framework-rendered
   // fallback document gets the same client entry and HMR wiring a page does.
   transformDocument?: (html: string) => string | Promise<string>;
@@ -47,15 +48,17 @@ export async function renderNotFoundResponse(
   options: NotFoundRenderOptions = {},
 ) {
   const url = new URL(request.url);
+  const pathname = options.pathname ?? url.pathname;
 
   if (!isNavigationDataRequest(request) && !prefersHtmlDocument(request)) {
     return createNotFoundProblemResponse(url);
   }
 
-  const match = await loadNotFoundMatch(manifest, url.pathname, {
+  const match = await loadNotFoundMatch(manifest, pathname, {
+    locale: options.locale,
     onLayoutError: (error) => options.onError?.(error, "page"),
   });
-  const documentPolicy = await loadDocumentPolicy(manifest, url.pathname);
+  const documentPolicy = await loadDocumentPolicy(manifest, pathname);
   const nonce = options.nonce ?? (
     securityPolicyRequiresNonce(documentPolicy) ? createCspNonce() : undefined
   );
@@ -70,6 +73,7 @@ export async function renderNotFoundResponse(
         metadata: match.metadata,
         title: options.title,
       }),
+      locale: options.locale,
       headers,
       kind: NAVIGATION_NOT_FOUND_RESPONSE,
       status: 404,
@@ -133,10 +137,11 @@ function renderAttempt(
     (children, Layout) =>
       createElement(Layout, {
         children,
+        locale: match.locale,
         path: {},
         pathname: match.pathname,
       }),
-    createElement(NotFound, { pathname: match.pathname }),
+    createElement(NotFound, { locale: match.locale, pathname: match.pathname }),
   );
   const scripts = createScriptRenderContext({
     dev: options.dev,
@@ -148,6 +153,7 @@ function renderAttempt(
       data: undefined,
       fallback: "not-found",
       html: renderToString(withScriptContext(scripts, content)),
+      locale: options.locale,
       navigation: options.navigation,
     },
     entrySrc: options.clientEntry,

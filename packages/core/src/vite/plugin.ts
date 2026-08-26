@@ -58,6 +58,7 @@ import type {
   StaticFileHeaderPatternRule,
   VercelStaticDeployment,
 } from "../static";
+import { defineLocales, type LocaleConfiguration } from "../routing";
 
 export type DemiurgeVitePluginOptions = {
   // The route audit panel of the development server. The panel is available by
@@ -73,6 +74,7 @@ export type DemiurgeVitePluginOptions = {
   // The image policy that the application passes to `planImageTransform` and
   // to `Image`. The development server serves the optimizer path from it.
   images?: ImagePolicy;
+  locales?: LocaleConfiguration;
   routesDir?: string;
   static?: {
     deployment?: VercelStaticDeployment;
@@ -99,6 +101,7 @@ const SERVER_ENTRY_ID = "virtual:demiurge/server-entry";
 const RESOLVED_SERVER_ENTRY_ID = `\0${SERVER_ENTRY_ID}`;
 const DEFAULT_TYPED_ROUTES_OUTPUT = ".demiurge/route-manifest.d.ts";
 export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
+  if (options.locales) options = { ...options, locales: defineLocales(options.locales) };
   let root = process.cwd();
   let isBuild = false;
   const viteNoncePlaceholder = `demiurge-${createCspNonce()}`;
@@ -834,7 +837,7 @@ ${createRouteMapSource(routesDir, {
     includeServerOnly: false,
   })}
 
-void hydrateFileRouter({ routes });
+void hydrateFileRouter({ routes${options.locales ? `, locales: ${JSON.stringify(options.locales)}` : ""} });
 `;
 }
 
@@ -853,12 +856,13 @@ ${createRouteMapSource(routesDir, {
   })}
 
 export function createHandler(options = {}) {
-  const { clientEntry, lang, styles, title, ...handlerOptions } = options;
+  const { clientEntry, lang, locales, styles, title, ...handlerOptions } = options;
 
   return createRequestHandler({
     ...handlerOptions,
     routes,
     routeModules,
+    locales: locales ?? ${JSON.stringify(options.locales)},
     ssr: {
       clientEntry,
       lang: lang ?? ${JSON.stringify(options.document?.lang)},
@@ -1477,7 +1481,16 @@ async function generateTypedRoutes(
       : DEFAULT_TYPED_ROUTES_OUTPUT,
   );
 
-  await generateRoutes({ outputFile, routesDir });
+  await generateRoutes({
+    outputFile,
+    routesDir,
+    locales: options.locales?.supportedLocales,
+    localeNamespaces: [
+      ...Object.values(options.locales?.path?.labels ?? {}),
+      ...Object.keys(options.locales?.aliases ?? {}),
+      ...(options.locales?.path?.reserved ?? []),
+    ],
+  });
 }
 
 function isRouteFile(routesDir: string, file: string) {
