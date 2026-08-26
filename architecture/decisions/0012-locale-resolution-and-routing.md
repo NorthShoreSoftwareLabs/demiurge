@@ -60,14 +60,51 @@ for an explicit URL or domain value.
 
 ### URL strategies
 
-An application can bind locale identity to a path prefix, a domain, or neither.
+An application binds each locale-aware page to a path prefix or a domain.
 Path and domain bindings can exist together for explicit migrations.
 
-A path binding maps a leading URL segment to a supported locale. The locale
-segment is separate from the application route pattern and route parameters.
+An application can omit both bindings only when it supports one locale. It can
+also omit them for a route that explicitly declares locale-neutral output.
+
+Configuration fails when a locale-aware page supports multiple locales without
+a URL binding. A cookie or request header cannot become page identity.
+
+A path binding maps a declared leading URL label to a supported locale. The
+locale segment is separate from the application route pattern and route parameters.
+
+The application declares every label that belongs to the locale namespace. The
+declaration contains canonical labels, aliases, and optional reserved labels.
+
+Routing tests a declared locale label before it tests an application route. A
+declared canonical, alias, or reserved label therefore owns that leading segment.
+
+If the segment is not declared, routing tests the complete pathname as an
+application route. Thus, `/about` remains valid when `about` is not declared.
+
+A canonical label or alias selects its mapped locale. A reserved label returns
+not found and cannot match an application route.
+
+The resolver does not use a language-tag heuristic to consume an undeclared
+segment. The application must reserve an unsupported or retired locale label
+when that label must return a locale-specific not-found response.
 
 A domain binding maps a normalized host to a supported locale. Ports are not
 part of the configured production domain identity.
+
+Domain routing uses a complete mapping or an exact fallback mode. A complete
+mapping declares one canonical host for every supported locale.
+
+The complete mapping can also declare alias hosts. Each alias redirects to the
+canonical host for its mapped locale.
+
+Exact fallback mode declares one canonical host and its fallback locale. Every
+other locale must then have a path binding on that host.
+
+The fallback selects its locale only when the path does not select another
+locale. It matches only the configured normalized host.
+
+Configuration fails for an incomplete mapping outside exact fallback mode. An
+unknown host does not use the fallback and does not select a locale.
 
 The application declares whether the default locale has a path prefix. If it
 omits that prefix, an explicit default-locale prefix redirects to the unprefixed
@@ -83,8 +120,8 @@ the client supplied them.
 Canonicalization uses status 308 for `GET` and `HEAD`. The framework does not
 automatically redirect an unsafe method.
 
-An explicit unsupported path locale returns not found. It does not fall back
-to the default locale and does not treat that segment as a locale-free route.
+A reserved unsupported path locale returns not found. It does not fall back to
+the default locale and does not match an application route.
 
 An unconfigured host does not become an unsupported locale. Normal host and
 deployment validation rules continue to apply.
@@ -123,11 +160,26 @@ application must explicitly enable and name the cookie.
 ### Replaceable resolver
 
 The locale resolver is an application-supplied function with a framework default.
-It receives normalized candidates, supported locales, the default locale, the
-route kind, and the request method.
+It receives a typed `LocaleResolverInput` value.
+
+Dynamic input contains normalized path and domain candidates. It also contains
+enabled cookie and language candidates, supported locales, the default locale,
+the route kind, the request method, and the canonical URL configuration.
+
+Static input has a `mode: "static"` discriminant. It contains one declared
+locale, route kind, route path, and build-target canonical host.
+
+Static input does not contain a cookie, request headers, or an inferred domain.
+It contains no request-only candidate.
 
 The resolver returns one supported locale identity and its source. It can also
 return a canonical redirect or an unsupported explicit-locale result.
+
+The resolver also returns a typed cache variation declaration. It has separate
+`headers` and `cookies` name lists.
+
+Each cookie name must equal the configured preference cookie. Header names use
+HTTP field-name syntax and cannot name `Cookie` directly.
 
 The resolver must be deterministic for the supplied input. It cannot depend on
 hidden process state.
@@ -140,6 +192,14 @@ locale precedence.
 
 Static generation uses the same resolver contract with a static input mode. A
 custom resolver must support this mode if the application generates static pages.
+
+Core calls the resolver for each declared static locale during configuration.
+The build fails if the result changes the supplied locale or uses a request-only
+source.
+
+The build also fails if a static result redirects, requests cookie variation,
+or requests header variation. Static resolution must return the supplied locale
+and its canonical URL identity.
 
 ### Page, API, and asset behavior
 
@@ -171,6 +231,18 @@ the resolved request locale when page negotiation can select one.
 Static generation enumerates supported locale identities for each locale-aware
 page. It creates only canonical path and domain combinations.
 
+Each static build target declares exactly one canonical host. A domain-localized
+application runs one build target for each canonical locale host.
+
+A target emits only the locale mapped to its canonical host. Path-localized
+output can emit all locale prefixes into one target when one host owns them.
+
+Collision detection is scoped to one build target and its canonical host. The
+build compares the complete emitted pathname after locale prefix resolution.
+
+Two outputs on different canonical hosts do not collide. Two outputs with the
+same pathname and target host fail the build, even when their source routes differ.
+
 Static generation never reads a cookie or `Accept-Language`. A static host can
 implement preference discovery only as a redirect before it serves an artifact.
 
@@ -187,6 +259,32 @@ from browser preferences.
 A static artifact contains content for one locale identity. Runtime negotiation
 cannot change that artifact's locale without a redirect to another artifact.
 
+### Canonical and alternate metadata
+
+Each localized page emits a self canonical URL for its active locale. The URL
+uses the configured canonical path and canonical host for that locale.
+
+Each equivalent supported locale emits one alternate link. Its `hrefLang` value
+is that locale's canonical BCP 47 identifier.
+
+An application can identify one alternate as `x-default`. The default locale
+does not become `x-default` automatically.
+
+`x-default` points to a configured locale-selection URL or one canonical locale
+URL. It cannot point to an alias or a negotiation result that varies by visitor.
+
+The framework deduplicates an exact normalized `hrefLang` and absolute URL pair.
+The self alternate and canonical URL must identify the same active-locale page.
+
+Configuration fails when one normalized `hrefLang` has different URLs. It also
+fails when one URL claims different locales or multiple `x-default` values exist.
+
+The static build fails for a static-only conflict. Dynamic startup fails for a
+conflict that the framework can know from dynamic route configuration.
+
+A request fails before rendering when application metadata adds a conflicting
+canonical or alternate value that depends on request data.
+
 ### Privacy
 
 `Accept-Language` can add fingerprinting information. The framework uses it only
@@ -197,7 +295,13 @@ Framework diagnostics record the selected locale and source. They do not record
 the preference cookie value or the complete `Accept-Language` header.
 
 The locale cookie is a preference, not an authentication value. Its default
-scope is `Path=/`, `SameSite=Lax`, and `Secure` on secure origins.
+scope is `Path=/`, `SameSite=Lax`, `HttpOnly`, and `Secure` on secure origins.
+
+The default cookie is not available to browser JavaScript. A locale switcher
+navigates to an explicit locale URL or calls an application endpoint.
+
+An application can disable `HttpOnly` as an explicit security opt-out. The
+framework does not require JavaScript cookie access for browser navigation.
 
 The application owns consent and retention policy for the preference cookie.
 Core does not write the cookie only because a request contains `Accept-Language`.
@@ -207,9 +311,27 @@ Core does not write the cookie only because a request contains `Accept-Language`
 A canonical path or domain is the preferred cache identity. A response at that
 URL does not vary by the locale cookie or `Accept-Language`.
 
-A negotiation redirect varies on every preference input that affected its
-selection. The default resolver adds `Vary: Cookie, Accept-Language` when both
-inputs are enabled.
+Framework render and data caches add the canonical locale identity to every
+locale-aware route key. Applications do not add this scope manually.
+
+A route can declare locale-neutral output. Only that declaration removes locale
+from its framework cache key.
+
+Locale-aware cache tags receive an internal locale scope before storage and
+invalidation. Invalidating a route tag affects the active locale by default.
+
+An application can request all-locale invalidation explicitly. The cache expands
+that request to each configured locale scope.
+
+A negotiation redirect varies on every preference input that can affect its
+selection. The default resolver declares `Cookie` and `Accept-Language` when
+both inputs are enabled.
+
+Core merges resolver declarations with existing `Vary` values. Header names use
+case-insensitive deduplication, and an existing `Vary: *` remains authoritative.
+
+A cookie variation declaration names the configured cookie. HTTP still emits
+`Vary: Cookie` because the protocol cannot vary on one cookie name.
 
 Negotiation redirects use `Cache-Control: private, no-store`. A shared cache must
 not reuse one visitor's preference redirect for another visitor.
@@ -220,10 +342,15 @@ Their cache key must include the host when domain routing is enabled.
 Framework render and data-cache identity includes the canonical locale identity.
 It does not include the raw preference cookie or complete language header.
 
-A custom resolver that varies a representation without changing its canonical
-URL must declare the related request headers. Dynamic responses then include
-those headers in `Vary` and cannot use shared caching without an equivalent
-adapter cache key.
+A custom resolver must declare each request header or cookie that can change its
+result. Core rejects a dynamic result with an undeclared request-dependent source.
+
+Dynamic responses include the merged `Vary` fields. Any cookie variation forces
+`Cache-Control: private, no-store`.
+
+Header variation also forces `private, no-store` unless the adapter declares an
+equivalent shared-cache key for every varied header. The framework verifies that
+declaration before it permits shared caching.
 
 ## Consequences
 
