@@ -20,6 +20,7 @@ export function createNavigationDataResponse(
       typeof NAVIGATION_ERROR_RESPONSE |
       typeof NAVIGATION_NOT_FOUND_RESPONSE;
     status?: number;
+    locale?: string;
   } = {},
 ) {
   const headers = new Headers(options.headers);
@@ -36,6 +37,7 @@ export function createNavigationDataResponse(
       document: options.document,
       error: options.error,
       hasData: true,
+      locale: options.locale,
     } satisfies InitialRouteData,
     {
       headers,

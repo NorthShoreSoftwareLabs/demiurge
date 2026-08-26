@@ -19,7 +19,7 @@ export async function createDocumentShell(
   options: SsrRenderOptions & { scripts?: ScriptTag[] },
 ): Promise<DocumentShell> {
   const shell = renderDocumentShell({
-    body: { data: match.data, navigation: options.navigation },
+    body: { data: match.data, locale: options.locale, navigation: options.navigation },
     entrySrc: options.clientEntry,
     lang: options.lang,
     links: match.links,

@@ -6,6 +6,7 @@ import { createPageRenderTree, createPageScriptContext } from "./render-tree";
 export type SsrOptions = {
   clientEntry?: string;
   lang?: string;
+  locale?: string;
   navigation?: "document";
   styles?: string[];
   title?: string;
@@ -30,6 +31,7 @@ export function renderPageDocument(
     body: {
       data: match.data,
       html,
+      locale: options.locale,
       navigation: match.render.mode === "static"
         ? "document"
         : options.navigation,

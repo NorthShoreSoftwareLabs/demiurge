@@ -58,6 +58,7 @@ import type {
   StaticFileHeaderPatternRule,
   VercelStaticDeployment,
 } from "../static";
+import type { LocaleConfiguration } from "../routing";
 
 export type DemiurgeVitePluginOptions = {
   // The route audit panel of the development server. The panel is available by
@@ -73,6 +74,7 @@ export type DemiurgeVitePluginOptions = {
   // The image policy that the application passes to `planImageTransform` and
   // to `Image`. The development server serves the optimizer path from it.
   images?: ImagePolicy;
+  locales?: LocaleConfiguration;
   routesDir?: string;
   static?: {
     deployment?: VercelStaticDeployment;
@@ -834,7 +836,7 @@ ${createRouteMapSource(routesDir, {
     includeServerOnly: false,
   })}
 
-void hydrateFileRouter({ routes });
+void hydrateFileRouter({ routes${options.locales ? `, locales: ${JSON.stringify(options.locales)}` : ""} });
 `;
 }
 
@@ -853,12 +855,13 @@ ${createRouteMapSource(routesDir, {
   })}
 
 export function createHandler(options = {}) {
-  const { clientEntry, lang, styles, title, ...handlerOptions } = options;
+  const { clientEntry, lang, locales, styles, title, ...handlerOptions } = options;
 
   return createRequestHandler({
     ...handlerOptions,
     routes,
     routeModules,
+    locales: locales ?? ${JSON.stringify(options.locales)},
     ssr: {
       clientEntry,
       lang: lang ?? ${JSON.stringify(options.document?.lang)},
@@ -1477,7 +1480,11 @@ async function generateTypedRoutes(
       : DEFAULT_TYPED_ROUTES_OUTPUT,
   );
 
-  await generateRoutes({ outputFile, routesDir });
+  await generateRoutes({
+    outputFile,
+    routesDir,
+    locales: options.locales?.supportedLocales,
+  });
 }
 
 function isRouteFile(routesDir: string, file: string) {

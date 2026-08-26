@@ -54,7 +54,7 @@ import {
   type PendingRouteMatch,
 } from "../router";
 import { BuiltInNotFound } from "../server/fallbacks";
-import { href, type AppHref, type LinkTarget, type LinkTo } from "../routing";
+import { applicationPathname, href, localizeHref, type AppHref, type AppLocale, type LinkTarget, type LinkTo, type LocaleConfiguration } from "../routing";
 import {
   abortMutationActions,
   mutationFormActionDetails,
@@ -119,6 +119,8 @@ export type FileRouterOptions = {
   loadNavigationData?: NavigationDataLoader;
   navigation?: "document" | "server";
   routes: Record<string, RouteImporter>;
+  locales?: LocaleConfiguration;
+  locale?: string;
   loading?: ComponentType;
   navigationAccessibility?: NavigationAccessibility;
   navigationScroll?: NavigationScrollOption;
@@ -131,6 +133,8 @@ export function createFileRouter(options: FileRouterOptions) {
 
   return function FileRouter() {
     const [location, setLocation] = useState(() => getCurrentLocation());
+    const [locale, setLocale] = useState(options.locale);
+    const routePathname = applicationPathname(location.pathname, options.locales);
     const lastLocation = useRef(location);
     const [match, setMatch] = useState<PendingRouteMatch>(
       () => options.initialMatch ?? { status: "loading" },
@@ -319,7 +323,7 @@ export function createFileRouter(options: FileRouterOptions) {
 
       if (
         initialMatchPending.current &&
-        getMatchPathname(options.initialMatch) === location.pathname
+        getMatchPathname(options.initialMatch) === routePathname
       ) {
         initialMatchPending.current = false;
         initialNavigationPending.current = false;
@@ -351,7 +355,7 @@ export function createFileRouter(options: FileRouterOptions) {
 
       if (cause !== "refresh") {
         setMatch({ status: "loading" });
-        loadLoadingFallback(manifest, location.pathname).then((Loading) => {
+        loadLoadingFallback(manifest, routePathname).then((Loading) => {
           if (isCurrent() && !settled && Loading) {
             setMatch({ loading: Loading, status: "loading" });
           }
@@ -367,7 +371,7 @@ export function createFileRouter(options: FileRouterOptions) {
           initialData,
           nextMatch: await loadPageRoute(
             manifest,
-            location.pathname,
+            routePathname,
             request,
             initialData,
             undefined,
@@ -379,6 +383,9 @@ export function createFileRouter(options: FileRouterOptions) {
           if (isCurrent()) {
             if (initialData.document) {
               applyNavigationDocument(initialData.document);
+            }
+            if ("locale" in initialData && initialData.locale) {
+              setLocale(initialData.locale);
             }
             setMatch(nextMatch);
             setResolvedRouteVersion((value) => value + 1);
@@ -401,7 +408,7 @@ export function createFileRouter(options: FileRouterOptions) {
 
           const ErrorFallback = await loadErrorFallback(
             manifest,
-            location.pathname,
+            routePathname,
           );
 
           if (isCurrent()) {
@@ -414,7 +421,7 @@ export function createFileRouter(options: FileRouterOptions) {
             setMatch({
               Error: ErrorFallback,
               error,
-              pathname: location.pathname,
+              pathname: routePathname,
               status: "error",
             });
             setPendingCommit(cause === "refresh"
@@ -436,7 +443,7 @@ export function createFileRouter(options: FileRouterOptions) {
           routeLoadController.current = undefined;
         }
       };
-    }, [location.pathname, location.search, routeRefresh]);
+    }, [routePathname, location.search, routeRefresh]);
 
     useLayoutEffect(() => {
       if (!committed || options.navigation === "document") {
@@ -492,6 +499,8 @@ export function createFileRouter(options: FileRouterOptions) {
     const router = useMemo(
       () => ({
         navigation: options.navigation ?? "server",
+        locale,
+        locales: options.locales,
         submissionVersion,
         getMutationNavigation(form?: HTMLFormElement, submissionKey?: string) {
           const key = mutationSubmissionKey(form, submissionKey);
@@ -677,7 +686,7 @@ export function createFileRouter(options: FileRouterOptions) {
           setRouteRefresh((value) => value + 1);
         });
       },
-    }), []);
+    }), [locale, options.locales, options.navigation]);
 
     return createElement(RouterContext.Provider, {
       value: router,
@@ -768,7 +777,7 @@ export async function hydrateFileRouter(options: HydrateFileRouterOptions) {
   const initialData = options.initialData ?? readInitialRouteData(document);
   const match = await loadPageRoute(
     manifest,
-    window.location.pathname,
+    applicationPathname(window.location.pathname, options.locales),
     new Request(window.location.href),
     initialData ?? await navigationDataLoader(new Request(window.location.href)),
     undefined,
@@ -779,6 +788,7 @@ export async function hydrateFileRouter(options: HydrateFileRouterOptions) {
     hydratable
       ? {
         ...options,
+        locale: initialData?.locale ?? options.locale,
         initialMatch: match,
         loadNavigationData: navigationDataLoader,
         navigation: initialData?.navigation ?? options.navigation,
@@ -845,6 +855,7 @@ export type LinkProps<TTo extends AppHref = AppHref> = LinkTo<TTo> &
   Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
     reloadDocument?: boolean;
     replace?: boolean;
+    locale?: AppLocale;
   } & DataAttributes;
 
 function LinkImplementation<const TTo extends AppHref>(
@@ -856,6 +867,7 @@ function LinkImplementation<const TTo extends AppHref>(
     children,
     download,
     hash: _hash,
+    locale: _locale,
     onClick,
     path: _path,
     reloadDocument,
@@ -866,7 +878,11 @@ function LinkImplementation<const TTo extends AppHref>(
     ...anchorProps
   } = props;
   // TYPE-EVIDENCE: href reads only the typed destination fields from LinkProps.
-  const to = href(props as LinkTarget<TTo>);
+  const baseHref = href(props as LinkTarget<TTo>);
+  const explicitLocale = _locale;
+  const to = router.locales && (explicitLocale ?? router.locale)
+    ? localizeHref(baseHref, (explicitLocale ?? router.locale)!, router.locales, window.location.href)
+    : baseHref;
 
   return (
     <a
@@ -1484,6 +1500,8 @@ function announceNavigationRegion(message: string) {
 }
 
 type RouterApi = {
+  locale?: string;
+  locales?: LocaleConfiguration;
   navigation: "document" | "server";
   submissionVersion: number;
   push(to: string): void;
