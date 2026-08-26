@@ -1,10 +1,12 @@
 import { renderToString } from "react-dom/server";
 import { renderDocument } from "../document";
+import { localeDirection } from "../routing";
 import type { LoadedRouteMatch } from "../router";
 import { createPageRenderTree, createPageScriptContext } from "./render-tree";
 
 export type SsrOptions = {
   clientEntry?: string;
+  dir?: "ltr" | "rtl";
   lang?: string;
   locale?: string;
   navigation?: "document";
@@ -20,10 +22,18 @@ export type SsrRenderOptions = SsrOptions & {
   transformDocument?: (html: string) => string | Promise<string>;
 };
 
+export function resolveDocumentLocale(options: SsrOptions) {
+  return {
+    dir: options.dir ?? (options.locale ? localeDirection(options.locale) : undefined),
+    lang: options.lang ?? options.locale,
+  };
+}
+
 export function renderPageDocument(
   match: LoadedRouteMatch,
   options: SsrRenderOptions = {},
 ) {
+  const documentLocale = resolveDocumentLocale(options);
   const scripts = createPageScriptContext(match, options);
   const html = renderToString(createPageRenderTree(match, scripts));
 
@@ -37,7 +47,8 @@ export function renderPageDocument(
         : options.navigation,
     },
     entrySrc: options.clientEntry,
-    lang: options.lang,
+    dir: documentLocale.dir,
+    lang: documentLocale.lang,
     links: match.links,
     metadata: match.metadata,
     nonce: options.nonce,

@@ -79,6 +79,21 @@ describe("a failure inside a page render", () => {
     });
   });
 
+  it("applies resolved language and direction to an error document", async () => {
+    const handler = createRequestHandler({
+      onError: vi.fn(),
+      routes: {
+        "./routes/@error.tsx": routeModule({ default: AppError }),
+        "./routes/index.tsx": routeModule({ GET: page({ view: BrokenView }) }),
+      },
+      ssr: { dir: "rtl", lang: "ar" },
+    });
+
+    const body = await (await handler(htmlRequest("/"))).text();
+
+    expect(body).toContain('<html lang="ar" dir="rtl">');
+  });
+
   // A page render already committed to a document, so it stays a document even
   // for a caller that asked for JSON.
   it("stays a document whatever the caller asked for", async () => {

@@ -407,6 +407,30 @@ test("SPA navigation keeps request callbacks server-only across query history", 
   expect(pageErrors).toEqual([]);
 });
 
+test("SPA navigation updates document language and direction", async ({ page }) => {
+  await page.route("**/navigation", async (route) => {
+    if (route.request().headers()["x-demiurge-navigation"] !== "data") {
+      await route.continue();
+      return;
+    }
+
+    const response = await route.fetch();
+    const body = await response.json();
+    body.document.lang = "ar";
+    body.document.dir = "rtl";
+    await route.fulfill({ json: body, response });
+  });
+
+  await page.goto("/");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
+
+  await page.getByRole("link", { name: "Test navigation" }).click();
+  await expect(page).toHaveURL("http://localhost:42177/navigation");
+  await expect(page.locator("html")).toHaveAttribute("lang", "ar");
+  await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+});
+
 test("malformed encoded SPA paths render a controlled 400 route error", async ({
   page,
 }) => {

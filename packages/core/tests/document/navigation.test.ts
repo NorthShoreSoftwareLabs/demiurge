@@ -16,6 +16,8 @@ import {
 
 describe("navigation document contributions", () => {
   beforeEach(() => {
+    document.documentElement.lang = "en";
+    document.documentElement.dir = "ltr";
     document.head.innerHTML = `
       <meta charset="utf-8">
       <title>Previous</title>
@@ -23,6 +25,26 @@ describe("navigation document contributions", () => {
       <script nonce="document-nonce" src="/client.js"></script>
       <script ${DOCUMENT_CONTRIBUTION_ATTRIBUTE} data-demiurge-script-strategy="afterInteractive" src="/shared.js"></script>
     `;
+  });
+
+  it("updates document language and direction", () => {
+    applyNavigationDocument(createNavigationDocument({
+      dir: "rtl",
+      lang: "ar",
+      metadata: resolveMetadata(),
+    }));
+
+    expect(document.documentElement.lang).toBe("ar");
+    expect(document.documentElement.dir).toBe("rtl");
+  });
+
+  it("preserves document attributes when a contribution omits them", () => {
+    applyNavigationDocument(createNavigationDocument({
+      metadata: resolveMetadata(),
+    }));
+
+    expect(document.documentElement.lang).toBe("en");
+    expect(document.documentElement.dir).toBe("ltr");
   });
 
   it("replaces route-owned metadata and links", () => {

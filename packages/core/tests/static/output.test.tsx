@@ -163,6 +163,29 @@ function appRoutes(extra: Record<string, ReturnType<typeof routeModule>> = {}) {
 }
 
 describe("static output adapter", () => {
+  it("emits deterministic language and direction for each static document", async () => {
+    const { outDir } = await createOutputDirectory();
+
+    await generateStaticOutput({
+      outDir,
+      routes: appRoutes(),
+      ssr: { locale: "ar" },
+    });
+    const firstHome = await readFile(join(outDir, "index.html"), "utf8");
+    const firstNotFound = await readFile(join(outDir, "404.html"), "utf8");
+
+    await generateStaticOutput({
+      outDir,
+      routes: appRoutes(),
+      ssr: { locale: "ar" },
+    });
+
+    expect(await readFile(join(outDir, "index.html"), "utf8")).toBe(firstHome);
+    expect(await readFile(join(outDir, "404.html"), "utf8")).toBe(firstNotFound);
+    expect(firstHome).toContain('<html lang="ar" dir="rtl">');
+    expect(firstNotFound).toContain('<html lang="ar" dir="rtl">');
+  });
+
   it("limits concurrent route module loading", async () => {
     const { outDir } = await createOutputDirectory();
     let active = 0;

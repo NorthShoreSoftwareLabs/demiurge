@@ -164,7 +164,7 @@ describe("streaming page responses", () => {
           }),
         }),
       },
-      ssr: { clientEntry: "/assets/client.js" },
+      ssr: { clientEntry: "/assets/client.js", dir: "rtl", lang: "ar" },
     });
 
     const response = await handler(new Request("https://example.test/"));
@@ -176,6 +176,7 @@ describe("streaming page responses", () => {
       "text/html; charset=utf-8",
     );
     expect(shell.html).toContain("<!doctype html>");
+    expect(shell.html).toContain('<html lang="ar" dir="rtl">');
     expect(shell.html).toContain("Streaming shell");
     expect(shell.html).toContain("Loading value");
     expect(shell.html).not.toContain("Deferred ready");

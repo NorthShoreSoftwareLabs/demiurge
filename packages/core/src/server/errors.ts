@@ -19,7 +19,7 @@ import { BuiltInError, DevError, describeError } from "./fallbacks";
 import type { FailureSite } from "./failure-site";
 import { prefersHtmlDocument } from "./negotiate";
 import { createProblemResponse } from "./problem";
-import type { SsrRenderOptions } from "./ssr";
+import { resolveDocumentLocale, type SsrRenderOptions } from "./ssr";
 
 export type ErrorRenderOptions = SsrRenderOptions & {
   dev?: boolean;
@@ -60,6 +60,7 @@ export async function renderFailureResponse(
   }
 
   if (isNavigationDataRequest(request)) {
+    const documentLocale = resolveDocumentLocale(options);
     const described = describeError(error);
     const headers = isHttpError(error)
       ? new Headers(error.headers)
@@ -67,6 +68,8 @@ export async function renderFailureResponse(
 
     return createNavigationDataResponse(undefined, {
       document: createNavigationDocument({
+        dir: documentLocale.dir,
+        lang: documentLocale.lang,
         metadata: resolveMetadata(),
         title: options.title,
       }),
@@ -165,6 +168,7 @@ async function renderErrorDocument(
   error: unknown,
   options: ErrorRenderOptions,
 ) {
+  const documentLocale = resolveDocumentLocale(options);
   const Error = await resolveErrorComponent(manifest, pathname, options);
   const scripts = createScriptRenderContext({
     dev: options.dev,
@@ -180,7 +184,8 @@ async function renderErrorDocument(
   return renderDocument({
     body: { data: undefined, html, locale: options.locale, navigation: options.navigation },
     entrySrc: options.clientEntry,
-    lang: options.lang,
+    dir: documentLocale.dir,
+    lang: documentLocale.lang,
     nonce: options.nonce,
     scripts: scripts.scripts(),
     styles: options.styles,

@@ -35,11 +35,17 @@ describe("renderDocument static shell", () => {
     );
   });
 
-  it("defaults lang to en and title to Demiurge App", () => {
+  it("defaults language, direction, and title", () => {
     const html = renderDocument({});
 
-    expect(html).toContain('<html lang="en">');
+    expect(html).toContain('<html lang="en" dir="ltr">');
     expect(html).toContain("<title>Demiurge App</title>");
+  });
+
+  it("renders resolved language and direction on a static shell", () => {
+    const html = renderDocument({ dir: "rtl", lang: "ar" });
+
+    expect(html).toContain('<html lang="ar" dir="rtl">');
   });
 
   it("omits the client entry script when entrySrc is absent", () => {
@@ -283,7 +289,7 @@ describe("renderDocument HTML escaping", () => {
       ),
     });
 
-    expect(html).toContain('<html lang="en&quot; data-test=&quot;bad">');
+    expect(html).toContain('<html lang="en&quot; data-test=&quot;bad" dir="ltr">');
     expect(html).toContain("<title>Checkout &lt;Secure&gt;</title>");
     expect(html).toContain(
       '<meta data-demiurge-document-contribution name="description" content="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;" />',

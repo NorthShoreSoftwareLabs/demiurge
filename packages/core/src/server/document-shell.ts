@@ -1,7 +1,7 @@
 import { renderDocumentShell } from "../document/render";
 import type { ScriptTag } from "../document/scripts";
 import type { LoadedRouteMatch } from "../router";
-import type { SsrRenderOptions } from "./ssr";
+import { resolveDocumentLocale, type SsrRenderOptions } from "./ssr";
 
 // A streaming render sends the document head before the body exists. A
 // transform that rewrites the document therefore needs a placeholder where the
@@ -18,10 +18,12 @@ export async function createDocumentShell(
   match: LoadedRouteMatch,
   options: SsrRenderOptions & { scripts?: ScriptTag[] },
 ): Promise<DocumentShell> {
+  const documentLocale = resolveDocumentLocale(options);
   const shell = renderDocumentShell({
     body: { data: match.data, locale: options.locale, navigation: options.navigation },
+    dir: documentLocale.dir,
     entrySrc: options.clientEntry,
-    lang: options.lang,
+    lang: documentLocale.lang,
     links: match.links,
     metadata: match.metadata,
     nonce: options.nonce,

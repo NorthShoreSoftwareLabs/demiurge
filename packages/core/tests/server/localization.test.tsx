@@ -5,6 +5,7 @@ const locales = {
   aliases: { french: "fr" },
   cookie: { name: "locale" },
   defaultLocale: "en",
+  directions: { fr: "rtl" },
   path: { labels: { en: "en", fr: "fr" }, reserved: ["de"] },
   supportedLocales: ["en", "fr"],
 } as const;
@@ -17,6 +18,14 @@ function NotFound() {
   return <main>Localized missing page</main>;
 }
 
+function Broken(): never {
+  throw new Error("Localized render failed");
+}
+
+function ErrorView() {
+  return <main>Localized error page</main>;
+}
+
 function routeModule(module: RouteModule) {
   return async () => module;
 }
@@ -26,9 +35,14 @@ function handler() {
     locales,
     routes: {
       "./routes/@not-found.tsx": routeModule({ default: NotFound }),
+      "./routes/@error.tsx": routeModule({ default: ErrorView }),
+      "./routes/broken.tsx": routeModule({ GET: page(Broken) }),
       "./routes/index.tsx": routeModule({ GET: page(View) }),
       "./routes/api.ts": routeModule({ GET: json({ ok: true }) }),
       "./routes/redirect.ts": routeModule({ GET: redirect("/") }),
+      "./routes/static.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: View }),
+      }),
     },
   });
 }
@@ -40,6 +54,7 @@ describe("localized request routing", () => {
     const body = await response.text();
     expect(body).toContain("Localized page");
     expect(body).toContain('"locale":"fr"');
+    expect(body).toContain('<html lang="fr" dir="rtl">');
   });
 
   it("uses a permanent redirect for an alias", async () => {
@@ -62,7 +77,38 @@ describe("localized request routing", () => {
       headers: { accept: "text/html" },
     }));
     expect(response.status).toBe(404);
-    await expect(response.text()).resolves.toContain("Localized missing page");
+    const body = await response.text();
+    expect(body).toContain("Localized missing page");
+    expect(body).toContain('<html lang="en" dir="ltr">');
+  });
+
+  it("applies the resolved values to localized error documents", async () => {
+    const response = await handler()(new Request("https://example.test/fr/broken"));
+    const body = await response.text();
+
+    expect(response.status).toBe(500);
+    expect(body).toContain("Localized error page");
+    expect(body).toContain('<html lang="fr" dir="rtl">');
+  });
+
+  it("includes the resolved values in browser navigation data", async () => {
+    const response = await handler()(new Request("https://example.test/fr", {
+      headers: { "x-demiurge-navigation": "data" },
+    }));
+
+    await expect(response.json()).resolves.toMatchObject({
+      document: { dir: "rtl", lang: "fr" },
+      locale: "fr",
+    });
+  });
+
+  it("renders deterministic static document attributes", async () => {
+    const request = () => new Request("https://example.test/fr/static");
+    const first = await (await handler()(request())).text();
+    const second = await (await handler()(request())).text();
+
+    expect(first).toBe(second);
+    expect(first).toContain('<html lang="fr" dir="rtl">');
   });
 
   it("does not preference-redirect a resource route", async () => {

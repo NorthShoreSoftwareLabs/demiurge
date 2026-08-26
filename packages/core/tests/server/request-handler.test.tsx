@@ -2160,6 +2160,7 @@ describe("request handler", () => {
           scripts: defineScripts(pageScripts),
         }),
       },
+      ssr: { dir: "rtl", lang: "ar" },
     });
     const response = await handler(
       new Request("https://example.test/?headline=Server", {
@@ -2177,6 +2178,8 @@ describe("request handler", () => {
     await expect(response.json()).resolves.toEqual({
       data: { headline: "Server" },
       document: {
+        dir: "rtl",
+        lang: "ar",
         links: [{
           href: "https://layout.example.test",
           kind: "link",
@@ -2427,12 +2430,12 @@ describe("request handler", () => {
           metadata: defineMetadata({ title: "Home" }),
         }),
       },
-      ssr: { clientEntry: "/client-entry.js", lang: "en-GB" },
+      ssr: { clientEntry: "/client-entry.js", dir: "ltr", lang: "en-GB" },
     });
 
     const html = await (await handler(new Request("https://example.test/"))).text();
 
-    expect(html).toContain(`<html lang="en-GB">`);
+    expect(html).toContain(`<html lang="en-GB" dir="ltr">`);
     expect(html).toContain("<title>Home</title>");
     expect(html).toContain(`<meta data-demiurge-document-contribution name="description" content="Layout &amp; document" />`);
     expect(html).toContain(`<link data-demiurge-document-contribution rel="preconnect" href="https://api.example.com" />`);

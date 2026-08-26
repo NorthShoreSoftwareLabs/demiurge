@@ -1,5 +1,19 @@
 export interface RouteLocales {}
 
+const rightToLeftScripts = new Set([
+  "Adlm",
+  "Arab",
+  "Hebr",
+  "Mand",
+  "Nkoo",
+  "Rohg",
+  "Samr",
+  "Sogd",
+  "Sogo",
+  "Syrc",
+  "Thaa",
+]);
+
 type KnownLocale = keyof RouteLocales & string;
 export type AppLocale = [KnownLocale] extends [never] ? string : KnownLocale;
 export type LocaleSource = "path" | "domain" | "cookie" | "accept-language" | "default";
@@ -8,6 +22,7 @@ export type LocaleConfiguration<TLocale extends string = string> = {
   aliases?: Readonly<Record<string, TLocale>>;
   cookie?: { name: string };
   defaultLocale: TLocale;
+  directions?: Partial<Readonly<Record<TLocale, "ltr" | "rtl">>>;
   domains?: Partial<Readonly<Record<TLocale, string>>>;
   path?: {
     labels: Readonly<Record<TLocale, string>>;
@@ -16,6 +31,14 @@ export type LocaleConfiguration<TLocale extends string = string> = {
   };
   supportedLocales: readonly TLocale[];
 };
+
+export function localeDirection<TLocale extends string>(
+  locale: TLocale,
+  configuration?: LocaleConfiguration<TLocale>,
+): "ltr" | "rtl" {
+  return configuration?.directions?.[locale] ??
+    (rightToLeftScripts.has(new Intl.Locale(locale).maximize().script ?? "") ? "rtl" : "ltr");
+}
 
 export type LocaleResolution<TLocale extends string = string> = {
   locale: TLocale;
@@ -53,12 +76,21 @@ export function defineLocales<const TLocale extends string>(
   );
   // TYPE-EVIDENCE: each domain entry uses a supported TLocale value as its key.
   const domains = normalizedDomains as Partial<Record<TLocale, string>> | undefined;
+  const normalizedDirections = configuration.directions && Object.fromEntries(
+    configuration.supportedLocales.flatMap((locale) => {
+      const direction = configuration.directions?.[locale];
+      return direction ? [[canonicalLocale(locale), direction]] : [];
+    }),
+  );
+  // TYPE-EVIDENCE: each direction entry uses a supported TLocale value as its key.
+  const directions = normalizedDirections as Partial<Record<TLocale, "ltr" | "rtl">> | undefined;
   return {
     ...configuration,
     aliases: configuration.aliases && Object.fromEntries(
       Object.entries(configuration.aliases).map(([alias, locale]) => [alias.toLowerCase(), normalizeTarget(String(locale))]),
     ),
     defaultLocale: normalizeTarget(configuration.defaultLocale),
+    directions,
     domains,
     path: configuration.path && {
       ...configuration.path,
@@ -186,6 +218,9 @@ function validateLocales<TLocale extends string>(configuration: LocaleConfigurat
   const assertTarget = (locale: string, kind: string) => {
     if (!supported.has(canonicalLocale(locale))) throw new Error(`The ${kind} target "${locale}" must be supported.`);
   };
+  for (const locale of Object.keys(configuration.directions ?? {})) {
+    assertTarget(locale, "direction");
+  }
   const identifiers = new Map<string, string>();
   const addIdentifier = (value: string, kind: string) => {
     const key = value.toLowerCase();

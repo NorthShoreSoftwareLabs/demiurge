@@ -21,7 +21,7 @@ import { BuiltInNotFound } from "./fallbacks";
 import type { FailureSite } from "./failure-site";
 import { prefersHtmlDocument } from "./negotiate";
 import { createProblemResponse } from "./problem";
-import type { SsrRenderOptions } from "./ssr";
+import { resolveDocumentLocale, type SsrRenderOptions } from "./ssr";
 
 export type NotFoundRenderOptions = SsrRenderOptions & {
   onError?: (error: unknown, site: FailureSite) => void;
@@ -68,8 +68,11 @@ export async function renderNotFoundResponse(
   });
 
   if (isNavigationDataRequest(request)) {
+    const documentLocale = resolveDocumentLocale(options);
     return createNavigationDataResponse(undefined, {
       document: createNavigationDocument({
+        dir: documentLocale.dir,
+        lang: documentLocale.lang,
         metadata: match.metadata,
         title: options.title,
       }),
@@ -133,6 +136,7 @@ function renderAttempt(
   layouts: LoadedNotFoundMatch["layouts"],
   options: NotFoundRenderOptions,
 ) {
+  const documentLocale = resolveDocumentLocale(options);
   const content = layouts.reduceRight<ReactNode>(
     (children, Layout) =>
       createElement(Layout, {
@@ -157,7 +161,8 @@ function renderAttempt(
       navigation: options.navigation,
     },
     entrySrc: options.clientEntry,
-    lang: options.lang,
+    dir: documentLocale.dir,
+    lang: documentLocale.lang,
     metadata: match.metadata,
     nonce: options.nonce,
     scripts: scripts.scripts(),

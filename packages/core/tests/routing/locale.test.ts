@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applicationPathname, defineLocales, localizeHref, resolveLocale } from "@demiurgejs/core";
+import {
+  applicationPathname,
+  defineLocales,
+  localizeHref,
+  resolveLocale,
+  type LocaleConfiguration,
+} from "@demiurgejs/core";
 
 const locales = defineLocales({
   aliases: { english: "en", french: "fr" },
@@ -79,6 +85,7 @@ describe("locale-aware routes", () => {
     const normalized = defineLocales({
       aliases: { ENGLISH: "en-us" },
       defaultLocale: "en-us",
+      directions: { "en-us": "rtl" },
       domains: { "en-us": "EXAMPLE.TEST" },
       path: { labels: { "en-us": "EN" } },
       supportedLocales: ["en-us"],
@@ -86,6 +93,7 @@ describe("locale-aware routes", () => {
     expect(normalized).toMatchObject({
       aliases: { english: "en-US" },
       defaultLocale: "en-US",
+      directions: { "en-US": "rtl" },
       domains: { "en-US": "example.test" },
       path: { labels: { "en-US": "en" } },
       supportedLocales: ["en-US"],
@@ -145,5 +153,13 @@ describe("locale-aware routes", () => {
       domains: { en: "example.test", fr: "EXAMPLE.TEST" },
       supportedLocales: ["en", "fr"],
     })).toThrow("duplicated");
+    const unsupportedDirection: LocaleConfiguration = {
+      defaultLocale: "en",
+      directions: { ar: "rtl" },
+      supportedLocales: ["en"],
+    };
+    expect(() => defineLocales(unsupportedDirection)).toThrow(
+      'The direction target "ar" must be supported.',
+    );
   });
 });

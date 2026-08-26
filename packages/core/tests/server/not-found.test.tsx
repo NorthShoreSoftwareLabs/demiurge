@@ -69,6 +69,19 @@ describe("not-found responses", () => {
     expect(body).not.toContain('<div id="root"></div>');
   });
 
+  it("applies resolved language and direction to a not-found document", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/@not-found.tsx": routeModule({ default: RootNotFound }),
+      },
+      ssr: { dir: "rtl", lang: "ar" },
+    });
+
+    const body = await (await handler(htmlRequest("/missing"))).text();
+
+    expect(body).toContain('<html lang="ar" dir="rtl">');
+  });
+
   it("marks the document as a fallback so the client hydrates it", async () => {
     const handler = createRequestHandler({
       routes: {

@@ -65,6 +65,7 @@ export type DemiurgeVitePluginOptions = {
   // default. Set this option to false to remove the endpoint.
   devtools?: boolean;
   document?: {
+    dir?: "ltr" | "rtl";
     lang?: string;
     title?: string;
   };
@@ -856,7 +857,7 @@ ${createRouteMapSource(routesDir, {
   })}
 
 export function createHandler(options = {}) {
-  const { clientEntry, lang, locales, styles, title, ...handlerOptions } = options;
+  const { clientEntry, dir, lang, locales, styles, title, ...handlerOptions } = options;
 
   return createRequestHandler({
     ...handlerOptions,
@@ -865,6 +866,7 @@ export function createHandler(options = {}) {
     locales: locales ?? ${JSON.stringify(options.locales)},
     ssr: {
       clientEntry,
+      dir: dir ?? ${JSON.stringify(options.document?.dir)},
       lang: lang ?? ${JSON.stringify(options.document?.lang)},
       styles,
       title: title ?? ${JSON.stringify(options.document?.title)},
@@ -1439,6 +1441,7 @@ Create it before building for production:
 }
 
 export function createDocumentHtml({
+  dir,
   entrySrc,
   lang,
   links,
@@ -1448,6 +1451,7 @@ export function createDocumentHtml({
   styles,
   title,
 }: {
+  dir?: "ltr" | "rtl";
   entrySrc: string;
   lang?: string;
   links?: LinkTag[];
@@ -1458,6 +1462,7 @@ export function createDocumentHtml({
   title?: string;
 }) {
   return renderDocument({
+    dir,
     entrySrc,
     lang,
     links,

@@ -72,7 +72,7 @@ import {
   securityPolicyRequiresNonce,
 } from "../security/policy";
 import { MUTATION_REVALIDATION_HEADER } from "../route/mutation";
-import { defineLocales, localizeHref, resolveLocale, type LocaleConfiguration } from "../routing";
+import { defineLocales, localeDirection, localizeHref, resolveLocale, type LocaleConfiguration } from "../routing";
 
 export type RequestErrorReporter = (
   error: unknown,
@@ -153,6 +153,8 @@ export function createRequestHandler(options: RequestHandlerOptions) {
       if (resolution.unsupported) {
         return await renderNotFoundResponse(manifest, request, {
           ...options.ssr,
+          dir: localeDirection(resolution.locale, locales),
+          lang: resolution.locale,
           locale: resolution.locale,
           pathname: resolution.pathname,
         });
@@ -179,7 +181,12 @@ export function createRequestHandler(options: RequestHandlerOptions) {
         }
         return new Response(null, { headers, status: preference ? 307 : 308 });
       }
-      ssr = { ...options.ssr, locale: resolution.locale };
+      ssr = {
+        ...options.ssr,
+        dir: localeDirection(resolution.locale, locales),
+        lang: resolution.locale,
+        locale: resolution.locale,
+      };
       const response = await handleRequestWithManifest(manifest, request, {
         cacheStore: options.cacheStore,
         onError: options.onError,
@@ -468,6 +475,8 @@ async function handleMatchedRoute(
           if (isNavigationDataRequest(request)) {
             return createNavigationDataResponse(match.match.data, {
               document: createNavigationDocument({
+                dir: options.ssr?.dir,
+                lang: options.ssr?.lang,
                 links: match.match.links,
                 metadata: match.match.metadata,
                 scripts: match.match.scripts,

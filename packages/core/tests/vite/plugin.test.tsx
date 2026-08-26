@@ -1825,7 +1825,7 @@ describe("Vite plugin document runtime", () => {
       title: "Demiurge <Blog>",
     });
 
-    expect(html).toContain('<html lang="en&quot; data-test=&quot;bad">');
+    expect(html).toContain('<html lang="en&quot; data-test=&quot;bad" dir="ltr">');
     expect(html).toContain("<title>Demiurge &lt;Blog&gt;</title>");
     expect(html).toContain('<div id="root"></div>');
     expect(html).toContain('<script type="module" src="/assets/app.js"></script>');
@@ -1967,6 +1967,7 @@ describe("Vite plugin document runtime", () => {
   it("creates a virtual server entry with normalized routes and SSR defaults", () => {
     const source = unstable_createServerEntrySource("/tmp/app", {
       document: {
+        dir: "ltr",
         lang: "en-GB",
         title: "Server app",
       },
@@ -1982,6 +1983,7 @@ describe("Vite plugin document runtime", () => {
     expect(source).toContain("routeModules,");
     expect(source).toContain("createRequestHandler");
     expect(source).toContain('lang ?? "en-GB"');
+    expect(source).toContain('dir ?? "ltr"');
     expect(source).toContain('title ?? "Server app"');
   });
 
