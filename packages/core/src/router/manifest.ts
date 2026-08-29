@@ -15,7 +15,9 @@ import type {
   PageRenderOptions,
   PathVars,
   RouteErrorProps,
+  RouteContext,
   RouteImporter,
+  RouteModule,
   RouteProps,
 } from "../route";
 
@@ -83,6 +85,7 @@ export type LoadedRouteMatch = {
 
 export type StaticRoutePath = {
   file: string;
+  locale?: string;
   path: PathVars;
   pattern: string;
   pathname: string;
@@ -392,10 +395,10 @@ export async function loadPageRoute(
       ),
       locale: options.locale,
       metadata: documentContributions
-        ? resolveMetadata(
-          ...layoutModules.map((module) => module.metadata),
-          pageModule.metadata,
-        )
+        ? resolveMetadata(...await Promise.all([
+          ...layoutModules.map((module) => resolveRouteMetadata(module, context)),
+          resolveRouteMetadata(pageModule, context),
+        ]))
         : resolveMetadata(),
       path: routeMatch.path,
       pathname,
@@ -415,7 +418,11 @@ export async function loadPageRoute(
 
 export async function collectStaticRoutePaths(
   manifest: RouteManifest,
-  options: { includeResources?: boolean } = {},
+  options: {
+    includePages?: boolean;
+    includeResources?: boolean;
+    locale?: string;
+  } = {},
 ): Promise<StaticRoutePath[]> {
   const cache = createMemoryCache();
   const paths: StaticRoutePath[] = [];
@@ -428,6 +435,10 @@ export async function collectStaticRoutePaths(
     }
 
     if (routeModule.GET.kind !== "page" && !options.includeResources) {
+      continue;
+    }
+
+    if (routeModule.GET.kind === "page" && options.includePages === false) {
       continue;
     }
 
@@ -459,7 +470,10 @@ export async function collectStaticRoutePaths(
       );
     }
 
-    const routePaths = await routeModule.paths({ cache });
+    const routePaths = await routeModule.paths({
+      cache,
+      locale: options.locale,
+    });
 
     for (const path of routePaths) {
       const normalizedPath = normalizeStaticPath(route, pattern, path);
@@ -558,13 +572,14 @@ export async function loadNotFoundMatch(
     | ComponentType<NotFoundProps>
     | undefined;
   const documentContributions = options.documentContributions ?? true;
+  const metadataContext = { locale: options.locale, path: {}, pathname };
 
   if (fallbackModule?.layout === false) {
     return {
       layouts: [],
       locale: options.locale,
       metadata: documentContributions
-        ? resolveMetadata(fallbackModule.metadata)
+        ? resolveMetadata(await resolveRouteMetadata(fallbackModule, metadataContext))
         : resolveMetadata(),
       notFound,
       pathname,
@@ -585,10 +600,10 @@ export async function loadNotFoundMatch(
       ),
       locale: options.locale,
       metadata: documentContributions
-        ? resolveMetadata(
-          ...layoutModules.map((module) => module.metadata),
-          fallbackModule?.metadata,
-        )
+        ? resolveMetadata(...await Promise.all([
+          ...layoutModules.map((module) => resolveRouteMetadata(module, metadataContext)),
+          resolveRouteMetadata(fallbackModule, metadataContext),
+        ]))
         : resolveMetadata(),
       notFound,
       pathname,
@@ -600,12 +615,21 @@ export async function loadNotFoundMatch(
       layouts: [],
       locale: options.locale,
       metadata: documentContributions
-        ? resolveMetadata(fallbackModule?.metadata)
+        ? resolveMetadata(await resolveRouteMetadata(fallbackModule, metadataContext))
         : resolveMetadata(),
       notFound,
       pathname,
     };
   }
+}
+
+async function resolveRouteMetadata(
+  module: RouteModule | undefined,
+  context: RouteContext,
+) {
+  return typeof module?.metadata === "function"
+    ? await module.metadata(context)
+    : module?.metadata;
 }
 
 export function findLayoutsForPath(

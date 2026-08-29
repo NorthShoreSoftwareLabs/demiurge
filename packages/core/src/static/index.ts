@@ -37,6 +37,14 @@ import {
 import { resolveFontAssets } from "../platform/font-assets";
 import type { FontContribution } from "../platform/fonts";
 import type { ImagePolicy } from "../platform/images";
+import {
+  defineLocales,
+  localeDirection,
+  localizeHref,
+  resolveLocale,
+  type LocaleConfiguration,
+} from "../routing";
+import { createRequestHandler } from "../server/request-handler";
 import { assertNoOptimizerImages, emitImageVariants } from "./images";
 
 const STATIC_MANIFEST_FILE = "demiurge-static-manifest.json";
@@ -111,6 +119,7 @@ export type GenerateStaticOutputOptions = {
   // The image policy that the application declared in the Vite plugin. The
   // build reads it to find and validate the variants it must emit.
   images?: ImagePolicy;
+  locales?: LocaleConfiguration;
   onError?: RequestErrorReporter;
   origin?: string;
   outDir: string;
@@ -184,32 +193,65 @@ export async function generateStaticOutput(
   const origin = normalizeOrigin(options.origin);
   const outDir = resolve(options.outDir);
   const routeKinds = await validateStaticRoutes(manifest);
-  const paths = await collectStaticRoutePaths(manifest, {
+  const resourcePaths = await collectStaticRoutePaths(manifest, {
+    includePages: false,
     includeResources: true,
   });
+  const localeTargets = options.locales
+    ? staticLocalesForOrigin(origin, options.locales)
+    : [undefined];
+  const pagePaths = (
+    await Promise.all(
+      localeTargets.map((locale) => collectStaticRoutePaths(manifest, { locale })),
+    )
+  ).flatMap((paths, index) => paths.map((path) => ({
+    ...path,
+    locale: localeTargets[index],
+  })));
+  const paths = [...resourcePaths, ...pagePaths];
 
   assertStaticPageApp(
     manifest,
-    paths.filter((path) => routeKinds.get(path.file) === "document").length,
+    pagePaths.length,
   );
 
   const outputEntries = planOutputEntries(
-    paths.map((path) => ({
-      kind: routeKinds.get(path.file) ?? "resource",
-      pathname: path.pathname,
-    })),
+    paths.flatMap((path) => {
+      const kind = routeKinds.get(path.file) ?? "resource";
+      if (kind !== "document" || !options.locales || !path.locale) {
+        return [{ kind, pathname: path.pathname }];
+      }
+
+      const localized = new URL(
+        localizeHref(path.pathname, path.locale, options.locales, origin),
+        origin,
+      );
+      return [{ kind, pathname: `${localized.pathname}${localized.search}` }];
+    }),
   );
   const rateLimitStore = createMemoryRateLimitStore();
   const pending: PendingOutput[] = [];
   const ssr = { ...options.ssr, navigation: "document" as const };
+  const requestHandler = options.locales
+    ? createRequestHandler({
+      adapter: staticAdapter,
+      locales: options.locales,
+      onError: options.onError,
+      routeModules,
+      routes: options.routes,
+      ssr,
+    })
+    : undefined;
 
   for (const entry of outputEntries) {
     const request = createStaticRequest(origin, entry.pathname, entry.kind);
-    const response = await handleRequestWithManifest(manifest, request, {
-      onError: options.onError,
-      rateLimitStore,
-      ssr,
-    });
+    const response = requestHandler
+      ? await requestHandler(request)
+      : await handleRequestWithManifest(manifest, request, {
+        onError: options.onError,
+        rateLimitStore,
+        ssr,
+      });
 
     pending.push(
       entry.kind === "document"
@@ -218,11 +260,20 @@ export async function generateStaticOutput(
     );
   }
 
+  const notFoundRequest = createStaticRequest(origin, "/404", "document");
+  const notFoundLocale = options.locales
+    ? resolveLocale(notFoundRequest, defineLocales(options.locales)).locale
+    : undefined;
   const notFoundResponse = await renderNotFoundResponse(
     manifest,
-    createStaticRequest(origin, "/404", "document"),
+    notFoundRequest,
     {
       ...ssr,
+      dir: notFoundLocale
+        ? localeDirection(notFoundLocale, options.locales)
+        : ssr.dir,
+      lang: notFoundLocale ?? ssr.lang,
+      locale: notFoundLocale ?? ssr.locale,
       onError: (error, site) =>
         options.onError?.(error, { pathname: "/404", site }),
     },
@@ -275,6 +326,20 @@ export async function generateStaticOutput(
   await writeOutput(outDir, pending, [...images, ...fonts], outputManifest);
 
   return outputManifest;
+}
+
+function staticLocalesForOrigin(
+  origin: string,
+  locales: LocaleConfiguration,
+) {
+  const target = new URL(origin);
+
+  return locales.supportedLocales.flatMap((locale) => {
+    const localized = new URL(localizeHref("/", locale, locales, origin), origin);
+    return localized.origin === target.origin
+      ? [locale]
+      : [];
+  });
 }
 
 async function createStaticFileHeaderRules(

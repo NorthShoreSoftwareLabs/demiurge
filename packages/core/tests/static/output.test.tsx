@@ -275,6 +275,39 @@ describe("static output adapter", () => {
     ).toBe("application/xml; charset=utf-8");
   });
 
+  it("emits locale-specific paths and isolates locale path collection", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/posts/[slug].tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: Post }),
+        paths: async ({ locale }) => [{ slug: locale === "fr" ? "bonjour" : "hello" }],
+      }),
+    });
+
+    const manifest = await generateStaticOutput({
+      locales: {
+        defaultLocale: "en",
+        path: { labels: { en: "en", fr: "fr" } },
+        supportedLocales: ["en", "fr"],
+      },
+      origin: "https://static.example.test",
+      outDir,
+      routes,
+    });
+
+    expect(manifest.entries.map((entry) => entry.file)).toEqual([
+      "404.html",
+      "fr/index.html",
+      "fr/posts/bonjour/index.html",
+      "index.html",
+      "posts/hello/index.html",
+    ]);
+    await expect(readFile(join(outDir, "fr", "index.html"), "utf8"))
+      .resolves.toContain('<html lang="fr" dir="ltr">');
+    await expect(readFile(join(outDir, "fr", "posts", "bonjour", "index.html"), "utf8"))
+      .resolves.toContain('hreflang="en"');
+  });
+
   it("rejects route capabilities that require a runtime adapter", async () => {
     const dynamic = await createOutputDirectory();
     const mutation = await createOutputDirectory();

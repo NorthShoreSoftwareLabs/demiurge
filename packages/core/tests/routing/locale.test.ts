@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applicationPathname, defineLocales, localizeHref, resolveLocale } from "@demiurgejs/core";
+import { applicationPathname, defineLocales, localeDirection, localizeHref, resolveLocale } from "@demiurgejs/core";
 
 const locales = defineLocales({
   aliases: { english: "en", french: "fr" },
@@ -75,6 +75,26 @@ describe("locale-aware routes", () => {
     }), regional)).toMatchObject({ locale: "zh-Hant", source: "accept-language" });
   });
 
+  it("lets an application replace locale selection through the typed boundary", () => {
+    const custom = defineLocales({
+      defaultLocale: "en",
+      path: { labels: { en: "en", fr: "fr" } },
+      resolver: ({ defaultResolution, request }) =>
+        request.headers.get("x-example-locale") === "fr"
+          ? {
+            ...defaultResolution,
+            locale: "fr",
+            redirect: new URL("/fr", request.url),
+            source: "default",
+          }
+          : defaultResolution,
+      supportedLocales: ["en", "fr"],
+    } as const);
+    expect(resolveLocale(new Request("https://example.test/", {
+      headers: { "x-example-locale": "fr" },
+    }), custom)).toMatchObject({ locale: "fr", redirect: new URL("https://example.test/fr") });
+  });
+
   it("normalizes locale identifiers, labels, aliases, and domains", () => {
     const normalized = defineLocales({
       aliases: { ENGLISH: "en-us" },
@@ -114,6 +134,16 @@ describe("locale-aware routes", () => {
       supportedLocales: ["en", "fr"],
     } as const);
     expect(localizeHref("/about", "en", prefixed)).toBe("/en/about");
+  });
+
+  it("resolves document direction and accepts an application override", () => {
+    expect(localeDirection("ar")).toBe("rtl");
+    expect(localeDirection("en")).toBe("ltr");
+    expect(localeDirection("ar", defineLocales({
+      defaultLocale: "ar",
+      directions: { ar: "ltr" },
+      supportedLocales: ["ar"],
+    }))).toBe("ltr");
   });
 
   it("returns application pathnames with and without configuration", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createRequestHandler, json, page, redirect, type RouteModule } from "@demiurgejs/core";
+import { createMemoryCacheStore, createRequestHandler, json, page, redirect, type RouteModule } from "@demiurgejs/core";
 
 const locales = {
   aliases: { french: "fr" },
@@ -26,7 +26,13 @@ function handler() {
     locales,
     routes: {
       "./routes/@not-found.tsx": routeModule({ default: NotFound }),
-      "./routes/index.tsx": routeModule({ GET: page(View) }),
+      "./routes/index.tsx": routeModule({
+        GET: page(View),
+        metadata: ({ locale }) => ({
+          description: locale === "fr" ? "Page française" : "English page",
+          title: locale === "fr" ? "Français" : "English",
+        }),
+      }),
       "./routes/api.ts": routeModule({ GET: json({ ok: true }) }),
       "./routes/redirect.ts": routeModule({ GET: redirect("/") }),
     },
@@ -40,6 +46,12 @@ describe("localized request routing", () => {
     const body = await response.text();
     expect(body).toContain("Localized page");
     expect(body).toContain('"locale":"fr"');
+    expect(body).toContain('<html lang="fr" dir="ltr">');
+    expect(body).toContain("<title>Français</title>");
+    expect(body).toContain('content="Page française"');
+    expect(body).toContain('<link data-demiurge-document-contribution rel="canonical" href="https://example.test/fr" />');
+    expect(body).toContain('rel="alternate" href="https://example.test/" hreflang="en"');
+    expect(body).toContain('rel="alternate" href="https://example.test/fr" hreflang="fr"');
   });
 
   it("uses a permanent redirect for an alias", async () => {
@@ -76,5 +88,36 @@ describe("localized request routing", () => {
   it("localizes same-origin route redirects", async () => {
     const response = await handler()(new Request("https://example.test/fr/redirect"));
     expect(response.headers.get("location")).toBe("/fr");
+  });
+
+  it("isolates framework cache identity by locale", async () => {
+    let loads = 0;
+    const handle = createRequestHandler({
+      cacheStore: {
+        namespace: { app: "locale-test", environment: "test", schemaVersion: 1 },
+        store: createMemoryCacheStore(),
+      },
+      locales,
+      routes: {
+        "./routes/@not-found.tsx": routeModule({ default: NotFound }),
+        "./routes/index.tsx": routeModule({
+          GET: page({
+            data: async ({ cache }) => await cache.get({
+              fn: async () => ({ loads: ++loads }),
+              key: ["home"],
+              scope: "public",
+            }),
+            view: View,
+          }),
+        }),
+      },
+    });
+
+    await handle(new Request("https://example.test/"));
+    await handle(new Request("https://example.test/fr"));
+    await handle(new Request("https://example.test/"));
+    await handle(new Request("https://example.test/fr"));
+
+    expect(loads).toBe(2);
   });
 });

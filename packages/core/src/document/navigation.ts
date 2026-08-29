@@ -69,6 +69,8 @@ export type NavigationScriptTag = Pick<
 >;
 
 export type NavigationDocument = {
+  dir?: "ltr" | "rtl";
+  lang?: string;
   links: LinkTag[];
   metadata: ResolvedMetadata;
   scripts: NavigationScriptTag[];
@@ -76,12 +78,16 @@ export type NavigationDocument = {
 };
 
 export function createNavigationDocument(options: {
+  dir?: "ltr" | "rtl";
+  lang?: string;
   links?: readonly LinkTag[];
   metadata: ResolvedMetadata;
   scripts?: readonly ScriptTag[];
   title?: string;
 }): NavigationDocument {
   return {
+    dir: options.dir,
+    lang: options.lang,
     links: [...(options.links ?? [])],
     metadata: options.metadata,
     scripts: (options.scripts ?? []).map(toNavigationScriptTag),
@@ -117,6 +123,8 @@ export function applyNavigationDocument(
   }
 
   owner.title = contribution.title;
+  if (contribution.lang) owner.documentElement.lang = contribution.lang;
+  if (contribution.dir) owner.documentElement.dir = contribution.dir;
   reconcileManagedScripts(owner, contribution.scripts);
 
   for (const element of owner.head.querySelectorAll(

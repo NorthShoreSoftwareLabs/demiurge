@@ -34,6 +34,22 @@ test("production SSR hydrates and navigates without a document reload", async ({
   expect(pageErrors).toEqual([]);
 });
 
+test("localized navigation updates content and document locale", async ({ page }) => {
+  await page.goto("/localized");
+  await expect(page.getByRole("heading", { name: "Localized application" })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+
+  await page.getByRole("link", { name: "View in French" }).click();
+
+  await expect(page).toHaveURL("http://localhost:42177/fr/localized");
+  await expect(page.getByRole("heading", { name: "Application localisée" })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr");
+  await expect(page.locator('link[rel="alternate"][hreflang="en"]')).toHaveAttribute(
+    "href",
+    "http://localhost:42177/localized",
+  );
+});
+
 test("production mutation forms use their typed redirect history operation", async ({
   page,
 }) => {

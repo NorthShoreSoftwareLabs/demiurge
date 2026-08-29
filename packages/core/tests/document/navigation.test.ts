@@ -27,6 +27,8 @@ describe("navigation document contributions", () => {
 
   it("replaces route-owned metadata and links", () => {
     applyNavigationDocument(createNavigationDocument({
+      dir: "rtl",
+      lang: "ar",
       links: [link({ href: "/next.css", rel: "stylesheet" })],
       metadata: resolveMetadata({
         canonical: "/next",
@@ -39,6 +41,8 @@ describe("navigation document contributions", () => {
     }));
 
     expect(document.title).toBe("Next title");
+    expect(document.documentElement.lang).toBe("ar");
+    expect(document.documentElement.dir).toBe("rtl");
     expect(document.head.querySelector('meta[name="description"]')?.getAttribute("content"))
       .toBe("Next");
     expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute("href"))

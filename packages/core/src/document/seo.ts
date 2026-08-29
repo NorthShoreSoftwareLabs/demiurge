@@ -48,8 +48,47 @@ export type OgImage = {
 
 export function defineSitemap(entries: readonly SitemapEntry[]): Sitemap {
   return {
-    entries,
+    entries: entries.map((entry) => ({
+      ...entry,
+      alternates: normalizeSitemapAlternates(entry.alternates ?? []),
+    })),
   };
+}
+
+function normalizeSitemapAlternates(
+  alternates: readonly SitemapAlternate[],
+) {
+  const byLanguage = new Map<string, string>();
+  const byUrl = new Map<string, string>();
+
+  for (const alternate of alternates) {
+    const language = alternate.hrefLang.toLowerCase();
+    let href: string;
+    try {
+      href = new URL(alternate.href).href;
+    } catch {
+      throw new Error(
+        `Sitemap alternate URL must be absolute: ${JSON.stringify(alternate.href)}.`,
+      );
+    }
+    const previousHref = byLanguage.get(language);
+    const previousLanguage = byUrl.get(href);
+    if (previousHref && previousHref !== href) {
+      throw new Error(`Sitemap language ${JSON.stringify(alternate.hrefLang)} has conflicting URLs.`);
+    }
+    if (
+      previousLanguage &&
+      previousLanguage !== language &&
+      previousLanguage !== "x-default" &&
+      language !== "x-default"
+    ) {
+      throw new Error(`Sitemap URL ${JSON.stringify(alternate.href)} has conflicting languages.`);
+    }
+    byLanguage.set(language, href);
+    byUrl.set(href, language);
+  }
+
+  return [...byLanguage].map(([hrefLang, href]) => ({ href, hrefLang }));
 }
 
 export function renderSitemap(sitemap: Sitemap) {

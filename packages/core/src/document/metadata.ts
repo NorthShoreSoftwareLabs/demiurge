@@ -70,6 +70,76 @@ export type ResolvedMetadata = {
   viewport: "width=device-width, initial-scale=1";
 };
 
+export type LocalizedMetadataAlternate = {
+  href: string;
+  hrefLang: string;
+};
+
+export function applyLocalizedMetadata(
+  metadata: ResolvedMetadata,
+  options: {
+    alternates: readonly LocalizedMetadataAlternate[];
+    canonical: string;
+  },
+): ResolvedMetadata {
+  const canonical = normalizeMetadataUrl(options.canonical);
+  if (
+    metadata.canonical &&
+    normalizeMetadataUrl(metadata.canonical, canonical) !== canonical
+  ) {
+    throw new Error(
+      `Localized metadata canonical URL ${JSON.stringify(metadata.canonical)} conflicts with ${JSON.stringify(options.canonical)}.`,
+    );
+  }
+
+  const applicationAlternates = metadata.custom.filter(
+    (tag): tag is LinkTag => tag.kind === "link" && tag.rel.toLowerCase() === "alternate" && Boolean(tag.hrefLang),
+  );
+  const byLanguage = new Map<string, string>();
+  const byUrl = new Map<string, string>();
+
+  for (const alternate of [...options.alternates, ...applicationAlternates]) {
+    const language = alternate.hrefLang!.toLowerCase();
+    const url = normalizeMetadataUrl(alternate.href, canonical);
+    const languageUrl = byLanguage.get(language);
+    const urlLanguage = byUrl.get(url);
+    if (languageUrl && languageUrl !== url) {
+      throw new Error(`Localized metadata language ${JSON.stringify(alternate.hrefLang)} has conflicting URLs.`);
+    }
+    if (
+      urlLanguage &&
+      urlLanguage !== language &&
+      urlLanguage !== "x-default" &&
+      language !== "x-default"
+    ) {
+      throw new Error(`Localized metadata URL ${JSON.stringify(alternate.href)} has conflicting languages.`);
+    }
+    byLanguage.set(language, url);
+    byUrl.set(url, language);
+  }
+
+  const nonAlternate = metadata.custom.filter(
+    (tag) => !(tag.kind === "link" && tag.rel.toLowerCase() === "alternate" && tag.hrefLang),
+  );
+
+  return {
+    ...metadata,
+    canonical,
+    custom: [
+      ...nonAlternate,
+      ...[...byLanguage].map(([hrefLang, href]) => link({ href, hrefLang, rel: "alternate" })),
+    ],
+  };
+}
+
+function normalizeMetadataUrl(value: string, base?: string) {
+  try {
+    return new URL(value, base).href;
+  } catch {
+    throw new Error(`Localized metadata URL must be an absolute or root-relative URL: ${JSON.stringify(value)}.`);
+  }
+}
+
 export function defineMetadata(metadata: Metadata) {
   return metadata;
 }

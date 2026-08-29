@@ -27,6 +27,7 @@ export default function RootLayout({ children }: LayoutProps) {
         <nav>
           <Link to="/">Home</Link>
           <Link to="/items">Items</Link>
+          <Link to="/localized">Localization</Link>
         </nav>
       </header>
       <RouteFocusBoundary as="div" data-route-focus-boundary="">{children}</RouteFocusBoundary>

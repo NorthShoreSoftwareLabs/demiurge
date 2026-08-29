@@ -67,6 +67,8 @@ export async function renderFailureResponse(
 
     return createNavigationDataResponse(undefined, {
       document: createNavigationDocument({
+        dir: options.dir,
+        lang: options.lang,
         metadata: resolveMetadata(),
         title: options.title,
       }),

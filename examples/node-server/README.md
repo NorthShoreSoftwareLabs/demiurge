@@ -3,6 +3,9 @@
 This example builds a client bundle and an SSR server bundle, then serves both
 through the production Node adapter.
 
+The `/localized` route uses i18next through an application-owned message helper.
+Its locale switch uses the framework `Link` locale option.
+
 ```sh
 pnpm build
 NODE_ENV=production pnpm start

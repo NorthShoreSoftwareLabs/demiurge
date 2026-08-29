@@ -11,7 +11,7 @@ import {
   createStaticFileHandler,
   renderNodePageResponse,
 } from "@demiurgejs/core/node";
-import { createHandler, fonts } from "./dist/server/server-entry.js";
+import { createHandler, fonts, locales } from "./dist/server/server-entry.js";
 
 const root = fileURLToPath(new URL("dist/client", import.meta.url));
 const manifest = JSON.parse(
@@ -36,6 +36,7 @@ const applicationHandler = createHandler({
     },
   },
   clientEntry: manifest.clientEntry,
+  locales,
   renderPage: renderNodePageResponse,
   styles: manifest.styles,
 });

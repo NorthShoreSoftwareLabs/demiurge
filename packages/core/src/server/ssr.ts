@@ -5,6 +5,7 @@ import { createPageRenderTree, createPageScriptContext } from "./render-tree";
 
 export type SsrOptions = {
   clientEntry?: string;
+  dir?: "ltr" | "rtl";
   lang?: string;
   locale?: string;
   navigation?: "document";
@@ -37,6 +38,7 @@ export function renderPageDocument(
         : options.navigation,
     },
     entrySrc: options.clientEntry,
+    dir: options.dir,
     lang: options.lang,
     links: match.links,
     metadata: match.metadata,

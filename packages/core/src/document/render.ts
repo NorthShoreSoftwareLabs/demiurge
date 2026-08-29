@@ -38,6 +38,7 @@ export type DocumentBody = {
 
 export type RenderDocumentOptions = {
   body?: DocumentBody;
+  dir?: "ltr" | "rtl";
   entrySrc?: string;
   lang?: string;
   links?: LinkTag[];
@@ -65,6 +66,7 @@ export function renderDocument(options: RenderDocumentOptions) {
 
 export function renderDocumentShell({
   body,
+  dir,
   entrySrc,
   lang = "en",
   links = [],
@@ -85,7 +87,7 @@ export function renderDocumentShell({
 
   return {
     prefix: `<!doctype html>
-<html lang="${escapeHtml(lang)}">
+<html lang="${escapeHtml(lang)}"${renderAttribute("dir", dir)}>
   <head>
 ${renderHeadTags({ links, metadata, nonce, scripts, styles, title: documentTitle })}
   </head>
@@ -101,6 +103,7 @@ ${trailingBodyContent}
 }
 
 function renderDocumentWithoutBody({
+  dir,
   entrySrc,
   lang = "en",
   links = [],
@@ -121,7 +124,7 @@ function renderDocumentWithoutBody({
   ].join("\n");
 
   return `<!doctype html>
-<html lang="${escapeHtml(lang)}">
+<html lang="${escapeHtml(lang)}"${renderAttribute("dir", dir)}>
   <head>
 ${renderHeadTags({ links, metadata, nonce, scripts, styles, title: documentTitle })}
   </head>

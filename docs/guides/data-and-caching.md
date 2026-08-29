@@ -4,6 +4,9 @@ Demiurge keeps data timing explicit. Route `data` runs on the server, cache
 scope is part of each request, and static paths are declared separately from
 runtime data.
 
+For a localized route, the framework adds the active locale to cache keys and
+tags. Set `locale: "neutral"` only when the value is identical for all locales.
+
 ## Route data
 
 Page routes may resolve data before rendering:
