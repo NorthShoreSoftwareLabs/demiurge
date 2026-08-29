@@ -288,6 +288,7 @@ function canonicalLocale<TLocale extends string>(locale: TLocale): TLocale {
   return canonical as TLocale;
 }
 
+// This list follows the CLDR scriptMetadata RTL field. Update it when the CLDR version changes.
 const rtlScripts = new Set([
   "Adlm",
   "Arab",
