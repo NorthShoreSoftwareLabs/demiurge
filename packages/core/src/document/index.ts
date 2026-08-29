@@ -18,6 +18,7 @@ export {
 } from "./links";
 export {
   defineMetadata,
+  applyLocalizedMetadata,
   link,
   meta,
   resolveMetadata,
@@ -64,6 +65,7 @@ export type {
 } from "./links";
 export type {
   DocumentMetadataTag,
+  LocalizedMetadataAlternate,
   LinkTag,
   Metadata,
   MetadataTitle,

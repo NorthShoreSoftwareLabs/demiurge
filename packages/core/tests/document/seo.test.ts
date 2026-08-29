@@ -50,6 +50,29 @@ describe("document SEO outputs", () => {
     ).toThrow("Sitemap entry priority must be between 0 and 1.");
   });
 
+  it("deduplicates sitemap alternates and rejects conflicts", () => {
+    expect(defineSitemap([{
+      alternates: [
+        { href: "https://example.com/fr", hrefLang: "fr" },
+        { href: "https://example.com/fr", hrefLang: "FR" },
+      ],
+      url: "https://example.com/fr",
+    }]).entries[0]?.alternates).toEqual([
+      { href: "https://example.com/fr", hrefLang: "fr" },
+    ]);
+    expect(() => defineSitemap([{
+      alternates: [
+        { href: "https://example.com/fr", hrefLang: "fr" },
+        { href: "https://other.example.com/fr", hrefLang: "fr" },
+      ],
+      url: "https://example.com/fr",
+    }])).toThrow("conflicting URLs");
+    expect(() => defineSitemap([{
+      alternates: [{ href: "/fr", hrefLang: "fr" }],
+      url: "https://example.com/fr",
+    }])).toThrow("must be absolute");
+  });
+
   it("renders robots.txt directives, host, and sitemap lines", () => {
     const robots = defineRobots({
       host: "https://example.com",

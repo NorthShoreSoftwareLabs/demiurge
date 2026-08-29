@@ -8,14 +8,29 @@ export type LocaleConfiguration<TLocale extends string = string> = {
   aliases?: Readonly<Record<string, TLocale>>;
   cookie?: { name: string };
   defaultLocale: TLocale;
+  directions?: Partial<Readonly<Record<TLocale, "ltr" | "rtl">>>;
   domains?: Partial<Readonly<Record<TLocale, string>>>;
   path?: {
     labels: Readonly<Record<TLocale, string>>;
     prefixDefault?: boolean;
     reserved?: readonly string[];
   };
+  resolver?: LocaleResolver<TLocale>;
   supportedLocales: readonly TLocale[];
+  xDefault?: TLocale;
 };
+
+export type LocaleDirection = "ltr" | "rtl";
+
+export type LocaleResolverInput<TLocale extends string = string> = {
+  configuration: LocaleConfiguration<TLocale>;
+  defaultResolution: LocaleResolution<TLocale>;
+  request: Request;
+};
+
+export type LocaleResolver<TLocale extends string = string> = (
+  input: LocaleResolverInput<TLocale>,
+) => LocaleResolution<TLocale>;
 
 export type LocaleResolution<TLocale extends string = string> = {
   locale: TLocale;
@@ -59,6 +74,13 @@ export function defineLocales<const TLocale extends string>(
       Object.entries(configuration.aliases).map(([alias, locale]) => [alias.toLowerCase(), normalizeTarget(String(locale))]),
     ),
     defaultLocale: normalizeTarget(configuration.defaultLocale),
+    // TYPE-EVIDENCE: validation restricts each direction key to a supported TLocale value.
+    directions: configuration.directions && Object.fromEntries(
+      Object.entries(configuration.directions).map(([locale, direction]) => [
+        canonicalLocale(locale),
+        direction,
+      ]),
+    ) as Partial<Record<TLocale, LocaleDirection>>,
     domains,
     path: configuration.path && {
       ...configuration.path,
@@ -66,7 +88,18 @@ export function defineLocales<const TLocale extends string>(
       reserved: configuration.path.reserved?.map((label) => label.toLowerCase()),
     },
     supportedLocales: configuration.supportedLocales.map(canonicalLocale),
+    xDefault: configuration.xDefault && normalizeTarget(configuration.xDefault),
   };
+}
+
+export function localeDirection<TLocale extends string>(
+  locale: TLocale,
+  configuration?: LocaleConfiguration<TLocale>,
+): LocaleDirection {
+  const configured = configuration?.directions?.[locale];
+  if (configured) return configured;
+
+  return rtlLanguages.has(new Intl.Locale(locale).language) ? "rtl" : "ltr";
 }
 
 export function resolveLocale<TLocale extends string>(
@@ -87,13 +120,34 @@ export function resolveLocale<TLocale extends string>(
   const source: LocaleSource = pathLocale ? "path" : domainLocale ? "domain" : cookie ? "cookie" : language ? "accept-language" : "default";
   const pathname = pathLocale || unsupported ? `/${rest.join("/")}`.replace(/\/$/, "") || "/" : url.pathname;
   const canonical = localeUrl(url, pathname, locale, configuration);
-  return {
+  const defaultResolution: LocaleResolution<TLocale> = {
     locale,
     pathname,
     redirect: !unsupported && canonical.href !== url.href ? canonical : undefined,
     source,
     unsupported,
   };
+  const resolution = configuration.resolver?.({
+    configuration,
+    defaultResolution,
+    request,
+  }) ?? defaultResolution;
+
+  if (!configuration.supportedLocales.includes(resolution.locale)) {
+    throw new Error(
+      `The locale resolver returned unsupported locale ${JSON.stringify(resolution.locale)}.`,
+    );
+  }
+
+  if (
+    resolution.redirect &&
+    resolution.redirect.origin !== url.origin &&
+    !Object.values(configuration.domains ?? {}).includes(resolution.redirect.hostname)
+  ) {
+    throw new Error("The locale resolver returned an external redirect.");
+  }
+
+  return resolution;
 }
 
 export function localizeHref<TLocale extends string>(
@@ -211,10 +265,30 @@ function validateLocales<TLocale extends string>(configuration: LocaleConfigurat
     if (domains.has(normalized)) throw new Error(`Locale domain "${domain}" is duplicated.`);
     domains.add(normalized);
   }
+  for (const [locale, direction] of Object.entries(configuration.directions ?? {})) {
+    assertTarget(locale, "direction");
+    if (direction !== "ltr" && direction !== "rtl") {
+      throw new Error(`Locale direction for "${locale}" must be "ltr" or "rtl".`);
+    }
+  }
   if (configuration.cookie && !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(configuration.cookie.name)) {
     throw new Error("The locale cookie name is invalid.");
   }
+  if (configuration.xDefault) assertTarget(configuration.xDefault, "x-default");
 }
+
+const rtlLanguages = new Set([
+  "ar",
+  "dv",
+  "fa",
+  "he",
+  "ku",
+  "ps",
+  "sd",
+  "ug",
+  "ur",
+  "yi",
+]);
 
 function canonicalLocale<TLocale extends string>(locale: TLocale): TLocale {
   const [canonical] = Intl.getCanonicalLocales(locale);

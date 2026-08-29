@@ -54,7 +54,7 @@ import {
   type PendingRouteMatch,
 } from "../router";
 import { BuiltInNotFound } from "../server/fallbacks";
-import { applicationPathname, href, localizeHref, type AppHref, type AppLocale, type LinkTarget, type LinkTo, type LocaleConfiguration } from "../routing";
+import { applicationPathname, href, localizeHref, resolveLocale, type AppHref, type AppLocale, type LinkTarget, type LinkTo, type LocaleConfiguration } from "../routing";
 import {
   abortMutationActions,
   mutationFormActionDetails,
@@ -373,6 +373,11 @@ export function createFileRouter(options: FileRouterOptions) {
         .then(async (initialData) => {
           const responseUrl = initialData.url ? new URL(initialData.url, location.href) : new URL(location.href);
           if (!responseUrl.hash) responseUrl.hash = location.hash;
+          const responseLocale = initialData.locale ?? (
+            options.locales
+              ? resolveLocale(new Request(responseUrl), options.locales).locale
+              : locale
+          );
           return {
             initialData,
             responseUrl,
@@ -382,7 +387,7 @@ export function createFileRouter(options: FileRouterOptions) {
             new Request(responseUrl.href, { signal: controller.signal }),
             initialData,
             undefined,
-            { documentContributions: false, locale: initialData.locale ?? locale },
+            { documentContributions: false, locale: responseLocale },
           ),
           };
         })
@@ -458,7 +463,7 @@ export function createFileRouter(options: FileRouterOptions) {
           routeLoadController.current = undefined;
         }
       };
-    }, [routePathname, location.search, routeRefresh]);
+    }, [routePathname, location.pathname, location.search, routeRefresh]);
 
     useLayoutEffect(() => {
       if (!committed || options.navigation === "document") {

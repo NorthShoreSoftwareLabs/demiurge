@@ -90,6 +90,7 @@ export type PageDataFunction<
 
 export type StaticPathsContext = {
   cache: Cache;
+  locale?: AppLocale;
 };
 
 export type StaticPath<TPath extends string = string> =
@@ -383,7 +384,7 @@ export type RouteModule = {
   // false`, mirroring the escape hatch a page capability already has.
   layout?: false;
   links?: LinkContribution;
-  metadata?: Metadata;
+  metadata?: Metadata | ((context: RouteContext) => MaybePromise<Metadata>);
   middleware?: AnyRouteMiddleware;
   paths?: StaticPathsFunction;
   policy?: RoutePolicy;

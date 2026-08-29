@@ -1,4 +1,5 @@
 import {
+  applyLocalizedMetadata,
   createNavigationDocument,
 } from "../document";
 import {
@@ -72,7 +73,7 @@ import {
   securityPolicyRequiresNonce,
 } from "../security/policy";
 import { MUTATION_REVALIDATION_HEADER } from "../route/mutation";
-import { defineLocales, localizeHref, resolveLocale, type LocaleConfiguration } from "../routing";
+import { defineLocales, localeDirection, localizeHref, resolveLocale, type LocaleConfiguration } from "../routing";
 
 export type RequestErrorReporter = (
   error: unknown,
@@ -108,6 +109,7 @@ type RequestRuntimeOptions = {
   dev?: boolean;
   onError?: RequestErrorReporter;
   renderPage?: PageRenderer;
+  locales?: LocaleConfiguration;
   routePathname?: string;
   rateLimitStore?: RateLimitStore;
   ssr?: SsrOptions;
@@ -153,6 +155,8 @@ export function createRequestHandler(options: RequestHandlerOptions) {
       if (resolution.unsupported) {
         return await renderNotFoundResponse(manifest, request, {
           ...options.ssr,
+          dir: localeDirection(resolution.locale, locales),
+          lang: resolution.locale,
           locale: resolution.locale,
           pathname: resolution.pathname,
         });
@@ -169,7 +173,12 @@ export function createRequestHandler(options: RequestHandlerOptions) {
             rateLimitStore,
             renderPage: options.renderPage,
             routePathname: resolution.pathname,
-            ssr: { ...options.ssr, locale: locales.defaultLocale },
+            ssr: {
+              ...options.ssr,
+              dir: localeDirection(locales.defaultLocale, locales),
+              lang: locales.defaultLocale,
+              locale: locales.defaultLocale,
+            },
           });
         }
         const headers = new Headers({ location: resolution.redirect.href });
@@ -179,9 +188,15 @@ export function createRequestHandler(options: RequestHandlerOptions) {
         }
         return new Response(null, { headers, status: preference ? 307 : 308 });
       }
-      ssr = { ...options.ssr, locale: resolution.locale };
+      ssr = {
+        ...options.ssr,
+        dir: localeDirection(resolution.locale, locales),
+        lang: resolution.locale,
+        locale: resolution.locale,
+      };
       const response = await handleRequestWithManifest(manifest, request, {
         cacheStore: options.cacheStore,
+        locales,
         onError: options.onError,
         rateLimitStore,
         renderPage: options.renderPage,
@@ -421,7 +436,7 @@ async function handleMatchedRoute(
 
   request = limitRequestBody(routeSecurity?.request, request);
   const requestContext: Record<string, unknown> = {};
-  const cache = createRequestCache(options.cacheStore);
+  const cache = createRequestCache(options.cacheStore, options.ssr?.locale);
 
   if (capability.kind === "page") {
     const context = {
@@ -465,9 +480,21 @@ async function handleMatchedRoute(
             });
           }
 
+          if (options.locales && options.ssr?.locale) {
+            match.match.metadata = createLocalizedPageMetadata(
+              match.match.metadata,
+              request,
+              routePathname,
+              options.ssr.locale,
+              options.locales,
+            );
+          }
+
           if (isNavigationDataRequest(request)) {
             return createNavigationDataResponse(match.match.data, {
               document: createNavigationDocument({
+                dir: options.ssr?.dir,
+                lang: options.ssr?.lang,
                 links: match.match.links,
                 metadata: match.match.metadata,
                 scripts: match.match.scripts,
@@ -618,6 +645,34 @@ async function handleMatchedRoute(
   }
 }
 
+function createLocalizedPageMetadata(
+  metadata: LoadedRouteMatch["metadata"],
+  request: Request,
+  pathname: string,
+  locale: string,
+  locales: LocaleConfiguration,
+) {
+  const base = request.url;
+  const localizedUrl = (targetLocale: string) =>
+    new URL(localizeHref(pathname, targetLocale, locales, base), base).href;
+  const alternates = locales.supportedLocales.map((targetLocale) => ({
+    href: localizedUrl(targetLocale),
+    hrefLang: targetLocale,
+  }));
+
+  if (locales.xDefault) {
+    alternates.push({
+      href: localizedUrl(locales.xDefault),
+      hrefLang: "x-default",
+    });
+  }
+
+  return applyLocalizedMetadata(metadata, {
+    alternates,
+    canonical: localizedUrl(locale),
+  });
+}
+
 async function revalidateMutation(
   response: Response,
   cache: Cache,
@@ -686,10 +741,37 @@ function invalidMutationInvalidation() {
   return new Error("Demiurge received invalid internal mutation invalidation metadata.");
 }
 
-function createRequestCache(options: RequestCacheStoreOptions | undefined) {
-  return options
+function createRequestCache(
+  options: RequestCacheStoreOptions | undefined,
+  locale?: string,
+) {
+  const cache = options
     ? createCache(options)
     : createMemoryCache();
+
+  if (!locale) return cache;
+
+  const localeTag = (id: string) => ({ id: `demiurge:locale:${locale}:${id}` });
+  const localeKey = (key: CacheKey): CacheKey => [
+    { "demiurge:locale": locale },
+    ...key,
+  ];
+
+  return {
+    get: (request) => cache.get(
+      request.locale === "neutral"
+        ? request
+        : {
+          ...request,
+          key: localeKey(request.key),
+          tags: request.tags?.map((tag) => localeTag(tag.id)),
+        },
+    ),
+    invalidateKey: (key) => cache.invalidateKey(localeKey(key)),
+    invalidateTags: (tags) => cache.invalidateTags(
+      tags.map((tag) => localeTag(tag.id)),
+    ),
+  } satisfies Cache;
 }
 
 function createFallbackOptions(url: URL, options: RequestRuntimeOptions) {

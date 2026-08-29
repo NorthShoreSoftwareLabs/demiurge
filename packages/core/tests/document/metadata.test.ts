@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyLocalizedMetadata,
   defineMetadata,
   link,
   meta,
@@ -127,5 +128,37 @@ describe("document metadata", () => {
     );
 
     expect(metadata.structuredData).toEqual([organization, article]);
+  });
+
+  it("adds audited localized canonical and alternate metadata", () => {
+    const metadata = applyLocalizedMetadata(resolveMetadata(), {
+      alternates: [
+        { href: "https://example.test/about", hrefLang: "en" },
+        { href: "https://example.test/fr/about", hrefLang: "fr" },
+        { href: "https://example.test/about", hrefLang: "x-default" },
+      ],
+      canonical: "https://example.test/fr/about",
+    });
+
+    expect(metadata.canonical).toBe("https://example.test/fr/about");
+    expect(metadata.custom).toEqual([
+      { href: "https://example.test/about", hrefLang: "en", kind: "link", rel: "alternate" },
+      { href: "https://example.test/fr/about", hrefLang: "fr", kind: "link", rel: "alternate" },
+      { href: "https://example.test/about", hrefLang: "x-default", kind: "link", rel: "alternate" },
+    ]);
+  });
+
+  it("rejects conflicting localized metadata", () => {
+    expect(() => applyLocalizedMetadata(resolveMetadata({ canonical: "/wrong" }), {
+      alternates: [],
+      canonical: "https://example.test/right",
+    })).toThrow("conflicts");
+    expect(() => applyLocalizedMetadata(resolveMetadata(), {
+      alternates: [
+        { href: "https://example.test/en", hrefLang: "en" },
+        { href: "https://example.test/other", hrefLang: "en" },
+      ],
+      canonical: "https://example.test/en",
+    })).toThrow("conflicting URLs");
   });
 });

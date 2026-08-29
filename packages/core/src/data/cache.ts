@@ -26,6 +26,7 @@ type MaybePromise<T> = T | Promise<T>;
 export type CacheRequest<TResult> = {
   fn: () => MaybePromise<TResult>;
   key: CacheKey;
+  locale?: "neutral";
   // TTL for a negative entry (the loader called `cacheNotFound()`). Kept
   // separate from `ttl` because "does not currently exist" tends to change
   // sooner than "currently exists." Falls back to `ttl` when omitted.
@@ -39,6 +40,7 @@ export type CacheRequest<TResult> = {
 export type QueryDefinition<TArgs extends readonly unknown[], TResult> = {
   fn: (...args: TArgs) => MaybePromise<TResult>;
   key: (...args: TArgs) => CacheKey;
+  locale?: "neutral";
   notFoundTtl?: CacheDuration;
   scope?: CacheScope;
   staleWhileRevalidate?: CacheDuration;
@@ -163,6 +165,7 @@ export function query<TArgs extends readonly unknown[], TResult>(
   return (...args) => ({
     fn: () => definition.fn(...args),
     key: definition.key(...args),
+    locale: definition.locale,
     notFoundTtl: definition.notFoundTtl,
     scope: definition.scope,
     staleWhileRevalidate: definition.staleWhileRevalidate,

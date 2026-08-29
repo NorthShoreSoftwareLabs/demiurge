@@ -20,6 +20,7 @@ export async function createDocumentShell(
 ): Promise<DocumentShell> {
   const shell = renderDocumentShell({
     body: { data: match.data, locale: options.locale, navigation: options.navigation },
+    dir: options.dir,
     entrySrc: options.clientEntry,
     lang: options.lang,
     links: match.links,

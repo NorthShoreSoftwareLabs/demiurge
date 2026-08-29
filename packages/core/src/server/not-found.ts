@@ -70,6 +70,8 @@ export async function renderNotFoundResponse(
   if (isNavigationDataRequest(request)) {
     return createNavigationDataResponse(undefined, {
       document: createNavigationDocument({
+        dir: options.dir,
+        lang: options.lang,
         metadata: match.metadata,
         title: options.title,
       }),

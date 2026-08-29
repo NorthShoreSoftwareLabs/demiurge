@@ -47,6 +47,7 @@ export {
 } from "./data";
 export {
   createFrameworkScriptUrl,
+  applyLocalizedMetadata,
   defineLinks,
   defineMetadata,
   defineOgImage,
@@ -72,7 +73,7 @@ export {
   startDeferredScripts,
   structuredData,
 } from "./document";
-export { applicationPathname, defineLocales, href, localizeHref, resolveLocale } from "./routing";
+export { applicationPathname, defineLocales, href, localeDirection, localizeHref, resolveLocale } from "./routing";
 export {
   analytics,
   COLLECTED_WEB_VITAL_NAMES,
@@ -329,6 +330,8 @@ export type {
   RouteMutationMethods,
   LocaleConfiguration,
   LocaleResolution,
+  LocaleResolver,
+  LocaleResolverInput,
   LocaleSource,
   RouteLocales,
 } from "./routing";
