@@ -139,10 +139,12 @@ describe("locale-aware routes", () => {
   it("resolves document direction and accepts an application override", () => {
     expect(localeDirection("ar")).toBe("rtl");
     expect(localeDirection("en")).toBe("ltr");
-    expect(localeDirection("ar", defineLocales({
-      defaultLocale: "ar",
-      directions: { ar: "ltr" },
-      supportedLocales: ["ar"],
+    expect(localeDirection("az-Arab")).toBe("rtl");
+    expect(localeDirection("az-Latn")).toBe("ltr");
+    expect(localeDirection("az-Arab", defineLocales({
+      defaultLocale: "az-Arab",
+      directions: { "az-Arab": "ltr" },
+      supportedLocales: ["az-Arab"],
     }))).toBe("ltr");
   });
 

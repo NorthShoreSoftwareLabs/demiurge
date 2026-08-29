@@ -99,7 +99,11 @@ export function localeDirection<TLocale extends string>(
   const configured = configuration?.directions?.[locale];
   if (configured) return configured;
 
-  return rtlLanguages.has(new Intl.Locale(locale).language) ? "rtl" : "ltr";
+  // TYPE-EVIDENCE: Node 22.13 implements Intl.Locale textInfo, but TypeScript 5.7 omits its declaration.
+  const localeWithTextInfo = new Intl.Locale(locale) as Intl.Locale & {
+    textInfo: { direction: LocaleDirection };
+  };
+  return localeWithTextInfo.textInfo.direction;
 }
 
 export function resolveLocale<TLocale extends string>(
@@ -276,19 +280,6 @@ function validateLocales<TLocale extends string>(configuration: LocaleConfigurat
   }
   if (configuration.xDefault) assertTarget(configuration.xDefault, "x-default");
 }
-
-const rtlLanguages = new Set([
-  "ar",
-  "dv",
-  "fa",
-  "he",
-  "ku",
-  "ps",
-  "sd",
-  "ug",
-  "ur",
-  "yi",
-]);
 
 function canonicalLocale<TLocale extends string>(locale: TLocale): TLocale {
   const [canonical] = Intl.getCanonicalLocales(locale);
