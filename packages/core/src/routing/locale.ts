@@ -99,7 +99,11 @@ export function localeDirection<TLocale extends string>(
   const configured = configuration?.directions?.[locale];
   if (configured) return configured;
 
-  return rtlLanguages.has(new Intl.Locale(locale).language) ? "rtl" : "ltr";
+  const localeInformation = new Intl.Locale(locale);
+  const direction = localeInformation.textInfo?.direction;
+  if (direction) return direction;
+
+  return rtlScripts.has(localeInformation.maximize().script ?? "") ? "rtl" : "ltr";
 }
 
 export function resolveLocale<TLocale extends string>(
@@ -277,25 +281,52 @@ function validateLocales<TLocale extends string>(configuration: LocaleConfigurat
   if (configuration.xDefault) assertTarget(configuration.xDefault, "x-default");
 }
 
-const rtlLanguages = new Set([
-  "ar",
-  "dv",
-  "fa",
-  "he",
-  "ku",
-  "ps",
-  "sd",
-  "ug",
-  "ur",
-  "yi",
-]);
-
 function canonicalLocale<TLocale extends string>(locale: TLocale): TLocale {
   const [canonical] = Intl.getCanonicalLocales(locale);
   if (!canonical) throw new Error(`Locale "${locale}" is invalid.`);
   // TYPE-EVIDENCE: canonicalization changes spelling only. It preserves the locale represented by TLocale.
   return canonical as TLocale;
 }
+
+const rtlScripts = new Set([
+  "Adlm",
+  "Arab",
+  "Armi",
+  "Avst",
+  "Chrs",
+  "Cprt",
+  "Elym",
+  "Gara",
+  "Hatr",
+  "Hebr",
+  "Hung",
+  "Khar",
+  "Lydi",
+  "Mand",
+  "Mani",
+  "Mend",
+  "Merc",
+  "Mero",
+  "Narb",
+  "Nbat",
+  "Nkoo",
+  "Orkh",
+  "Ougr",
+  "Palm",
+  "Phli",
+  "Phlp",
+  "Phnx",
+  "Prti",
+  "Rohg",
+  "Samr",
+  "Sarb",
+  "Sidt",
+  "Sogd",
+  "Sogo",
+  "Syrc",
+  "Thaa",
+  "Yezi",
+]);
 
 function normalizeDomain(domain: string) {
   if (domain.includes(":" ) || domain.includes("/") || domain.trim() !== domain) {

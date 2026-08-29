@@ -139,11 +139,26 @@ describe("locale-aware routes", () => {
   it("resolves document direction and accepts an application override", () => {
     expect(localeDirection("ar")).toBe("rtl");
     expect(localeDirection("en")).toBe("ltr");
-    expect(localeDirection("ar", defineLocales({
-      defaultLocale: "ar",
-      directions: { ar: "ltr" },
-      supportedLocales: ["ar"],
+    expect(localeDirection("az-Arab")).toBe("rtl");
+    expect(localeDirection("az-Latn")).toBe("ltr");
+    expect(localeDirection("az-Arab", defineLocales({
+      defaultLocale: "az-Arab",
+      directions: { "az-Arab": "ltr" },
+      supportedLocales: ["az-Arab"],
     }))).toBe("ltr");
+  });
+
+  it("uses script direction when the browser omits locale text information", () => {
+    const descriptor = Object.getOwnPropertyDescriptor(Intl.Locale.prototype, "textInfo");
+    if (!descriptor) throw new Error("The test runtime must provide Intl.Locale textInfo.");
+    Object.defineProperty(Intl.Locale.prototype, "textInfo", { configurable: true, value: undefined });
+    try {
+      expect(localeDirection("az-Arab")).toBe("rtl");
+      expect(localeDirection("hu-Hung")).toBe("rtl");
+      expect(localeDirection("az-Latn")).toBe("ltr");
+    } finally {
+      Object.defineProperty(Intl.Locale.prototype, "textInfo", descriptor);
+    }
   });
 
   it("returns application pathnames with and without configuration", () => {
