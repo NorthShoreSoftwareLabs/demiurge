@@ -35,7 +35,7 @@
     "eslint": "^10.8.0",
     "globals": "^17.9.0",
     "tsx": "^4.20.6",
-    "typescript": "^5.7.2",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.66.0"
   }
 }
