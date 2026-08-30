@@ -18,7 +18,21 @@ let processOutput = "";
 
 try {
   build();
-  await run();
+  // Polling a real child process's HTTP server is inherently racy at both
+  // ends of its life. A connection can land before the listener is fully
+  // ready during startup. A socket can reset while the server closes its
+  // listener during shutdown.
+  // Node surfaces some resets as an 'error' on the request. Once headers
+  // arrive, it surfaces others as an 'error' on the response instead. Rare
+  // ones show up as a raw uncaught exception if no stream is listening.
+  // This guard covers the probe's entire run, not just one phase. The same
+  // race showed up at startup after first being fixed only for shutdown.
+  const restoreSocketErrorGuard = installSocketResetGuard();
+  try {
+    await run();
+  } finally {
+    restoreSocketErrorGuard();
+  }
   console.log(
     `vm-node process probe passed (host ${localhostHost})`,
   );
@@ -52,6 +66,77 @@ function build() {
   if (result.status !== 0) {
     throw new Error(`pnpm build in examples/vm-node exited with code ${result.status}.`);
   }
+}
+
+type RequestResult = { status: number; data: string };
+
+// Makes one HTTP request and settles once the response completes. A caller
+// races this against a deadline for readiness and draining checks, or awaits
+// it directly for a single request. `agent: false` gives every request its
+// own socket, torn down after the request cycle. A pooled socket can
+// outlive the request and surface a late, unlistened error instead.
+// Both the request and the response get an 'error' listener. Node emits an
+// early reset (before headers) on the request. It emits a later one (after
+// headers, mid-body) on the response instead.
+function requestOnce(
+  url: URL,
+  options?: { method?: string; headers?: Record<string, string> },
+): Promise<RequestResult> {
+  return new Promise<RequestResult>((resolveRequest, rejectRequest) => {
+    const req = httpRequest(
+      url,
+      {
+        method: options?.method ?? "GET",
+        agent: false,
+        headers: {
+          Connection: "close",
+          Host: "localhost",
+          ...options?.headers,
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk: Buffer) => {
+          data += chunk;
+        });
+        res.on("end", () => {
+          resolveRequest({ status: res.statusCode ?? 500, data });
+        });
+        res.on("error", rejectRequest);
+      },
+    );
+
+    req.on("error", rejectRequest);
+    req.end();
+  });
+}
+
+// Installs a narrowly-scoped `uncaughtException` guard that swallows only
+// socket-reset-shaped errors (ECONNRESET / "socket hang up"). Anything else
+// is rethrown, which preserves default Node behavior (crash the process)
+// for real bugs. The returned function removes the guard. Callers must
+// always call it in a `finally` block, so it never leaks into other
+// integration probes that share this process.
+function installSocketResetGuard() {
+  const isSocketResetError = (error: unknown) =>
+    error instanceof Error &&
+    (("code" in error && (error as NodeJS.ErrnoException).code === "ECONNRESET") ||
+      error.message.includes("socket hang up") ||
+      error.message.includes("ECONNRESET"));
+
+  const onUncaughtException = (error: unknown) => {
+    if (isSocketResetError(error)) {
+      return;
+    }
+
+    throw error;
+  };
+
+  process.on("uncaughtException", onUncaughtException);
+
+  return () => {
+    process.off("uncaughtException", onUncaughtException);
+  };
 }
 
 async function run() {
@@ -88,39 +173,13 @@ async function run() {
   const origin = `http://${localhostHost}:${testPort}`;
   await waitForReady(origin);
 
-  // Helper to make HTTP requests with proper Host header
   const makeRequest = (
     path: string,
     options?: { method?: string; headers?: Record<string, string> },
   ) => {
-    return new Promise<{ status: number; data: string }>((resolve, reject) => {
-      const url = new URL(origin);
-      url.pathname = path;
-      const req = httpRequest(
-        url,
-        {
-          method: options?.method ?? "GET",
-          agent: false,
-          headers: {
-            Connection: "close",
-            Host: "localhost",
-            ...options?.headers,
-          },
-        },
-        (res) => {
-          let data = "";
-          res.on("data", (chunk) => {
-            data += chunk;
-          });
-          res.on("end", () => {
-            resolve({ status: res.statusCode ?? 500, data });
-          });
-        }
-      );
-
-      req.on("error", reject);
-      req.end();
-    });
+    const url = new URL(origin);
+    url.pathname = path;
+    return requestOnce(url, options);
   };
 
   // Test 1: Fetch the home page
@@ -180,23 +239,10 @@ async function run() {
   // Test 4: Verify graceful shutdown with SIGTERM.
   // The server must enter the draining state (readiness reports 503) before
   // the process exits, and it must exit on its own within the grace period.
-  //
-  // Polling a mid-shutdown server is inherently racy. The listener can
-  // close, or an in-flight socket can reset, between any two lines here.
-  // Node surfaces some resets as an 'error' on the request. Once headers
-  // arrive, it surfaces others as an 'error' on the response instead. Rare
-  // ones show up as a raw uncaught exception if no stream is listening.
-  // All three are expected shutdown noise, not test failures, so they are
-  // handled the same way for the duration of this drain check.
   const child = serverProcess;
   child.kill("SIGTERM");
 
-  const restoreUncaughtExceptionGuard = installShutdownSocketErrorGuard();
-  try {
-    await waitForDraining(origin);
-  } finally {
-    restoreUncaughtExceptionGuard();
-  }
+  await waitForDraining(origin);
 
   const exitDeadline = Date.now() + 10_000;
   while (child.exitCode === null && child.signalCode === null) {
@@ -210,58 +256,13 @@ async function run() {
   }
 }
 
-// Installs a narrowly-scoped `uncaughtException` guard that swallows only
-// socket-reset-shaped errors (ECONNRESET / "socket hang up"), for the
-// duration of the SIGTERM drain check. Anything else is rethrown, which
-// preserves default Node behavior (crash the process) for real bugs. The
-// returned function removes the guard. Callers must always call it in a
-// `finally` block, so it never leaks into other integration probes that
-// share this process.
-function installShutdownSocketErrorGuard() {
-  const isSocketResetError = (error: unknown) =>
-    error instanceof Error &&
-    (("code" in error && (error as NodeJS.ErrnoException).code === "ECONNRESET") ||
-      error.message.includes("socket hang up") ||
-      error.message.includes("ECONNRESET"));
-
-  const onUncaughtException = (error: unknown) => {
-    if (isSocketResetError(error)) {
-      return;
-    }
-
-    throw error;
-  };
-
-  process.on("uncaughtException", onUncaughtException);
-
-  return () => {
-    process.off("uncaughtException", onUncaughtException);
-  };
-}
-
 async function waitForDraining(origin: string) {
   const deadline = Date.now() + 5_000;
   const url = new URL("/.well-known/ready", origin);
 
   while (Date.now() < deadline) {
     try {
-      const status = await new Promise<number>((resolveStatus, rejectStatus) => {
-        const req = httpRequest(
-          url,
-          { method: "GET", agent: false, headers: { Connection: "close", Host: "localhost" } },
-          (res) => {
-            res.on("data", () => {});
-            res.on("end", () => resolveStatus(res.statusCode ?? 500));
-            // A reset that arrives after headers are received is emitted on
-            // the response stream, not the request. See the comment on
-            // `installShutdownSocketErrorGuard` above.
-            res.on("error", rejectStatus);
-          },
-        );
-
-        req.on("error", rejectStatus);
-        req.end();
-      });
+      const { status } = await requestOnce(url);
 
       if (status === 503) {
         return;
@@ -270,7 +271,7 @@ async function waitForDraining(origin: string) {
       // The process may have already closed its listener once draining
       // finishes. That is a valid way to observe the shutdown, not a bug.
       // ECONNREFUSED: listener closed. ECONNRESET: connection reset during
-      // shutdown (for example, on a pooled socket after the request cycle ended).
+      // shutdown (for example, on a socket mid-request as the server exits).
       if (error instanceof Error && (error.message.includes("ECONNREFUSED") || error.message.includes("ECONNRESET"))) {
         return;
       }
@@ -293,44 +294,21 @@ async function waitForReady(origin: string) {
 
   while (Date.now() < deadline) {
     try {
-      await new Promise<void>((resolveRequest, rejectRequest) => {
-        const req = httpRequest(
-          url,
-          {
-            method: "GET",
-            agent: false,
-            headers: {
-              Connection: "close",
-              Host: "localhost",
-            },
-          },
-          (res) => {
-            res.on("data", () => {
-              // Consume data to prevent memory leak
-            });
-            res.on("end", () => {
-              if (res.statusCode === 200) {
-                resolveRequest();
-              } else {
-                rejectRequest(new Error(`Status ${res.statusCode}`));
-              }
-            });
-          }
-        );
+      const { status, data } = await Promise.race([
+        requestOnce(url),
+        new Promise<never>((_resolveTimeout, rejectTimeout) => {
+          setTimeout(() => rejectTimeout(new Error("Request timeout")), 5000);
+        }),
+      ]);
 
-        req.on("error", rejectRequest);
-        req.end();
+      if (status === 200) {
+        return;
+      }
 
-        // Set a timeout for this specific request
-        setTimeout(() => {
-          req.destroy();
-          rejectRequest(new Error("Request timeout"));
-        }, 5000);
-      });
-
-      return;
+      lastError = new Error(`Status ${status}: ${data}`);
     } catch (error) {
-      // The server may not accept connections yet. Retry until the deadline.
+      // The server may not accept connections yet, or a connection made
+      // just as the listener came up can reset. Retry until the deadline.
       if (error instanceof Error) {
         lastError = error;
       }
