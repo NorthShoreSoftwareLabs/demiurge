@@ -100,6 +100,7 @@ async function run() {
         url,
         {
           method: options?.method ?? "GET",
+          agent: false,
           headers: {
             Connection: "close",
             Host: "localhost",
@@ -205,7 +206,7 @@ async function waitForDraining(origin: string) {
       const status = await new Promise<number>((resolveStatus, rejectStatus) => {
         const req = httpRequest(
           url,
-          { method: "GET", headers: { Connection: "close", Host: "localhost" } },
+          { method: "GET", agent: false, headers: { Connection: "close", Host: "localhost" } },
           (res) => {
             res.on("data", () => {});
             res.on("end", () => resolveStatus(res.statusCode ?? 500));
@@ -222,7 +223,9 @@ async function waitForDraining(origin: string) {
     } catch (error) {
       // The process may have already closed its listener once draining
       // finishes. That is a valid way to observe the shutdown, not a bug.
-      if (error instanceof Error && error.message.includes("ECONNREFUSED")) {
+      // ECONNREFUSED: listener closed. ECONNRESET: connection reset during
+      // shutdown (for example, on a pooled socket after the request cycle ended).
+      if (error instanceof Error && (error.message.includes("ECONNREFUSED") || error.message.includes("ECONNRESET"))) {
         return;
       }
 
@@ -249,6 +252,7 @@ async function waitForReady(origin: string) {
           url,
           {
             method: "GET",
+            agent: false,
             headers: {
               Connection: "close",
               Host: "localhost",
