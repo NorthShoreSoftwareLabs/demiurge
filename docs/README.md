@@ -20,6 +20,7 @@ that exists in the current source tree. Planned work and delivery status live in
 - [Node deployment](./guides/node-deployment.md)
 - [Edge deployment](./guides/edge-deployment.md)
 - [Container deployment contract](./guides/container-deployment-contract.md)
+- [CDN and reverse-proxy contract](./guides/cdn-reverse-proxy-contract.md)
 - [Cloud Run deployment](./guides/cloud-run-deployment.md)
 - [Deployment capability matrix](./guides/deployment-capability-matrix.md)
 

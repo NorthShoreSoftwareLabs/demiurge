@@ -60,7 +60,9 @@ Behind exactly one trusted reverse proxy, configure `trustProxy: { hops: 1 }`.
 Where proxy addresses are stable, prefer
 `trustProxy: { ranges: ["10.0.0.0/8"] }`. Demiurge then resolves the client
 address, scheme, and host right-to-left through that boundary. Never enable
-proxy trust on a process clients can reach around the proxy.
+proxy trust on a process clients can reach around the proxy. See the
+[CDN and reverse-proxy contract](./cdn-reverse-proxy-contract.md) for the full
+requirements a proxy must satisfy.
 
 ## Timeouts and shutdown
 

@@ -40,7 +40,8 @@ in front of the container. Exactly one trusted hop in front of the process
 calls for `trustProxy: { hops: 1 }`. A proxy fleet with stable addresses calls
 for `trustProxy: { ranges: [...] }` instead. Never enable proxy trust on a
 process that clients can also reach directly. That reach makes the proxy
-bypassable.
+bypassable. See the [CDN and reverse-proxy contract](./cdn-reverse-proxy-contract.md)
+for the full proxy requirements.
 
 ## Readiness, termination, and graceful shutdown
 
