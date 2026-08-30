@@ -4,6 +4,8 @@ This example proves a production Node deployment on a persistent virtual machine
 
 `examples/cloud-run` binds to `0.0.0.0` and relies on a platform load balancer to handle TLS. This example binds to a loopback address (`127.0.0.1`) instead. A reverse proxy terminates TLS and forwards requests.
 
+This example runs the Node adapter, so the [deployment capability matrix](../../docs/guides/deployment-capability-matrix.md) covers what it supports.
+
 ## Architecture
 
 **Security boundary:**
