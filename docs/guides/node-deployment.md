@@ -7,7 +7,9 @@ This document covers the operational settings. The
 [`examples/node-server`](../../examples/node-server) is the complete version.
 Deploying this process inside a container follows the
 [container deployment contract](./container-deployment-contract.md), which
-separates the rules below from settings a specific platform chooses.
+separates the rules below from settings a specific platform chooses. See the
+[deployment capability matrix](./deployment-capability-matrix.md) for what the
+Node adapter proves against the shared adapter contract.
 
 ## Build outputs
 

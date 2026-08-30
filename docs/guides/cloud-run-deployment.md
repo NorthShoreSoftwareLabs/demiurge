@@ -5,7 +5,9 @@ container needs, so this document covers the container shape rather than new
 framework code. Read the [Node deployment guide](./node-deployment.md) first.
 Everything there about the build output, static files, and shutdown still
 applies inside the container. [`examples/cloud-run`](../../examples/cloud-run)
-is the complete, buildable version of what follows.
+is the complete, buildable version of what follows. Cloud Run runs the Node
+adapter, so the [deployment capability matrix](./deployment-capability-matrix.md)
+applies here unchanged.
 
 Cloud Run is one conforming implementation of the
 [container deployment contract](./container-deployment-contract.md). This

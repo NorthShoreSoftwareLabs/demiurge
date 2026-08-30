@@ -21,6 +21,7 @@ that exists in the current source tree. Planned work and delivery status live in
 - [Edge deployment](./guides/edge-deployment.md)
 - [Container deployment contract](./guides/container-deployment-contract.md)
 - [Cloud Run deployment](./guides/cloud-run-deployment.md)
+- [Deployment capability matrix](./guides/deployment-capability-matrix.md)
 
 ## Maintainers
 

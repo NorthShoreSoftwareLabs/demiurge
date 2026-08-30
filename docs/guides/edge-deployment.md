@@ -6,7 +6,9 @@ common denominator across the runtimes that call themselves edge, so the adapter
 targets the platform rather than one vendor.
 
 The [Node deployment guide](./node-deployment.md) covers the process-shaped
-deployment. This document covers what changes when the process is gone.
+deployment. This document covers what changes when the process is gone. See
+the [deployment capability matrix](./deployment-capability-matrix.md) for how
+the edge adapter compares against Node and static.
 
 ## What the adapter declares
 
