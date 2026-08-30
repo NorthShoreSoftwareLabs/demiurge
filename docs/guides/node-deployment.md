@@ -5,6 +5,9 @@ owns the request boundary, the static file boundary, and the process lifecycle.
 This document covers the operational settings. The
 [README quickstart](../../README.md#deploy) covers the minimum working setup, and
 [`examples/node-server`](../../examples/node-server) is the complete version.
+Deploying this process inside a container follows the
+[container deployment contract](./container-deployment-contract.md), which
+separates the rules below from settings a specific platform chooses.
 
 ## Build outputs
 
