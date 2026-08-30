@@ -279,6 +279,7 @@ exports. These examples are useful starting points:
 - [Errors and not-found behavior](./docs/guides/errors-and-not-found.md)
 - [Node deployment](./docs/guides/node-deployment.md)
 - [Edge deployment](./docs/guides/edge-deployment.md)
+- [Object storage and CDN deployment](./docs/guides/object-storage-cdn-deployment.md)
 
 Maintainers and contributors can also read the [architecture records](./architecture/README.md),
 [open design discussions](https://github.com/NorthShoreSoftwareLabs/demiurge/issues?q=is%3Aissue+is%3Aopen+label%3Aneeds-decision), and [contribution guide](./CONTRIBUTING.md).

@@ -20,7 +20,7 @@ not here. Every claim below cites the source or test that proves it today.
 | Node process in a container | Node | [Cloud Run deployment](./cloud-run-deployment.md), [`examples/cloud-run`](../../examples/cloud-run) |
 | Node process, general | Node | [Node deployment](./node-deployment.md), [`examples/node-server`](../../examples/node-server) |
 | Web-platform isolate | Edge | [Edge deployment](./edge-deployment.md) |
-| Static build output | Static | [`examples/static-export`](../../examples/static-export) |
+| Static build output | Static | [`examples/static-export`](../../examples/static-export), [object-storage and CDN deployment](./object-storage-cdn-deployment.md), [`examples/object-storage-cdn`](../../examples/object-storage-cdn) |
 
 The three Node deployment paths run the same adapter and therefore declare the
 same capabilities. What differs between them is operational, not a
