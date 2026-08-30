@@ -7,6 +7,11 @@ Everything there about the build output, static files, and shutdown still
 applies inside the container. [`examples/cloud-run`](../../examples/cloud-run)
 is the complete, buildable version of what follows.
 
+Cloud Run is one conforming implementation of the
+[container deployment contract](./container-deployment-contract.md). This
+document names the provider settings Cloud Run needs for each framework
+requirement that contract defines.
+
 ## Container shape
 
 The image builds in two stages. A builder stage installs workspace

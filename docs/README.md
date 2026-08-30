@@ -19,6 +19,7 @@ that exists in the current source tree. Planned work and delivery status live in
 - [Analytics and observability](./guides/analytics.md)
 - [Node deployment](./guides/node-deployment.md)
 - [Edge deployment](./guides/edge-deployment.md)
+- [Container deployment contract](./guides/container-deployment-contract.md)
 - [Cloud Run deployment](./guides/cloud-run-deployment.md)
 
 ## Maintainers
