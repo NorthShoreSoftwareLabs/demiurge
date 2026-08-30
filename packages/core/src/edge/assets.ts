@@ -1,4 +1,5 @@
 import {
+  contentTypeForExtension,
   IMMUTABLE_FILE_CACHE_CONTROL,
   isContentHashedFileName,
   REVALIDATED_FILE_CACHE_CONTROL,
@@ -29,26 +30,6 @@ type ResolvedAsset = {
   cacheControl: string;
   contentType: string;
   etag: string;
-};
-
-const contentTypes: Record<string, string> = {
-  ".avif": "image/avif",
-  ".css": "text/css; charset=utf-8",
-  ".gif": "image/gif",
-  ".html": "text/html; charset=utf-8",
-  ".ico": "image/x-icon",
-  ".jpeg": "image/jpeg",
-  ".jpg": "image/jpeg",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".txt": "text/plain; charset=utf-8",
-  ".webmanifest": "application/manifest+json",
-  ".webp": "image/webp",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
 };
 
 // The framework build output is never a public asset. The route pipeline owns
@@ -204,7 +185,7 @@ function fileNameOf(pathname: string) {
 function contentTypeOf(pathname: string) {
   const fileName = fileNameOf(pathname);
   const dot = fileName.lastIndexOf(".");
-  const extension = dot === -1 ? "" : fileName.slice(dot).toLowerCase();
+  const extension = dot === -1 ? "" : fileName.slice(dot);
 
-  return contentTypes[extension] ?? "application/octet-stream";
+  return contentTypeForExtension(extension);
 }

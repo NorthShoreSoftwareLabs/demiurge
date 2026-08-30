@@ -23,6 +23,11 @@ export type {
   MutationValidation,
 } from "./browser";
 export {
+  contentTypeForExtension,
+  DEFAULT_CONTENT_TYPE,
+  isContentHashedFileName,
+} from "./static-files";
+export {
   assertAdapterCapabilities,
   checkAdapterCapabilities,
   defineAdapter,

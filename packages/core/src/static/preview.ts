@@ -6,6 +6,10 @@ import type {
   StaticOutputFileHeaderRule,
   StaticOutputManifest,
 } from "./index";
+import {
+  contentTypeForExtension,
+  DEFAULT_CONTENT_TYPE,
+} from "../static-files";
 
 const STATIC_MANIFEST_FILE = "demiurge-static-manifest.json";
 
@@ -13,27 +17,6 @@ export type StaticPreviewOptions = {
   host?: string;
   outDir: string;
   port?: number;
-};
-
-const contentTypes: Record<string, string> = {
-  ".avif": "image/avif",
-  ".css": "text/css; charset=utf-8",
-  ".gif": "image/gif",
-  ".html": "text/html; charset=utf-8",
-  ".ico": "image/x-icon",
-  ".jpeg": "image/jpeg",
-  ".jpg": "image/jpeg",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".mp4": "video/mp4",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".txt": "text/plain; charset=utf-8",
-  ".webmanifest": "application/manifest+json",
-  ".webp": "image/webp",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
 };
 
 export async function createStaticPreviewServer(
@@ -94,8 +77,12 @@ export async function createStaticPreviewServer(
           }
 
           const body = await readFile(file);
-          const type = contentTypes[extname(file).toLowerCase()];
-          if (type) response.setHeader("content-type", type);
+          // The preview leaves the header off for an extension the shared
+          // table does not name, rather than declaring an opaque type here.
+          const type = contentTypeForExtension(extname(file));
+          if (type !== DEFAULT_CONTENT_TYPE) {
+            response.setHeader("content-type", type);
+          }
 
           const fileName = pathname.split("/").at(-1) ?? "";
           const rule = rules.find(({ expression }) => expression.test(fileName));
