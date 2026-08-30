@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   copyRequestConnectionMetadata,
+  getRequestClientAddress,
   getRequestConnectionMetadata,
   setRequestConnectionMetadata,
 } from "../../src/server/request-metadata";
@@ -25,5 +26,19 @@ describe("request connection metadata", () => {
     copyRequestConnectionMetadata(source, wrapped);
 
     expect(getRequestConnectionMetadata(wrapped)).toBeUndefined();
+  });
+
+  it("reports the resolved client address the adapter stored", () => {
+    const request = new Request("https://example.test/");
+
+    setRequestConnectionMetadata(request, { clientIp: "198.51.100.7" });
+
+    expect(getRequestClientAddress(request)).toBe("198.51.100.7");
+  });
+
+  it("reports no client address for a plain Fetch request", () => {
+    const request = new Request("https://example.test/");
+
+    expect(getRequestClientAddress(request)).toBeUndefined();
   });
 });

@@ -62,6 +62,40 @@ Run it with `pnpm test`. The suite itself is covered by
 `packages/core/tests/adapter/contract.test.ts`, which proves that a deliberate
 violation of each capability fails.
 
+## Deployment conformance kit
+
+The adapter contract proves an adapter's in-process behavior. It does not
+prove the provider translation or the production artifact a deployment ships.
+`verifyDeploymentContract` from `@demiurgejs/core/deployment/testing` runs
+against a live origin instead, one probe per behavior:
+
+- Request URL and client address translation
+- Streaming and cancellation
+- Repeated response headers, `Set-Cookie` included
+- Static assets and cache headers
+- Security headers and nonce behavior
+- A cache shared across runtime instances
+- Readiness and graceful shutdown for process runtimes
+
+Every deployment declares a `DeploymentClaims` map alongside its probes. A
+capability declared true without a matching probe fails the suite. A probe
+supplied without a matching claim fails the same way, mirroring the adapter
+contract's declared-capability check. A deployment claims only the behaviors
+its execution model actually supports. A platform that recycles instances
+between requests has no `readiness` to prove, and a memory-backed cache has
+no `sharedCache` to claim.
+
+`examples/cloud-run` runs the suite against the built container in
+`tests/integration/cloud-run.ts`, through a small set of
+`/.well-known/deployment-contract/*` probe endpoints in its `server.js`. It
+declares every capability except `sharedCache`, because its cache store is
+process-local memory rather than one shared across instances.
+
+The suite itself is covered by
+`packages/core/tests/deployment/contract.test.ts`. It proves that a
+deliberate violation of each capability fails, the same way
+`packages/core/tests/adapter/contract.test.ts` does for the adapter contract.
+
 ## Commands
 
 ```sh
@@ -89,6 +123,8 @@ retains traces and screenshots according to `playwright.config.ts`.
   process boundary, cache lifetime, or built artifact.
 - Add a browser test when only a browser can prove the behavior.
 - Run a new adapter through the shared adapter contract suite.
+- Run a new deployment through the shared deployment conformance kit,
+  claiming only the behaviors its execution model supports.
 - Extend packed-consumer verification when package metadata, exports,
   declarations, peer dependencies, or supported Node versions change.
 

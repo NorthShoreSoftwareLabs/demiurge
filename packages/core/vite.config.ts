@@ -13,6 +13,9 @@ export default defineConfig({
           new URL("src/adapter/testing.ts", import.meta.url),
         ),
         cli: fileURLToPath(new URL("src/cli.ts", import.meta.url)),
+        "deployment/testing": fileURLToPath(
+          new URL("src/deployment/testing.ts", import.meta.url),
+        ),
         "data/testing": fileURLToPath(
           new URL("src/data/testing.ts", import.meta.url),
         ),

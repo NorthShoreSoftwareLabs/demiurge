@@ -157,6 +157,7 @@ export {
 } from "./security";
 export {
   createRequestHandler,
+  getRequestClientAddress,
   handleRequestWithManifest,
   renderPageResponse,
 } from "./server";

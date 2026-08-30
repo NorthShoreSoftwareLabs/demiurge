@@ -3,6 +3,7 @@ export {
   handleRequestWithManifest,
   loadInheritedRoutePolicy,
 } from "./request-handler";
+export { getRequestClientAddress } from "./request-metadata";
 export { renderPageDocument, renderPageResponse } from "./ssr";
 export {
   createErrorProblemResponse,

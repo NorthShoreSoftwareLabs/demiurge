@@ -69,6 +69,7 @@ covers host allowlists, proxy trust, timeouts, and graceful shutdown.
 - `@demiurgejs/core/redis` — Redis-backed cache store with cross-instance tag invalidation
 - `@demiurgejs/core/vite` — Vite framework plugin
 - `@demiurgejs/core/adapter/testing` — adapter capability conformance contract
+- `@demiurgejs/core/deployment/testing` — deployment conformance kit for provider translation and production artifacts
 - `@demiurgejs/core/data/testing` — cache-store conformance contract
 - `@demiurgejs/core/internal/testing` — explicitly unstable test helpers
 
