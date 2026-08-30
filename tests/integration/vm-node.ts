@@ -180,10 +180,23 @@ async function run() {
   // Test 4: Verify graceful shutdown with SIGTERM.
   // The server must enter the draining state (readiness reports 503) before
   // the process exits, and it must exit on its own within the grace period.
+  //
+  // Polling a mid-shutdown server is inherently racy. The listener can
+  // close, or an in-flight socket can reset, between any two lines here.
+  // Node surfaces some resets as an 'error' on the request. Once headers
+  // arrive, it surfaces others as an 'error' on the response instead. Rare
+  // ones show up as a raw uncaught exception if no stream is listening.
+  // All three are expected shutdown noise, not test failures, so they are
+  // handled the same way for the duration of this drain check.
   const child = serverProcess;
   child.kill("SIGTERM");
 
-  await waitForDraining(origin);
+  const restoreUncaughtExceptionGuard = installShutdownSocketErrorGuard();
+  try {
+    await waitForDraining(origin);
+  } finally {
+    restoreUncaughtExceptionGuard();
+  }
 
   const exitDeadline = Date.now() + 10_000;
   while (child.exitCode === null && child.signalCode === null) {
@@ -195,6 +208,35 @@ async function run() {
 
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
   }
+}
+
+// Installs a narrowly-scoped `uncaughtException` guard that swallows only
+// socket-reset-shaped errors (ECONNRESET / "socket hang up"), for the
+// duration of the SIGTERM drain check. Anything else is rethrown, which
+// preserves default Node behavior (crash the process) for real bugs. The
+// returned function removes the guard. Callers must always call it in a
+// `finally` block, so it never leaks into other integration probes that
+// share this process.
+function installShutdownSocketErrorGuard() {
+  const isSocketResetError = (error: unknown) =>
+    error instanceof Error &&
+    (("code" in error && (error as NodeJS.ErrnoException).code === "ECONNRESET") ||
+      error.message.includes("socket hang up") ||
+      error.message.includes("ECONNRESET"));
+
+  const onUncaughtException = (error: unknown) => {
+    if (isSocketResetError(error)) {
+      return;
+    }
+
+    throw error;
+  };
+
+  process.on("uncaughtException", onUncaughtException);
+
+  return () => {
+    process.off("uncaughtException", onUncaughtException);
+  };
 }
 
 async function waitForDraining(origin: string) {
@@ -210,6 +252,10 @@ async function waitForDraining(origin: string) {
           (res) => {
             res.on("data", () => {});
             res.on("end", () => resolveStatus(res.statusCode ?? 500));
+            // A reset that arrives after headers are received is emitted on
+            // the response stream, not the request. See the comment on
+            // `installShutdownSocketErrorGuard` above.
+            res.on("error", rejectStatus);
           },
         );
 
