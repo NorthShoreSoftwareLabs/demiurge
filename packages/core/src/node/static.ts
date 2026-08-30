@@ -3,6 +3,7 @@ import { lstat, open, realpath } from "node:fs/promises";
 import { extname, join, relative, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import {
+  contentTypeForExtension,
   IMMUTABLE_FILE_CACHE_CONTROL,
   isContentHashedFileName,
   REVALIDATED_FILE_CACHE_CONTROL,
@@ -22,26 +23,6 @@ export type StaticFileHandlerOptions = {
 // A null result keeps the handler composable. It means that the request does not
 // identify an owned file. The route pipeline owns all other responses, including
 // the 404 body and security headers. A traversal attempt gives the same result.
-const contentTypes: Record<string, string> = {
-  ".avif": "image/avif",
-  ".css": "text/css; charset=utf-8",
-  ".gif": "image/gif",
-  ".html": "text/html; charset=utf-8",
-  ".ico": "image/x-icon",
-  ".jpeg": "image/jpeg",
-  ".jpg": "image/jpeg",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".txt": "text/plain; charset=utf-8",
-  ".webmanifest": "application/manifest+json",
-  ".webp": "image/webp",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-};
-
 // Plain static requests must not access the framework build output. The output
 // includes the SPA shell and the Node configuration manifest. The route pipeline
 // serves the shell and applies the `@policy.ts` headers. The server never serves
@@ -386,7 +367,5 @@ function fileNameOf(filePath: string) {
 }
 
 function contentTypeOf(filePath: string) {
-  return (
-    contentTypes[extname(filePath).toLowerCase()] ?? "application/octet-stream"
-  );
+  return contentTypeForExtension(extname(filePath));
 }
