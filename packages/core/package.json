@@ -41,6 +41,10 @@
       "types": "./dist/adapter/testing.d.ts",
       "default": "./dist/adapter/testing.js"
     },
+    "./deployment/testing": {
+      "types": "./dist/deployment/testing.d.ts",
+      "default": "./dist/deployment/testing.js"
+    },
     "./internal/testing": {
       "types": "./dist/internal/testing.d.ts",
       "default": "./dist/internal/testing.js"
