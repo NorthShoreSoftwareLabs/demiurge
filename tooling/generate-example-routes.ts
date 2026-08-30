@@ -9,6 +9,7 @@ const examples = [
   "runtime-server-data",
   "app-owned-fallbacks",
   "static-export",
+  "object-storage-cdn",
   "nested-policies",
   "metadata-blog",
   "sse-feed",

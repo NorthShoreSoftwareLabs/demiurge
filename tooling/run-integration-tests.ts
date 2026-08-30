@@ -12,6 +12,7 @@ const probes = [
   // first and let the cheap ones fill the remaining lanes beside it.
   "tests/integration/cloud-run.ts",
   "tests/integration/vm-node.ts",
+  "tests/integration/object-storage-cdn.ts",
   "tests/integration/runtime-server-data.ts",
   "tests/integration/app-owned-fallbacks.ts",
   "tests/integration/nested-policies.ts",
