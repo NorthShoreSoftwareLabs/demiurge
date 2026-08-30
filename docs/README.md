@@ -22,6 +22,7 @@ that exists in the current source tree. Planned work and delivery status live in
 - [Container deployment contract](./guides/container-deployment-contract.md)
 - [CDN and reverse-proxy contract](./guides/cdn-reverse-proxy-contract.md)
 - [Cloud Run deployment](./guides/cloud-run-deployment.md)
+- [Static deployment contract](./guides/static-deployment-contract.md)
 - [Deployment capability matrix](./guides/deployment-capability-matrix.md)
 
 ## Maintainers
