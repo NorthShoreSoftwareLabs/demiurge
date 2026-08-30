@@ -1,0 +1,48 @@
+[Unit]
+Description=Demiurge VM Node Example
+After=network.target
+Documentation=https://github.com/NorthShoreSoftwareLabs/demiurge
+
+[Service]
+# Process and user configuration
+Type=simple
+User=demiurge-vm-node
+Group=demiurge-vm-node
+WorkingDirectory=/opt/demiurge-vm-node
+
+# Start the Node process
+ExecStart=/usr/bin/node server.js
+
+# Graceful shutdown: send SIGTERM first, wait for process to exit gracefully
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=35
+
+# Restart policy: on-failure or always, depending on your needs
+Restart=on-failure
+RestartSec=5s
+StartLimitInterval=1m
+StartLimitBurst=5
+
+# Resource limits (adjust to your hardware)
+# LimitNOFILE=65536
+# LimitNPROC=512
+
+# Logging: stdout/stderr go to systemd journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=demiurge-vm-node
+
+# Security hardening (optional, adjust based on your needs)
+# NoNewPrivileges=true
+# PrivateTmp=true
+# ProtectSystem=strict
+# ProtectHome=yes
+# ReadWritePaths=/opt/demiurge-vm-node/logs
+
+# Environment variables (populate from /etc/demiurge-vm-node/env if needed)
+EnvironmentFile=-/etc/demiurge-vm-node/env
+Environment="NODE_ENV=production"
+
+[Install]
+WantedBy=multi-user.target
