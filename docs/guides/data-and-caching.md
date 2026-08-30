@@ -343,6 +343,10 @@ provider configuration.
 Static generation fails on redirects, render errors, response cookies, unsafe
 or colliding output paths, and security policy that depends on a request nonce.
 
+Every static platform conforms to the same portable rules. Read the
+[static deployment contract](./static-deployment-contract.md) for host
+responsibilities.
+
 ## Vercel static output
 
 Select the Vercel static adapter in the Vite configuration:
