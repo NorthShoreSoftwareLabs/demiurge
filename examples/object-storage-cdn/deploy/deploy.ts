@@ -27,6 +27,7 @@
 //    asset's name changed if its bytes changed, so it needs no invalidation.
 import { readFile, readdir } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+import { contentTypeForExtension } from "@demiurgejs/core";
 import type { StaticOutputManifest } from "@demiurgejs/core/static";
 import { objectUrl } from "./object-url";
 
@@ -237,20 +238,7 @@ function withPageCacheDefaults(manifest: StaticOutputManifest): StaticOutputMani
 // every file the framework did not list as a route entry. They leave
 // content type to the host. A platform like Vercel infers it from the file
 // extension on its own. A plain object-storage bucket does not. The
-// deployment sets it explicitly from the same extension table any static
-// file server uses.
-const CONTENT_TYPES_BY_EXTENSION: Record<string, string> = {
-  css: "text/css; charset=utf-8",
-  js: "text/javascript; charset=utf-8",
-  json: "application/json; charset=utf-8",
-  map: "application/json; charset=utf-8",
-  svg: "image/svg+xml",
-  txt: "text/plain; charset=utf-8",
-  webmanifest: "application/manifest+json",
-  woff2: "font/woff2",
-  xml: "application/xml; charset=utf-8",
-};
-
+// deployment sets it explicitly from the framework's own extension table.
 function headersForFile(manifest: StaticOutputManifest, key: string): Record<string, string> {
   const basename = key.split("/").pop() ?? key;
   const rule = manifest.fileHeaderRules.find((candidate) => new RegExp(candidate.pattern).test(basename));
@@ -258,8 +246,7 @@ function headersForFile(manifest: StaticOutputManifest, key: string): Record<str
 
   if (!headers["content-type"]) {
     const extension = basename.split(".").pop() ?? "";
-    const contentType = CONTENT_TYPES_BY_EXTENSION[extension];
-    if (contentType) headers["content-type"] = contentType;
+    headers["content-type"] = contentTypeForExtension(extension);
   }
 
   return headers;
