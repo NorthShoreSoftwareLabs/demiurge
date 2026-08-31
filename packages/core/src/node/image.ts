@@ -12,6 +12,7 @@ import {
   parseImageOptimizerRequest,
 } from "../platform/images";
 import type { ImagePolicy } from "../platform/images";
+import { urlPath } from "../platform/url";
 import type { StaticFileHandler } from "./static";
 import { REVALIDATED_FILE_CACHE_CONTROL } from "../static-files";
 
@@ -186,7 +187,7 @@ function resolveLocalFile(root: string, src: string) {
   let decoded: string;
 
   try {
-    decoded = decodeURIComponent(src.split("?")[0]!.split("#")[0]!);
+    decoded = decodeURIComponent(urlPath(src));
   } catch {
     return undefined;
   }

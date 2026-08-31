@@ -1,4 +1,5 @@
 import { preload } from "../document/links";
+import { urlExtension } from "./url";
 import type { LinkTag } from "../document";
 
 export type FontStyle = "normal" | "italic" | "oblique";
@@ -150,11 +151,7 @@ export function fontMediaType(file: string) {
 }
 
 export function fontFormat(file: string): FontFormat {
-  const name = file.split("?")[0]!.split("#")[0]!.split("/").at(-1) ?? "";
-  const extension = name.includes(".")
-    ? name.split(".").at(-1)!.toLowerCase()
-    : "";
-  const format = fontFormats[extension];
+  const format = fontFormats[urlExtension(file)];
 
   if (!format) {
     throw new Error(
