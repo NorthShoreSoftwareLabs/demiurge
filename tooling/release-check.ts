@@ -26,6 +26,7 @@ type PackageManifest = {
   name?: unknown;
   repository?: ManifestRepository | string;
   version?: unknown;
+  dependencies?: unknown;
 };
 
 export function checkRelease(input: ReleaseCheckInput): string[] {
@@ -142,6 +143,41 @@ function checkWorkingTree(changedTrackedFiles: readonly string[]): string[] {
   ];
 }
 
+function checkTemplateVersion(coreVersion: string, templateManifest: unknown): string[] {
+  const template = asManifest(templateManifest);
+
+  if (template === undefined) {
+    return ["packages/create-demiurge/templates/shared/package.json is not a JSON object. Repair the manifest."];
+  }
+
+  const templateCoreVersion =
+    typeof template.dependencies === "object" && template.dependencies !== null
+      ? (template.dependencies as Record<string, unknown>)["@demiurgejs/core"]
+      : undefined;
+
+  const templateVersionString = typeof templateCoreVersion === "string" ? templateCoreVersion : "";
+
+  if (templateVersionString === "") {
+    return [
+      "packages/create-demiurge/templates/shared/package.json does not declare @demiurgejs/core. " +
+        "Add or update the dependency.",
+    ];
+  }
+
+  // Extract the base version from the range (e.g., "^0.2.0-beta.3" -> "0.2.0-beta.3")
+  const templateVersionMatch = /[\^~]?(.+)/.exec(templateVersionString);
+  const templateBaseVersion = templateVersionMatch ? templateVersionMatch[1] : templateVersionString;
+
+  if (templateBaseVersion !== coreVersion) {
+    return [
+      `packages/create-demiurge/templates/shared/package.json pins @demiurgejs/core to ${templateVersionString}, ` +
+        `but the release version is ${coreVersion}. Update the pinned version to match.`,
+    ];
+  }
+
+  return [];
+}
+
 function findHeading(changelog: string, version: string) {
   for (const line of changelog.split("\n")) {
     const match = /^##\s+(\S+)\s*(.*)$/u.exec(line.trim());
@@ -187,12 +223,21 @@ function main(argv: readonly string[]) {
   const tag = argv.filter((value) => value !== "--")[0] ?? "";
   const manifestPath = new URL("../packages/core/package.json", import.meta.url);
   const changelogPath = new URL("../CHANGELOG.md", import.meta.url);
+  const templatePath = new URL("../packages/create-demiurge/templates/shared/package.json", import.meta.url);
+  const packageManifest = JSON.parse(readFileSync(manifestPath, "utf8"));
   const failures = checkRelease({
     changedTrackedFiles: changedTrackedFiles(repositoryRoot),
     changelog: readFileSync(changelogPath, "utf8"),
-    packageManifest: JSON.parse(readFileSync(manifestPath, "utf8")),
+    packageManifest,
     tag,
   });
+
+  // Check template version consistency
+  const coreVersion = typeof packageManifest.version === "string" ? packageManifest.version : "";
+  if (coreVersion !== "") {
+    const templateManifest = JSON.parse(readFileSync(templatePath, "utf8"));
+    failures.push(...checkTemplateVersion(coreVersion, templateManifest));
+  }
 
   if (failures.length === 0) {
     console.log(`Release metadata is consistent for ${tag}.`);
