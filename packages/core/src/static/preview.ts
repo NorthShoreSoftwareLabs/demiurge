@@ -15,6 +15,7 @@ import {
   contentTypeForExtension,
   DEFAULT_CONTENT_TYPE,
 } from "../static-files";
+import { isPlainObject } from "../type-guards";
 
 const STATIC_MANIFEST_FILE = "demiurge-static-manifest.json";
 
@@ -199,7 +200,7 @@ function parseStaticManifest(source: string): StaticOutputManifest {
     throw new Error("The static output manifest is not valid JSON.");
   }
 
-  if (!isRecord(value) || value.adapter !== "static" || value.version !== 1) {
+  if (!isPlainObject(value) || value.adapter !== "static" || value.version !== 1) {
     throw new Error("The static output manifest has an unsupported format.");
   }
   if (!Array.isArray(value.entries) || !Array.isArray(value.fileHeaderRules)) {
@@ -221,7 +222,7 @@ function parseStaticManifest(source: string): StaticOutputManifest {
 
 function parseEntry(value: unknown): StaticOutputEntry {
   if (
-    !isRecord(value) ||
+    !isPlainObject(value) ||
     typeof value.file !== "string" ||
     typeof value.pathname !== "string" ||
     (value.status !== 200 && value.status !== 404) ||
@@ -240,7 +241,7 @@ function parseEntry(value: unknown): StaticOutputEntry {
 
 function parseRule(value: unknown): StaticOutputFileHeaderRule {
   if (
-    !isRecord(value) ||
+    !isPlainObject(value) ||
     typeof value.pattern !== "string" ||
     !isStringRecord(value.headers)
   ) {
@@ -254,12 +255,8 @@ function parseRule(value: unknown): StaticOutputFileHeaderRule {
   return { headers: value.headers, pattern: value.pattern };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
 function isStringRecord(value: unknown): value is Record<string, string> {
-  return isRecord(value) && Object.values(value).every(
+  return isPlainObject(value) && Object.values(value).every(
     (item) => typeof item === "string",
   );
 }

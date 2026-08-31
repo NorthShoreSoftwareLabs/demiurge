@@ -1,5 +1,6 @@
 import type { CspSource, RoutePolicy, RouteSecurityNeeds } from "../security/types";
 import type { WebVitalName, WebVitalRating } from "./observability";
+import { isObjectLike } from "../type-guards";
 
 export const WEB_VITAL_NAMES: readonly WebVitalName[] = [
   "CLS",
@@ -204,7 +205,7 @@ export function parseWebVitalsBeacon(
   payload: unknown,
   maxMetrics: number = defaultMaxMetrics,
 ): WebVitalsBeaconResult {
-  if (!isRecord(payload) || !Array.isArray(payload.metrics)) {
+  if (!isObjectLike(payload) || !Array.isArray(payload.metrics)) {
     return { ok: false, reason: "invalid-payload" };
   }
 
@@ -228,7 +229,7 @@ export function parseWebVitalsBeacon(
 }
 
 function parseWebVitalReport(entry: unknown): WebVitalReport | undefined {
-  if (!isRecord(entry)) {
+  if (!isObjectLike(entry)) {
     return undefined;
   }
 
@@ -255,10 +256,6 @@ function parseWebVitalReport(entry: unknown): WebVitalReport | undefined {
   }
 
   return { id, name, navigationType, rating, url, value };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 // The endpoint is either a same-origin path or an HTTPS collector URL. A

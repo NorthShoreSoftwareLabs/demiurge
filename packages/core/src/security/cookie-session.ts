@@ -5,6 +5,7 @@ import {
   type CookieScope,
 } from "./cookies";
 import { parseCookieHeader } from "./csrf";
+import { isPlainObject } from "../type-guards";
 import type { SessionData, SessionRecord } from "./session-store";
 
 const defaultAbsoluteExpirationMs = 7 * 24 * 60 * 60 * 1000;
@@ -454,7 +455,7 @@ function parseRecord<TData extends SessionData>(
     const value: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
 
     if (
-      !isObject(value) ||
+      !isPlainObject(value) ||
       !isSafeTimestamp(value.createdAt) ||
       !isSafeTimestamp(value.expiresAt) ||
       typeof value.id !== "string" ||
@@ -499,11 +500,7 @@ function isSessionData(value: unknown): value is SessionData {
     return value.every(isSessionData);
   }
 
-  return isObject(value) && Object.values(value).every(isSessionData);
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return isPlainObject(value) && Object.values(value).every(isSessionData);
 }
 
 function isExpired(record: SessionRecord, now: number) {

@@ -12,6 +12,7 @@ import {
   type RouteSecurityPolicy,
   type SecurityPolicy,
 } from "../security";
+import { isPlainObject } from "../type-guards";
 
 type AstNode = {
   [key: string]: unknown;
@@ -171,10 +172,10 @@ function extractCapability(
     constants,
   );
 
-  // TYPE-EVIDENCE: the isRecord checks confirm the values are plain objects. The casts label them as the capability policy types.
+  // TYPE-EVIDENCE: the isPlainObject checks confirm the values are plain objects. The casts label them as the capability policy types.
   return {
-    cors: isRecord(cors) ? cors as CorsPolicy : undefined,
-    security: isRecord(securityPolicy)
+    cors: isPlainObject(cors) ? cors as CorsPolicy : undefined,
+    security: isPlainObject(securityPolicy)
       ? securityPolicy as RouteSecurityPolicy
       : undefined,
   } satisfies ExtractedCapability;
@@ -187,7 +188,7 @@ function evaluateObjectProperty(
 ) {
   if (node.type === "Identifier") {
     const value = constants.get(String(node.name));
-    return isRecord(value) ? value[property] : unresolved;
+    return isPlainObject(value) ? value[property] : unresolved;
   }
   if (node.type !== "ObjectExpression") return unresolved;
 
@@ -218,8 +219,8 @@ function extractRoutePolicy(
 
   if (node.type !== "ObjectExpression") {
     const value = evaluateLiteral(node, constants);
-    // TYPE-EVIDENCE: the isRecord check confirms the value is a plain object. The cast labels it as a route policy.
-    return isRecord(value) ? value as RoutePolicy : undefined;
+    // TYPE-EVIDENCE: the isPlainObject check confirms the value is a plain object. The cast labels it as a route policy.
+    return isPlainObject(value) ? value as RoutePolicy : undefined;
   }
 
   const result: Record<string, unknown> = {};
@@ -252,8 +253,8 @@ function extractSecurityPolicy(
 ): SecurityPolicy | undefined {
   if (node.type !== "CallExpression") {
     const value = evaluateLiteral(node, constants);
-    // TYPE-EVIDENCE: the isRecord check confirms the value is a plain object. The cast labels it as a security policy.
-    return isRecord(value) ? value as SecurityPolicy : undefined;
+    // TYPE-EVIDENCE: the isPlainObject check confirms the value is a plain object. The cast labels it as a security policy.
+    return isPlainObject(value) ? value as SecurityPolicy : undefined;
   }
 
   const callee = asNode(node.callee);
@@ -265,7 +266,7 @@ function extractSecurityPolicy(
   }
 
   const options = evaluateLiteral(asNodeArray(node.arguments)[0], constants);
-  if (options !== unresolved && options !== undefined && !isRecord(options)) {
+  if (options !== unresolved && options !== undefined && !isPlainObject(options)) {
     return undefined;
   }
 
@@ -496,10 +497,6 @@ function isHttpMethod(value: string): value is HttpMethod {
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function asNode(value: unknown) {
