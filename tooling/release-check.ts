@@ -165,7 +165,7 @@ function checkTemplateVersion(coreVersion: string, templateManifest: unknown): s
     ];
   }
 
-  // Extract the base version from the range (e.g., "^0.2.0-beta.3" -> "0.2.0-beta.3")
+  // Extract the base version from the range. For example, "^0.2.0-beta.3" becomes "0.2.0-beta.3".
   const templateVersionMatch = /[\^~]?(.+)/.exec(templateVersionString);
   const templateBaseVersion = templateVersionMatch ? templateVersionMatch[1] : templateVersionString;
 
