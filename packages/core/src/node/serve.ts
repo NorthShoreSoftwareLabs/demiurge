@@ -85,8 +85,8 @@ export async function serveNodeBuild(
     : options.readyPath ?? defaultNodeBuildReadyPath;
 
   // The cache store and the route pipeline hand background work to the server
-  // that does not exist yet. This binding closes that loop before listen.
-  let server: NodeServer | undefined;
+  // that does not exist yet. The closure reads it after listen, so the later
+  // binding is always set.
   const context: NodeBuildContext = {
     page: {
       clientEntry: manifest.clientEntry,
@@ -95,12 +95,12 @@ export async function serveNodeBuild(
     },
     root,
     waitUntil(promise) {
-      server?.waitUntil(promise);
+      server.waitUntil(promise);
     },
   };
   const handler = await options.createHandler(context);
 
-  server = createNodeServer({
+  const server = createNodeServer({
     allowedHosts,
     handler,
     onError: options.onError,
@@ -111,16 +111,15 @@ export async function serveNodeBuild(
     trustProxy: options.trustProxy,
   });
 
-  const listening = server;
   await new Promise<void>((resolveListen, rejectListen) => {
-    listening.once("error", rejectListen);
-    listening.listen(port, host, () => {
-      listening.off("error", rejectListen);
+    server.once("error", rejectListen);
+    server.listen(port, host, () => {
+      server.off("error", rejectListen);
       resolveListen();
     });
   });
 
-  const address = listening.address();
+  const address = server.address();
   // Port 0 asks the operating system for a free port. Report the bound port so
   // a caller can reach the server.
   const boundPort = typeof address === "object" && address
@@ -128,12 +127,12 @@ export async function serveNodeBuild(
     : port;
 
   if (options.onListen) {
-    options.onListen({ host, port: boundPort, server: listening });
+    options.onListen({ host, port: boundPort, server });
   } else {
     console.log(`${name} listening on http://${host}:${boundPort}`);
   }
 
-  return listening;
+  return server;
 }
 
 function resolvePort(configured: string | undefined, fallback: number | undefined) {

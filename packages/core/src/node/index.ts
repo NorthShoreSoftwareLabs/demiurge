@@ -208,15 +208,14 @@ export function createNodeServer(
   const timeouts = normalizeNodeServerTimeouts(options.timeouts);
   const readyPath = normalizeReadyPath(options.readyPath);
   // The readiness answer needs the server the framework has not created yet.
-  // This binding closes that loop, and a request can only arrive after listen.
-  let readyServer: NodeServer | undefined;
+  // The closure reads it after listen, so the later binding is always set.
   const handler: RequestHandler = readyPath
     ? async (request) => {
       if (new URL(request.url).pathname !== readyPath) {
         return options.handler(request);
       }
 
-      const ready = readyServer?.isReady() ?? false;
+      const ready = server.isReady();
 
       return new Response(ready ? "ready" : "draining", {
         headers: {
@@ -231,7 +230,6 @@ export function createNodeServer(
   const server = createServer(
     createNodeRequestListener({ ...options, handler }),
   ) as NodeServer;
-  readyServer = server;
   server.keepAliveTimeout = timeouts.keepAliveTimeout;
   server.headersTimeout = timeouts.headersTimeout;
   server.requestTimeout = timeouts.requestTimeout;
