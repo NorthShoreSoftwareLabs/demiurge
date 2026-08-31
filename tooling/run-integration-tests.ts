@@ -2,10 +2,13 @@ import { spawn } from "node:child_process";
 import { availableParallelism } from "node:os";
 
 // Every probe in `tests/integration` owns its own world. Each spawns its own
-// server on `PORT=0`, so the operating system hands it a free port. The two
-// probes needing more than a port derive their names from `process.pid`.
-// `redis-cache-adapter` derives its Redis port that way, and `cloud-run` its
-// image tag, container name, and host port. No probe takes a fixed port or
+// server on `PORT=0`, so the operating system hands it a free port.
+// `cloud-run` gets an OS-assigned host port too, by publishing the container
+// port as `-p 0:<containerPort>` and reading back the assignment with
+// `docker port`. `redis-cache-adapter` and `cloud-run` also derive their
+// Redis port, image tag, and container name from `process.pid`.
+// `redis-server` and Docker port publishing need a name/port picked
+// upfront rather than an OS assignment. No probe takes a fixed port or
 // writes a shared file, so they can all run at once.
 const probes = [
   // The Docker build and container run make this the longest probe. Start it
@@ -67,7 +70,7 @@ if (failures.length > 0) {
   console.log(`All ${probes.length} integration probes passed.`);
 }
 
-// Probe output is buffered rather than inherited. Fourteen probes writing to
+// Probe output is buffered rather than inherited. Seventeen probes writing to
 // one terminal at once interleaves into noise, and a passing probe's log is
 // only worth reading when the probe fails.
 function runProbe(probe: string) {

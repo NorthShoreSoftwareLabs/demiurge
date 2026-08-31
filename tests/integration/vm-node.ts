@@ -140,18 +140,20 @@ function installSocketResetGuard() {
 }
 
 async function run() {
-  // Use a dynamic port by passing PORT with a higher starting range
-  const testPort = 25_000 + Math.floor(Math.random() * 5000);
-
-  // Spawn the Node process
+  // Ask the OS for a free port instead of guessing a range, so this probe
+  // can never collide with another probe's port. `server.js` reports the
+  // port it actually bound to on stdout once it is listening.
   serverProcess = spawn("node", ["server.js"], {
     cwd: exampleDir,
     env: {
       ...process.env,
       NODE_ENV: "production",
       HOST: "127.0.0.1",
-      PORT: String(testPort),
-      ALLOWED_HOSTS: "localhost",
+      PORT: "0",
+      // "example.com" matches the X-Forwarded-Host sent by the client-ip
+      // test below. Without it in the allowlist, the server correctly
+      // rejects the forwarded host with 421 Misdirected Request.
+      ALLOWED_HOSTS: "localhost,example.com",
     },
   });
 
@@ -169,8 +171,7 @@ async function run() {
     });
   }
 
-  // Wait for the server to be ready using the port we requested
-  const origin = `http://${localhostHost}:${testPort}`;
+  const origin = await waitForListeningOrigin(serverProcess);
   await waitForReady(origin);
 
   const makeRequest = (
@@ -229,9 +230,14 @@ async function run() {
       );
     }
   } catch (error) {
-    // The /api/client-ip route is optional for this test. If it fails for routing reasons,
-    // skip this test but still verify the core functionality works.
-    if (error instanceof Error && !error.message.includes("route")) {
+    // The /api/client-ip route is optional for this test. The request
+    // itself might fail to connect, for example if the route genuinely
+    // does not exist and the server tears down the socket. In that case,
+    // skip this test but still verify the core functionality works. An
+    // assertion thrown above, including the 500-status check, whose
+    // message happens to contain "route" — must always be rethrown
+    // rather than swallowed here.
+    if (error instanceof Error && error.message.startsWith("VM Node client-ip route returned")) {
       throw error;
     }
   }
@@ -254,6 +260,41 @@ async function run() {
 
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
   }
+}
+
+// Waits for `server.js` to report the port it bound to (`PORT=0` asks the
+// OS for a free one). Mirrors `waitForOrigin` in
+// `tests/integration/redis-cache-adapter.ts`.
+function waitForListeningOrigin(child: ChildProcess) {
+  return new Promise<string>((resolveOrigin, rejectOrigin) => {
+    const timeout = setTimeout(() => {
+      rejectOrigin(
+        new Error(
+          `VM Node process did not report a listening address in time. Process output: ${processOutput}`,
+        ),
+      );
+    }, 15_000);
+
+    const onData = (chunk: string) => {
+      const match = /listening on (http:\/\/[^\s]+)/.exec(chunk);
+
+      if (match) {
+        child.stdout?.off("data", onData);
+        clearTimeout(timeout);
+        resolveOrigin(match[1]!);
+      }
+    };
+
+    child.stdout?.on("data", onData);
+    child.once("exit", (code) => {
+      clearTimeout(timeout);
+      rejectOrigin(
+        new Error(
+          `VM Node process exited with code ${code} before it started listening. Process output: ${processOutput}`,
+        ),
+      );
+    });
+  });
 }
 
 async function waitForDraining(origin: string) {

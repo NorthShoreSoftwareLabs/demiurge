@@ -27,7 +27,6 @@ const containerName = `demiurge-cloud-run-probe-${process.pid}`;
 // A port distinct from Cloud Run's conventional 8080 proves the image reads
 // `$PORT` rather than assuming it.
 const containerPort = 9000 + (process.pid % 500);
-const hostPort = 24_000 + (process.pid % 5_000);
 
 try {
   build();
@@ -35,6 +34,7 @@ try {
 
   // `ALLOWED_HOSTS=localhost` below has no port, so it matches any port on
   // that hostname but rejects a request addressed to `127.0.0.1`.
+  const hostPort = discoverHostPort();
   const origin = `http://localhost:${hostPort}`;
   await waitForReady(origin);
 
@@ -83,7 +83,7 @@ try {
       ready: () => fetch(`${origin}/.well-known/ready`),
       shutdown: async () => {
         spawnSync("docker", ["kill", "--signal=SIGTERM", containerName]);
-        await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
+        await waitForDraining(origin);
       },
     }),
     repeatedHeaders: () =>
@@ -133,7 +133,10 @@ function run() {
     "--name",
     containerName,
     "-p",
-    `${hostPort}:${containerPort}`,
+    // Binding the host side to port 0 asks the OS for a free port
+    // instead of guessing a range. This probe can never collide with
+    // another probe's port.
+    `0:${containerPort}`,
     "-e",
     `PORT=${containerPort}`,
     "-e",
@@ -146,6 +149,28 @@ function run() {
       `docker run exited with code ${result.status}: ${result.stderr.toString("utf8")}`,
     );
   }
+}
+
+// Reads back the host port Docker actually assigned for `containerPort`.
+function discoverHostPort() {
+  const result = spawnSync("docker", ["port", containerName, String(containerPort)]);
+
+  if (result.status !== 0) {
+    throw new Error(
+      `docker port exited with code ${result.status}: ${result.stderr.toString("utf8")}`,
+    );
+  }
+
+  // Output looks like "0.0.0.0:32768" (and possibly a second line for IPv6).
+  const match = /:(\d+)\s*$/m.exec(result.stdout.toString("utf8"));
+
+  if (!match) {
+    throw new Error(
+      `Could not parse the host port Docker assigned: ${result.stdout.toString("utf8")}`,
+    );
+  }
+
+  return Number(match[1]);
 }
 
 async function fetchOrUnavailable(url: string) {
@@ -171,12 +196,15 @@ async function discoverStaticAssetPath(page: Response) {
   return match[1]!;
 }
 
+// Mirrors `tests/integration/vm-node.ts`'s `waitForReady`: each request gets
+// its own bounded timeout so a hung connection cannot stall the whole probe
+// until the outer deadline.
 async function waitForReady(origin: string) {
   const deadline = Date.now() + 15_000;
 
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${origin}/.well-known/ready`);
+      const response = await fetchWithTimeout(`${origin}/.well-known/ready`);
 
       if (response.ok) {
         return;
@@ -192,4 +220,35 @@ async function waitForReady(origin: string) {
   throw new Error(
     `Cloud Run container did not become ready in time. ${logs.stdout?.toString("utf8") ?? ""} ${logs.stderr?.toString("utf8") ?? ""}`,
   );
+}
+
+// Mirrors `tests/integration/vm-node.ts`'s `waitForDraining`. It polls the
+// readiness endpoint until it reports draining, or until the connection is
+// refused or reset. Either outcome is a valid way to observe that the
+// container finished shutting down.
+async function waitForDraining(origin: string) {
+  const deadline = Date.now() + 5_000;
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetchWithTimeout(`${origin}/.well-known/ready`);
+
+      if (!response.ok) {
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
+  }
+}
+
+function fetchWithTimeout(url: string, init?: RequestInit) {
+  return Promise.race([
+    fetch(url, init),
+    new Promise<never>((_resolveTimeout, rejectTimeout) => {
+      setTimeout(() => rejectTimeout(new Error("Request timeout")), 5000);
+    }),
+  ]);
 }
