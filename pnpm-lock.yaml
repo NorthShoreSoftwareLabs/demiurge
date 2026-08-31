@@ -656,8 +656,8 @@ importers:
         specifier: ^0.35.3
         version: 0.35.3(@types/node@22.20.1)
       typescript:
-        specifier: ^5.7.2
-        version: 5.9.3
+        specifier: ^6.0.3
+        version: 6.0.3
       vite:
         specifier: ^6.0.7
         version: 6.4.3(@types/node@22.20.1)(tsx@4.23.11)
@@ -3518,12 +3518,6 @@ packages:
       typescript: 6.0.3
     transitivePeerDependencies:
       - supports-color
-    dev: true
-
-  /typescript@5.9.3:
-    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
-    engines: {node: '>=14.17'}
-    hasBin: true
     dev: true
 
   /typescript@6.0.3:
