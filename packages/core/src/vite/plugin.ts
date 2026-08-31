@@ -307,8 +307,8 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
         root: server.config.root,
       });
 
-      // Vite's Connect middleware type is void-returning; the handler below
-      // is deliberately async so tests can await its returned promise to
+      // Vite's Connect middleware type is void-returning. The handler below
+      // is deliberately async so tests can await its returned promise and
       // know when a request has finished. Vite itself never touches that
       // return value, so async is safe here even though the declared type
       // says otherwise.
@@ -397,9 +397,9 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       // fallback intercepts these requests. Development and production render
       // the same negotiated not-found response for an unmatched path.
       return () => {
-        // See the note above the earlier `server.middlewares.use` call: this
+        // See the note above the earlier `server.middlewares.use` call. This
         // handler is deliberately async so tests can await the returned
-        // promise, and Vite itself never inspects that return value.
+        // promise. Vite itself never inspects that return value.
         // eslint-disable-next-line @typescript-eslint/no-misused-promises
         server.middlewares.use(async (request, response, next) => {
           try {

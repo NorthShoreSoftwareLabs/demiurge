@@ -32,11 +32,11 @@ export default tseslint.config(
         },
         projectService: {
           // These files sit outside every project's tsconfig `include` on
-          // purpose (see tsconfig.json's `exclude` for `vite.config.ts`, and
-          // the create-demiurge templates, which are scaffolds for a
-          // generated project rather than part of this one). The default
-          // project still gives them type-aware linting; it just builds an
-          // isolated program instead of reusing a full project reference.
+          // purpose. See tsconfig.json's `exclude` for `vite.config.ts`. The
+          // create-demiurge templates are scaffolds for a generated project
+          // rather than part of this one. The default project still gives
+          // them type-aware linting. It just builds an isolated program
+          // instead of reusing a full project reference.
           allowDefaultProject: [
             "playwright.config.ts",
             "browser-tests/*.ts",
