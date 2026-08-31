@@ -1,75 +1,38 @@
-/* global console, process, Response, URL */
+/* global console, process, URL */
 
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createMemoryCacheStore } from "@demiurgejs/core";
 import {
   createFontAssetHandler,
   createImageOptimizer,
-  createNodeServer,
   createStaticFileHandler,
-  renderNodePageResponse,
+  serveNodeBuild,
 } from "@demiurgejs/core/node";
 import { createHandler, fonts, locales } from "./dist/server/server-entry.js";
 
-const root = fileURLToPath(new URL("dist/client", import.meta.url));
-const manifest = JSON.parse(
-  await readFile(join(root, "demiurge-manifest.json"), "utf8"),
-);
-const cacheStore = createMemoryCacheStore();
-let server;
 const reportBackgroundError = (error) => {
   console.error("Demiurge Node background task failed.", error);
 };
-const applicationHandler = createHandler({
-  cacheStore: {
-    namespace: {
-      app: "demiurge-node-example",
-      environment: process.env.NODE_ENV ?? "development",
-      schemaVersion: 1,
-    },
-    onBackgroundError: reportBackgroundError,
-    store: cacheStore,
-    waitUntil(promise) {
-      server.waitUntil(promise);
-    },
-  },
-  clientEntry: manifest.clientEntry,
-  locales,
-  renderPage: renderNodePageResponse,
-  styles: manifest.styles,
-});
-const host = process.env.HOST ?? "127.0.0.1";
-const port = Number(process.env.PORT ?? 4173);
-const allowedHosts = (process.env.ALLOWED_HOSTS ?? `${host},localhost`)
-  .split(",")
-  .map((value) => value.trim());
-// The font handler and the optimizer own the two framework asset paths. Every
-// other path falls through to the plain static file handler, and then to the
-// route pipeline.
-const serveFont = createFontAssetHandler({
-  fonts,
-  root: fileURLToPath(new URL(".", import.meta.url)),
-});
-const optimizeImage = createImageOptimizer({ root });
-const serveFile = createStaticFileHandler({ root });
-const serveStatic = async (request) =>
-  (await serveFont(request)) ?? (await optimizeImage(request)) ??
-    serveFile(request);
-const handler = (request) => {
-  if (new URL(request.url).pathname === "/.well-known/ready") {
-    return new Response(server?.isReady() ? "ready" : "draining", {
-      status: server?.isReady() ? 200 : 503,
-    });
-  }
 
-  return applicationHandler(request);
-};
-
-server = createNodeServer({
-  allowedHosts,
-  handler,
+await serveNodeBuild({
+  base: import.meta.url,
+  createHandler: ({ page, waitUntil }) =>
+    createHandler({
+      ...page,
+      cacheStore: {
+        namespace: {
+          app: "demiurge-node-example",
+          environment: process.env.NODE_ENV ?? "development",
+          schemaVersion: 1,
+        },
+        onBackgroundError: reportBackgroundError,
+        store: createMemoryCacheStore(),
+        waitUntil,
+      },
+      locales,
+    }),
+  name: "Demiurge Node server",
+  port: 4173,
   shutdown: {
     gracePeriod: 30_000,
     onBackgroundError: reportBackgroundError,
@@ -78,13 +41,19 @@ server = createNodeServer({
     },
     signals: ["SIGINT", "SIGTERM"],
   },
-  static: serveStatic,
-});
-server.listen(port, host, () => {
-  // Port 0 asks the operating system for a free port. Log the bound port so
-  // a caller can reach the server.
-  const address = server.address();
-  console.log(
-    `Demiurge Node server listening on http://${host}:${address.port}`,
-  );
+  // The font handler and the optimizer own the two framework asset paths. Every
+  // other path falls through to the plain static file handler, and then to the
+  // route pipeline.
+  static({ root }) {
+    const serveFont = createFontAssetHandler({
+      fonts,
+      root: fileURLToPath(new URL(".", import.meta.url)),
+    });
+    const optimizeImage = createImageOptimizer({ root });
+    const serveFile = createStaticFileHandler({ root });
+
+    return async (request) =>
+      (await serveFont(request)) ?? (await optimizeImage(request)) ??
+        serveFile(request);
+  },
 });

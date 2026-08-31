@@ -201,14 +201,28 @@ use the same pipeline.
 
 ### Node
 
-The Node adapter runs browser and SSR bundles in one production process. The
-application currently provides a server entry that composes the request
-handler, static assets, and process lifecycle.
+The Node adapter runs browser and SSR bundles in one production process.
+`serveNodeBuild(...)` owns that bootstrap:
+
+```js
+// server.js
+import { serveNodeBuild } from "@demiurgejs/core/node";
+import { createHandler } from "./dist/server/server-entry.js";
+
+await serveNodeBuild({
+  base: import.meta.url,
+  createHandler: ({ page }) => createHandler(page),
+  port: 4173,
+});
+```
+
+It reads the browser manifest, serves the client build, resolves the bind
+address and the host allowlist, answers `/.well-known/ready`, and listens.
 
 `allowedHosts` is mandatory. The adapter ignores forwarded headers until the
 application names a trusted proxy. The static root rejects traversal and
-symlinks. See [Node deployment](./docs/guides/node-deployment.md) for the current
-server entry, build commands, timeouts, graceful shutdown, and shared stores.
+symlinks. See [Node deployment](./docs/guides/node-deployment.md) for the build
+commands, timeouts, graceful shutdown, readiness, and shared stores.
 
 ### Static
 

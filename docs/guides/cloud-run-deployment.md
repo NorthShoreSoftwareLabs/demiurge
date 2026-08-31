@@ -38,12 +38,20 @@ CMD ["node", "server.js"]
 Cloud Run assigns the container's listening port at deploy time through the
 `PORT` environment variable and connects to it on `0.0.0.0`. A container that
 listens on a fixed port such as `4173`, or on `127.0.0.1`, never receives
-traffic. `server.js` already reads both correctly:
+traffic. `serveNodeBuild(...)` reads `PORT` from the environment already. The
+container only has to name the bind address, because the framework default is
+loopback:
 
 ```js
-const host = process.env.HOST ?? "0.0.0.0";
-const port = Number(process.env.PORT ?? 8080);
+await serveNodeBuild({
+  base: import.meta.url,
+  createHandler: ({ page }) => createHandler(page),
+  host: process.env.HOST ?? "0.0.0.0",
+  port: 8080,
+});
 ```
+
+The `port` option is the fallback. Cloud Run's `PORT` wins over it.
 
 The default host differs from the Node deployment guide's `127.0.0.1` on
 purpose. A bare-metal or VM deployment usually sits behind a local reverse
@@ -53,23 +61,25 @@ the only correct default here.
 
 `ALLOWED_HOSTS` still applies, and it is not the bind address. Set it to the
 Cloud Run service's `*.run.app` hostname, or to a custom domain mapped to the
-service. `toWebRequest` then accepts the `Host` header Cloud Run's front end
-forwards.
+service. `serveNodeBuild(...)` reads that comma-separated list, and
+`toWebRequest` then accepts the `Host` header Cloud Run's front end forwards.
 
 ## Health checks
 
 Cloud Run's default startup probe is a TCP check against the container port.
 The revision is marked healthy the moment something accepts a connection
-there, before the framework has served a single request. `server.js` loads the
-SSR bundle and the client manifest, then calls `server.listen(...)`, all
-before the process does anything else. A container that starts at all is a
-container that can already answer. No custom `startupProbe` configuration is
-required for this adapter.
+there, before the framework has served a single request. `serveNodeBuild(...)`
+loads the SSR bundle and the client manifest, then listens, all before the
+process does anything else. A container that starts at all is a container that
+can already answer. No custom `startupProbe` configuration is required for this
+adapter.
 
 An HTTP probe, or a load balancer's own health path, can instead target
-`/.well-known/ready`, the same endpoint the Node deployment guide's shutdown
-section describes. It returns `200` while `server.isReady()` is true and
-`503` once a `SIGTERM` starts the shutdown sequence. Cloud Run sends
+`/.well-known/ready`, the endpoint the Node deployment guide's
+[readiness section](./node-deployment.md#readiness-endpoint) describes.
+`serveNodeBuild(...)` serves it by default. It returns `200` while
+`server.isReady()` is true and `503` once a `SIGTERM` starts the shutdown
+sequence. Cloud Run sends
 `SIGTERM` before removing a revision from traffic. Wiring a readiness probe
 to this path lets Cloud Run stop routing new requests during the grace period
 instead of only during a hard stop.

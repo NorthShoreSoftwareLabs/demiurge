@@ -31,6 +31,17 @@ export type {
 } from "./image";
 export { createStaticFileHandler } from "./static";
 export {
+  defaultNodeBuildClientDir,
+  defaultNodeBuildReadyPath,
+  serveNodeBuild,
+} from "./serve";
+export type {
+  NodeBuildContext,
+  NodeBuildPageOptions,
+  ServeNodeBuildEnvironment,
+  ServeNodeBuildOptions,
+} from "./serve";
+export {
   renderNodePageResponse,
   renderStreamingPageResponse,
 } from "./streaming";
@@ -80,6 +91,7 @@ export type NodeGracefulShutdownOptions = {
 };
 
 export type NodeServerOptions = NodeRequestListenerOptions & {
+  readyPath?: string;
   shutdown?: NodeGracefulShutdownOptions;
   timeouts?: Partial<NodeServerTimeouts>;
 };
@@ -194,13 +206,49 @@ export function createNodeServer(
   options: NodeServerOptions,
 ): NodeServer {
   const timeouts = normalizeNodeServerTimeouts(options.timeouts);
+  const readyPath = normalizeReadyPath(options.readyPath);
+  // The readiness answer needs the server the framework has not created yet.
+  // The closure reads it after listen, so the later binding is always set.
+  const handler: RequestHandler = readyPath
+    ? async (request) => {
+      if (new URL(request.url).pathname !== readyPath) {
+        return options.handler(request);
+      }
+
+      const ready = server.isReady();
+
+      return new Response(ready ? "ready" : "draining", {
+        headers: {
+          "cache-control": "no-store",
+          "content-type": "text/plain; charset=utf-8",
+        },
+        status: ready ? 200 : 503,
+      });
+    }
+    : options.handler;
   // TYPE-EVIDENCE: createServer returns an http.Server that the framework manages as a node server. The cast adds the framework lifecycle type.
-  const server = createServer(createNodeRequestListener(options)) as NodeServer;
+  const server = createServer(
+    createNodeRequestListener({ ...options, handler }),
+  ) as NodeServer;
   server.keepAliveTimeout = timeouts.keepAliveTimeout;
   server.headersTimeout = timeouts.headersTimeout;
   server.requestTimeout = timeouts.requestTimeout;
 
   return attachNodeServerLifecycle(server, options.shutdown);
+}
+
+function normalizeReadyPath(configured: string | undefined) {
+  if (configured === undefined) {
+    return undefined;
+  }
+
+  if (!configured.startsWith("/") || configured.includes("?")) {
+    throw new Error(
+      "Demiurge Node readyPath must be an absolute path without a query string.",
+    );
+  }
+
+  return configured;
 }
 
 function normalizeNodeServerTimeouts(

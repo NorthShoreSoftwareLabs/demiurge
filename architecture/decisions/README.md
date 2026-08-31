@@ -16,3 +16,4 @@ after the implementing issue closes. They describe decisions, not task status.
 - [ADR 0011: Session management](./0011-session-management.md)
 - [ADR 0012: Locale resolution and routing](./0012-locale-resolution-and-routing.md)
 - [ADR 0013: Framework configuration and Vite integration boundary](./0013-framework-configuration-and-vite-boundary.md)
+- [ADR 0014: Framework-owned Node bootstrap](./0014-framework-owned-node-bootstrap.md)

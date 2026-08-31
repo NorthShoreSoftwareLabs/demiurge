@@ -111,19 +111,21 @@ The `upstream` block points to `127.0.0.1:4173`, where the Node process binds.
 
 ## What to look at, and why
 
-**Loopback binding.** `server.js` binds to `127.0.0.1` by default (line 42), making the process unreachable except through the proxy on the same machine.
+**Framework-owned bootstrap.** `server.js` calls `serveNodeBuild(...)` from `@demiurgejs/core/node`. The helper reads the browser manifest, serves the client build, resolves the bind address and the host allowlist, answers the readiness path, and listens. This file declares only what this deployment does differently.
 
-**TrustProxy configuration.** `trustProxy: { hops: 1 }` on line 49 tells the adapter to trust exactly one hop—the reverse proxy. The adapter then reads the client IP from `X-Forwarded-For` and the protocol from `X-Forwarded-Proto`.
+**Loopback binding.** `server.js` passes `host: "127.0.0.1"` by default, making the process unreachable except through the proxy on the same machine.
 
-**Graceful shutdown.** The systemd unit specifies `KillSignal=SIGTERM`, and `server.js` configures `signals: ["SIGTERM"]` (line 71). When the system stops the service, it sends SIGTERM, and the adapter's shutdown handler:
+**TrustProxy configuration.** `trustProxy: { hops: 1 }` tells the adapter to trust exactly one hop, the reverse proxy. The adapter then reads the client IP from `X-Forwarded-For` and the protocol from `X-Forwarded-Proto`.
+
+**Graceful shutdown.** The systemd unit specifies `KillSignal=SIGTERM`, and `server.js` configures `signals: ["SIGTERM"]`. When the system stops the service, it sends SIGTERM, and the adapter's shutdown handler:
 - Sets the server state to "draining" (so `/.well-known/ready` returns 503)
 - Stops accepting new connections
 - Waits up to 30 seconds for in-flight requests to finish
 - Exits cleanly
 
-**Readiness endpoint.** `/.well-known/ready` returns 200 while `server.isReady()` is true and 503 once draining starts. Monitoring systems can poll this to know when the process is healthy and when it is shutting down.
+**Readiness endpoint.** `serveNodeBuild(...)` serves `/.well-known/ready` by default through the adapter's `readyPath` option. It returns 200 while `server.isReady()` is true and 503 once draining starts. Monitoring systems can poll this to know when the process is healthy and when it is shutting down.
 
-**Logs to stdout/stderr.** `server.js` uses `console.log()` and `console.error()`. The systemd unit file (lines 43–44) captures these to the journal:
+**Logs to stdout/stderr.** `server.js` uses `console.log()` and `console.error()`. The systemd unit file (lines 32–33) captures these to the journal:
 
 ```ini
 StandardOutput=journal

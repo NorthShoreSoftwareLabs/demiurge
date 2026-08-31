@@ -36,9 +36,54 @@ export { createHandler, routes } from "virtual:demiurge/server-entry";
 }
 ```
 
-`server.js` reads the browser manifest for the hashed client entry and
-stylesheet paths, passes them to `createHandler(...)`, and serves hashed client
-assets before route requests.
+## The production process
+
+`serveNodeBuild(...)` owns the bootstrap. It reads the browser manifest, serves
+the client build, resolves the bind address and the host allowlist, answers the
+readiness path, and listens.
+
+```js
+// server.js
+import { serveNodeBuild } from "@demiurgejs/core/node";
+import { createHandler } from "./dist/server/server-entry.js";
+
+await serveNodeBuild({
+  base: import.meta.url,
+  createHandler: ({ page }) => createHandler(page),
+  name: "Demiurge server",
+  port: 4173,
+});
+```
+
+`base` is the `import.meta.url` of `server.js`. The helper resolves
+`dist/client` against it, so the process finds its own build wherever the image
+puts it. Set `clientDir` when the client build lands somewhere else.
+
+`createHandler` receives the manifest `page` options, the resolved client
+`root`, and a `waitUntil` binding for the server that does not exist yet. Pass
+that binding to a cache store, and return a wrapped handler when the app owns
+paths of its own:
+
+```js
+await serveNodeBuild({
+  base: import.meta.url,
+  createHandler({ page, waitUntil }) {
+    const routes = createHandler({
+      ...page,
+      cacheStore: { namespace, store, waitUntil },
+    });
+
+    return (request) =>
+      new URL(request.url).pathname === "/healthz"
+        ? new Response("ok")
+        : routes(request);
+  },
+  port: 4173,
+});
+```
+
+An application that needs a different process shape can still call
+`createNodeServer(...)` directly. The helper is a default, not a boundary.
 
 ## Host allowlist
 
@@ -50,6 +95,10 @@ List the public hostnames the app answers to, including ports when a port must
 be exact. This is not the bind address. `HOST` decides which interface the
 process listens on. Set `HOST=0.0.0.0` when a container or platform connects to
 the process directly.
+
+`serveNodeBuild(...)` reads the allowlist from `ALLOWED_HOSTS` as a
+comma-separated list. Without that variable it allows the bind address and
+`localhost`. Pass `allowedHosts` to state the list in code instead.
 
 ## Trusted proxies
 
@@ -82,10 +131,33 @@ const server = createNodeServer({
 
 The configured signal handler flips `server.isReady()` to false, stops accepting
 connections, closes idle sockets, drains active responses, and force-closes at
-the grace deadline. A readiness endpoint should return `503` as soon as
-`isReady()` is false, so the load balancer stops sending new traffic while
-in-flight requests finish. Hosts that own signals themselves should call
+the grace deadline. Hosts that own signals themselves should call
 `await server.shutdown()` directly instead of configuring `signals`.
+
+## Readiness endpoint
+
+A readiness endpoint must return `503` as soon as `isReady()` is false, so the
+load balancer stops sending new traffic while in-flight requests finish.
+
+`readyPath` serves that endpoint. It answers `200` with `ready` while the server
+is ready, and `503` with `draining` once shutdown starts. Both answers carry
+`cache-control: no-store`.
+
+```js
+const server = createNodeServer({
+  allowedHosts: ["app.example.com"],
+  handler,
+  readyPath: "/.well-known/ready",
+});
+```
+
+`serveNodeBuild(...)` sets `/.well-known/ready` by default. Pass a different
+path to move it, or `readyPath: false` to let route code own that path.
+
+A draining server refuses new connections, so a probe that opens a fresh
+connection sees a refused connection rather than a `503`. Point the probe at a
+balancer that reuses connections, or read the `503` as the stronger signal when
+it arrives.
 
 ## Static files
 
@@ -116,7 +188,8 @@ conformance contract in `@demiurgejs/core/data/testing`.
 
 Stale-while-revalidate refreshes are handed to `server.waitUntil(...)`, so
 shutdown drains them within the grace period rather than abandoning a
-publication mid-write.
+publication mid-write. Under `serveNodeBuild(...)`, pass the `waitUntil` binding
+from the `createHandler` context to the cache store.
 
 ## What to deploy
 

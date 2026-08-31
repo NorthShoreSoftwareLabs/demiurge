@@ -2,6 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { InlineConfig } from "vite";
+import { parseClientManifest } from "./manifest";
 import type { FontContribution, ImagePolicy } from "./platform";
 import type { RouteImporter } from "./route";
 import {
@@ -12,6 +13,9 @@ import {
   type StaticOutputManifest,
   type VercelStaticDeployment,
 } from "./static";
+
+export { parseClientManifest } from "./manifest";
+export type { ClientBuildManifest } from "./manifest";
 
 type CliEnvironment = Record<string, string | undefined>;
 
@@ -241,27 +245,6 @@ export async function validateBuildOutputDirectory(
       "The static output directory contains files that a Demiurge build did not create.",
     );
   }
-}
-
-export function parseClientManifest(source: string) {
-  let value: unknown;
-  try {
-    value = JSON.parse(source);
-  } catch {
-    throw new Error("The client build manifest is not valid JSON.");
-  }
-  if (
-    !value ||
-    typeof value !== "object" ||
-    !("clientEntry" in value) ||
-    typeof value.clientEntry !== "string" ||
-    !("styles" in value) ||
-    !Array.isArray(value.styles) ||
-    !value.styles.every((style) => typeof style === "string")
-  ) {
-    throw new Error("The client build manifest has an unsupported format.");
-  }
-  return { clientEntry: value.clientEntry, styles: value.styles };
 }
 
 function isRouteImporterRecord(

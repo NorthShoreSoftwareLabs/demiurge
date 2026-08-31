@@ -17,7 +17,7 @@ PORT=8080 HOST=0.0.0.0 ALLOWED_HOSTS=localhost NODE_ENV=production pnpm start
 curl http://localhost:8080/.well-known/ready
 ```
 
-`server.js` binds `0.0.0.0:8080` by default, the address and port Cloud Run
+The server binds `0.0.0.0:8080` by default, the address and port Cloud Run
 expects a deployed container to answer on. `HOST` and `PORT` are still plain
 environment variables. Override them for a different local target.
 
@@ -55,13 +55,21 @@ Both commands should return `200`. If the container only ever answered on
 
 ## What to look at, and why
 
-**No persistent state.** `server.js` reads `dist/client/demiurge-manifest.json`
+**Framework-owned bootstrap.** `server.js` calls `serveNodeBuild(...)` from
+`@demiurgejs/core/node`. The helper owns the manifest read, the client root,
+the bind address, the host allowlist, the readiness path, and the listen call.
+This file declares only the container's own settings and the deployment
+contract probes.
+
+**No persistent state.** `serveNodeBuild(...)` reads
+`dist/client/demiurge-manifest.json`
 once at process start and serves everything else from that same build. The
 image never writes application data to disk. Cloud Run can stop, restart, or
 replace this container at any point, and every replacement starts from the
 same image with nothing carried over.
 
-**The readiness endpoint.** `/.well-known/ready` returns `200` while
+**The readiness endpoint.** `serveNodeBuild(...)` serves `/.well-known/ready`
+by default through the adapter's `readyPath` option. It returns `200` while
 `server.isReady()` is true and `503` once a `SIGTERM` starts the shutdown
 sequence. Cloud Run's default startup probe is a TCP check against the
 container port, so a container that starts at all already passes it. An HTTP

@@ -38,3 +38,7 @@ compression, validators, range support, or provider configuration.
 
 The first framework-owned build command targets static output. A later adapter
 command can extend this interface without changing the static manifest.
+
+[ADR 0014](./0014-framework-owned-node-bootstrap.md) delivers that follow-up for
+the Node adapter. It supplies a library helper rather than a second command,
+because a server process needs application values a command line cannot carry.
