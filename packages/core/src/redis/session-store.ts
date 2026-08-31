@@ -1,5 +1,6 @@
 import type { Redis } from "ioredis";
 import {
+  parseSessionRecord,
   serializeSessionNamespace,
   type SessionData,
   type SessionNamespace,
@@ -137,8 +138,11 @@ export function createRedisSessionStore<
         return undefined;
       }
 
-      // TYPE-EVIDENCE: this store reads JSON that a conforming write operation serialized from a session record.
-      const record = JSON.parse(raw) as SessionRecord<TData>;
+      const record = parseRecord<TData>(raw);
+
+      if (!record) {
+        return undefined;
+      }
 
       if (storeExpiration(record) <= now) {
         await client.del(key(id));
@@ -183,6 +187,16 @@ export function createRedisSessionStore<
       }
     },
   };
+}
+
+function parseRecord<TData extends SessionData>(
+  raw: string,
+): SessionRecord<TData> | undefined {
+  try {
+    return parseSessionRecord<TData>(JSON.parse(raw));
+  } catch {
+    return undefined;
+  }
 }
 
 function toRecord<TData extends SessionData>(

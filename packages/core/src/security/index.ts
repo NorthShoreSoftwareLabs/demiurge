@@ -73,6 +73,7 @@ export {
 } from "./rate-limit";
 export {
   createMemorySessionStore,
+  parseSessionRecord,
   serializeSessionNamespace,
 } from "./session-store";
 export {

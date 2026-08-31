@@ -26,6 +26,66 @@ describe("createKvSessionStore", () => {
       })
     ).toThrow("requires atomic compare-and-swap operations");
   });
+
+  it("treats a corrupted stored record as absent rather than throwing", async () => {
+    const store = memoryAtomicNamespace();
+    const namespace = { app: "test", environment: "test", schemaVersion: 1 };
+    const sessionStore = createKvSessionStore({ namespace, store });
+    const key = "demiurge:session:test:test:1:corrupted";
+
+    await store.put(key, JSON.stringify({ not: "a valid session record" }));
+
+    await expect(sessionStore.read("corrupted", Date.now())).resolves
+      .toBeUndefined();
+  });
+
+  it("reports a conflict, not an outage, when update() targets a corrupted record", async () => {
+    const store = memoryAtomicNamespace();
+    const namespace = { app: "test", environment: "test", schemaVersion: 1 };
+    const sessionStore = createKvSessionStore({ namespace, store });
+    const key = "demiurge:session:test:test:1:corrupted";
+
+    await store.put(key, JSON.stringify({ not: "a valid session record" }));
+
+    const now = Date.now();
+    const result = await sessionStore.update(
+      {
+        createdAt: now,
+        data: {},
+        expiresAt: now + 60_000,
+        id: "corrupted",
+      },
+      0,
+    );
+
+    expect(result.status).toBe("conflict");
+  });
+
+  it("reports unavailable when the underlying store throws", async () => {
+    const namespace = { app: "test", environment: "test", schemaVersion: 1 };
+    const sessionStore = createKvSessionStore({
+      namespace,
+      store: {
+        atomic: async () => {
+          throw new Error("connection reset");
+        },
+        delete: async () => {},
+        get: async () => null,
+        list: async () => ({ keys: [], list_complete: true }),
+        put: async () => {},
+      },
+    });
+
+    const now = Date.now();
+    const result = await sessionStore.create({
+      createdAt: now,
+      data: {},
+      expiresAt: now + 60_000,
+      id: "unavailable-check",
+    });
+
+    expect(result.status).toBe("unavailable");
+  });
 });
 
 function memoryAtomicNamespace(): EdgeKvSessionNamespace {

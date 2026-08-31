@@ -105,6 +105,50 @@ describe.skipIf(!hasRedisServer)("createRedisCacheStore", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("treats a corrupted stored record as absent rather than throwing", async () => {
+    const keyPrefix = `session-corrupted:${Date.now()}:`;
+    const store = createRedisSessionStore({
+      client: clientA,
+      keyPrefix,
+      namespace: { app: "test", environment: "test", schemaVersion: 1 },
+    });
+
+    await clientA.set(
+      `${keyPrefix}test:test:1:corrupted`,
+      JSON.stringify({ not: "a valid session record" }),
+    );
+
+    await expect(store.read("corrupted", Date.now())).resolves.toBeUndefined();
+  });
+
+  it("reports unavailable when the underlying client rejects", async () => {
+    const brokenClient = new Redis({
+      connectTimeout: 200,
+      host: "127.0.0.1",
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      port: 1,
+      retryStrategy: () => null,
+    });
+    brokenClient.on("error", () => {});
+    const store = createRedisSessionStore({
+      client: brokenClient,
+      keyPrefix: `session-unavailable:${Date.now()}:`,
+      namespace: { app: "test", environment: "test", schemaVersion: 1 },
+    });
+
+    const now = Date.now();
+    const result = await store.create({
+      createdAt: now,
+      data: {},
+      expiresAt: now + 60_000,
+      id: "unavailable-check",
+    });
+
+    expect(result.status).toBe("unavailable");
+    brokenClient.disconnect();
+  });
+
   it("invalidates a tag across two separate client connections", async () => {
     const keyPrefix = `cross-instance:${Date.now()}:`;
     const storeA = createRedisCacheStore({ client: clientA, keyPrefix });
