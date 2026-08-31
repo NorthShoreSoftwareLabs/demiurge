@@ -1,4 +1,5 @@
 import {
+  parseSessionRecord,
   serializeSessionNamespace,
   type SessionData,
   type SessionNamespace,
@@ -80,8 +81,11 @@ export function createKvSessionStore<
         return undefined;
       }
 
-      // TYPE-EVIDENCE: this store reads JSON that a conforming atomic write serialized from a session record.
-      const record = JSON.parse(raw) as SessionRecord<TData>;
+      const record = parseRecord<TData>(raw);
+
+      if (!record) {
+        return undefined;
+      }
 
       if (storeExpiration(record) <= now) {
         await store.atomic([{ expected: raw, key: storageKey }]);
@@ -104,7 +108,7 @@ export function createKvSessionStore<
 
       const currentRecord = parseRecord<TData>(current);
 
-      if (currentRecord.version !== expectedVersion) {
+      if (!currentRecord || currentRecord.version !== expectedVersion) {
         return { status: "conflict" };
       }
 
@@ -129,7 +133,9 @@ export function createKvSessionStore<
       const storageKey = key(candidate.id);
       const current = await store.get(storageKey);
 
-      if (!current || parseRecord<TData>(current).version !== expectedVersion) {
+      const currentRecord = current ? parseRecord<TData>(current) : undefined;
+
+      if (!currentRecord || currentRecord.version !== expectedVersion) {
         return { status: "conflict" };
       }
 
@@ -164,9 +170,14 @@ function putOperation(
   };
 }
 
-function parseRecord<TData extends SessionData>(raw: string) {
-  // TYPE-EVIDENCE: session stores serialize this internal value before each atomic write.
-  return JSON.parse(raw) as SessionRecord<TData>;
+function parseRecord<TData extends SessionData>(
+  raw: string,
+): SessionRecord<TData> | undefined {
+  try {
+    return parseSessionRecord<TData>(JSON.parse(raw));
+  } catch {
+    return undefined;
+  }
 }
 
 function toRecord<TData extends SessionData>(

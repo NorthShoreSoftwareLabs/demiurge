@@ -127,6 +127,67 @@ export function createMemorySessionStore<
   };
 }
 
+/**
+ * Validates that an untrusted parsed value conforms to the `SessionRecord`
+ * envelope before it is trusted as a session. Backend session stores read
+ * raw JSON from shared infrastructure (KV, Redis) that a corrupted entry,
+ * manual edit, or deployment version skew could have produced, so the shape
+ * must be proven rather than assumed. Mirrors the validation cookie-session
+ * applies to its own decoded payloads.
+ */
+export function parseSessionRecord<TData extends SessionData = SessionData>(
+  value: unknown,
+): SessionRecord<TData> | undefined {
+  if (
+    !isObject(value) ||
+    !isSafeTimestamp(value.createdAt) ||
+    !isSafeTimestamp(value.expiresAt) ||
+    typeof value.id !== "string" ||
+    value.id.length === 0 ||
+    !isNonNegativeInteger(value.version) ||
+    (value.idleExpiresAt !== undefined &&
+      !isSafeTimestamp(value.idleExpiresAt)) ||
+    !isSessionData(value.data)
+  ) {
+    return undefined;
+  }
+
+  // TYPE-EVIDENCE: validation above proves each field and the recursive session data shape.
+  return value as SessionRecord<TData>;
+}
+
+function isSafeTimestamp(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isSessionData(value: unknown): value is SessionData {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "string"
+  ) {
+    return true;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.every(isSessionData);
+  }
+
+  return isObject(value) && Object.values(value).every(isSessionData);
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function serializeSessionNamespace(namespace: SessionNamespace) {
   const app = validateNamespacePart("app", namespace.app);
   const environment = validateNamespacePart(
