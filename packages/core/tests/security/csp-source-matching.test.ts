@@ -2,8 +2,8 @@
 // (`cspSourceListAllows` / `cspSourceMatchesOrigin`). Those functions are not
 // exported, so every case here drives them through the public
 // `validateRouteModules` entry point. Each test case specifies a script with
-// a runtime `needs` origin and a route policy with a `connectSrc` list, then
-// asserts whether verification accepts or rejects the combination.
+// a runtime `needs` origin and a route policy with a `connectSrc` list. It
+// then asserts whether verification accepts or rejects the combination.
 import { describe, expect, it } from "vitest";
 import {
   defineRoutePolicy,
