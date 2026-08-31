@@ -755,7 +755,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await mkdir(routesDir, { recursive: true });
     await writeFile(join(routesDir, "index.tsx"), "export {}");
 
-    plugin.configResolved?.({ root } as never);
+    await plugin.configResolved?.({ root } as never);
     await plugin.buildStart?.({} as never);
 
     await expect(readText(outputFile)).resolves.toContain('"/": {};');
@@ -770,7 +770,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await mkdir(routesDir, { recursive: true });
     await writeFile(join(routesDir, "blog.tsx"), "export {}");
 
-    plugin.configResolved?.({ root } as never);
+    await plugin.configResolved?.({ root } as never);
     await plugin.buildStart?.({} as never);
 
     await expect(readText(outputFile)).resolves.toContain('"/blog": {};');
@@ -2263,10 +2263,10 @@ export const GET = json(() => db.widgets.page(2));
     const root = await scaffold({ "index.tsx": pageRoute });
     const plugin = demiurge() as PluginHarness;
 
-    plugin.configResolved?.({ command: "serve", root } as never);
+    await plugin.configResolved?.({ command: "serve", root } as never);
     await expect(plugin.buildStart?.()).resolves.toBeUndefined();
 
-    plugin.configResolved?.({ command: "build", root } as never);
+    await plugin.configResolved?.({ command: "build", root } as never);
     await expect(plugin.buildStart?.()).rejects.toThrow(/@not-found\.tsx/);
   });
 
@@ -2281,7 +2281,7 @@ export const GET = json({}, {
     });
     const plugin = demiurge() as PluginHarness;
 
-    plugin.configResolved?.({ command: "build", root } as never);
+    await plugin.configResolved?.({ command: "build", root } as never);
 
     await expect(plugin.buildStart?.()).rejects.toThrow(
       /api\.ts export GET: \[cors-invalid\].*wildcard origins/,
@@ -2301,7 +2301,7 @@ export const GET = json({}, {
     const devPlugin = demiurge() as PluginHarness;
     const buildPlugin = demiurge() as PluginHarness;
 
-    devPlugin.configResolved?.({ command: "serve", root });
+    await devPlugin.configResolved?.({ command: "serve", root });
     devPlugin.configureServer?.({
       config: { logger: { warn }, root },
       middlewares: { use: vi.fn() },
@@ -2310,7 +2310,7 @@ export const GET = json({}, {
     } as never);
     await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
 
-    buildPlugin.configResolved?.({ command: "build", root });
+    await buildPlugin.configResolved?.({ command: "build", root });
     await expect(buildPlugin.buildStart?.()).rejects.toThrow(
       warn.mock.calls[0]![0] as string,
     );
