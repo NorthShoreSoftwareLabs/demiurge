@@ -38,7 +38,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y redis-server
 
       - name: Verify minimum-Node package contract
-        run: pnpm --filter @demiurge-js/core test && pnpm test:pack
+        run: pnpm --filter @demiurgejs/core test && pnpm test:pack
 
   verification-shard:
     name: Verify / ${{ matrix.name }}
@@ -113,11 +113,12 @@ jobs:
   verify:
     name: pnpm verify
     if: always()
-    needs: verification-shard
+    needs: [node-floor, verification-shard]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Confirm all verification shards passed
         env:
+          FLOOR_RESULT: ${{ needs.node-floor.result }}
           SHARD_RESULT: ${{ needs.verification-shard.result }}
-        run: test "$SHARD_RESULT" = success
+        run: test "$FLOOR_RESULT" = success && test "$SHARD_RESULT" = success
