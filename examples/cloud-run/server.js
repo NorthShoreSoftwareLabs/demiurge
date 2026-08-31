@@ -1,14 +1,7 @@
 /* global console, process, Response, ReadableStream, TextEncoder, URL, Headers, setTimeout */
 
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { createMemoryCacheStore, getRequestClientAddress } from "@demiurgejs/core";
-import {
-  createNodeServer,
-  createStaticFileHandler,
-  renderNodePageResponse,
-} from "@demiurgejs/core/node";
+import { serveNodeBuild } from "@demiurgejs/core/node";
 import { createHandler } from "./dist/server/server-entry.js";
 
 // These endpoints exist only for the deployment conformance kit
@@ -54,70 +47,52 @@ function handleDeploymentContractRequest(request, url) {
   return new Response("Unknown deployment contract probe.", { status: 404 });
 }
 
-const root = fileURLToPath(new URL("dist/client", import.meta.url));
-const manifest = JSON.parse(
-  await readFile(join(root, "demiurge-manifest.json"), "utf8"),
-);
-const cacheStore = createMemoryCacheStore();
-let server;
 const reportBackgroundError = (error) => {
   console.error("Demiurge Cloud Run background task failed.", error);
 };
-const applicationHandler = createHandler({
-  cacheStore: {
-    namespace: {
-      app: "demiurge-cloud-run-example",
-      environment: process.env.NODE_ENV ?? "development",
-      schemaVersion: 1,
-    },
-    onBackgroundError: reportBackgroundError,
-    store: cacheStore,
-    waitUntil(promise) {
-      server.waitUntil(promise);
-    },
-  },
-  clientEntry: manifest.clientEntry,
-  renderPage: renderNodePageResponse,
-  styles: manifest.styles,
-});
-// Cloud Run injects PORT and expects the container to bind 0.0.0.0. Binding a
-// loopback address would leave the platform unable to reach the process.
-const host = process.env.HOST ?? "0.0.0.0";
-const port = Number(process.env.PORT ?? 8080);
-const allowedHosts = (process.env.ALLOWED_HOSTS ?? "localhost")
-  .split(",")
-  .map((value) => value.trim());
-const serveStatic = createStaticFileHandler({ root });
-const handler = (request) => {
-  const url = new URL(request.url);
 
-  // The request-url probe needs an arbitrary client-chosen path, not one
-  // this server already routes. It is recognized by a header instead of a
-  // fixed path prefix.
-  if (request.headers.get("x-deployment-contract-probe") === "request-url") {
-    return Response.json({ pathname: url.pathname, search: url.search });
-  }
-
-  if (url.pathname === "/.well-known/ready") {
-    return new Response(server?.isReady() ? "ready" : "draining", {
-      status: server?.isReady() ? 200 : 503,
+await serveNodeBuild({
+  allowedHosts: (process.env.ALLOWED_HOSTS ?? "localhost")
+    .split(",")
+    .map((value) => value.trim()),
+  base: import.meta.url,
+  createHandler({ page, waitUntil }) {
+    const applicationHandler = createHandler({
+      ...page,
+      cacheStore: {
+        namespace: {
+          app: "demiurge-cloud-run-example",
+          environment: process.env.NODE_ENV ?? "development",
+          schemaVersion: 1,
+        },
+        onBackgroundError: reportBackgroundError,
+        store: createMemoryCacheStore(),
+        waitUntil,
+      },
     });
-  }
 
-  if (url.pathname.startsWith(deploymentContractPrefix)) {
-    return handleDeploymentContractRequest(request, url);
-  }
+    return (request) => {
+      const url = new URL(request.url);
 
-  return applicationHandler(request);
-};
+      // The request-url probe needs an arbitrary client-chosen path, not one
+      // this server already routes. It is recognized by a header instead of a
+      // fixed path prefix.
+      if (request.headers.get("x-deployment-contract-probe") === "request-url") {
+        return Response.json({ pathname: url.pathname, search: url.search });
+      }
 
-server = createNodeServer({
-  allowedHosts,
-  handler,
-  // Cloud Run's front end is the one hop between the client and this
-  // container. Trusting a single proxy hop resolves the real client
-  // address from `X-Forwarded-For` instead of the front end's own address.
-  trustProxy: { hops: 1 },
+      if (url.pathname.startsWith(deploymentContractPrefix)) {
+        return handleDeploymentContractRequest(request, url);
+      }
+
+      return applicationHandler(request);
+    };
+  },
+  // Cloud Run injects PORT and expects the container to bind 0.0.0.0. Binding a
+  // loopback address would leave the platform unable to reach the process.
+  host: process.env.HOST ?? "0.0.0.0",
+  name: "Demiurge Cloud Run server",
+  port: 8080,
   shutdown: {
     gracePeriod: 30_000,
     onBackgroundError: reportBackgroundError,
@@ -126,11 +101,8 @@ server = createNodeServer({
     },
     signals: ["SIGINT", "SIGTERM"],
   },
-  static: serveStatic,
-});
-server.listen(port, host, () => {
-  const address = server.address();
-  console.log(
-    `Demiurge Cloud Run server listening on http://${host}:${address.port}`,
-  );
+  // Cloud Run's front end is the one hop between the client and this
+  // container. Trusting a single proxy hop resolves the real client
+  // address from `X-Forwarded-For` instead of the front end's own address.
+  trustProxy: { hops: 1 },
 });
