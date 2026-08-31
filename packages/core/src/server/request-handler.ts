@@ -2,6 +2,7 @@ import {
   applyLocalizedMetadata,
   createNavigationDocument,
 } from "../document";
+import { isPlainObject } from "../type-guards";
 import {
   createNavigationDataResponse,
   createRouteManifest,
@@ -698,7 +699,7 @@ function parseMutationInvalidation(value: string) {
   } catch {
     throw invalidMutationInvalidation();
   }
-  if (!isRecord(parsed) || parsed.version !== 1) {
+  if (!isPlainObject(parsed) || parsed.version !== 1) {
     throw invalidMutationInvalidation();
   }
   const names = Object.keys(parsed).sort();
@@ -730,11 +731,7 @@ function isCacheKeyPart(value: unknown): boolean {
   }
   if (typeof value === "number") return Number.isFinite(value);
   if (Array.isArray(value)) return value.every(isCacheKeyPart);
-  return isRecord(value) && Object.values(value).every(isCacheKeyPart);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return isPlainObject(value) && Object.values(value).every(isCacheKeyPart);
 }
 
 function invalidMutationInvalidation() {

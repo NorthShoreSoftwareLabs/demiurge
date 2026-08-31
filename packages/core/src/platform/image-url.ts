@@ -1,4 +1,5 @@
 import type { ImageFormat } from "./images";
+import { urlExtension } from "./url";
 
 export type ImageSourceKind = "local" | "remote";
 
@@ -121,10 +122,7 @@ export function resolveVariantExtension(descriptor: ImageVariantDescriptor) {
 }
 
 export function imageSourceExtension(src: string) {
-  const name = src.split("?")[0]!.split("#")[0]!.split("/").at(-1) ?? "";
-  const extension = name.includes(".")
-    ? name.split(".").at(-1)!.toLowerCase()
-    : "";
+  const extension = urlExtension(src);
 
   return extension in extensionFormats ? extension : undefined;
 }

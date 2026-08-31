@@ -3,6 +3,7 @@ import {
   parseBodySize,
   RequestBodyTooLargeError,
 } from "./request";
+import { isObjectLike } from "../type-guards";
 
 type MaybePromise<T> = Promise<T> | T;
 
@@ -146,13 +147,9 @@ function normalizeSecurityReports(payload: unknown) {
     return payload;
   }
 
-  if (isObject(payload) && "csp-report" in payload) {
+  if (isObjectLike(payload) && "csp-report" in payload) {
     return [payload["csp-report"]];
   }
 
   return [payload];
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }

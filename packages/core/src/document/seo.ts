@@ -1,3 +1,5 @@
+import { IMMUTABLE_FILE_CACHE_CONTROL } from "../static-files";
+
 export type SitemapChangeFrequency =
   | "always"
   | "hourly"
@@ -169,7 +171,7 @@ export function renderOgImageSvg(image: OgImage) {
 export function renderOgImageResponse(image: OgImage) {
   return new Response(renderOgImageSvg(image), {
     headers: {
-      "cache-control": "public, max-age=31536000, immutable",
+      "cache-control": IMMUTABLE_FILE_CACHE_CONTROL,
       "content-type": "image/svg+xml; charset=utf-8",
     },
   });

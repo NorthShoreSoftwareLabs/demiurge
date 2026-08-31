@@ -16,6 +16,7 @@ import {
   type RoutePathVars,
 } from "../routing";
 import { useActionState, useMemo } from "react";
+import { isPlainObject } from "../type-guards";
 
 const mutationFormActionMetadata = Symbol("Demiurge mutation form action");
 declare const mutationFormActionResult: unique symbol;
@@ -246,7 +247,7 @@ export async function readMutationResult<TData = unknown, TField extends string 
   } catch {
     throw new Error("Demiurge received a malformed versioned mutation result.");
   }
-  if (!isRecord(value) || value.version !== 1 || typeof value.status !== "string") {
+  if (!isPlainObject(value) || value.version !== 1 || typeof value.status !== "string") {
     throw new Error("Demiurge received a malformed versioned mutation result.");
   }
   if (value.status === "success") {
@@ -295,21 +296,17 @@ function malformedResult() {
   return new Error("Demiurge received a malformed mutation result.");
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]) {
   return Object.keys(value).every((key) => keys.includes(key));
 }
 
 function isMutationValidation(value: unknown): value is MutationValidation {
-  return isRecord(value) && hasOnlyKeys(value, ["issues"]) &&
+  return isPlainObject(value) && hasOnlyKeys(value, ["issues"]) &&
     Array.isArray(value.issues) && value.issues.every(isMutationValidationIssue);
 }
 
 function isMutationValidationIssue(value: unknown): value is MutationValidationIssue {
-  return isRecord(value) && hasOnlyKeys(value, ["code", "message", "path"]) &&
+  return isPlainObject(value) && hasOnlyKeys(value, ["code", "message", "path"]) &&
     typeof value.code === "string" && typeof value.message === "string" &&
     Array.isArray(value.path) &&
     (value.path.length === 0 || typeof value.path[0] === "string") &&
@@ -320,5 +317,5 @@ function isJsonValue(value: unknown): boolean {
   if (value === null || typeof value === "string" || typeof value === "boolean") return true;
   if (typeof value === "number") return Number.isFinite(value);
   if (Array.isArray(value)) return value.every(isJsonValue);
-  return isRecord(value) && Object.values(value).every(isJsonValue);
+  return isPlainObject(value) && Object.values(value).every(isJsonValue);
 }
