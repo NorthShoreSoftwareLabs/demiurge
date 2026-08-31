@@ -19,7 +19,7 @@ export function urlPath(url: string) {
  * reported as unknown rather than mistaken for a format.
  */
 export function urlExtension(url: string) {
-  const name = urlPath(url).split("/").at(-1) ?? "";
+  const name = urlPath(url).split("/").at(-1)!;
 
   return name.includes(".") ? name.split(".").at(-1)!.toLowerCase() : "";
 }
