@@ -39,6 +39,8 @@ export type ServeNodeBuildOptions = {
   host?: string;
   name?: string;
   onError?: NodeRequestListenerOptions["onError"];
+  // When set, this replaces the default listen log entirely, so `name` is
+  // not used.
   onListen?: (address: { host: string; port: number; server: NodeServer }) => void;
   port?: number;
   readyPath?: string | false;
@@ -84,9 +86,11 @@ export async function serveNodeBuild(
     ? undefined
     : options.readyPath ?? defaultNodeBuildReadyPath;
 
-  // The cache store and the route pipeline hand background work to the server
-  // that does not exist yet. The closure reads it after listen, so the later
-  // binding is always set.
+  // A caller's createHandler may call waitUntil synchronously (for example to
+  // warm a cache at startup), before the server exists. Buffer those promises
+  // here and flush them into the real server once it is constructed, so an
+  // early call just works instead of throwing.
+  const pendingWaitUntil: Promise<unknown>[] = [];
   const context: NodeBuildContext = {
     page: {
       clientEntry: manifest.clientEntry,
@@ -95,7 +99,7 @@ export async function serveNodeBuild(
     },
     root,
     waitUntil(promise) {
-      server.waitUntil(promise);
+      pendingWaitUntil.push(promise);
     },
   };
   const handler = await options.createHandler(context);
@@ -110,6 +114,13 @@ export async function serveNodeBuild(
     timeouts: options.timeouts,
     trustProxy: options.trustProxy,
   });
+
+  context.waitUntil = (promise) => {
+    server.waitUntil(promise);
+  };
+  for (const promise of pendingWaitUntil) {
+    server.waitUntil(promise);
+  }
 
   await new Promise<void>((resolveListen, rejectListen) => {
     server.once("error", rejectListen);
@@ -173,5 +184,26 @@ function resolveStatic(
     return { root: context.root };
   }
 
-  return typeof configured === "function" ? configured(context) : configured;
+  if (typeof configured !== "function") {
+    return configured;
+  }
+
+  const resolved = configured(context);
+
+  // A factory returns a StaticFileHandler or a StaticFileHandlerOptions
+  // object, both synchronously. A StaticFileHandler passed directly instead
+  // (the shape createNodeServer's own `static` option accepts) is an async
+  // function. Calling it here as a factory always returns a Promise. That
+  // catches the mistake early, with a clear message, instead of a failure
+  // deep inside the static file handler.
+  if (resolved instanceof Promise) {
+    throw new TypeError(
+      "The `static` option must be a StaticFileHandlerOptions object or a " +
+        "factory `(context) => StaticFileHandler | StaticFileHandlerOptions`. " +
+        "It looks like a StaticFileHandler was passed directly. Wrap it: " +
+        "`static: () => yourHandler`.",
+    );
+  }
+
+  return resolved;
 }

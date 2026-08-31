@@ -189,6 +189,37 @@ describe("serveNodeBuild", () => {
     expect(states).toEqual(["ready", "draining", "stopped"]);
   });
 
+  it("tracks a waitUntil call made synchronously during createHandler", async () => {
+    const output = await createBuildOutput();
+    let settle = () => undefined as void;
+    const warmup = new Promise<void>((resolveWarmup) => {
+      settle = () => resolveWarmup();
+    });
+    const states: string[] = [];
+    const server = await serveNodeBuild({
+      base: output.base,
+      createHandler: (context) => {
+        // Calling waitUntil here, before the server exists, must not throw.
+        context.waitUntil(warmup);
+        return async () => new Response("route");
+      },
+      onListen: () => undefined,
+      port: 0,
+      shutdown: {
+        gracePeriod: 1_000,
+        onStateChange: (state) => states.push(state),
+      },
+    });
+    started.push(server);
+
+    const shutdown = server.shutdown();
+    settle();
+    await shutdown;
+    started.pop();
+
+    expect(states).toEqual(["ready", "draining", "stopped"]);
+  });
+
   it("logs the bound port with the configured name by default", async () => {
     const output = await createBuildOutput();
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
