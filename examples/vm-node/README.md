@@ -125,7 +125,7 @@ The `upstream` block points to `127.0.0.1:4173`, where the Node process binds.
 
 **Readiness endpoint.** `serveNodeBuild(...)` serves `/.well-known/ready` by default through the adapter's `readyPath` option. It returns 200 while `server.isReady()` is true and 503 once draining starts. Monitoring systems can poll this to know when the process is healthy and when it is shutting down.
 
-**Logs to stdout/stderr.** `server.js` uses `console.log()` and `console.error()`. The systemd unit file (lines 43–44) captures these to the journal:
+**Logs to stdout/stderr.** `server.js` uses `console.log()` and `console.error()`. The systemd unit file (lines 32–33) captures these to the journal:
 
 ```ini
 StandardOutput=journal

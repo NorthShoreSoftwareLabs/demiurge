@@ -4,8 +4,9 @@ This production Node example opts its root page into
 `render: { mode: "streaming" }`. The document metadata, strict CSP nonce,
 layout, heading, and Suspense fallback flush in the shell. React streams the
 deferred panel later and applies the same nonce to its inline completion script.
-`server.js` supplies `renderNodePageResponse` to the generated handler so the
-Node-only pipeable renderer never enters the client bundle.
+`serveNodeBuild` injects `renderNodePageResponse` into the generated handler
+through `context.page.renderPage`, so the Node-only pipeable renderer never
+enters the client bundle.
 
 ```sh
 pnpm build

@@ -53,8 +53,8 @@ handler serves the font file and one `@font-face` stylesheet from
 ships under the SIL Open Font License, and `fonts/inter-latin.LICENSE.txt`
 carries that license.
 
-The client build emits `dist/client/demiurge-manifest.json`. `server.js` reads
-its hashed entry and stylesheet paths and passes them to the generated
+The client build emits `dist/client/demiurge-manifest.json`. `serveNodeBuild`
+reads its hashed entry and stylesheet paths and passes them to the generated
 `createHandler(...)`. The SSR build compiles `src/server-entry.ts` to
 `dist/server/server-entry.js`.
 
