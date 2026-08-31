@@ -88,16 +88,25 @@ async function startRedis(port: number) {
 
   await new Promise<void>((resolvePromise, reject) => {
     let output = "";
+    // Matches the 10s bound on the sibling wait in `waitForOrigin` below.
+    const timeout = setTimeout(() => {
+      reject(new Error(`redis-server did not report ready in time. ${output}`));
+    }, 10_000);
     const onData = (chunk: Buffer) => {
       output += chunk.toString("utf8");
       if (output.includes("Ready to accept connections")) {
         child.stdout.off("data", onData);
+        clearTimeout(timeout);
         resolvePromise();
       }
     };
     child.stdout.on("data", onData);
-    child.once("error", reject);
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
     child.once("exit", (code) => {
+      clearTimeout(timeout);
       reject(new Error(`redis-server exited early with code ${code}.`));
     });
   });
