@@ -152,7 +152,8 @@ function checkTemplateVersion(coreVersion: string, templateManifest: unknown): s
 
   const templateCoreVersion =
     typeof template.dependencies === "object" && template.dependencies !== null
-      ? (template.dependencies as Record<string, unknown>)["@demiurgejs/core"]
+      ? // TYPE-EVIDENCE: The guard confirmed template.dependencies is a non-null object.
+        (template.dependencies as Record<string, unknown>)["@demiurgejs/core"]
       : undefined;
 
   const templateVersionString = typeof templateCoreVersion === "string" ? templateCoreVersion : "";
