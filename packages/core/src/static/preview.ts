@@ -1,4 +1,9 @@
-import { createServer, type Server } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, relative, resolve, sep } from "node:path";
 import type {
@@ -37,7 +42,14 @@ export async function createStaticPreviewServer(
     expression: new RegExp(rule.pattern),
   }));
 
-  const server = createServer(async (request, response) => {
+  const server = createServer((request, response) => {
+    void handleRequest(request, response);
+  });
+
+  async function handleRequest(
+    request: IncomingMessage,
+    response: ServerResponse,
+  ) {
     try {
       if (request.method !== "GET" && request.method !== "HEAD") {
         response.writeHead(405, { allow: "GET, HEAD" });
@@ -109,7 +121,7 @@ export async function createStaticPreviewServer(
       });
       response.end("Demiurge could not serve the static output.");
     }
-  });
+  }
 
   await new Promise<void>((resolvePromise, reject) => {
     const onError = (error: Error) => reject(error);

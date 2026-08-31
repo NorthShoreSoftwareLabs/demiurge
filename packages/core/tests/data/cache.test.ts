@@ -190,9 +190,9 @@ describe("data cache primitives", () => {
       value: "value",
     };
 
-    store.set("first", entry);
-    store.set("second", entry);
-    store.set("third", entry);
+    void store.set("first", entry);
+    void store.set("second", entry);
+    void store.set("third", entry);
 
     expect([...entries.keys()]).toEqual(["second", "third"]);
     expect(() => createMemoryCacheStore({ maximumEntries: 0 })).toThrow(
@@ -205,20 +205,20 @@ describe("data cache primitives", () => {
     const entries = new Map();
     const store = createMemoryCacheStore({ entries, maximumEntries: 2, now: () => now });
 
-    store.set("expired", {
+    void store.set("expired", {
       expiresAt: 5,
       staleUntil: 10,
       tags: [],
       value: "old",
     });
-    store.set("active", {
+    void store.set("active", {
       expiresAt: 50,
       staleUntil: 100,
       tags: [],
       value: "active",
     });
     now = 10;
-    store.set("new", {
+    void store.set("new", {
       expiresAt: 50,
       staleUntil: 100,
       tags: [],
