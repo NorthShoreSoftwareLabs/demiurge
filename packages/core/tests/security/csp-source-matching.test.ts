@@ -1,9 +1,9 @@
 // Coverage for the CSP source-list matching helpers in verification.ts
 // (`cspSourceListAllows` / `cspSourceMatchesOrigin`). Those functions are not
 // exported, so every case here drives them through the public
-// `validateRouteModules` entry point: a script declares a runtime `needs`
-// origin, the route's document policy declares a `connectSrc` list, and we
-// assert whether verification accepts or rejects the combination.
+// `validateRouteModules` entry point. Each test case specifies a script with
+// a runtime `needs` origin and a route policy with a `connectSrc` list, then
+// asserts whether verification accepts or rejects the combination.
 import { describe, expect, it } from "vitest";
 import {
   defineRoutePolicy,
@@ -193,9 +193,9 @@ describe("cspSourceListAllows / cspSourceMatchesOrigin", () => {
       validateRouteModules(
         modulesNeedingConnect(
           ["https://api.example.com"],
-          // needs.connect entries are ordinarily URLs, but the matcher must
-          // not accidentally treat a quoted CSP keyword as a matchable
-          // origin (cspSourceMatchesOrigin short-circuits on a leading `'`).
+          // needs.connect entries are ordinarily URLs. The matcher must not
+          // accidentally treat a quoted CSP keyword as a matchable origin
+          // (cspSourceMatchesOrigin short-circuits on a leading `'`).
           "'unsafe-inline'",
         ),
       )
