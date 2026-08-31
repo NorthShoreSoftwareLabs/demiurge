@@ -151,7 +151,7 @@ async function run() {
       HOST: "127.0.0.1",
       PORT: "0",
       // "example.com" matches the X-Forwarded-Host sent by the client-ip
-      // test below; without it in the allowlist, the server correctly
+      // test below. Without it in the allowlist, the server correctly
       // rejects the forwarded host with 421 Misdirected Request.
       ALLOWED_HOSTS: "localhost,example.com",
     },
@@ -230,12 +230,13 @@ async function run() {
       );
     }
   } catch (error) {
-    // The /api/client-ip route is optional for this test. If the request
-    // itself fails to connect (the route genuinely doesn't exist and the
-    // server tears down the socket, etc.), skip this test but still verify
-    // the core functionality works. An assertion thrown above — including
-    // the 500-status check, whose message happens to contain "route" — must
-    // always be rethrown rather than swallowed here.
+    // The /api/client-ip route is optional for this test. The request
+    // itself might fail to connect, for example if the route genuinely
+    // does not exist and the server tears down the socket. In that case,
+    // skip this test but still verify the core functionality works. An
+    // assertion thrown above, including the 500-status check, whose
+    // message happens to contain "route" — must always be rethrown
+    // rather than swallowed here.
     if (error instanceof Error && error.message.startsWith("VM Node client-ip route returned")) {
       throw error;
     }

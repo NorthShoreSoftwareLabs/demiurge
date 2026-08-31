@@ -133,9 +133,9 @@ function run() {
     "--name",
     containerName,
     "-p",
-    // Binding the host side to port 0 asks the OS for a free port instead
-    // of guessing a range, so this probe can never collide with another
-    // probe's port.
+    // Binding the host side to port 0 asks the OS for a free port
+    // instead of guessing a range. This probe can never collide with
+    // another probe's port.
     `0:${containerPort}`,
     "-e",
     `PORT=${containerPort}`,
@@ -222,10 +222,10 @@ async function waitForReady(origin: string) {
   );
 }
 
-// Mirrors `tests/integration/vm-node.ts`'s `waitForDraining`: polls the
+// Mirrors `tests/integration/vm-node.ts`'s `waitForDraining`. It polls the
 // readiness endpoint until it reports draining, or until the connection is
-// refused/reset, which is an equally valid way to observe the container
-// finished shutting down.
+// refused or reset. Either outcome is a valid way to observe that the
+// container finished shutting down.
 async function waitForDraining(origin: string) {
   const deadline = Date.now() + 5_000;
 

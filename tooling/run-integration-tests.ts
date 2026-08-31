@@ -6,10 +6,10 @@ import { availableParallelism } from "node:os";
 // `cloud-run` gets an OS-assigned host port too, by publishing the container
 // port as `-p 0:<containerPort>` and reading back the assignment with
 // `docker port`. `redis-cache-adapter` and `cloud-run` also derive their
-// Redis port, image tag, and container name from `process.pid`, since
-// `redis-server` and Docker port publishing need a name/port picked upfront
-// rather than an OS assignment. No probe takes a fixed port or writes a
-// shared file, so they can all run at once.
+// Redis port, image tag, and container name from `process.pid`.
+// `redis-server` and Docker port publishing need a name/port picked
+// upfront rather than an OS assignment. No probe takes a fixed port or
+// writes a shared file, so they can all run at once.
 const probes = [
   // The Docker build and container run make this the longest probe. Start it
   // first and let the cheap ones fill the remaining lanes beside it.
