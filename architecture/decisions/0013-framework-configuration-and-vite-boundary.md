@@ -2,9 +2,7 @@
 
 ## Status
 
-Proposed.
-Migration path and configuration discovery/diagnostics remain open.
-See Open Questions.
+Accepted.
 
 ## Context
 
@@ -116,6 +114,51 @@ The framework offers two tiers, not one:
    This escape is named and framed so it is never mistaken for a first-class,
    stable API.
 
+### Adoption
+
+Demiurge has no external users at `0.2.0-beta`.
+The framework replaces the `vite.config.ts` plugin call with
+`demiurge.config.ts` in one change.
+There is no deprecation window, no codemod, and no period when the framework
+accepts both forms.
+
+The `demiurge(options)` factory in `packages/core/src/vite/plugin.ts` becomes a
+framework internal.
+It stops being an application-facing API.
+The implementation work changes the repository examples and the
+`create-demiurge` templates in the same change.
+
+### Configuration discovery and diagnostics
+
+The framework reads `demiurge.config.ts` from the project root.
+The project root is the directory that contains `package.json` for the
+application.
+The framework resolves the root from the working directory of the command.
+
+The framework accepts one file name at one location.
+It does not search parent directories.
+It does not accept another file extension or a configuration subdirectory.
+One accepted name gives one accurate diagnostic when the file is absent.
+
+The configuration file is required.
+Each framework command fails when the file is absent.
+This includes the development server, the build, the production start, and the
+static commands.
+There is no implicit default configuration.
+The diagnostic gives the absolute path that the framework expects.
+It also tells the user to create an application with `npm create demiurge`.
+
+`create-demiurge` writes `demiurge.config.ts` in each template.
+The templates stop shipping `vite.config.ts`.
+The scaffolding command is the supported way to start an application.
+
+The framework fails before it starts Vite when the configuration is invalid.
+A configuration is invalid when the module throws an error.
+It is also invalid when the module has no default export.
+It is also invalid when a field does not agree with the configuration schema.
+The diagnostic gives the file, the field path, and the value that the framework
+received.
+
 ### Failure behavior
 
 Consistent with the epic's existing decision rule, invalid configuration —
@@ -143,15 +186,13 @@ blobs) stays a separate, replaceable concern from the schema itself.
 Adopting an encrypted-file workflow later does not require revisiting this
 decision.
 
-## Open Questions
+A required configuration file makes the framework entry point explicit.
+The framework does not have to infer configuration from the file system.
+The cost is that a manually assembled project does not run until the file
+exists.
+`create-demiurge` covers that path, so the scaffolding command becomes part of
+the supported first-run experience.
 
-- **Migration path.** Existing applications and repository examples call
-  `demiurge(options)` directly from `vite.config.ts`
-  (`packages/core/src/vite/plugin.ts`).
-  This decision does not yet define how they move to `demiurge.config.ts`.
-  Options include a codemod, a deprecation window with both forms accepted,
-  or a hard cutover.
-  This must be defined before implementation work can begin.
-- **Configuration discovery and diagnostics.** How the framework locates
-  `demiurge.config.ts`, and the error format when it is missing or invalid,
-  are not yet decided.
+A direct cutover is only possible before the first stable release.
+The framework accepts the churn now to avoid a permanent second configuration
+form.
