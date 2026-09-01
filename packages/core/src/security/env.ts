@@ -288,10 +288,11 @@ function createVariable<T>(
   kind: EnvVariableKind = "string",
   extra: Record<string, unknown> = {},
 ): EnvVariable<T, boolean> {
-  const { client = false, critical = false, optional = false, ...rest } = {
-    ...options,
-    ...extra,
-  } as Record<string, unknown> & EnvVariableOptions;
+  // TYPE-EVIDENCE: each builder passes its own declared options and its own extra values. The cast reads the shared options and keeps the rest as the serializable description.
+  const merged = { ...options, ...extra } as
+    & Record<string, unknown>
+    & EnvVariableOptions;
+  const { client = false, critical = false, optional = false, ...rest } = merged;
 
   if (sensitive && client) {
     throw new Error(

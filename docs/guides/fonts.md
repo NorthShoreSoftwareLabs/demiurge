@@ -28,16 +28,17 @@ export const fonts = defineFonts([
 `src` names a project file. The file does not belong in the public directory,
 because nothing should serve it under a second URL.
 
-Pass the same declaration to the Vite plugin. The development server then
-serves the font URLs that the application renders:
+Pass the same declaration to the configuration file. The development server
+then serves the font URLs that the application renders:
 
 ```ts
-import { defineConfig } from "vite";
-import { demiurge } from "@demiurgejs/core/vite";
+// demiurge.config.ts
+import { defineConfig } from "@demiurgejs/core/config";
 import { fonts } from "./src/fonts";
 
 export default defineConfig({
-  plugins: [demiurge({ fonts, typedRoutes: true })],
+  assets: { fonts },
+  routing: { typedRoutes: true },
 });
 ```
 

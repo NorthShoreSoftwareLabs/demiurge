@@ -42,6 +42,7 @@ export async function createDemiurgeViteConfig(
 
   if (!config.unstable_viteConfig) return merged;
 
+  // TYPE-EVIDENCE: InlineConfig extends UserConfig with command options only. The callback reads the same fields.
   const extended = await config.unstable_viteConfig(merged as UserConfig);
   if (!extended || typeof extended !== "object" || Array.isArray(extended)) {
     throw new DemiurgeConfigError(
@@ -52,6 +53,7 @@ export async function createDemiurgeViteConfig(
     );
   }
 
+  // TYPE-EVIDENCE: the check above rejected every value that is not a configuration object. The cast records that result.
   return extended as InlineConfig;
 }
 
@@ -95,6 +97,7 @@ export function toPluginOptions(
 
 async function mergeViteConfig(base: InlineConfig, overrides: InlineConfig) {
   const { mergeConfig } = await import("vite");
+  // TYPE-EVIDENCE: mergeConfig returns the merge of two InlineConfig values. The cast restores that type from its Record signature.
   return mergeConfig(base, overrides) as InlineConfig;
 }
 
@@ -114,7 +117,8 @@ async function loadReactPluginOrFail(loader?: ReactPluginLoader) {
 }
 
 async function loadReactPlugin(): Promise<(...args: never[]) => PluginOption> {
-  const module = await import("@vitejs/plugin-react");
-  // TYPE-EVIDENCE: the package default export is the plugin factory. The cast keeps the factory signature that the generated configuration needs.
-  return module.default as unknown as (...args: never[]) => PluginOption;
+  const module: { default: (...args: never[]) => PluginOption } = await import(
+    "@vitejs/plugin-react"
+  );
+  return module.default;
 }

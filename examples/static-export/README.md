@@ -20,7 +20,7 @@ keeps the static adapter independent of a provider configuration format.
 Ordered `fileHeaderRules` cover the remaining Vite and `public/` files. Hashed
 files are immutable. Other files must revalidate.
 
-The example selects `vercelStatic()` in `vite.config.ts`. The build also emits
+The example selects `vercelStatic()` in `demiurge.config.ts`. The build also emits
 Vercel Build Output API artifacts under `.vercel/output`.
 
 The example gives `site.webmanifest` a one-hour application cache rule. That

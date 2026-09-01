@@ -141,6 +141,7 @@ function createVariableFromDescriptor(
   key: string,
   descriptor: EnvVariableDescriptor,
 ): EnvVariable<unknown, boolean> {
+  // TYPE-EVIDENCE: serializeEnvSchema wrote these options from a builder call. The cast returns them to the overloaded builder parameter.
   const options = {
     ...descriptor.options,
     client: descriptor.client,
@@ -169,7 +170,7 @@ function isEnvSchema(
   schema: EnvSchema | EnvSchemaDescriptor,
 ): schema is EnvSchema {
   return Object.values(schema).every(
-    (variable) => typeof (variable as { parse?: unknown }).parse === "function",
+    (variable) => "parse" in variable && typeof variable.parse === "function",
   );
 }
 

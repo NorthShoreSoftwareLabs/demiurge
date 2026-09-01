@@ -11,7 +11,8 @@ npm create demiurge
 ```
 
 The page template includes the root layout, fallback documents, policy, styles,
-and Vite configuration. The API template does not include page-route files.
+and the framework configuration file. The API template does not include
+page-route files.
 
 The scaffold carries the framework version. A prerelease scaffold publishes
 under the `next` tag:
@@ -27,17 +28,23 @@ pnpm add @demiurgejs/core react react-dom
 pnpm add -D vite @vitejs/plugin-react typescript @types/react @types/react-dom
 ```
 
-## Configure Vite
+## Configure the application
+
+Each application has a `demiurge.config.ts` file at its root. Demiurge reads
+this one file, and it generates the Vite configuration from it.
 
 ```ts
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
-import { demiurge } from "@demiurgejs/core/vite";
+// demiurge.config.ts
+import { defineConfig } from "@demiurgejs/core/config";
 
 export default defineConfig({
-  plugins: [demiurge({ typedRoutes: true }), react()],
+  routing: { typedRoutes: true },
 });
 ```
+
+The file is required. A framework command fails when the file is absent, and
+the diagnostic gives the expected path. The
+[configuration guide](./guides/configuration.md) describes each boundary.
 
 ## Add the first route
 
@@ -61,16 +68,18 @@ export default function NotFound({ pathname }: NotFoundProps) {
 }
 ```
 
-Run `vite` for development and `vite build` for a browser build. The framework
-creates the HTML document and browser entry. The application does not need an
-`index.html` or a manual React mount.
+Run `demiurge dev` for development and `demiurge build` for production output.
+The framework creates the HTML document and browser entry. The application does
+not need an `index.html` or a manual React mount.
 
-For static production output, run `demiurge build`. Run `demiurge preview` to
-serve the output with its declared headers.
+`demiurge build` writes the client bundle. It also writes static output when
+the configuration declares `deployment.static`. Run `demiurge preview` to serve
+that output with its declared headers.
 
-For Vercel, select `vercelStatic()` in the Vite configuration. The build then
-creates Build Output API artifacts under `.vercel/output`. The adapter does not
-require a Vercel package in the application.
+For Vercel, select `vercelStatic()` as the static provider in
+`demiurge.config.ts`. The build then creates Build Output API artifacts under
+`.vercel/output`. The adapter does not require a Vercel package in the
+application.
 
 To optimize an image, follow the [image guide](./guides/images.md). It covers
 the static build shape and the request-time optimizer.

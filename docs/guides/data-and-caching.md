@@ -320,9 +320,9 @@ only.
 An application declares extra rules for its own file patterns:
 
 ```ts
-demiurge({
-  static: {
-    headers: [
+defineConfig({
+  security: {
+    staticFileHeaders: [
       {
         headers: { crossOriginResourcePolicy: "cross-origin" },
         pattern: "\\.woff2$",
@@ -349,15 +349,15 @@ responsibilities.
 
 ## Vercel static output
 
-Select the Vercel static adapter in the Vite configuration:
+Select the Vercel static adapter in `demiurge.config.ts`:
 
 ```ts
+import { defineConfig } from "@demiurgejs/core/config";
 import { vercelStatic } from "@demiurgejs/core/static";
-import { demiurge } from "@demiurgejs/core/vite";
 
-demiurge({
-  static: {
-    deployment: vercelStatic(),
+export default defineConfig({
+  deployment: {
+    static: { provider: vercelStatic() },
   },
 });
 ```

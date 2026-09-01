@@ -38,6 +38,7 @@ export function validateDemiurgeConfig(
 ): DemiurgeConfig {
   const context = { configFile };
   assertPlainObject(context, "", value, "a configuration object");
+  // TYPE-EVIDENCE: assertPlainObject threw unless the value is a non-array object. The cast reads its keys.
   const config = value as Record<string, unknown>;
   assertKnownKeys(context, "", config, CONFIG_KEYS);
 
@@ -170,6 +171,7 @@ function section(
   if (value === undefined) return undefined;
   const field = `${prefix}${key}`;
   assertPlainObject(context, field, value, "an object");
+  // TYPE-EVIDENCE: assertPlainObject threw unless the value is a non-array object. The cast reads its keys.
   const record = value as Record<string, unknown>;
   const known = SECTION_KEYS[field];
   if (known) assertKnownKeys(context, field, record, known);
@@ -229,6 +231,7 @@ function assertOptionalObject(
 function assertTypedRoutes(context: ValidationContext, value: unknown) {
   if (value === undefined || typeof value === "boolean") return;
   assertPlainObject(context, "routing.typedRoutes", value, "a boolean or an object");
+  // TYPE-EVIDENCE: assertPlainObject threw unless the value is a non-array object. The cast reads its keys.
   const record = value as Record<string, unknown>;
   assertKnownKeys(context, "routing.typedRoutes", record, ["outputFile"]);
   assertOptionalString(context, "routing.typedRoutes.outputFile", record.outputFile);
@@ -237,12 +240,14 @@ function assertTypedRoutes(context: ValidationContext, value: unknown) {
 function assertEnvSchema(context: ValidationContext, value: unknown) {
   if (value === undefined) return;
   assertPlainObject(context, "env", value, "an environment schema");
-  for (const [key, variable] of Object.entries(value as Record<string, unknown>)) {
+  // TYPE-EVIDENCE: assertPlainObject threw unless the value is a non-array object. The cast reads its entries.
+  const schema = value as Record<string, unknown>;
+  for (const [key, variable] of Object.entries(schema)) {
     if (
       variable &&
       typeof variable === "object" &&
       "parse" in variable &&
-      typeof (variable as { parse: unknown }).parse === "function"
+      typeof variable.parse === "function"
     ) {
       continue;
     }
