@@ -109,7 +109,14 @@ describe("environment startup", () => {
   });
 
   it("refuses a secret variable that client code can read", () => {
-    expect(() => env.secret({ client: true })).toThrow(/cannot reach client code/);
+    expect(() => env.secret({ client: true } as never))
+      .toThrow(/cannot reach client code/);
+  });
+
+  it("refuses a client variable until the build enforces the boundary", () => {
+    expect(() => env.string({ client: true } as never))
+      .toThrow(/not available yet/);
+    expect(() => env.string({ client: true } as never)).toThrow(/#376/);
   });
 });
 
@@ -134,7 +141,7 @@ describe("environment startup branches", () => {
   it("restores each variable kind from a description", () => {
     const schema = deserializeEnvSchema({
       FLAG: {
-        client: true,
+        client: false,
         critical: false,
         kind: "boolean",
         optional: false,

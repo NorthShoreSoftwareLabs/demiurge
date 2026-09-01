@@ -11,7 +11,7 @@ import {
   type RouteProps,
 } from "@demiurgejs/core";
 import { useFormStatus } from "react-dom";
-import { useOptimistic } from "react";
+import { useEffect, useOptimistic, useState } from "react";
 import { readMutationVersion } from "../mutation-state.server";
 
 export const GET = page({
@@ -73,9 +73,18 @@ function MutationFormsPage({ data }: RouteProps<
     route: "/mutation-forms/refresh",
   }, undefined);
   const [optimisticVersion, setOptimisticVersion] = useOptimistic(data.version);
+  // A form action runs in the browser only after hydration. A test that
+  // submits before this marker appears gets a native submission instead.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
   return (
     <main>
       <h1>Mutation forms</h1>
+      <p data-hydrated={hydrated} data-testid="hydrated-marker">
+        {hydrated ? "Hydrated." : "Not hydrated yet."}
+      </p>
       <p>Result: {data.result ?? "none"}</p>
       <Form action="/mutation-forms" method="post" submissionKey="mutation-form-example">
         <button name="history" type="submit" value="push">Save with push</button>

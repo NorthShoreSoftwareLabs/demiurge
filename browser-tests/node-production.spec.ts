@@ -92,6 +92,7 @@ test("React mutation forms preserve pending state, validation, files, and submit
   });
 
   await page.goto("/mutation-forms");
+  await expect(page.getByTestId("hydrated-marker")).toHaveText("Hydrated.");
   await page.getByRole("button", { name: "Save draft" }).click();
   await expect(page.getByLabel("React mutation validation")).toHaveText(
     "Enter a title.",
@@ -171,6 +172,7 @@ test("mutation refresh retrieves authority without changing navigation state", a
   });
 
   await page.goto("/mutation-forms?refreshKey=playwright-refresh");
+  await expect(page.getByTestId("hydrated-marker")).toHaveText("Hydrated.");
   const version = page.getByLabel("Server version");
   const optimisticVersion = page.getByLabel("Optimistic version");
   const initialVersion = Number(await version.textContent());
@@ -198,6 +200,7 @@ test("optimistic mutation state rolls back after validation and expected failure
   page,
 }) => {
   await page.goto("/mutation-forms?refreshKey=playwright-rollback");
+  await expect(page.getByTestId("hydrated-marker")).toHaveText("Hydrated.");
   const authoritativeVersion = page.getByLabel("Server version");
   const optimisticVersion = page.getByLabel("Optimistic version");
   const initialVersion = Number(await authoritativeVersion.textContent());

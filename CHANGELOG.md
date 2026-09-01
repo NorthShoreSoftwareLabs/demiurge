@@ -20,8 +20,9 @@ status live in GitHub issues and milestones.
   `critical` option. The generated server entry validates the environment while
   the module graph loads. A critical variable that is absent or invalid stops
   the start before the process accepts traffic. A required variable that is not
-  critical gives a startup warning. A variable that `env.secret(...)` declares
-  cannot set the `client` option (#375).
+  critical gives a startup warning. Every variable stays on the server. The
+  `client` option is not available until #376 adds the build-time boundary,
+  and a declaration that sets it fails (#375).
 - `demiurge dev` starts the development server. `demiurge build` writes the
   client bundle, the declared application server bundle, and the static output
   from one configuration file (#373).

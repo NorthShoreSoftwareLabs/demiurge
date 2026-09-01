@@ -28,6 +28,8 @@ export type EnvVariableKind =
 // description into the generated server entry, so the schema of the
 // configuration file reaches the production process without the file.
 export type EnvVariableDescriptor = {
+  // The build does not put an environment variable in the browser bundle yet.
+  // This field is always false until issue #376 adds the build-time boundary.
   client: boolean;
   critical: boolean;
   kind: EnvVariableKind;
@@ -56,9 +58,6 @@ export type InferEnvSchema<Schema extends EnvSchema> = {
 };
 
 type SharedEnvVariableOptions = {
-  // A client variable reaches the browser bundle. A secret variable can never
-  // set this option.
-  client?: boolean;
   // A critical variable stops the server start when it is absent or invalid.
   critical?: boolean;
 };
@@ -291,12 +290,15 @@ function createVariable<T>(
   // TYPE-EVIDENCE: each builder passes its own declared options and its own extra values. The cast reads the shared options and keeps the rest as the serializable description.
   const merged = { ...options, ...extra } as
     & Record<string, unknown>
-    & EnvVariableOptions;
+    & EnvVariableOptions
+    & { client?: boolean };
   const { client = false, critical = false, optional = false, ...rest } = merged;
 
-  if (sensitive && client) {
+  if (client) {
     throw new Error(
-      "A secret environment variable cannot reach client code. Declare a separate variable for the browser.",
+      sensitive
+        ? "A secret environment variable cannot reach client code. Declare a separate variable for the browser."
+        : "The client option is not available yet. Demiurge cannot put an environment variable in the browser bundle until the build enforces the boundary. Follow issue #376.",
     );
   }
 

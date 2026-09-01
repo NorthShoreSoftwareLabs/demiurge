@@ -128,9 +128,11 @@ Each variable has a `critical` option. The default value is `false`.
   that names the variable. A request that needs the value fails at the request
   path that reads it.
 
-A variable that `env.secret(...)` declares is sensitive. A sensitive variable
-cannot reach client code, and it cannot set the `client` option. Declare a
-separate, non-secret variable for a value that the browser needs.
+A variable that `env.secret(...)` declares is sensitive. Demiurge keeps every
+environment variable on the server. The build does not put a variable in the
+browser bundle, and the `client` option is not available yet. A declaration
+that sets it fails. Issue #376 adds the build-time boundary that this option
+needs. Until then, pass a value that the browser needs through route data.
 
 The schema declares what a variable is. Where the value comes from is a
 separate concern. Demiurge reads the process environment.
