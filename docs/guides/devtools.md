@@ -61,13 +61,14 @@ export contain no panel and no audit code.
 Two more conditions remove the panel:
 
 - The environment variable `NODE_ENV` has the value `production`.
-- The plugin option `devtools` has the value `false`.
+- The configuration option `devtools` has the value `false`.
 
 ```ts
-import { demiurge } from "@demiurgejs/core/vite";
+// demiurge.config.ts
+import { defineConfig } from "@demiurgejs/core/config";
 
 export default defineConfig({
-  plugins: [demiurge({ devtools: false })],
+  devtools: false,
 });
 ```
 

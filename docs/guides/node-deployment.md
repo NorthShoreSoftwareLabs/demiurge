@@ -27,10 +27,25 @@ build has something to compile:
 export { createHandler, routes } from "virtual:demiurge/server-entry";
 ```
 
+Declare the entry in `demiurge.config.ts`. `demiurge build` then writes the
+client bundle and the server bundle:
+
+```ts
+// demiurge.config.ts
+import { defineConfig } from "@demiurgejs/core/config";
+
+export default defineConfig({
+  deployment: {
+    outDir: "dist/client",
+    server: { entry: "src/server-entry.ts", outDir: "dist/server" },
+  },
+});
+```
+
 ```json
 {
   "scripts": {
-    "build": "vite build --outDir dist/client && vite build --ssr src/server-entry.ts --outDir dist/server",
+    "build": "demiurge build",
     "start": "node server.js"
   }
 }

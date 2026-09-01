@@ -8,6 +8,7 @@ that exists in the current source tree. Planned work and delivery status live in
 ## Start here
 
 - [Getting started](./getting-started.md)
+- [Configuration](./guides/configuration.md)
 - [Route reference](./reference/routes.md)
 - [Security guide](./guides/security.md)
 - [Route audit panel](./guides/devtools.md)

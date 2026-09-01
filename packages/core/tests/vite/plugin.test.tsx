@@ -41,7 +41,7 @@ import {
 import { unstable_createRouteManifest } from "@demiurgejs/core/internal/testing";
 import { vercelStatic } from "@demiurgejs/core/static";
 import {
-  demiurge,
+  unstable_demiurge as demiurge,
   unstable_assertRootNotFoundRoute,
   unstable_declaresPageRoute,
   unstable_createClientEntrySource,

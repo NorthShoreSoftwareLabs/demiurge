@@ -148,7 +148,11 @@ describe("environment validation", () => {
   it("falls back to a generic invalid message when a custom parser throws a non-Error value", () => {
     const schema: EnvSchema = {
       CUSTOM: {
+        client: false,
+        critical: false,
+        kind: "string",
         optional: false,
+        options: {},
         parse: () => {
           // Intentionally throw a non-Error value to exercise the fallback
           // branch in validateEnv's catch handler.

@@ -40,15 +40,16 @@ pnpm add -D vite @vitejs/plugin-react typescript @types/react @types/react-dom
 ```
 
 ```ts
-// vite.config.ts
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
-import { demiurge } from "@demiurgejs/core/vite";
+// demiurge.config.ts
+import { defineConfig } from "@demiurgejs/core/config";
 
 export default defineConfig({
-  plugins: [demiurge({ typedRoutes: true }), react()],
+  routing: { typedRoutes: true },
 });
 ```
+
+Every application has this file at its root. Demiurge generates the Vite
+configuration from it. Applications do not write a Vite configuration file.
 
 ```tsx
 // src/routes/index.tsx

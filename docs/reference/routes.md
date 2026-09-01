@@ -423,10 +423,11 @@ static modes.
 
 ## Typed URLs
 
-Enable `typedRoutes` in the Vite plugin to generate the route manifest types:
+Enable `typedRoutes` in `demiurge.config.ts` to generate the route manifest
+types:
 
 ```ts
-demiurge({ typedRoutes: true })
+defineConfig({ routing: { typedRoutes: true } })
 ```
 
 `href(...)`, `redirect(...)`, and `<Link />` then reject unknown route patterns

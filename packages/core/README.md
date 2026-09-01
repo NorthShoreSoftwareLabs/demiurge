@@ -8,7 +8,7 @@ Node process. Adapter boundaries support other deployment configurations.
 
 - Node.js 22.13 or newer
 - React and React DOM 19
-- Vite 6 when using the `@demiurgejs/core/vite` build integration
+- Vite 6 and `@vitejs/plugin-react` when the application uses the framework build
 
 ## Install
 
@@ -36,20 +36,20 @@ export default function NotFound({ pathname }: { pathname: string }) {
 }
 ```
 
-Add the framework to Vite:
+Configure the application:
 
 ```ts
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
-import { demiurge } from "@demiurgejs/core/vite";
+// demiurge.config.ts
+import { defineConfig } from "@demiurgejs/core/config";
 
 export default defineConfig({
-  plugins: [demiurge({ typedRoutes: true }), react()],
+  routing: { typedRoutes: true },
 });
 ```
 
-Run `vite` for development or `vite build` for a browser build. There is no
-`index.html` to write: the framework renders the document and attaches CSP
+Run `demiurge dev` for development or `demiurge build` for production output.
+Demiurge generates the Vite configuration from `demiurge.config.ts`. There is
+no `index.html` to write: the framework renders the document and attaches CSP
 nonces to what it emits.
 
 Run `demiurge build` for static production output. Run `demiurge preview` to
@@ -67,14 +67,15 @@ covers host allowlists, proxy trust, timeouts, and graceful shutdown.
 - `@demiurgejs/core/node` — production Node HTTP, SSR, and static-file adapter
 - `@demiurgejs/core/static` — static-output adapter
 - `@demiurgejs/core/redis` — Redis-backed cache store with cross-instance tag invalidation
-- `@demiurgejs/core/vite` — Vite framework plugin
+- `@demiurgejs/core/config` — the application configuration contract
+- `@demiurgejs/core/vite` — framework build internals
 - `@demiurgejs/core/adapter/testing` — adapter capability conformance contract
 - `@demiurgejs/core/deployment/testing` — deployment conformance kit for provider translation and production artifacts
 - `@demiurgejs/core/data/testing` — cache-store conformance contract
 - `@demiurgejs/core/internal/testing` — explicitly unstable test helpers
 
-The Vite entry point is optional. Core, Node, and static consumers do not need
-to install Vite unless their own build imports `@demiurgejs/core/vite`.
+Vite is an optional peer dependency with `@vitejs/plugin-react`. A consumer
+that only runs the built output does not install them.
 
 ## Support and license
 

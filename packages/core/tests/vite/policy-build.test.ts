@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "vite";
 import { describe, expect, it } from "vitest";
-import { demiurge } from "@demiurgejs/core/vite";
+import { unstable_demiurge as demiurge } from "@demiurgejs/core/vite";
 
 async function buildPolicyRoute(source: string) {
   const root = await mkdtemp(join(tmpdir(), "demiurge-policy-build-"));

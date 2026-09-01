@@ -9,6 +9,9 @@ export default defineConfig({
       "@demiurgejs/core/internal/testing": fileURLToPath(
         new URL("./src/internal/testing.ts", import.meta.url),
       ),
+      "@demiurgejs/core/config": fileURLToPath(
+        new URL("./src/config/index.ts", import.meta.url),
+      ),
       "@demiurgejs/core/edge": fileURLToPath(
         new URL("./src/edge/index.ts", import.meta.url),
       ),

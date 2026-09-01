@@ -4,24 +4,65 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { InlineConfig } from "vite";
 import {
-  buildStaticSite,
   parseCliArguments,
   parseClientManifest,
   resolvePreviewOutputDirectory,
+  runBuild,
   validateBuildOutputDirectory,
 } from "../src/cli";
+import type { ResolvedDemiurgeConfig } from "../src/config/types";
+
+function resolvedConfig(
+  config: Partial<ResolvedDemiurgeConfig> = {},
+): ResolvedDemiurgeConfig {
+  return {
+    configFile: "/application/app/demiurge.config.ts",
+    root: "/application/app",
+    ...config,
+  };
+}
+
+function buildRuntime() {
+  const build = vi.fn(async (_config: InlineConfig) => undefined);
+  const generate = vi.fn(async () => ({
+    adapter: "static" as const,
+    entries: [],
+    fileHeaderRules: [],
+    version: 1 as const,
+  }));
+  const importModule = vi.fn(async () => ({
+    routes: { "./routes/index.tsx": async () => ({}) },
+  }));
+  return {
+    build,
+    createViteConfig: vi.fn(async (overrides: InlineConfig) => overrides),
+    generate,
+    importModule,
+    now: () => 42,
+    readText: async () =>
+      JSON.stringify({
+        clientEntry: "/assets/app.js",
+        styles: ["/assets/app.css"],
+      }),
+  };
+}
 
 describe("Demiurge CLI arguments", () => {
-  it("uses static build defaults and the configured site origin", () => {
+  it("uses build defaults and the configured site origin", () => {
     expect(parseCliArguments(["build"], {
       SITE_ORIGIN: "https://example.test",
     })).toEqual({
       command: "build",
       host: "localhost",
       origin: "https://example.test",
-      outDir: "dist",
+      outDir: undefined,
       port: 4173,
     });
+  });
+
+  it("gives the development server its own default port", () => {
+    expect(parseCliArguments(["dev"]).port).toBe(5173);
+    expect(parseCliArguments(["dev", "--port=3000"]).port).toBe(3000);
   });
 
   it("parses preview values in both supported option forms", () => {
@@ -45,34 +86,79 @@ describe("Demiurge CLI arguments", () => {
     expect(() => parseCliArguments(["build", "--root", "app"]))
       .toThrow(/Unknown option/);
     expect(() => parseCliArguments(["preview", "--port", "70000"]))
-      .toThrow(/Preview port/);
+      .toThrow(/server port/);
     expect(() => parseCliArguments(["preview", "--host"]))
       .toThrow(/requires a value/);
   });
 
-  it("returns help without a command", () => {
+  it("returns help without a command and after a command", () => {
     expect(parseCliArguments([]).command).toBe("help");
     expect(parseCliArguments(["--help"]).command).toBe("help");
+    expect(parseCliArguments(["dev", "--help"]).command).toBe("help");
+    expect(parseCliArguments(["build", "-h"]).command).toBe("help");
   });
 
-  it("resolves preview output from the configured Vite root", async () => {
-    await expect(resolvePreviewOutputDirectory("dist", async () => ({
-      root: "/application/app",
-    }))).resolves.toBe("/application/app/dist");
+  it("resolves preview output from the project root", () => {
+    expect(resolvePreviewOutputDirectory("/application/app", "output"))
+      .toBe("/application/app/output");
+    expect(
+      resolvePreviewOutputDirectory("/application/app", undefined, "public-site"),
+    ).toBe("/application/app/public-site");
+    expect(resolvePreviewOutputDirectory("/application/app", undefined))
+      .toBe("/application/app/dist");
+  });
+});
+
+describe("Demiurge build", () => {
+  it("builds only the client bundle without a deployment target", async () => {
+    const runtime = buildRuntime();
+    const result = await runBuild(
+      parseCliArguments(["build"]),
+      resolvedConfig(),
+      runtime,
+    );
+
+    expect(runtime.build).toHaveBeenCalledTimes(1);
+    expect(runtime.build.mock.calls[0]![0]).toMatchObject({
+      define: { "process.env.NODE_ENV": '"production"' },
+      mode: "production",
+    });
+    expect(runtime.build.mock.calls[0]![0].build?.rollupOptions).toEqual({
+      input: "virtual:demiurge/client-entry",
+    });
+    expect(result).toEqual({
+      outDir: "/application/app/dist",
+      serverOutDir: undefined,
+    });
   });
 
-  it("runs the client, server, and static build sequence", async () => {
-    const build = vi.fn(async (_config: InlineConfig) => undefined);
-    const generate = vi.fn(async () => ({
-      adapter: "static" as const,
-      entries: [],
-      fileHeaderRules: [],
-      version: 1 as const,
-    }));
-    const importModule = vi.fn(async () => ({
-      routes: { "./routes/index.tsx": async () => ({}) },
-    }));
-    const result = await buildStaticSite(
+  it("builds the application server entry that the configuration declares", async () => {
+    const runtime = buildRuntime();
+    const result = await runBuild(
+      parseCliArguments(["build"]),
+      resolvedConfig({
+        deployment: {
+          outDir: "dist/client",
+          server: { entry: "src/server-entry.ts" },
+        },
+      }),
+      runtime,
+    );
+
+    expect(runtime.build).toHaveBeenCalledTimes(2);
+    expect(runtime.build.mock.calls[1]![0].build).toMatchObject({
+      copyPublicDir: false,
+      outDir: "/application/app/dist/server",
+      rollupOptions: { input: "/application/app/src/server-entry.ts" },
+      ssr: true,
+    });
+    expect(result.outDir).toBe("/application/app/dist/client");
+    expect(result.serverOutDir).toBe("/application/app/dist/server");
+  });
+
+  it("runs the framework server build and the static generation", async () => {
+    const runtime = buildRuntime();
+    const result = await runBuild(
       parseCliArguments([
         "build",
         "--out-dir",
@@ -80,31 +166,12 @@ describe("Demiurge CLI arguments", () => {
         "--origin",
         "https://example.test",
       ]),
-      {
-        build,
-        generate,
-        importModule,
-        now: () => 42,
-        readText: async () => JSON.stringify({
-          clientEntry: "/assets/app.js",
-          styles: ["/assets/app.css"],
-        }),
-        resolveConfig: async () => ({
-          publicDir: "/application/app/public",
-          root: "/application/app",
-        }),
-      },
+      resolvedConfig({ deployment: { static: { origin: "https://config.test" } } }),
+      runtime,
     );
 
-    expect(build).toHaveBeenCalledTimes(2);
-    expect(build.mock.calls[0]![0]).toMatchObject({
-      define: { "process.env.NODE_ENV": '"production"' },
-      mode: "production",
-    });
-    expect(build.mock.calls[0]![0].build?.rollupOptions).toEqual({
-      input: "virtual:demiurge/client-entry",
-    });
-    expect(build.mock.calls[1]![0].build).toMatchObject({
+    expect(runtime.build).toHaveBeenCalledTimes(2);
+    expect(runtime.build.mock.calls[1]![0].build).toMatchObject({
       copyPublicDir: false,
       outDir: "/application/app/.demiurge/server",
       rollupOptions: {
@@ -113,15 +180,10 @@ describe("Demiurge CLI arguments", () => {
       },
       ssr: true,
     });
-    expect(build.mock.calls[1]![0]).toMatchObject({
-      define: { "process.env.NODE_ENV": '"production"' },
-      mode: "production",
-    });
-    expect(build.mock.calls[0]![0].root).toBeUndefined();
-    expect(importModule).toHaveBeenCalledWith(
+    expect(runtime.importModule).toHaveBeenCalledWith(
       "file:///application/app/.demiurge/server/server-entry.js?build=42",
     );
-    expect(generate).toHaveBeenCalledWith({
+    expect(runtime.generate).toHaveBeenCalledWith({
       fonts: undefined,
       images: undefined,
       origin: "https://example.test",
@@ -135,6 +197,20 @@ describe("Demiurge CLI arguments", () => {
       staticFileHeaders: [],
     });
     expect(result.outDir).toBe("/application/app/output");
+    expect(result.manifest).toBeDefined();
+  });
+
+  it("uses the configured origin when the command does not give one", async () => {
+    const runtime = buildRuntime();
+    await runBuild(
+      parseCliArguments(["build"]),
+      resolvedConfig({ deployment: { static: { origin: "https://config.test" } } }),
+      runtime,
+    );
+
+    expect(runtime.generate).toHaveBeenCalledWith(
+      expect.objectContaining({ origin: "https://config.test" }),
+    );
   });
 
   it("rejects invalid client and server build manifests", async () => {
@@ -142,22 +218,12 @@ describe("Demiurge CLI arguments", () => {
     expect(() => parseClientManifest(JSON.stringify({ styles: [] })))
       .toThrow(/unsupported format/);
 
-    await expect(buildStaticSite(parseCliArguments(["build"]), {
-      build: async () => undefined,
-      generate: async () => ({
-        adapter: "static",
-        entries: [],
-        fileHeaderRules: [],
-        version: 1,
-      }),
-      importModule: async () => ({ routes: [] }),
-      now: () => 0,
-      readText: async () => JSON.stringify({ clientEntry: "/app.js", styles: [] }),
-      resolveConfig: async () => ({
-        publicDir: "/application/public",
-        root: "/application",
-      }),
-    })).rejects.toThrow(/does not export routes/);
+    const runtime = buildRuntime();
+    await expect(runBuild(
+      parseCliArguments(["build"]),
+      resolvedConfig({ deployment: { static: {} } }),
+      { ...runtime, importModule: async () => ({ routes: [] }) },
+    )).rejects.toThrow(/does not export routes/);
   });
 
   it("rejects output paths that can remove application files", async () => {

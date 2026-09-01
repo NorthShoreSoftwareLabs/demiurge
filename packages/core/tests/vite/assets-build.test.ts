@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "vite";
 import { expect, test } from "vitest";
-import { demiurge } from "@demiurgejs/core/vite";
+import { unstable_demiurge as demiurge } from "@demiurgejs/core/vite";
 
 test("the default build emits small fonts as files", async () => {
   const root = await mkdtemp(join(tmpdir(), "demiurge-assets-build-"));

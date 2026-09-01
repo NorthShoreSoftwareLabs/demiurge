@@ -68,7 +68,7 @@ export default function NotFound({ pathname }: NotFoundProps) {
 
 ### The build refuses a page app with no root @not-found.tsx
 
-The framework ships a working 404 so nothing is ever blank, and `vite build`
+The framework ships a working 404 so nothing is ever blank, and `demiurge build`
 fails until the app has decided on its own. A generic framework page in front
 of real users is a failure of the framework, not of the app that never got
 around to it.

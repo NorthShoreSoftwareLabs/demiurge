@@ -4,11 +4,13 @@
 
 import { resolve } from "node:path";
 import {
-  buildStaticSite,
   helpText,
   parseCliArguments,
   resolvePreviewOutputDirectory,
+  runBuild,
+  runDev,
 } from "../dist/cli.js";
+import { loadDemiurgeConfig } from "../dist/config/index.js";
 import {
   createStaticPreviewServer,
 } from "../dist/static/index.js";
@@ -21,24 +23,40 @@ async function main() {
     return;
   }
 
+  const config = await loadDemiurgeConfig();
+
+  if (options.command === "dev") {
+    const server = await runDev(options, config);
+    server.printUrls();
+    return;
+  }
+
   if (options.command === "build") {
-    const { deploymentOutDir, manifest, outDir } = await buildStaticSite(options);
-    console.log(
-      `Demiurge generated ${manifest.entries.length} static artifacts in ${outDir}.`,
-    );
-    if (deploymentOutDir) {
-      console.log(`Demiurge generated provider output in ${deploymentOutDir}.`);
+    const result = await runBuild(options, config);
+    console.log(`Demiurge generated client output in ${result.outDir}.`);
+    if (result.serverOutDir) {
+      console.log(`Demiurge generated server output in ${result.serverOutDir}.`);
+    }
+    if (result.manifest) {
+      console.log(
+        `Demiurge generated ${result.manifest.entries.length} static artifacts in ${result.outDir}.`,
+      );
+    }
+    if (result.deploymentOutDir) {
+      console.log(`Demiurge generated provider output in ${result.deploymentOutDir}.`);
     }
     return;
   }
 
-  const server = await createStaticPreviewServer({
-    ...options,
-    outDir: await resolvePreviewOutputDirectory(options.outDir),
-  });
+  const outDir = resolvePreviewOutputDirectory(
+    config.root,
+    options.outDir,
+    config.deployment?.outDir,
+  );
+  const server = await createStaticPreviewServer({ ...options, outDir });
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : options.port;
-  console.log(`Demiurge serves ${resolve(options.outDir)} at http://${options.host}:${port}.`);
+  console.log(`Demiurge serves ${resolve(outDir)} at http://${options.host}:${port}.`);
 
   const close = () => server.close();
   process.once("SIGINT", close);

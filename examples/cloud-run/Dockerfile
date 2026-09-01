@@ -20,7 +20,7 @@ COPY examples/cloud-run examples/cloud-run
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @demiurgejs/core build
-# `vite build` generates this example's typed route manifest itself
+# `demiurge build` generates this example's typed route manifest itself
 # (see the plugin's `buildStart` hook), so no separate route-generation
 # step runs here.
 RUN pnpm --filter @demiurge-examples/cloud-run build

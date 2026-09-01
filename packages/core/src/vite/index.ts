@@ -1,4 +1,3 @@
-export { demiurge } from "./plugin";
 export {
   assertRootNotFoundRoute as unstable_assertRootNotFoundRoute,
   declaresPageRoute as unstable_declaresPageRoute,
@@ -22,9 +21,12 @@ export {
   renderRouteAuditDocument as unstable_renderRouteAuditDocument,
   ROUTE_AUDIT_PATH as unstable_ROUTE_AUDIT_PATH,
 } from "./route-audit";
+export {
+  demiurge as unstable_demiurge,
+} from "./plugin";
 export type {
-  DemiurgeVitePluginApi,
-  DemiurgeVitePluginOptions,
+  DemiurgeVitePluginApi as unstable_DemiurgeVitePluginApi,
+  DemiurgeVitePluginOptions as unstable_DemiurgeVitePluginOptions,
 } from "./plugin";
 export type {
   RouteAudit,

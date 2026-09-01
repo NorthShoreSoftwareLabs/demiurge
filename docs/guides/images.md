@@ -32,16 +32,17 @@ export const images = defineImages({
 });
 ```
 
-Pass the same policy to the Vite plugin. The development server then serves
-the image URLs that the application renders:
+Pass the same policy to the configuration file. The development server then
+serves the image URLs that the application renders:
 
 ```ts
-import { defineConfig } from "vite";
-import { demiurge } from "@demiurgejs/core/vite";
+// demiurge.config.ts
+import { defineConfig } from "@demiurgejs/core/config";
 import { images } from "./src/images";
 
 export default defineConfig({
-  plugins: [demiurge({ images, typedRoutes: true })],
+  assets: { images },
+  routing: { typedRoutes: true },
 });
 ```
 

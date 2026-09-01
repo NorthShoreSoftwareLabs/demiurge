@@ -17,7 +17,7 @@ requirement that contract defines.
 ## Container shape
 
 The image builds in two stages. A builder stage installs workspace
-dependencies and runs the same `vite build` commands the Node deployment guide
+dependencies and runs the same `demiurge build` command the Node deployment guide
 describes, producing `dist/client`, `dist/server`, and a pruned
 `node_modules`. A runtime stage copies only that output into a slim base
 image and starts `node server.js`. The build stage never ships. Cloud Run

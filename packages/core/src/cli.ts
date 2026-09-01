@@ -1,17 +1,16 @@
 import { readFile, readdir } from "node:fs/promises";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { InlineConfig } from "vite";
+import { createDemiurgeViteConfig } from "./config/vite";
+import type { ResolvedDemiurgeConfig } from "./config/types";
 import { parseClientManifest } from "./manifest";
-import type { FontContribution, ImagePolicy } from "./platform";
 import type { RouteImporter } from "./route";
 import {
   generateVercelStaticOutput,
   generateStaticOutput,
   type GenerateStaticOutputOptions,
-  type StaticFileHeaderPatternRule,
   type StaticOutputManifest,
-  type VercelStaticDeployment,
 } from "./static";
 
 export { parseClientManifest } from "./manifest";
@@ -21,30 +20,36 @@ type CliEnvironment = Record<string, string | undefined>;
 
 const cliOptionNames = new Set(["--host", "--origin", "--out-dir", "--port"]);
 
+const CLIENT_ENTRY = "virtual:demiurge/client-entry";
+const SERVER_ENTRY = "virtual:demiurge/server-entry";
+const DEFAULT_CLIENT_OUT_DIR = "dist";
+const DEFAULT_SERVER_OUT_DIR = "dist/server";
+const FRAMEWORK_SERVER_OUT_DIR = ".demiurge/server";
+
 export type CliOptions = {
-  command: "build" | "help" | "preview";
+  command: "build" | "dev" | "help" | "preview";
   host: string;
   origin?: string;
-  outDir: string;
+  outDir?: string;
   port: number;
 };
 
-type StaticBuildRuntime = {
+export type BuildRuntime = {
   build: (config: InlineConfig) => Promise<unknown>;
+  createViteConfig: (overrides: InlineConfig) => Promise<InlineConfig>;
   generate: (
     options: GenerateStaticOutputOptions,
   ) => Promise<StaticOutputManifest>;
   importModule: (specifier: string) => Promise<Record<string, unknown>>;
   now: () => number;
   readText: (file: string) => Promise<string>;
-  resolveConfig: () => Promise<{
-    plugins?: Array<{
-      api?: unknown;
-      name: string;
-    }>;
-    publicDir: false | string;
-    root: string;
-  }>;
+};
+
+export type BuildResult = {
+  deploymentOutDir?: string;
+  manifest?: StaticOutputManifest;
+  outDir: string;
+  serverOutDir?: string;
 };
 
 export function parseCliArguments(
@@ -56,11 +61,10 @@ export function parseCliArguments(
     return {
       command: "help",
       host: "localhost",
-      outDir: "dist",
       port: 4173,
     };
   }
-  if (command !== "build" && command !== "preview") {
+  if (command !== "build" && command !== "dev" && command !== "preview") {
     throw new Error(`Unknown command: ${command}`);
   }
 
@@ -68,12 +72,14 @@ export function parseCliArguments(
     command,
     host: "localhost",
     origin: environment.SITE_ORIGIN,
-    outDir: "dist",
-    port: 4173,
+    port: command === "dev" ? 5173 : 4173,
   };
 
   for (let index = 1; index < arguments_.length; index += 1) {
     const argument = arguments_[index]!;
+    if (argument === "--help" || argument === "-h") {
+      return { command: "help", host: "localhost", port: 4173 };
+    }
     const [name, inlineValue] = argument.split("=", 2);
     if (!cliOptionNames.has(name!)) {
       throw new Error(`Unknown option: ${argument}`);
@@ -89,7 +95,7 @@ export function parseCliArguments(
     if (name === "--port") {
       const port = Number(value);
       if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) {
-        throw new Error("Preview port must be an integer from 0 through 65535.");
+        throw new Error("The server port must be an integer from 0 through 65535.");
       }
       options.port = port;
     }
@@ -101,59 +107,144 @@ export function parseCliArguments(
 export const helpText = `Usage: demiurge <command> [options]
 
 Commands:
-  build                 Build static production output
+  dev                   Start the development server
+  build                 Build production output
   preview               Serve static output with its declared headers
 
 Options:
-  --host <host>         Set the preview host (default: localhost)
+  --host <host>         Set the server host (default: localhost)
   --origin <origin>     Set the build origin (default: SITE_ORIGIN)
-  --out-dir <directory> Set the output directory (default: dist)
-  --port <port>         Set the preview port (default: 4173)
-  -h, --help            Show this help`;
+  --out-dir <directory> Set the client output directory (default: dist)
+  --port <port>         Set the server port (dev: 5173, preview: 4173)
+  -h, --help            Show this help
 
-export async function buildStaticSite(
+Demiurge reads demiurge.config.ts from the project root.`;
+
+export async function runDev(
   options: CliOptions,
-  runtime?: StaticBuildRuntime,
+  config: ResolvedDemiurgeConfig,
 ) {
-  const vite = runtime ? undefined : await import("vite");
-  const config = runtime
-    ? await runtime.resolveConfig()
-    : await vite!.resolveConfig({}, "build", "production", "production");
+  const { createServer } = await import("vite");
+  const server = await createServer(
+    await createDemiurgeViteConfig({
+      config,
+      overrides: {
+        mode: "development",
+        server: { host: options.host, port: options.port },
+      },
+    }),
+  );
+  await server.listen();
+  return server;
+}
+
+export async function runBuild(
+  options: CliOptions,
+  config: ResolvedDemiurgeConfig,
+  runtime?: BuildRuntime,
+): Promise<BuildResult> {
   const root = config.root;
-  const outDir = resolve(root, options.outDir);
-  const serverOutDir = resolve(root, ".demiurge/server");
-  const build = runtime?.build ?? vite!.build;
+  const build = runtime?.build ?? (await import("vite")).build;
+  const createViteConfig = runtime?.createViteConfig ??
+    ((overrides: InlineConfig) => createDemiurgeViteConfig({ config, overrides }));
+
+  const outDir = resolve(
+    root,
+    options.outDir ?? config.deployment?.outDir ?? DEFAULT_CLIENT_OUT_DIR,
+  );
+  const frameworkServerOutDir = resolve(root, FRAMEWORK_SERVER_OUT_DIR);
 
   await validateBuildOutputDirectory(
     root,
     outDir,
-    config.publicDir,
-    serverOutDir,
+    join(root, "public"),
+    frameworkServerOutDir,
   );
 
-  await build({
-    define: { "process.env.NODE_ENV": JSON.stringify("production") },
-    mode: "production",
-    build: {
-      emptyOutDir: true,
-      outDir,
-      rollupOptions: { input: "virtual:demiurge/client-entry" },
-    },
-  });
-  await build({
-    define: { "process.env.NODE_ENV": JSON.stringify("production") },
-    mode: "production",
-    build: {
-      copyPublicDir: false,
-      emptyOutDir: true,
-      outDir: serverOutDir,
-      rollupOptions: {
-        input: "virtual:demiurge/server-entry",
-        output: { entryFileNames: "server-entry.js" },
+  await build(
+    await createViteConfig({
+      define: { "process.env.NODE_ENV": JSON.stringify("production") },
+      mode: "production",
+      build: {
+        emptyOutDir: true,
+        outDir,
+        rollupOptions: { input: CLIENT_ENTRY },
       },
-      ssr: true,
-    },
+    }),
+  );
+
+  const applicationServer = config.deployment?.server;
+  const serverOutDir = applicationServer
+    ? resolve(root, applicationServer.outDir ?? DEFAULT_SERVER_OUT_DIR)
+    : undefined;
+
+  if (applicationServer && serverOutDir) {
+    await build(
+      await createViteConfig({
+        define: { "process.env.NODE_ENV": JSON.stringify("production") },
+        mode: "production",
+        build: {
+          copyPublicDir: false,
+          emptyOutDir: true,
+          outDir: serverOutDir,
+          rollupOptions: { input: resolve(root, applicationServer.entry) },
+          ssr: true,
+        },
+      }),
+    );
+  }
+
+  if (!config.deployment?.static) return { outDir, serverOutDir };
+
+  const staticResult = await buildStaticOutput({
+    build,
+    config,
+    createViteConfig,
+    frameworkServerOutDir,
+    options,
+    outDir,
+    root,
+    runtime,
   });
+
+  return { ...staticResult, outDir, serverOutDir };
+}
+
+async function buildStaticOutput({
+  build,
+  config,
+  createViteConfig,
+  frameworkServerOutDir,
+  options,
+  outDir,
+  root,
+  runtime,
+}: {
+  build: (config: InlineConfig) => Promise<unknown>;
+  config: ResolvedDemiurgeConfig;
+  createViteConfig: (overrides: InlineConfig) => Promise<InlineConfig>;
+  frameworkServerOutDir: string;
+  options: CliOptions;
+  outDir: string;
+  root: string;
+  runtime?: BuildRuntime;
+}) {
+  await build(
+    await createViteConfig({
+      define: { "process.env.NODE_ENV": JSON.stringify("production") },
+      mode: "production",
+      build: {
+        copyPublicDir: false,
+        emptyOutDir: true,
+        outDir: frameworkServerOutDir,
+        rollupOptions: {
+          input: SERVER_ENTRY,
+          output: { entryFileNames: "server-entry.js" },
+        },
+        ssr: true,
+      },
+    }),
+  );
 
   const clientManifest = parseClientManifest(
     runtime
@@ -161,7 +252,7 @@ export async function buildStaticSite(
       : await readFile(resolve(outDir, "demiurge-manifest.json"), "utf8"),
   );
   const serverEntryUrl = `${
-    pathToFileURL(resolve(serverOutDir, "server-entry.js")).href
+    pathToFileURL(resolve(frameworkServerOutDir, "server-entry.js")).href
   }?build=${runtime?.now() ?? Date.now()}`;
   const serverEntry = runtime
     ? await runtime.importModule(serverEntryUrl)
@@ -171,37 +262,35 @@ export async function buildStaticSite(
   }
 
   const manifest = await (runtime?.generate ?? generateStaticOutput)({
-    fonts: findFontContribution(config.plugins),
-    images: findImagePolicy(config.plugins),
-    origin: options.origin,
+    fonts: config.assets?.fonts,
+    images: config.assets?.images,
+    origin: options.origin ?? config.deployment?.static?.origin,
     outDir,
     root,
     routes: serverEntry.routes,
     ssr: clientManifest,
-    staticFileHeaders: findStaticFileHeaderPatterns(config.plugins),
+    staticFileHeaders: config.security?.staticFileHeaders ?? [],
   });
 
-  const deployment = findVercelStaticDeployment(config.plugins);
-  const deploymentOutDir = deployment
+  const provider = config.deployment?.static?.provider;
+  const deploymentOutDir = provider
     ? await generateVercelStaticOutput({
-      deployment,
+      deployment: provider,
       manifest,
       outDir,
-      projectRoot: process.cwd(),
+      projectRoot: root,
     })
     : undefined;
 
-  return { deploymentOutDir, manifest, outDir };
+  return { deploymentOutDir, manifest };
 }
 
-export async function resolvePreviewOutputDirectory(
-  outDir: string,
-  resolveConfig?: () => Promise<{ root: string }>,
+export function resolvePreviewOutputDirectory(
+  root: string,
+  outDir: string | undefined,
+  configuredOutDir?: string,
 ) {
-  const config = resolveConfig
-    ? await resolveConfig()
-    : await (await import("vite")).resolveConfig({}, "serve", "production");
-  return resolve(config.root, outDir);
+  return resolve(root, outDir ?? configuredOutDir ?? DEFAULT_CLIENT_OUT_DIR);
 }
 
 export async function validateBuildOutputDirectory(
@@ -255,53 +344,6 @@ function isRouteImporterRecord(
   }
 
   return Object.values(value).every((load) => typeof load === "function");
-}
-
-function findVercelStaticDeployment(
-  plugins: ReadonlyArray<{ api?: unknown; name: string }> | undefined,
-): VercelStaticDeployment | undefined {
-  return findDemiurgePluginApi(plugins)?.staticDeployment;
-}
-
-function findFontContribution(
-  plugins: ReadonlyArray<{ api?: unknown; name: string }> | undefined,
-): FontContribution | undefined {
-  return findDemiurgePluginApi(plugins)?.fonts;
-}
-
-function findImagePolicy(
-  plugins: ReadonlyArray<{ api?: unknown; name: string }> | undefined,
-): ImagePolicy | undefined {
-  return findDemiurgePluginApi(plugins)?.images;
-}
-
-function findStaticFileHeaderPatterns(
-  plugins: ReadonlyArray<{ api?: unknown; name: string }> | undefined,
-): readonly StaticFileHeaderPatternRule[] {
-  return findDemiurgePluginApi(plugins)?.staticFileHeaders ?? [];
-}
-
-function findDemiurgePluginApi(
-  plugins: ReadonlyArray<{ api?: unknown; name: string }> | undefined,
-) {
-  return plugins
-    ?.filter((plugin) => plugin.name === "demiurge")
-    .map((plugin) => plugin.api)
-    .find(isDemiurgePluginApi);
-}
-
-function isDemiurgePluginApi(value: unknown): value is {
-  demiurge: true;
-  fonts?: FontContribution;
-  images?: ImagePolicy;
-  staticDeployment?: VercelStaticDeployment;
-  staticFileHeaders?: readonly StaticFileHeaderPatternRule[];
-} {
-  return Boolean(value) &&
-    value !== null &&
-    typeof value === "object" &&
-    "demiurge" in value &&
-    value.demiurge === true;
 }
 
 function pathsOverlap(left: string, right: string) {
