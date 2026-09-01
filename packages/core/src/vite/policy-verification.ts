@@ -266,25 +266,31 @@ function extractSecurityPolicy(
   }
 
   const options = evaluateLiteral(asNodeArray(node.arguments)[0], constants);
-  if (options !== unresolved && options !== undefined && !isPlainObject(options)) {
+  // The options expression could not be statically evaluated (it depends on
+  // a runtime value). The `unresolved` sentinel must not pass through to a
+  // security preset because it would verify a policy that was never computed.
+  // Treat this call as unverifiable, matching `unresolved` handling in
+  // extractRoutePolicy above.
+  if (options === unresolved) return undefined;
+  if (options !== undefined && !isPlainObject(options)) {
     return undefined;
   }
 
   if (preset === "api") {
-    // TYPE-EVIDENCE: the guard above rejects non-object options values. The preset helper validates the specific option fields.
-    return security.api(options as never);
+    // TYPE-EVIDENCE: the guards above return undefined unless options is a plain object or undefined. The cast labels the record as a security policy for the preset helper.
+    return security.api(options as SecurityPolicy | undefined);
   }
   if (preset === "crossOriginIsolated") {
-    // TYPE-EVIDENCE: the guard above rejects non-object options values. The preset helper validates the specific option fields.
-    return security.crossOriginIsolated(options as never);
+    // TYPE-EVIDENCE: the guards above return undefined unless options is a plain object or undefined. The cast labels the record as a security policy for the preset helper.
+    return security.crossOriginIsolated(options as SecurityPolicy | undefined);
   }
   if (preset === "static") {
-    // TYPE-EVIDENCE: the guard above rejects non-object options values. The preset helper validates the specific option fields.
-    return security.static(options as never);
+    // TYPE-EVIDENCE: the guards above return undefined unless options is a plain object or undefined. The cast labels the record as a security policy for the preset helper.
+    return security.static(options as SecurityPolicy | undefined);
   }
   if (preset === "strict") {
-    // TYPE-EVIDENCE: the guard above rejects non-object options values. The preset helper validates the specific option fields.
-    return security.strict(options as never);
+    // TYPE-EVIDENCE: the guards above return undefined unless options is a plain object or undefined. The cast labels the record as a security policy for the preset helper.
+    return security.strict(options as SecurityPolicy | undefined);
   }
   return undefined;
 }

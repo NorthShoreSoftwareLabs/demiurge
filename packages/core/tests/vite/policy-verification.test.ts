@@ -308,6 +308,18 @@ export const policy = { document: security.${preset}() };`;
     },
   );
 
+  it("does not guess a security preset's runtime-derived options", async () => {
+    const source = `
+import { defineRoutePolicy, security } from "@demiurgejs/core";
+export const policy = defineRoutePolicy({
+  document: security.strict(buildOptions()),
+});`;
+
+    await expect(
+      unstable_verifyRoutePolicySource(source, "/app/@policy.ts"),
+    ).resolves.toEqual([]);
+  });
+
   it("ignores unrelated exports and unsupported helper calls", async () => {
     const source = `
 import { json } from "another-package";
