@@ -1313,6 +1313,20 @@ describe("localized browser navigation", () => {
     supportedLocales: ["en", "fr"],
   } as const;
 
+  // These tests share the history, the navigation status region, and the
+  // document body. Without this reset, a navigation from an earlier test
+  // changes the location of a later one before that test renders its route.
+  beforeEach(() => {
+    window.history.replaceState(null, "", "/");
+    document.body.querySelector("[data-demiurge-navigation-status]")?.remove();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it("preserves the active locale and supports an explicit switch", async () => {
     window.history.replaceState(null, "", "/fr");
     const Router = createFileRouter({
@@ -1352,7 +1366,9 @@ describe("localized browser navigation", () => {
     render(<Router />);
     await waitFor(() => expect(window.location.pathname).toBe("/fr/blog"));
     expect(window.location.hash).toBe("#section");
-    expect(screen.getByText("Blog page at /blog")).toBeTruthy();
+    // The route content renders after the history reconciliation. A
+    // synchronous query here reads the document before that render.
+    expect(await screen.findByText("Blog page at /blog")).toBeTruthy();
   });
 });
 
