@@ -15,7 +15,7 @@ describe("Demiurge configuration validation", () => {
   it("accepts a configuration that uses each boundary", () => {
     const config = validateDemiurgeConfig(
       {
-        assets: { fonts: {}, images: {} },
+        assets: { fonts: [], images: {} },
         deployment: {
           outDir: "dist/client",
           server: { entry: "src/server-entry.ts", outDir: "dist/server" },
@@ -54,6 +54,8 @@ describe("Demiurge configuration validation", () => {
       .toThrow(/an array of header rules/);
     expect(validate({ vite: { plugins: {} } }))
       .toThrow(/an array of Vite plugins/);
+    expect(validate({ assets: { fonts: {} } }))
+      .toThrow(/an array of font declarations/);
   });
 
   it("requires an application server entry when the section exists", () => {

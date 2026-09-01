@@ -28,5 +28,5 @@
     "tests/tooling",
     "tooling"
   ],
-  "exclude": ["examples/**/vite.config.ts", "examples/**/dist"]
+  "exclude": ["examples/**/dist"]
 }

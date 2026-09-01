@@ -9,8 +9,8 @@ import type {
 } from "../static";
 
 // The routes that the application publishes and the locales that select them.
-export type DemiurgeRoutingConfig = {
-  locales?: LocaleConfiguration;
+export type DemiurgeRoutingConfig<Locale extends string = string> = {
+  locales?: LocaleConfiguration<Locale>;
   routesDir?: string;
   typedRoutes?: boolean | {
     outputFile?: string;
@@ -65,7 +65,7 @@ export type DemiurgeViteExtension = {
   };
 };
 
-export type DemiurgeConfig = {
+export type DemiurgeConfig<Locale extends string = string> = {
   assets?: DemiurgeAssetsConfig;
   deployment?: DemiurgeDeploymentConfig;
   // The route audit panel of the development server. The panel is available by
@@ -73,7 +73,7 @@ export type DemiurgeConfig = {
   devtools?: boolean;
   env?: EnvSchema;
   rendering?: DemiurgeRenderingConfig;
-  routing?: DemiurgeRoutingConfig;
+  routing?: DemiurgeRoutingConfig<Locale>;
   security?: DemiurgeSecurityConfig;
   vite?: DemiurgeViteExtension;
   // This callback receives the resolved Vite configuration of the framework.

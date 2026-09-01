@@ -116,7 +116,7 @@ describe("generated Vite configuration", () => {
 
   it("maps the configuration boundaries onto the plugin options", () => {
     expect(toPluginOptions({
-      assets: { fonts: { faces: [] } as never },
+      assets: { fonts: [] as never },
       deployment: { static: { provider: { headers: [] } as never } },
       devtools: false,
       rendering: { document: { title: "Application" }, styles: false },
@@ -125,7 +125,7 @@ describe("generated Vite configuration", () => {
     })).toEqual({
       devtools: false,
       document: { title: "Application" },
-      fonts: { faces: [] },
+      fonts: [],
       routesDir: "src/pages",
       static: { deployment: { headers: [] }, headers: [] },
       styles: false,

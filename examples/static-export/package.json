@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "demiurge build --origin https://static.example.test",
-    "dev": "vite",
+    "build": "demiurge build",
+    "dev": "demiurge dev",
     "preview": "demiurge preview"
   },
   "dependencies": {

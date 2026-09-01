@@ -78,7 +78,14 @@ export function validateDemiurgeConfig(
 
   const assets = section(context, config, "assets");
   if (assets) {
-    assertOptionalObject(context, "assets.fonts", assets.fonts);
+    if (assets.fonts !== undefined && !Array.isArray(assets.fonts)) {
+      throw invalid(
+        context,
+        "assets.fonts",
+        "an array of font declarations from defineFonts()",
+        assets.fonts,
+      );
+    }
     assertOptionalObject(context, "assets.images", assets.images);
   }
 

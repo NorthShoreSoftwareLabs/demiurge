@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build --outDir dist/client && vite build --ssr src/server-entry.ts --outDir dist/server",
+    "build": "demiurge build",
     "start": "node server.js",
     "start:client": "node client-server.js"
   },

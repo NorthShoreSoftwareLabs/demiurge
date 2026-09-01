@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "demiurge dev",
+    "build": "demiurge build",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

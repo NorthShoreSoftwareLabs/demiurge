@@ -50,7 +50,7 @@ test("creates the complete page application", () => {
       "src/routes/@policy.ts",
       "src/routes/index.tsx",
       "src/styles.css",
-      "vite.config.ts",
+      "demiurge.config.ts",
     ]) {
       assert(existsSync(join(target, file)), `Missing ${file}`);
     }
@@ -60,6 +60,9 @@ test("creates the complete page application", () => {
     assert.equal(metadata.dependencies["@demiurgejs/core"], `^${coreVersion}`);
     assert(!readFileSync(join(target, "src/styles.css"), "utf8").includes("error"));
     assert(!readFileSync(join(target, "src/styles.css"), "utf8").includes("not-found"));
+    assert(!existsSync(join(target, "vite.config.ts")), "Unexpected vite.config.ts");
+    assert.equal(metadata.scripts.dev, "demiurge dev");
+    assert.equal(metadata.scripts.build, "demiurge build");
   });
 });
 
@@ -68,6 +71,7 @@ test("creates an API application without page files", () => {
     const target = create(scratch, "service", "api");
     assert(existsSync(join(target, "src/routes/@policy.ts")));
     assert(existsSync(join(target, "src/routes/api/health.ts")));
+    assert(existsSync(join(target, "demiurge.config.ts")));
     assert(!existsSync(join(target, "src/routes/@layout.tsx")));
     assert(!existsSync(join(target, "src/routes/@not-found.tsx")));
     assert(!existsSync(join(target, "src/routes/@error.tsx")));
@@ -129,6 +133,7 @@ test("the packed CLI includes and copies both templates", () => {
     });
 
     assert(existsSync(join(target, "src/routes/api/health.ts")));
+    assert(existsSync(join(target, "demiurge.config.ts")));
     assert(existsSync(join(target, "src/routes/@policy.ts")));
     assert(!existsSync(join(target, "src/routes/index.tsx")));
     assert(!existsSync(join(target, "src/routes/@not-found.tsx")));

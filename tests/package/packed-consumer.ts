@@ -206,8 +206,9 @@ try {
       `import { verifyAdapterContract } from "@demiurgejs/core/adapter/testing";`,
       `import { verifyDeploymentContract } from "@demiurgejs/core/deployment/testing";`,
       `import { unstable_createRouteManifest } from "@demiurgejs/core/internal/testing";`,
-      `import { demiurge } from "@demiurgejs/core/vite";`,
-      `for (const [name, value] of Object.entries({ createEdgeAssetHandler, createEdgeRequestHandler, createEncryptedCookieSession, createKvCacheStore, createKvSessionStore, createMemorySessionStore, createMutationAction, createNodeServer, createRedisCacheStore, createRedisSessionStore, createRequestHandler, createSessionManager, createSignedCookieSession, demiurge, generateStaticOutput, hydrateFileRouter, mutation, MutationSubmit, MutationValidationError, page, unstable_createRouteManifest, useMutationAction, verifyAdapterContract, verifyCacheStoreContract, verifyDeploymentContract, verifySessionStoreContract })) {`,
+      `import { unstable_demiurge as demiurge } from "@demiurgejs/core/vite";`,
+      `import { defineConfig } from "@demiurgejs/core/config";`,
+      `for (const [name, value] of Object.entries({ createEdgeAssetHandler, createEdgeRequestHandler, createEncryptedCookieSession, createKvCacheStore, createKvSessionStore, createMemorySessionStore, createMutationAction, createNodeServer, createRedisCacheStore, createRedisSessionStore, createRequestHandler, createSessionManager, createSignedCookieSession, defineConfig, demiurge, generateStaticOutput, hydrateFileRouter, mutation, MutationSubmit, MutationValidationError, page, unstable_createRouteManifest, useMutationAction, verifyAdapterContract, verifyCacheStoreContract, verifyDeploymentContract, verifySessionStoreContract })) {`,
       `  if (typeof value !== "function") {`,
       `    throw new Error(\`Expected \${name} to be exported as a function.\`);`,
       `  }`,
@@ -358,11 +359,34 @@ try {
     [join(installedRoot, "bin", "demiurge.mjs"), "--help"],
     scratch,
   );
-  assert(cliHelp.includes("Build static production output"), "Packed Demiurge command has no build help.");
+  assert(cliHelp.includes("Build production output"), "Packed Demiurge command has no build help.");
+  assert(
+    cliHelp.includes("Start the development server"),
+    "Packed Demiurge command has no development help.",
+  );
+  assert(
+    cliHelp.includes("demiurge.config.ts"),
+    "Packed Demiurge help does not name the configuration file.",
+  );
+
+  let missingConfigError = "";
+  try {
+    run("node", [join(installedRoot, "bin", "demiurge.mjs"), "build"], scratch);
+  } catch (error) {
+    missingConfigError = String(
+      (error as { stderr?: string }).stderr ?? (error as Error).message,
+    );
+  }
+  assert(
+    missingConfigError.includes("demiurge.config.ts") &&
+      missingConfigError.includes("npm create demiurge"),
+    "The packed command does not report an absent configuration file.",
+  );
 
   for (const file of [
     "dist/index.d.ts",
     "dist/cli.d.ts",
+    "dist/config/index.d.ts",
     "dist/adapter/testing.d.ts",
     "dist/deployment/testing.d.ts",
     "dist/data/testing.d.ts",
@@ -377,9 +401,9 @@ try {
     assert(existsSync(join(installedRoot, file)), `Packed tarball is missing ${file}.`);
   }
 
-  mkdirSync(join(scratch, "app", "src", "routes"), { recursive: true });
+  mkdirSync(join(scratch, "src", "routes"), { recursive: true });
   writeFileSync(
-    join(scratch, "app", "src", "routes", "index.tsx"),
+    join(scratch, "src", "routes", "index.tsx"),
     [
       `import { createMutationAction, defineRoutePolicy, Form, mutation, mutationInput, MutationSubmit, MutationValidationError, page, security, tag, useMutationAction, type CacheKey, type CacheTag, type MutationAction, type MutationContext, type MutationFormAction, type MutationIdempotency, type MutationInput, type MutationNavigationState, type MutationOptions, type MutationResult, type MutationRevalidation, type MutationRevalidationDeclaration, type MutationValidation, type MutationValidationIssue, type RouteProps } from "@demiurgejs/core";`,
       `import { useFormStatus } from "react-dom";`,
@@ -464,9 +488,9 @@ try {
       `}`,
     ].join("\n"),
   );
-  mkdirSync(join(scratch, "app", "src", "routes", "items"), { recursive: true });
+  mkdirSync(join(scratch, "src", "routes", "items"), { recursive: true });
   writeFileSync(
-    join(scratch, "app", "src", "routes", "items", "[id].tsx"),
+    join(scratch, "src", "routes", "items", "[id].tsx"),
     [
       `import { json, mutation, mutationInput, page, tag, type RouteProps } from "@demiurgejs/core";`,
       `const serverMutationHandlerSentinel = "DEMIURGE_PACKED_SERVER_MUTATION_HANDLER";`,
@@ -487,7 +511,7 @@ try {
     ].join("\n"),
   );
   writeFileSync(
-    join(scratch, "app", "src", "routes", "@not-found.tsx"),
+    join(scratch, "src", "routes", "@not-found.tsx"),
     [
       `export default function NotFound({ pathname }: { pathname: string }) {`,
       `  return <main>Nothing at {pathname}</main>;`,
@@ -495,15 +519,11 @@ try {
     ].join("\n"),
   );
   writeFileSync(
-    join(scratch, "vite.config.ts"),
+    join(scratch, "demiurge.config.ts"),
     [
-      `import react from "@vitejs/plugin-react";`,
-      `import { defineConfig } from "vite";`,
-      `import { vercelStatic } from "@demiurgejs/core/static";`,
-      `import { demiurge } from "@demiurgejs/core/vite";`,
+      `import { defineConfig } from "@demiurgejs/core/config";`,
       `export default defineConfig({`,
-      `  plugins: [demiurge({ static: { deployment: vercelStatic() }, typedRoutes: { outputFile: "src/route-manifest.d.ts" } }), react()],`,
-      `  root: "app",`,
+      `  routing: { typedRoutes: { outputFile: "src/route-manifest.d.ts" } },`,
       `});`,
     ].join("\n"),
   );
@@ -521,20 +541,20 @@ try {
           target: "ES2022",
           types: ["node", "vite/client"],
         },
-        include: ["app/src", "vite.config.ts"],
+        include: ["src", "demiurge.config.ts"],
       },
       null,
       2,
     ),
   );
 
-  run("pnpm", ["exec", "vite", "build"], scratch);
+  run("node", [join(installedRoot, "bin", "demiurge.mjs"), "build"], scratch);
   run("pnpm", ["exec", "tsc", "--noEmit"], scratch);
   const packedBrowserJavaScript = readdirSync(
-    join(scratch, "app", "dist", "assets"),
+    join(scratch, "dist", "assets"),
   )
     .filter((file) => file.endsWith(".js"))
-    .map((file) => readFileSync(join(scratch, "app", "dist", "assets", file), "utf8"))
+    .map((file) => readFileSync(join(scratch, "dist", "assets", file), "utf8"))
     .join("\n");
   assert(
     !packedBrowserJavaScript.includes("DEMIURGE_PACKED_SERVER_MUTATION_HANDLER"),
@@ -549,7 +569,7 @@ try {
     "The browser output contains a server mutation security declaration.",
   );
   writeFileSync(
-    join(scratch, "app", "src", "routes", "items", "[id].tsx"),
+    join(scratch, "src", "routes", "items", "[id].tsx"),
     [
       `import { page, type RouteProps } from "@demiurgejs/core";`,
       `export const paths = () => [{ id: "packed" }];`,
@@ -557,11 +577,22 @@ try {
     ].join("\n"),
   );
   writeFileSync(
-    join(scratch, "app", "src", "routes", "index.tsx"),
+    join(scratch, "src", "routes", "index.tsx"),
     [
       `import { defineRoutePolicy, page, security, type RouteProps } from "@demiurgejs/core";`,
       `export const policy = defineRoutePolicy({ document: security.static({ csp: { objectSrc: false, styleSrc: { replace: ["'unsafe-inline'"] } } }) });`,
       `export const GET = page({ render: { mode: "static" }, view: (_props: RouteProps) => <main>packed app</main> });`,
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(scratch, "demiurge.config.ts"),
+    [
+      `import { defineConfig } from "@demiurgejs/core/config";`,
+      `import { vercelStatic } from "@demiurgejs/core/static";`,
+      `export default defineConfig({`,
+      `  deployment: { static: { provider: vercelStatic() } },`,
+      `  routing: { typedRoutes: { outputFile: "src/route-manifest.d.ts" } },`,
+      `});`,
     ].join("\n"),
   );
   run(
@@ -575,9 +606,9 @@ try {
     scratch,
   );
   assert(
-    existsSync(join(scratch, "app", "dist", "index.html")) &&
+    existsSync(join(scratch, "dist", "index.html")) &&
       existsSync(
-        join(scratch, "app", "dist", "demiurge-static-manifest.json"),
+        join(scratch, "dist", "demiurge-static-manifest.json"),
       ),
     "The packed command could not build a clean external static app.",
   );
