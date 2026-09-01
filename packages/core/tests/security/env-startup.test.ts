@@ -112,3 +112,77 @@ describe("environment startup", () => {
     expect(() => env.secret({ client: true })).toThrow(/cannot reach client code/);
   });
 });
+
+describe("environment startup branches", () => {
+  it("reads the process environment and warns through the console by default", () => {
+    const schema = defineEnvSchema({ DEMIURGE_TEST_HOME: env.string() });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      const result = startEnvironment(schema);
+      expect(result.warnings).toHaveLength(1);
+      expect(warn).toHaveBeenCalledTimes(1);
+
+      process.env.DEMIURGE_TEST_HOME = "present";
+      expect(startEnvironment(schema).values.DEMIURGE_TEST_HOME).toBe("present");
+    } finally {
+      delete process.env.DEMIURGE_TEST_HOME;
+      warn.mockRestore();
+    }
+  });
+
+  it("restores each variable kind from a description", () => {
+    const schema = deserializeEnvSchema({
+      FLAG: {
+        client: true,
+        critical: false,
+        kind: "boolean",
+        optional: false,
+        options: {},
+        sensitive: false,
+      },
+      NAME: {
+        client: false,
+        critical: false,
+        kind: "string",
+        optional: false,
+        options: {},
+        sensitive: false,
+      },
+      RETRIES: {
+        client: false,
+        critical: false,
+        kind: "integer",
+        optional: false,
+        options: {},
+        sensitive: false,
+      },
+    });
+
+    const result = startEnvironment(schema, {
+      source: { FLAG: "1", NAME: "demiurge", RETRIES: "2" },
+    });
+
+    expect(result.values).toEqual({ FLAG: true, NAME: "demiurge", RETRIES: 2 });
+  });
+
+  it("reports an enum description without its values", () => {
+    expect(() =>
+      deserializeEnvSchema({
+        TIER: {
+          client: false,
+          critical: false,
+          kind: "enum",
+          optional: false,
+          options: {},
+          sensitive: false,
+        },
+      })
+    ).toThrow(/does not have the values of its enum/);
+  });
+
+  it("gives an empty schema no values", () => {
+    expect(startEnvironment({}).values).toEqual({});
+    expect(serializeEnvSchema({})).toEqual({});
+  });
+});

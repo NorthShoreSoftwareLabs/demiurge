@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Plugin } from "vite";
+import { defineConfig } from "../../src/config/define";
 import {
   createDemiurgeViteConfig,
   toPluginOptions,
@@ -132,5 +133,12 @@ describe("generated Vite configuration", () => {
       typedRoutes: true,
     });
     expect(toPluginOptions({})).toEqual({});
+  });
+});
+
+describe("defineConfig", () => {
+  it("returns the configuration value without a change", () => {
+    const value = { routing: { typedRoutes: true } } as const;
+    expect(defineConfig(value)).toBe(value);
   });
 });

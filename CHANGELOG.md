@@ -5,6 +5,27 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- Applications configure Demiurge in `demiurge.config.ts` at the project root.
+  The framework generates the Vite configuration from that file, and it no
+  longer exports the `demiurge(options)` plugin factory as an application API.
+  The file is required, and each command reports the expected path when the
+  file is absent. An invalid option fails before Vite starts, with the file,
+  the field path, and the received value (#373).
+- The `vite` field merges application plugins, aliases, dependency options, and
+  defines into the generated configuration. The `unstable_viteConfig` callback
+  receives the resolved configuration for the cases that the field does not
+  cover. That callback is a framework internal with no compatibility guarantee
+  (#374).
+- The `env` boundary holds the environment schema. Each variable takes a
+  `critical` option. The generated server entry validates the environment while
+  the module graph loads. A critical variable that is absent or invalid stops
+  the start before the process accepts traffic. A required variable that is not
+  critical gives a startup warning. A variable that `env.secret(...)` declares
+  cannot set the `client` option (#375).
+- `demiurge dev` starts the development server. `demiurge build` writes the
+  client bundle, the declared application server bundle, and the static output
+  from one configuration file (#373).
+
 - Added a bring-your-own authentication example with session-owner guidance,
   typed principals, application authorization, and explicit cache behavior.
   (#250)
