@@ -16,11 +16,34 @@ export class EnvValidationError extends Error {
   }
 }
 
-export type EnvVariable<T, Optional extends boolean = false> = {
-  optional: Optional;
-  parse: (key: string, value: string) => T;
+export type EnvVariableKind =
+  | "boolean"
+  | "enum"
+  | "integer"
+  | "secret"
+  | "string"
+  | "url";
+
+// The serializable description of one variable. The framework writes this
+// description into the generated server entry, so the schema of the
+// configuration file reaches the production process without the file.
+export type EnvVariableDescriptor = {
+  client: boolean;
+  critical: boolean;
+  kind: EnvVariableKind;
+  optional: boolean;
+  options: Record<string, unknown>;
   sensitive: boolean;
 };
+
+export type EnvSchemaDescriptor = Record<string, EnvVariableDescriptor>;
+
+export type EnvVariable<T, Optional extends boolean = false> =
+  & Omit<EnvVariableDescriptor, "optional">
+  & {
+    optional: Optional;
+    parse: (key: string, value: string) => T;
+  };
 
 export type EnvSchema = Record<string, EnvVariable<unknown, boolean>>;
 
@@ -32,11 +55,19 @@ export type InferEnvSchema<Schema extends EnvSchema> = {
     : never;
 };
 
-type RequiredEnvVariableOptions = {
+type SharedEnvVariableOptions = {
+  // A client variable reaches the browser bundle. A secret variable can never
+  // set this option.
+  client?: boolean;
+  // A critical variable stops the server start when it is absent or invalid.
+  critical?: boolean;
+};
+
+type RequiredEnvVariableOptions = SharedEnvVariableOptions & {
   optional?: false;
 };
 
-type OptionalEnvVariableOptions = {
+type OptionalEnvVariableOptions = SharedEnvVariableOptions & {
   optional: true;
 };
 
@@ -138,7 +169,7 @@ function booleanEnv(options: EnvVariableOptions = {}) {
     }
 
     throw new Error(`Environment variable ${key} must be true, false, 1, or 0.`);
-  });
+  }, "boolean");
 }
 
 function enumEnv<const Values extends readonly [string, ...string[]]>(
@@ -161,7 +192,7 @@ function enumEnv<const Values extends readonly [string, ...string[]]>(
     throw new Error(
       `Environment variable ${key} must be one of: ${values.join(", ")}.`,
     );
-  });
+  }, "enum", { values: [...values] });
 }
 
 function integerEnv(options: OptionalIntegerEnvOptions): EnvVariable<number, true>;
@@ -191,22 +222,28 @@ function integerEnv(options: IntegerEnvOptions = {}) {
     }
 
     return parsed;
-  });
+  }, "integer");
 }
 
 function secretEnv(options: OptionalStringEnvOptions): EnvVariable<string, true>;
 function secretEnv(options?: RequiredStringEnvOptions): EnvVariable<string, false>;
 function secretEnv(options: StringEnvOptions = {}) {
-  return createVariable(options, true, (key, value) =>
-    parseString(key, value, options),
+  return createVariable(
+    options,
+    true,
+    (key, value) => parseString(key, value, options),
+    "secret",
   );
 }
 
 function stringEnv(options: OptionalStringEnvOptions): EnvVariable<string, true>;
 function stringEnv(options?: RequiredStringEnvOptions): EnvVariable<string, false>;
 function stringEnv(options: StringEnvOptions = {}) {
-  return createVariable(options, false, (key, value) =>
-    parseString(key, value, options),
+  return createVariable(
+    options,
+    false,
+    (key, value) => parseString(key, value, options),
+    "string",
   );
 }
 
@@ -232,7 +269,7 @@ function urlEnv(options: UrlEnvOptions = {}) {
     }
 
     return url;
-  });
+  }, "url");
 }
 
 export const env = {
@@ -248,9 +285,26 @@ function createVariable<T>(
   options: EnvVariableOptions,
   sensitive: boolean,
   parse: (key: string, value: string) => T,
+  kind: EnvVariableKind = "string",
+  extra: Record<string, unknown> = {},
 ): EnvVariable<T, boolean> {
+  const { client = false, critical = false, optional = false, ...rest } = {
+    ...options,
+    ...extra,
+  } as Record<string, unknown> & EnvVariableOptions;
+
+  if (sensitive && client) {
+    throw new Error(
+      "A secret environment variable cannot reach client code. Declare a separate variable for the browser.",
+    );
+  }
+
   return {
-    optional: options.optional ?? false,
+    client,
+    critical,
+    kind,
+    optional,
+    options: rest,
     parse,
     sensitive,
   };

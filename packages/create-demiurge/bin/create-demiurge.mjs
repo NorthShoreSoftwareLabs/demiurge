@@ -152,9 +152,11 @@ function printHelp() {
 
 Options:
   -t, --template <page|api>  Select the application template
-  -y, --yes                  Use the page template and default directory
+  -y, --yes                  Proceed without consulting anyone
   -h, --help                 Show this help
-  -v, --version              Show the package version`);
+  -v, --version              Show the package version
+
+Defaults to the page template in ./demiurge-app.`);
 }
 
 main().catch((error) => {

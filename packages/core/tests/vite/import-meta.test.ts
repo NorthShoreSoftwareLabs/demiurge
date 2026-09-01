@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer, type ViteDevServer } from "vite";
-import { demiurge } from "@demiurgejs/core/vite";
+import { unstable_demiurge as demiurge } from "@demiurgejs/core/vite";
 
 describe("Vite development route transforms", () => {
   let server: ViteDevServer | undefined;

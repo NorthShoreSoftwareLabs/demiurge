@@ -55,6 +55,17 @@ export {
   validateEnv,
 } from "./env";
 export {
+  deserializeEnvSchema,
+  readEnv,
+  resetEnvironment as unstable_resetEnvironment,
+  serializeEnvSchema,
+  startEnvironment as unstable_startEnvironment,
+} from "./env-startup";
+export type {
+  EnvStartupOptions,
+  EnvStartupResult,
+} from "./env-startup";
+export {
   createSecurityHeaders,
   cspNonce,
   cspHash,
@@ -160,9 +171,12 @@ export type {
 } from "./upload";
 export type {
   EnvSchema,
+  EnvSchemaDescriptor,
   EnvSource,
   EnvValidationIssue,
   EnvVariable,
+  EnvVariableDescriptor,
+  EnvVariableKind,
   InferEnvSchema,
 } from "./env";
 export type {

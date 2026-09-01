@@ -46,6 +46,8 @@ import type { FontContribution } from "../platform/fonts";
 import { parseImageVariantPath } from "../platform/image-url";
 import type { ImagePolicy } from "../platform/images";
 import { createCspNonce } from "../security/policy";
+import type { EnvSchema } from "../security/env";
+import { serializeEnvSchema } from "../security/env-startup";
 import {
   verifyRoutePolicyFile,
   type StaticPolicyFinding,
@@ -68,6 +70,9 @@ export type DemiurgeVitePluginOptions = {
     lang?: string;
     title?: string;
   };
+  // The environment schema of the application. The generated server entry
+  // validates it when the server starts.
+  env?: EnvSchema;
   // The fonts that the application self-hosts. The development server serves
   // the same URLs that the build publishes.
   fonts?: FontContribution;
@@ -865,9 +870,20 @@ export function createServerEntrySource(
   options: DemiurgeVitePluginOptions = {},
 ) {
   const routesDir = options.routesDir ?? "src/routes";
+  const hasEnv = Boolean(options.env && Object.keys(options.env).length);
+  const environmentImport = hasEnv ? ", unstable_startEnvironment" : "";
+  const environmentSource = hasEnv
+    ? `
+// The framework validates the declared environment before the server accepts
+// traffic. A critical variable that is absent or invalid stops the start.
+export const env = unstable_startEnvironment(${
+      JSON.stringify(serializeEnvSchema(options.env ?? {}))
+    }).values;
+`
+    : "";
 
-  return `import { createRequestHandler } from "${PACKAGE_NAME}";
-
+  return `import { createRequestHandler${environmentImport} } from "${PACKAGE_NAME}";
+${environmentSource}
 ${createRouteMapSource(routesDir, {
     exportRoutes: true,
     includeServerOnly: true,
