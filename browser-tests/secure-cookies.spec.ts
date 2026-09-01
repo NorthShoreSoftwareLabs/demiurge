@@ -94,9 +94,13 @@ test("a signed session cookie fails closed after tampering", async ({
   ) as { session: { authenticated: boolean } | null });
   expect(authenticated.session?.authenticated).toBe(true);
 
+  // The cookie is `s1.<key>.<payload>.<signature>`, and the signature is a
+  // 32-byte HMAC in base64url. Its last character holds 4 significant bits
+  // and 2 ignored bits, so a change there can decode to the same bytes and
+  // still verify. Change the first character of the signature instead.
   await context.addCookies([{
     ...original!,
-    value: `${original!.value.slice(0, -1)}${original!.value.endsWith("a") ? "b" : "a"}`,
+    value: tamperWithSignature(original!.value),
   }]);
   await page.goto("/api/session-cookie");
   const rejected = await page.evaluate(() => JSON.parse(
@@ -109,3 +113,11 @@ test("a signed session cookie fails closed after tampering", async ({
       .some((cookie) => cookie.name === "__Host-account-session"),
   ).toBe(false);
 });
+
+function tamperWithSignature(value: string) {
+  const parts = value.split(".");
+  const signature = parts[3]!;
+  const first = signature[0] === "A" ? "B" : "A";
+  parts[3] = `${first}${signature.slice(1)}`;
+  return parts.join(".");
+}
