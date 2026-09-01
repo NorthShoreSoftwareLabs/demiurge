@@ -138,7 +138,19 @@ export function validateDemiurgeConfig(
     }
     assertOptionalObject(context, "vite.define", vite.define);
     assertOptionalObject(context, "vite.optimizeDeps", vite.optimizeDeps);
-    section(context, vite, "resolve", "vite.");
+    const resolve = section(context, vite, "resolve", "vite.");
+    if (
+      resolve?.alias !== undefined &&
+      !Array.isArray(resolve.alias) &&
+      (typeof resolve.alias !== "object" || resolve.alias === null)
+    ) {
+      throw invalid(
+        context,
+        "vite.resolve.alias",
+        "an object of aliases or an array of alias entries",
+        resolve.alias,
+      );
+    }
   }
 
   if (

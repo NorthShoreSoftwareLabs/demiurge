@@ -77,6 +77,9 @@ export function parseCliArguments(
 
   for (let index = 1; index < arguments_.length; index += 1) {
     const argument = arguments_[index]!;
+    if (argument === "--help" || argument === "-h") {
+      return { command: "help", host: "localhost", port: 4173 };
+    }
     const [name, inlineValue] = argument.split("=", 2);
     if (!cliOptionNames.has(name!)) {
       throw new Error(`Unknown option: ${argument}`);

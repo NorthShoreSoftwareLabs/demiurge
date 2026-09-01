@@ -91,9 +91,11 @@ describe("Demiurge CLI arguments", () => {
       .toThrow(/requires a value/);
   });
 
-  it("returns help without a command", () => {
+  it("returns help without a command and after a command", () => {
     expect(parseCliArguments([]).command).toBe("help");
     expect(parseCliArguments(["--help"]).command).toBe("help");
+    expect(parseCliArguments(["dev", "--help"]).command).toBe("help");
+    expect(parseCliArguments(["build", "-h"]).command).toBe("help");
   });
 
   it("resolves preview output from the project root", () => {

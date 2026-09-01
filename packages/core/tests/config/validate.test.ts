@@ -26,7 +26,11 @@ describe("Demiurge configuration validation", () => {
         rendering: { document: { title: "Application" }, styles: false },
         routing: { routesDir: "src/routes", typedRoutes: { outputFile: "types.d.ts" } },
         security: { staticFileHeaders: [] },
-        vite: { define: {}, plugins: [] },
+        vite: {
+          define: {},
+          plugins: [],
+          resolve: { alias: [{ find: "~", replacement: "/src" }] },
+        },
       },
       configFile,
     );
@@ -56,6 +60,8 @@ describe("Demiurge configuration validation", () => {
       .toThrow(/an array of Vite plugins/);
     expect(validate({ assets: { fonts: {} } }))
       .toThrow(/an array of font declarations/);
+    expect(validate({ vite: { resolve: { alias: 42 } } }))
+      .toThrow(/field: vite.resolve.alias[\s\S]*received: 42/);
   });
 
   it("requires an application server entry when the section exists", () => {
