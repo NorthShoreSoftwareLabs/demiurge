@@ -46,8 +46,15 @@ import type { FontContribution } from "../platform/fonts";
 import { parseImageVariantPath } from "../platform/image-url";
 import type { ImagePolicy } from "../platform/images";
 import { createCspNonce } from "../security/policy";
-import type { EnvSchema } from "../security/env";
+import type { EnvSchema, EnvSource } from "../security/env";
 import { serializeEnvSchema } from "../security/env-startup";
+import {
+  findEnvKeyReferences,
+  findImportPath,
+  findServerEnvKeys,
+  formatEnvBoundaryFindings,
+  type EnvBoundaryFinding,
+} from "./env-boundary";
 import {
   verifyRoutePolicyFile,
   type StaticPolicyFinding,
@@ -109,6 +116,11 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
   if (options.locales) options = { ...options, locales: defineLocales(options.locales) };
   let root = process.cwd();
   let isBuild = false;
+  // The build refuses a browser bundle that reads a variable of the server.
+  // The transform hook records a reference. The buildEnd hook then keeps the
+  // references of the modules that a client entry reaches.
+  const serverEnvKeys = findServerEnvKeys(options.env);
+  const clientEnvReferences = new Map<string, string[]>();
   const viteNoncePlaceholder = `demiurge-${createCspNonce()}`;
 
   return {
@@ -153,6 +165,10 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
     transform: {
       order: "post",
       handler(code, id, transformOptions) {
+        if (isBuild && !transformOptions?.ssr) {
+          recordClientEnvReferences(clientEnvReferences, serverEnvKeys, code, id);
+        }
+
         if (!isRouteSource(root, options, id)) {
           return null;
         }
@@ -201,7 +217,22 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
         type: "asset",
       });
     },
+    buildEnd() {
+      const findings = collectEnvBoundaryFindings({
+        moduleIds: [...this.getModuleIds()],
+        moduleInfo: (id) => this.getModuleInfo(id),
+        references: clientEnvReferences,
+        root,
+        serverEnvKeys,
+      });
+
+      if (findings.length) {
+        this.error(formatEnvBoundaryFindings(findings));
+      }
+    },
     async buildStart() {
+      clientEnvReferences.clear();
+
       if (isBuild) {
         await assertRootNotFoundRoute(root, options);
         const findings = await verifyRoutePolicies(root, options);
@@ -846,16 +877,130 @@ function createViteConfig(
   };
 }
 
+type EnvModuleInfo = {
+  dynamicallyImportedIds: readonly string[];
+  importedIds: readonly string[];
+  isEntry: boolean;
+} | null;
+
+// A module of a dependency reads the environment of its own process. The scan
+// stays inside the source of the application, where a declared variable is.
+function recordClientEnvReferences(
+  references: Map<string, string[]>,
+  serverEnvKeys: Map<string, { sensitive: boolean }>,
+  code: string,
+  id: string,
+) {
+  if (!serverEnvKeys.size) return;
+  if (id.includes("/node_modules/") || id.startsWith("\0")) return;
+
+  const keys = findEnvKeyReferences(code, serverEnvKeys.keys());
+  if (keys.length) references.set(id, keys);
+}
+
+// A reference is a defect only when the browser bundle holds the module. The
+// search starts at each entry of the client build and gives the import path.
+function collectEnvBoundaryFindings(options: {
+  moduleIds: string[];
+  moduleInfo: (id: string) => EnvModuleInfo;
+  references: Map<string, string[]>;
+  root: string;
+  serverEnvKeys: Map<string, { sensitive: boolean }>;
+}): EnvBoundaryFinding[] {
+  const { moduleIds, moduleInfo, references, root, serverEnvKeys } = options;
+  if (!references.size) return [];
+
+  const entries = moduleIds.filter((id) => moduleInfo(id)?.isEntry);
+  const importsOf = (id: string) => {
+    const info = moduleInfo(id);
+    return info ? [...info.importedIds, ...info.dynamicallyImportedIds] : [];
+  };
+  const findings: EnvBoundaryFinding[] = [];
+
+  for (const id of [...references.keys()].sort()) {
+    const paths = entries
+      .map((entry) => findImportPath(entry, id, importsOf))
+      .filter((path): path is string[] => Boolean(path))
+      .sort((first, second) => first.length - second.length);
+    const importPath = paths[0];
+    if (!importPath) continue;
+
+    for (const key of references.get(id) ?? []) {
+      findings.push({
+        code: serverEnvKeys.get(key)?.sensitive
+          ? "client-secret"
+          : "client-server-only",
+        importPath: importPath.map((item) => toDisplayModule(root, item)),
+        key,
+        module: toDisplayModule(root, id),
+      });
+    }
+  }
+
+  return findings;
+}
+
+function toDisplayModule(root: string, id: string) {
+  const name = id.startsWith("\0") ? id.slice(1) : id;
+  return name.startsWith(root) ? relative(root, name) || name : name;
+}
+
+// The build inlines the value of each client variable. The browser then
+// validates the values with the schema that the configuration file declares.
+export function createClientEnvSource(
+  options: DemiurgeVitePluginOptions = {},
+  source: EnvSource = process.env,
+) {
+  const clientVariables = Object.entries(options.env ?? {})
+    .filter(([, variable]) => variable.client);
+
+  if (!clientVariables.length) return "";
+
+  const absent = clientVariables.filter(([key, variable]) =>
+    variable.critical && !source[key]
+  );
+
+  if (absent.length) {
+    throw new Error(
+      [
+        "Demiurge stopped the build. The environment of the build does not have a critical client variable.",
+        ...absent.map(([key]) => `  variable: ${key}`),
+        "  The build inlines the value of a client variable. Give the value to the build.",
+      ].join("\n"),
+    );
+  }
+
+  const descriptor = serializeEnvSchema(Object.fromEntries(clientVariables));
+  const values = Object.fromEntries(
+    clientVariables
+      .map(([key]) => [key, source[key]])
+      .filter(([, value]) => value !== undefined),
+  );
+
+  return `
+// The build put these values in the browser bundle. The schema declares each
+// one as a client variable.
+unstable_startEnvironment(${JSON.stringify(descriptor)}, { source: ${
+    JSON.stringify(values)
+  } });
+`;
+}
+
 export function createClientEntrySource(
   root: string,
   options: DemiurgeVitePluginOptions = {},
+  source: EnvSource = process.env,
 ) {
   const routesDir = options.routesDir ?? "src/routes";
   const stylesImport = createStylesImport(root, options);
+  const environmentSource = createClientEnvSource(options, source);
+  const environmentImport = environmentSource
+    ? ", unstable_startEnvironment"
+    : "";
 
-  return `import { hydrateFileRouter } from "${PACKAGE_NAME}";
+  return `import { hydrateFileRouter${environmentImport} } from "${PACKAGE_NAME}";
 ${stylesImport}
-
+${environmentSource}
 ${createRouteMapSource(routesDir, {
     exportRoutes: false,
     includeServerOnly: false,

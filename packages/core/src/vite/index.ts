@@ -2,6 +2,7 @@ export {
   assertRootNotFoundRoute as unstable_assertRootNotFoundRoute,
   declaresPageRoute as unstable_declaresPageRoute,
   createClientEntrySource as unstable_createClientEntrySource,
+  createClientEnvSource as unstable_createClientEnvSource,
   createServerEntrySource as unstable_createServerEntrySource,
   createDocumentHtml as unstable_createDocumentHtml,
   createDevRouteImporters as unstable_createDevRouteImporters,
@@ -16,6 +17,15 @@ export {
 export {
   verifyRoutePolicySource as unstable_verifyRoutePolicySource,
 } from "./policy-verification";
+export {
+  findEnvKeyReferences as unstable_findEnvKeyReferences,
+  findImportPath as unstable_findEnvImportPath,
+  findServerEnvKeys as unstable_findServerEnvKeys,
+  formatEnvBoundaryFindings as unstable_formatEnvBoundaryFindings,
+} from "./env-boundary";
+export type {
+  EnvBoundaryFinding as unstable_EnvBoundaryFinding,
+} from "./env-boundary";
 export {
   createRouteAudit as unstable_createRouteAudit,
   renderRouteAuditDocument as unstable_renderRouteAuditDocument,
