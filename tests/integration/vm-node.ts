@@ -15,26 +15,26 @@ const localhostHost = "127.0.0.1";
 
 let serverProcess: ChildProcess | null = null;
 let processOutput = "";
+let ignoredSocketResets = 0;
+
+// Polling a real child process's HTTP server is inherently racy at both
+// ends of its life. A connection can land before the listener is fully
+// ready during startup. A socket can reset while the server closes its
+// listener during shutdown.
+// Node surfaces some resets as an 'error' on the request. Once headers
+// arrive, it surfaces others as an 'error' on the response instead. Rare
+// ones show up as a raw uncaught exception if no stream is listening.
+// The guard stays for the life of the probe. A request that loses a race
+// against its own timeout rejects later. The last of those rejections can
+// arrive while the probe stops the server. A guard that ends with the tests
+// leaves that last phase unprotected, and CI found the race there.
+installSocketResetGuard();
 
 try {
   build();
-  // Polling a real child process's HTTP server is inherently racy at both
-  // ends of its life. A connection can land before the listener is fully
-  // ready during startup. A socket can reset while the server closes its
-  // listener during shutdown.
-  // Node surfaces some resets as an 'error' on the request. Once headers
-  // arrive, it surfaces others as an 'error' on the response instead. Rare
-  // ones show up as a raw uncaught exception if no stream is listening.
-  // This guard covers the probe's entire run, not just one phase. The same
-  // race showed up at startup after first being fixed only for shutdown.
-  const restoreSocketErrorGuard = installSocketResetGuard();
-  try {
-    await run();
-  } finally {
-    restoreSocketErrorGuard();
-  }
+  await run();
   console.log(
-    `vm-node process probe passed (host ${localhostHost})`,
+    `vm-node process probe passed (host ${localhostHost}, ${ignoredSocketResets} socket resets ignored)`,
   );
 } finally {
   await stopProcess(serverProcess);
@@ -111,12 +111,18 @@ function requestOnce(
   });
 }
 
-// Installs a narrowly-scoped `uncaughtException` guard that swallows only
-// socket-reset-shaped errors (ECONNRESET / "socket hang up"). Anything else
-// is rethrown, which preserves default Node behavior (crash the process)
-// for real bugs. The returned function removes the guard. Callers must
-// always call it in a `finally` block, so it never leaks into other
-// integration probes that share this process.
+// Installs an `uncaughtException` guard that swallows only socket-reset
+// errors. Anything else is rethrown, which keeps the default behavior of
+// Node, a process that stops, for a real defect. The guard stays until the
+// probe ends. Each probe owns its own process, so the guard reaches no
+// other probe.
+//
+// Each request has an error listener. Every error that an assertion can
+// observe arrives through that listener. This guard sees the other group.
+// A socket outlives the request that owned it. The server then closes that
+// socket, and Node finds no stream for the error. The probe cannot attach a
+// listener to such a socket, because the probe does not hold it. The count
+// keeps this group visible in the output of the probe.
 function installSocketResetGuard() {
   // The server closes its listener while the probe polls the readiness
   // endpoint. A socket that closes before the request arrives gives
@@ -134,6 +140,7 @@ function installSocketResetGuard() {
 
   const onUncaughtException = (error: unknown) => {
     if (isSocketResetError(error)) {
+      ignoredSocketResets += 1;
       return;
     }
 
@@ -141,10 +148,6 @@ function installSocketResetGuard() {
   };
 
   process.on("uncaughtException", onUncaughtException);
-
-  return () => {
-    process.off("uncaughtException", onUncaughtException);
-  };
 }
 
 async function run() {
