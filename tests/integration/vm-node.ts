@@ -118,11 +118,19 @@ function requestOnce(
 // always call it in a `finally` block, so it never leaks into other
 // integration probes that share this process.
 function installSocketResetGuard() {
+  // The server closes its listener while the probe polls the readiness
+  // endpoint. A socket that closes before the request arrives gives
+  // ECONNRESET. A socket that closes between the connection and the write
+  // gives EPIPE. Both come from the shutdown of the server, not from a
+  // defect of the framework.
+  const socketResetCodes = new Set(["ECONNABORTED", "ECONNRESET", "EPIPE"]);
   const isSocketResetError = (error: unknown) =>
     error instanceof Error &&
-    (("code" in error && (error as NodeJS.ErrnoException).code === "ECONNRESET") ||
+    (("code" in error &&
+      socketResetCodes.has(String((error as NodeJS.ErrnoException).code))) ||
       error.message.includes("socket hang up") ||
-      error.message.includes("ECONNRESET"));
+      error.message.includes("ECONNRESET") ||
+      error.message.includes("EPIPE"));
 
   const onUncaughtException = (error: unknown) => {
     if (isSocketResetError(error)) {
