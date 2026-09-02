@@ -28,8 +28,8 @@ export type EnvVariableKind =
 // description into the generated server entry, so the schema of the
 // configuration file reaches the production process without the file.
 export type EnvVariableDescriptor = {
-  // The build does not put an environment variable in the browser bundle yet.
-  // This field is always false until issue #376 adds the build-time boundary.
+  // A client variable reaches the browser bundle. The build refuses a client
+  // bundle that reads a variable which this field does not mark.
   client: boolean;
   critical: boolean;
   kind: EnvVariableKind;
@@ -58,6 +58,9 @@ export type InferEnvSchema<Schema extends EnvSchema> = {
 };
 
 type SharedEnvVariableOptions = {
+  // A client variable reaches the browser bundle. The build inlines its value.
+  // The default value is false, and the value then stays on the server.
+  client?: boolean;
   // A critical variable stops the server start when it is absent or invalid.
   critical?: boolean;
 };
@@ -81,6 +84,14 @@ type OptionalStringEnvOptions = OptionalEnvVariableOptions & {
 };
 
 type StringEnvOptions = RequiredStringEnvOptions | OptionalStringEnvOptions;
+
+// A secret variable never reaches the browser. The option is absent from the
+// type of the builder, and the builder also refuses it at run time.
+type RequiredSecretEnvOptions = RequiredStringEnvOptions & { client?: never };
+
+type OptionalSecretEnvOptions = OptionalStringEnvOptions & { client?: never };
+
+type SecretEnvOptions = RequiredSecretEnvOptions | OptionalSecretEnvOptions;
 
 type RequiredUrlEnvOptions = RequiredEnvVariableOptions & {
   protocols?: readonly string[];
@@ -224,9 +235,9 @@ function integerEnv(options: IntegerEnvOptions = {}) {
   }, "integer");
 }
 
-function secretEnv(options: OptionalStringEnvOptions): EnvVariable<string, true>;
-function secretEnv(options?: RequiredStringEnvOptions): EnvVariable<string, false>;
-function secretEnv(options: StringEnvOptions = {}) {
+function secretEnv(options: OptionalSecretEnvOptions): EnvVariable<string, true>;
+function secretEnv(options?: RequiredSecretEnvOptions): EnvVariable<string, false>;
+function secretEnv(options: SecretEnvOptions = {}) {
   return createVariable(
     options,
     true,
@@ -294,11 +305,9 @@ function createVariable<T>(
     & { client?: boolean };
   const { client = false, critical = false, optional = false, ...rest } = merged;
 
-  if (client) {
+  if (client && sensitive) {
     throw new Error(
-      sensitive
-        ? "A secret environment variable cannot reach client code. Declare a separate variable for the browser."
-        : "The client option is not available yet. Demiurge cannot put an environment variable in the browser bundle until the build enforces the boundary. Follow issue #376.",
+      "A secret environment variable cannot reach client code. Declare a separate variable for the browser.",
     );
   }
 

@@ -128,11 +128,42 @@ Each variable has a `critical` option. The default value is `false`.
   that names the variable. A request that needs the value fails at the request
   path that reads it.
 
-A variable that `env.secret(...)` declares is sensitive. Demiurge keeps every
-environment variable on the server. The build does not put a variable in the
-browser bundle, and the `client` option is not available yet. A declaration
-that sets it fails. Issue #376 adds the build-time boundary that this option
-needs. Until then, pass a value that the browser needs through route data.
+### The client boundary
+
+A variable stays on the server. A variable that the schema declares with
+`client: true` reaches the browser bundle, and the build inlines its value.
+
+```ts
+env: defineEnvSchema({
+  PUBLIC_API_URL: env.url({ client: true }),
+  SESSION_SECRET: env.secret({ critical: true, minLength: 32 }),
+});
+```
+
+The build reads the value of a client variable one time. A client variable that
+is critical must have a value in the environment of the build.
+
+`env.secret(...)` refuses the `client` option. A secret variable never reaches
+the browser. Read the value on the server, then send the result through route
+data.
+
+The build enforces this boundary. It walks the modules that the client entry
+reaches. A module of that group fails the build when it reads a variable that
+stays on the server. The diagnostic names the variable, the module, and the
+import path:
+
+```text
+Demiurge stopped the build. Client code reads an environment variable that stays on the server.
+
+  variable: SESSION_SECRET
+  module: src/lib/session.ts
+  import path: virtual:demiurge/client-entry -> src/routes/index.tsx -> src/lib/session.ts
+  A secret variable never reaches the browser. Read the value on the server, then send the result through route data.
+```
+
+The build finds a name that the module reads. It does not find a value that a
+dynamic key selects. Keep a module that reads a secret out of the client graph.
+A module under `@middleware.ts` or `@policy.ts` is already out of that graph.
 
 The schema declares what a variable is. Where the value comes from is a
 separate concern. Demiurge reads the process environment.
@@ -151,6 +182,17 @@ import { readEnv } from "@demiurgejs/core";
 import { schema } from "./src/env";
 
 const { DATABASE_URL } = readEnv(schema);
+```
+
+Client code reads a client variable with the same function. Declare the client
+variables in their own module, because a module that names a server variable
+cannot enter the browser bundle:
+
+```ts
+import { readEnv } from "@demiurgejs/core";
+import { clientSchema } from "./src/env-client";
+
+const { PUBLIC_API_URL } = readEnv(clientSchema);
 ```
 
 ## Vite extension

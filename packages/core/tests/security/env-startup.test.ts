@@ -113,10 +113,12 @@ describe("environment startup", () => {
       .toThrow(/cannot reach client code/);
   });
 
-  it("refuses a client variable until the build enforces the boundary", () => {
-    expect(() => env.string({ client: true } as never))
-      .toThrow(/not available yet/);
-    expect(() => env.string({ client: true } as never)).toThrow(/#376/);
+  it("keeps a client variable in the schema description", () => {
+    const schema = defineEnvSchema({ PUBLIC_API_URL: env.url({ client: true }) });
+
+    expect(serializeEnvSchema(schema).PUBLIC_API_URL.client).toBe(true);
+    expect(deserializeEnvSchema(serializeEnvSchema(schema)).PUBLIC_API_URL.client)
+      .toBe(true);
   });
 });
 
