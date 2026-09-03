@@ -27,7 +27,7 @@ const examples = [
 
 for (const example of examples) {
   await generateRoutes({
-    outputFile: resolve(`examples/${example}/.demiurge/route-manifest.d.ts`),
+    outputFile: resolve(`examples/${example}/src/route-manifest.d.ts`),
     routesDir: resolve(`examples/${example}/src/routes`),
   });
 }

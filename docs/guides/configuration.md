@@ -79,6 +79,12 @@ export default defineConfig({
 });
 ```
 
+`typedRoutes` writes the generated declarations to `route-manifest.d.ts` beside
+the routes directory. The default file is `src/route-manifest.d.ts`. A
+TypeScript `include` entry that covers `src` also covers the declarations, so
+the application does not name the file. Give `typedRoutes` an `outputFile`
+value to select another path, and make `tsconfig.json` reach that path.
+
 ## Commands
 
 `demiurge dev` starts the development server. `demiurge build` writes

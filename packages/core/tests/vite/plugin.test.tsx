@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -761,11 +762,49 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await expect(readText(outputFile)).resolves.toContain('"/": {};');
   });
 
-  it("writes typed routes to a hidden framework directory by default", async () => {
+  it("writes typed routes beside the routes directory by default", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-build-default-"));
     const routesDir = join(root, "src", "routes");
-    const outputFile = join(root, ".demiurge", "route-manifest.d.ts");
+    const outputFile = join(root, "src", "route-manifest.d.ts");
     const plugin = demiurge({ typedRoutes: true }) as PluginHarness;
+
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(join(routesDir, "blog.tsx"), "export {}");
+
+    await plugin.configResolved?.({ root } as never);
+    await plugin.buildStart?.({} as never);
+
+    await expect(readText(outputFile)).resolves.toContain('"/blog": {};');
+    expect(existsSync(join(root, ".demiurge", "route-manifest.d.ts"))).toBe(false);
+  });
+
+  it("removes the declaration file that an earlier default wrote", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-build-legacy-"));
+    const routesDir = join(root, "src", "routes");
+    const legacyFile = join(root, ".demiurge", "route-manifest.d.ts");
+    const plugin = demiurge({ typedRoutes: true }) as PluginHarness;
+
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(join(routesDir, "blog.tsx"), "export {}");
+    await mkdir(join(root, ".demiurge"), { recursive: true });
+    await writeFile(legacyFile, "export {}");
+
+    await plugin.configResolved?.({ root } as never);
+    await plugin.buildStart?.({} as never);
+
+    expect(existsSync(legacyFile)).toBe(false);
+    await expect(
+      readText(join(root, "src", "route-manifest.d.ts")),
+    ).resolves.toContain('"/blog": {};');
+  });
+
+  it("keeps the declaration file of an earlier default when the application selects it", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-build-selected-"));
+    const routesDir = join(root, "src", "routes");
+    const outputFile = join(root, ".demiurge", "route-manifest.d.ts");
+    const plugin = demiurge({
+      typedRoutes: { outputFile: ".demiurge/route-manifest.d.ts" },
+    }) as PluginHarness;
 
     await mkdir(routesDir, { recursive: true });
     await writeFile(join(routesDir, "blog.tsx"), "export {}");
@@ -1442,7 +1481,7 @@ export const GET = json({}, { cors: { credentials: true, origins: "*" } });`,
   it("uses default route and typed-output directories in dev", async () => {
     const root = await mkdtemp(join(tmpdir(), "demiurge-vite-defaults-"));
     const routesDir = join(root, "src", "routes");
-    const outputFile = join(root, ".demiurge", "route-manifest.d.ts");
+    const outputFile = join(root, "src", "route-manifest.d.ts");
     const plugin = demiurge({ typedRoutes: {} }) as PluginHarness;
     const watcher = createWatcherHarness();
     const middleware = createMiddlewareHarness();
