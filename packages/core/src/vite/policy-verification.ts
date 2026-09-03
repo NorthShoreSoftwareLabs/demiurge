@@ -158,7 +158,7 @@ export function auditDocumentPolicyCoverage(
       code: "document-policy-missing",
       file: inspection.file,
       message:
-        "This page route inherits no document policy, so its HTML response carries no Content-Security-Policy. Add document: security.strict() to a @policy.ts file above this route.",
+        "This page route inherits no document policy, so its HTML response carries no Content-Security-Policy. Add document: security.strict() to this route or an ancestor @policy.ts file.",
       severity: "warning",
     });
   }
@@ -292,6 +292,7 @@ function extractDocumentCspState(
   constants: Map<string, unknown>,
 ): DocumentCspState {
   if (node.type === "Identifier") {
+    if (node.name === "undefined") return "absent";
     const value = constants.get(String(node.name));
     return value === undefined && !constants.has(String(node.name))
       ? "unknown"
@@ -341,7 +342,11 @@ function extractDocumentSecurityCspState(
   constants: Map<string, unknown>,
 ): DocumentCspState {
   if (!node) return "unknown";
+  if (node.type === "UnaryExpression" && node.operator === "void") {
+    return "absent";
+  }
   if (node.type === "Identifier") {
+    if (node.name === "undefined") return "absent";
     const value = constants.get(String(node.name));
     return value === undefined && !constants.has(String(node.name))
       ? "unknown"
@@ -433,6 +438,7 @@ function mergePresetCspState(
 }
 
 function extractDocumentCspStateFromValue(value: unknown): DocumentCspState {
+  if (value === undefined) return "absent";
   if (!isPlainObject(value)) return "unknown";
   if (!Object.prototype.hasOwnProperty.call(value, "document")) return "absent";
   return extractCspOptionState(value.document);

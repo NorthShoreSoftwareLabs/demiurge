@@ -310,6 +310,91 @@ export const policy = { document: createDocumentPolicy() };`,
     ).resolves.toEqual([]);
   });
 
+  it.each([
+    {
+      name: "a constant policy with an explicit opt-out",
+      source: `
+const documentPolicy = { csp: false };
+const routePolicy = { document: documentPolicy };
+export const policy = routePolicy;`,
+    },
+    {
+      name: "a constant policy with a CSP object",
+      source: `
+const documentPolicy = { csp: { defaultSrc: ["'self'"] } };
+const routePolicy = { document: documentPolicy };
+export const policy = routePolicy;`,
+    },
+  ])("reads $name", async ({ source }) => {
+    const root = await createRouteTree({
+      "index.tsx": `${pageRouteSource}
+${source}`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("reads static preset options and accepts an unknown preset", async () => {
+    const root = await createRouteTree({
+      "index.tsx": `${pageRouteSource}
+import { security } from "@demiurgejs/core";
+const options = { csp: false };
+export const policy = { document: security.strict(options) };`,
+      "admin/index.tsx": `${pageRouteSource}
+import { security } from "@demiurgejs/core";
+export const policy = { document: security.custom() };`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("keeps unknown static expressions out of missing-CSP diagnostics", async () => {
+    const root = await createRouteTree({
+      "unknown-identifier.tsx": `${pageRouteSource}
+const routePolicy = { document: documentPolicy };
+export const policy = routePolicy;`,
+      "undefined-document.tsx": `${pageRouteSource}
+export const policy = { document: undefined };`,
+      "unknown-member.tsx": `${pageRouteSource}
+export const policy = { document: options.strict() };`,
+      "unknown-csp.tsx": `${pageRouteSource}
+export const policy = { document: { csp: dynamicCsp } };`,
+      "spread-document.tsx": `${pageRouteSource}
+export const policy = { document: { ...dynamicDocument } };`,
+      "computed-document.tsx": `${pageRouteSource}
+const key = "csp";
+export const policy = { document: { [key]: false } };`,
+      "dynamic-preset-options.tsx": `${pageRouteSource}
+import { security } from "@demiurgejs/core";
+export const policy = { document: security.strict(dynamicOptions) };`,
+      "invalid-preset-options.tsx": `${pageRouteSource}
+import { security } from "@demiurgejs/core";
+export const policy = { document: security.strict(1) };`,
+      "constant-csp-value.tsx": `${pageRouteSource}
+const csp = "invalid";
+export const policy = { document: { csp } };`,
+      "constant-primitive-policy.tsx": `${pageRouteSource}
+const routePolicy = 1;
+export const policy = routePolicy;`,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, {
+      routesDir: "routes",
+    });
+
+    expect(
+      findings
+        .filter((finding) => finding.code === "document-policy-missing")
+        .map((finding) => finding.file),
+    ).toEqual([
+      join(root, "routes", "undefined-document.tsx"),
+    ]);
+  });
+
   it("accepts a page route that declares its own document policy", async () => {
     const root = await createRouteTree({
       "index.tsx": `${pageRouteSource}

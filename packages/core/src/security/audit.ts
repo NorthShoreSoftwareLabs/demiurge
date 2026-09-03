@@ -70,7 +70,7 @@ function auditMissingCsp(
   findings.push({
     code: "csp-missing",
     message:
-      "This document declares no Content-Security-Policy. Add document: security.strict() to the @policy.ts file of the route, or set csp: false to accept a document without a policy.",
+      "This document declares no Content-Security-Policy. Add document: security.strict() to the @policy.ts file of the route, or set csp: false to accept a document without a Content-Security-Policy.",
     severity: "warning",
   });
 }

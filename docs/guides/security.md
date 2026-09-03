@@ -25,10 +25,10 @@ inherited directive. Use `false` to remove one inherited directive.
 Use `cspNonce` when a custom policy requires the framework nonce. Use a custom
 source string when the built-in `CspSource` values do not contain the source.
 
-A page route sends security headers only when a policy above it declares
-`document`. A policy that declares `security` alone controls the request
-pipeline and leaves the response without a Content-Security-Policy. Therefore,
-declare `document` at the root of the route tree.
+A page route sends a Content-Security-Policy when a route-local or ancestor
+policy declares a document CSP. Set `csp: false` when the route accepts no CSP.
+A policy that declares `security` alone controls the request pipeline and leaves
+the response without a Content-Security-Policy.
 
 ## Strict documents
 
