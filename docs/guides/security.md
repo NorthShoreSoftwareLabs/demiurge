@@ -495,11 +495,11 @@ The Vite plugin validates literal CORS, rate-limit, and document policy during
 a production build. A finding identifies the route file and export.
 
 The build also reads the policy cascade of the route tree. A page route that
-inherits no `document` policy gets the `document-policy-missing` warning, which
-names the route file. The warning does not stop the build. The development
-server reports the same warning when it starts and after a route file changes.
-A page route that declares its own document policy, and a policy expression the
-build cannot read, get no warning.
+has no effective CSP gets the `document-policy-missing` warning. A document
+policy that declares only other headers also gets the warning. The warning
+names the route file and does not stop the build. The development server gives
+the same warning when it starts and after a route file changes. An explicit
+`csp: false` value stops the warning. An unreadable policy gets no warning.
 
 The build reads source without running route modules. The build does not guess
 an environment-derived value or a value from a function call.
