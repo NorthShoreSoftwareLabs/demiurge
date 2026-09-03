@@ -57,7 +57,9 @@ import {
   type EnvBoundaryFinding,
 } from "./env-boundary";
 import {
-  verifyRoutePolicyFile,
+  auditDocumentPolicyCoverage,
+  declaresPageRoute,
+  inspectRouteFile,
   type StaticPolicyFinding,
 } from "./policy-verification";
 import {
@@ -241,9 +243,17 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       if (isBuild) {
         await assertRootNotFoundRoute(root, options);
         const findings = await verifyRoutePolicies(root, options);
+        const errors = findings.filter(
+          (finding) => finding.severity === "error",
+        );
 
-        if (findings.length) {
-          throw new Error(formatStaticPolicyFindings(findings));
+        for (const finding of findings) {
+          if (finding.severity === "error") continue;
+          this.warn(formatStaticPolicyFinding(finding));
+        }
+
+        if (errors.length) {
+          throw new Error(formatStaticPolicyFindings(errors));
         }
       }
 
@@ -1578,42 +1588,6 @@ async function findPageRouteFile(files: string[]) {
   return undefined;
 }
 
-// Escaped because a package name may contain `.`, which the regex would
-// otherwise read as a wildcard.
-const PACKAGE_NAME_PATTERN = PACKAGE_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const DEMIURGE_NAMED_IMPORT = new RegExp(
-  `import\\s*\\{([^}]*)\\}\\s*from\\s*["']${PACKAGE_NAME_PATTERN}["']`,
-  "g",
-);
-
-// The plugin cannot evaluate route modules during the build. Therefore, page
-// detection reads the source. It checks the import, not only the word. An API
-// application can call `db.users.page(2)` without serving an HTML document.
-// Only a page route imports `page` from the framework package.
-export function declaresPageRoute(source: string) {
-  const locals = [...source.matchAll(DEMIURGE_NAMED_IMPORT)].flatMap((match) =>
-    match[1].split(",").flatMap((binding) => {
-      const [imported, local] = binding.trim().split(/\s+as\s+/);
-
-      // `import type { page }` cannot be called, and an alias renames what the
-      // call site looks like.
-      return imported.replace(/^type\s+/, "") === "page"
-        ? [local ?? imported]
-        : [];
-    }),
-  );
-
-  if (locals.length === 0) {
-    return false;
-  }
-
-  // Strip the import statements first so the binding list is not itself
-  // mistaken for a call.
-  const body = source.replace(DEMIURGE_NAMED_IMPORT, "");
-
-  return locals.some((local) => new RegExp(`\\b${local}\\s*\\(`).test(body));
-}
-
 export function missingRootNotFoundBuildMessage(
   routesDir: string,
   pageRoute: string,
@@ -1783,11 +1757,15 @@ export async function verifyRoutePolicies(
   const routesDir = resolve(root, options.routesDir ?? "src/routes");
 
   if (!existsSync(routesDir)) return [];
-  const findings = (await mapWithConcurrency(
+  const inspections = await mapWithConcurrency(
     await findRouteFiles(routesDir),
     policyVerificationConcurrency,
-    verifyRoutePolicyFile,
-  )).flat();
+    inspectRouteFile,
+  );
+  const findings = [
+    ...inspections.flatMap((inspection) => inspection.findings),
+    ...auditDocumentPolicyCoverage(routesDir, inspections),
+  ];
 
   return findings.sort((left, right) =>
     left.file.localeCompare(right.file) ||
@@ -1803,7 +1781,7 @@ export function formatStaticPolicyFindings(findings: StaticPolicyFinding[]) {
   ].join("\n");
 }
 
-function formatStaticPolicyFinding(finding: StaticPolicyFinding) {
+export function formatStaticPolicyFinding(finding: StaticPolicyFinding) {
   const source = finding.exportName
     ? `${finding.file} export ${finding.exportName}`
     : finding.file;

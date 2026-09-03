@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { basename, dirname, relative, sep } from "node:path";
 import { parseAst, transformWithEsbuild } from "vite";
 import type { HttpMethod } from "../route";
 import {
@@ -12,6 +13,7 @@ import {
   type RouteSecurityPolicy,
   type SecurityPolicy,
 } from "../security";
+import { PACKAGE_NAME } from "../package-name";
 import { isPlainObject } from "../type-guards";
 
 type AstNode = {
@@ -28,13 +30,29 @@ function asAstNode(value: unknown): AstNode {
 }
 
 export type StaticPolicyFinding = {
-  code: "cors-invalid" | "cors-method-unavailable" | "rate-limit-invalid" |
-    "security-header-render-failed";
+  code: "cors-invalid" | "cors-method-unavailable" | "document-policy-missing" |
+    "rate-limit-invalid" | "security-header-render-failed";
   exportName?: string;
   file: string;
   message: string;
-  severity: "error";
+  severity: "error" | "warning";
 };
+
+export type RouteFileInspection = {
+  /**
+   * `true` when the file declares a document policy, and also when the policy
+   * expression is not statically readable. An unreadable expression is not
+   * evidence of an absent policy.
+   */
+  declaresDocumentPolicy: boolean;
+  /** The statically provable CSP state of the route policy. */
+  documentCspState: DocumentCspState;
+  declaresPageRoute: boolean;
+  file: string;
+  findings: StaticPolicyFinding[];
+};
+
+export type DocumentCspState = "present" | "false" | "absent" | "unknown";
 
 type ExtractedCapability = {
   cors?: CorsPolicy;
@@ -44,6 +62,8 @@ type ExtractedCapability = {
 type ExtractedRouteModule = {
   capabilities: Partial<Record<HttpMethod, ExtractedCapability>>;
   declaredMethods: Set<HttpMethod>;
+  declaresDocumentPolicy: boolean;
+  documentCspState: DocumentCspState;
   policy?: RoutePolicy;
 };
 
@@ -70,20 +90,158 @@ const responseHelpers = new Set([
 ]);
 
 export async function verifyRoutePolicyFile(file: string) {
+  return (await inspectRouteFile(file)).findings;
+}
+
+export async function inspectRouteFile(
+  file: string,
+): Promise<RouteFileInspection> {
   const source = await readFile(file, "utf8");
-  return await verifyRoutePolicySource(source, file);
+  const extracted = await extractRouteModuleSource(source, file);
+
+  return {
+    declaresDocumentPolicy: extracted.declaresDocumentPolicy,
+    documentCspState: extracted.documentCspState,
+    // An attached file owns no address, so it never declares a page route.
+    declaresPageRoute: !basename(file).startsWith("@") &&
+      declaresPageRoute(source),
+    file,
+    findings: validateExtractedRouteModule(extracted, file),
+  };
 }
 
 export async function verifyRoutePolicySource(source: string, file: string) {
+  return validateExtractedRouteModule(
+    await extractRouteModuleSource(source, file),
+    file,
+  );
+}
+
+async function extractRouteModuleSource(source: string, file: string) {
   const loader = file.endsWith(".tsx") ? "tsx" : "ts";
   const transformed = await transformWithEsbuild(source, file, {
     format: "esm",
     loader,
     target: "esnext",
   });
-  const extracted = extractRouteModule(transformed.code);
 
-  return validateExtractedRouteModule(extracted, file);
+  return extractRouteModule(transformed.code);
+}
+
+// A page route that inherits no document policy sends no security headers.
+// The application still works, so nothing else reports the gap. This check
+// reads the policy cascade of the route tree and names each page route that
+// no document policy covers.
+export function auditDocumentPolicyCoverage(
+  routesDir: string,
+  inspections: readonly RouteFileInspection[],
+): StaticPolicyFinding[] {
+  const policies = inspections.filter((inspection) => isPolicyFile(inspection.file));
+
+  const findings: StaticPolicyFinding[] = [];
+
+  for (const inspection of inspections) {
+    if (!inspection.declaresPageRoute) {
+      continue;
+    }
+    const state = resolveDocumentCspState(
+      routesDir,
+      dirname(inspection.file),
+      inspection.documentCspState,
+      policies,
+    );
+    if (state !== "absent") {
+      continue;
+    }
+
+    findings.push({
+      code: "document-policy-missing",
+      file: inspection.file,
+      message:
+        "This page route inherits no document policy, so its HTML response carries no Content-Security-Policy. Add document: security.strict() to this route or an ancestor @policy.ts file.",
+      severity: "warning",
+    });
+  }
+
+  return findings;
+}
+
+function resolveDocumentCspState(
+  routesDir: string,
+  routeDirectory: string,
+  routeState: DocumentCspState,
+  policies: readonly RouteFileInspection[],
+) {
+  const applicable = policies
+    .filter((inspection) =>
+      isSameOrAbove(dirname(inspection.file), routeDirectory) &&
+      isSameOrAbove(routesDir, dirname(inspection.file)),
+    )
+    .sort((left, right) =>
+      dirname(left.file).length - dirname(right.file).length ||
+      left.file.localeCompare(right.file)
+    );
+
+  let state: DocumentCspState = "absent";
+  for (const policy of applicable) {
+    state = mergeDocumentCspState(state, policy.documentCspState);
+  }
+  return mergeDocumentCspState(state, routeState);
+}
+
+function mergeDocumentCspState(
+  base: DocumentCspState,
+  override: DocumentCspState,
+): DocumentCspState {
+  if (override === "absent") return base;
+  return override;
+}
+
+function isPolicyFile(file: string) {
+  return /^@policy\.tsx?$/.test(basename(file));
+}
+
+function isSameOrAbove(directory: string, routesDir: string) {
+  const distance = relative(directory, routesDir);
+  return distance === "" ||
+    (distance !== ".." && !distance.startsWith(`..${sep}`) &&
+      !distance.startsWith(sep));
+}
+
+// Escaped because a package name may contain `.`, which the regex would
+// otherwise read as a wildcard.
+const PACKAGE_NAME_PATTERN = PACKAGE_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const DEMIURGE_NAMED_IMPORT = new RegExp(
+  `import\\s*\\{([^}]*)\\}\\s*from\\s*["']${PACKAGE_NAME_PATTERN}["']`,
+  "g",
+);
+
+// The plugin cannot evaluate route modules during the build. Therefore, page
+// detection reads the source. It checks the import, not only the word. An API
+// application can call `db.users.page(2)` without serving an HTML document.
+// Only a page route imports `page` from the framework package.
+export function declaresPageRoute(source: string) {
+  const locals = [...source.matchAll(DEMIURGE_NAMED_IMPORT)].flatMap((match) =>
+    match[1].split(",").flatMap((binding) => {
+      const [imported, local] = binding.trim().split(/\s+as\s+/);
+
+      // `import type { page }` cannot be called, and an alias renames what the
+      // call site looks like.
+      return imported.replace(/^type\s+/, "") === "page"
+        ? [local ?? imported]
+        : [];
+    }),
+  );
+
+  if (locals.length === 0) {
+    return false;
+  }
+
+  // Strip the import statements first so the binding list is not itself
+  // mistaken for a call.
+  const body = source.replace(DEMIURGE_NAMED_IMPORT, "");
+
+  return locals.some((local) => new RegExp(`\\b${local}\\s*\\(`).test(body));
 }
 
 function extractRouteModule(code: string): ExtractedRouteModule {
@@ -94,12 +252,18 @@ function extractRouteModule(code: string): ExtractedRouteModule {
   const exports = collectNamedExports(ast);
   const capabilities: ExtractedRouteModule["capabilities"] = {};
   const declaredMethods = new Set<HttpMethod>();
+  let declaresDocumentPolicy = false;
+  let documentCspState: DocumentCspState = "absent";
   let policy: RoutePolicy | undefined;
 
   for (const [exportName, localName] of exports) {
     const initializer = declarations.get(localName);
 
     if (exportName === "policy") {
+      documentCspState = initializer
+        ? extractDocumentCspState(initializer, imports, constants)
+        : "unknown";
+      declaresDocumentPolicy = documentCspState !== "absent";
       if (initializer) {
         policy = extractRoutePolicy(initializer, imports, constants);
       }
@@ -113,7 +277,171 @@ function extractRouteModule(code: string): ExtractedRouteModule {
     if (capability) capabilities[exportName] = capability;
   }
 
-  return { capabilities, declaredMethods, policy };
+  return {
+    capabilities,
+    declaredMethods,
+    declaresDocumentPolicy,
+    documentCspState,
+    policy,
+  };
+}
+
+function extractDocumentCspState(
+  node: AstNode,
+  imports: Map<string, string>,
+  constants: Map<string, unknown>,
+): DocumentCspState {
+  if (node.type === "Identifier") {
+    if (node.name === "undefined") return "absent";
+    const value = constants.get(String(node.name));
+    return value === undefined && !constants.has(String(node.name))
+      ? "unknown"
+      : extractDocumentCspStateFromValue(value);
+  }
+
+  if (node.type === "CallExpression") {
+    const localName = identifierName(node.callee);
+    if (localName && imports.get(localName) === "defineRoutePolicy") {
+      const argument = asNodeArray(node.arguments)[0];
+      return argument
+        ? extractDocumentCspState(argument, imports, constants)
+        : "unknown";
+    }
+
+    const callee = asNode(node.callee);
+    if (callee?.type === "MemberExpression") {
+      const objectName = identifierName(callee.object);
+      const preset = propertyName(callee.property);
+      if (objectName && imports.get(objectName) === "security" && preset) {
+        return extractPresetCspState(preset, asNodeArray(node.arguments)[0], constants);
+      }
+    }
+    return "unknown";
+  }
+
+  if (node.type !== "ObjectExpression") return "unknown";
+
+  for (const property of asNodeArray(node.properties)) {
+    if (property.type === "SpreadElement") return "unknown";
+    if (property.type !== "Property") continue;
+    if (property.computed) return "unknown";
+    if (propertyName(property.key) !== "document") continue;
+    return extractDocumentSecurityCspState(
+      asNode(property.value),
+      imports,
+      constants,
+    );
+  }
+
+  return "absent";
+}
+
+function extractDocumentSecurityCspState(
+  node: AstNode | undefined,
+  imports: Map<string, string>,
+  constants: Map<string, unknown>,
+): DocumentCspState {
+  if (!node) return "unknown";
+  if (node.type === "UnaryExpression" && node.operator === "void") {
+    return "absent";
+  }
+  if (node.type === "Identifier") {
+    if (node.name === "undefined") return "absent";
+    const value = constants.get(String(node.name));
+    return value === undefined && !constants.has(String(node.name))
+      ? "unknown"
+      : extractDocumentCspStateFromValue(value);
+  }
+  if (node.type === "CallExpression") {
+    const callee = asNode(node.callee);
+    if (callee?.type !== "MemberExpression") return "unknown";
+    const objectName = identifierName(callee.object);
+    const preset = propertyName(callee.property);
+    if (!objectName || imports.get(objectName) !== "security" || !preset) {
+      return "unknown";
+    }
+    return extractPresetCspState(preset, asNodeArray(node.arguments)[0], constants);
+  }
+  if (node.type !== "ObjectExpression") return "unknown";
+
+  for (const property of asNodeArray(node.properties)) {
+    if (property.type === "SpreadElement" || property.computed) return "unknown";
+    if (property.type !== "Property") continue;
+    if (propertyName(property.key) !== "csp") continue;
+    const value = asNode(property.value);
+    if (!value) return "unknown";
+    if (value.type === "Literal") {
+      if (value.value === false) return "false";
+      if (value.value === undefined || value.value === null) return "absent";
+      return "present";
+    }
+    if (value.type === "Identifier") {
+      const literal = evaluateLiteral(value, constants);
+      if (literal === unresolved) return "unknown";
+      return extractCspValueState(literal);
+    }
+    if (value.type === "ObjectExpression" || value.type === "ArrayExpression") {
+      return "present";
+    }
+    return "unknown";
+  }
+
+  return "absent";
+}
+
+function extractPresetCspState(
+  preset: string,
+  optionsNode: AstNode | undefined,
+  constants: Map<string, unknown>,
+): DocumentCspState {
+  const defaultState = preset === "api" ? "absent" :
+    preset === "strict" || preset === "static" || preset === "crossOriginIsolated"
+      ? "present"
+      : "unknown";
+  if (!optionsNode) return defaultState;
+  if (optionsNode.type === "Identifier") {
+    const options = evaluateLiteral(optionsNode, constants);
+    if (options === unresolved) return "unknown";
+    return mergePresetCspState(defaultState, extractCspOptionState(options));
+  }
+  if (optionsNode.type !== "ObjectExpression") return "unknown";
+  for (const property of asNodeArray(optionsNode.properties)) {
+    if (property.type === "SpreadElement" || property.computed) return "unknown";
+    if (property.type !== "Property") continue;
+    if (propertyName(property.key) !== "csp") continue;
+    const value = evaluateLiteral(asNode(property.value), constants);
+    if (value === unresolved) return "unknown";
+    return mergePresetCspState(defaultState, extractCspValueState(value));
+  }
+  return defaultState;
+}
+
+function extractCspOptionState(value: unknown): DocumentCspState {
+  if (!isPlainObject(value)) return value === undefined ? "absent" : "unknown";
+  if (!Object.prototype.hasOwnProperty.call(value, "csp")) return "absent";
+  return extractCspValueState(value.csp);
+}
+
+function extractCspValueState(value: unknown): DocumentCspState {
+  if (value === false) return "false";
+  if (value === undefined || value === null) return "absent";
+  if (isPlainObject(value) || Array.isArray(value)) return "present";
+  return "unknown";
+}
+
+function mergePresetCspState(
+  preset: DocumentCspState,
+  override: DocumentCspState,
+): DocumentCspState {
+  if (override === "absent") return preset;
+  return override;
+}
+
+function extractDocumentCspStateFromValue(value: unknown): DocumentCspState {
+  if (value === undefined) return "absent";
+  if (!isPlainObject(value)) return "unknown";
+  if (!Object.prototype.hasOwnProperty.call(value, "document")) return "absent";
+  return extractCspOptionState(value.document);
 }
 
 function collectVariableInitializers(ast: AstNode) {

@@ -25,6 +25,11 @@ inherited directive. Use `false` to remove one inherited directive.
 Use `cspNonce` when a custom policy requires the framework nonce. Use a custom
 source string when the built-in `CspSource` values do not contain the source.
 
+A page route sends a Content-Security-Policy when a route-local or ancestor
+policy declares a document CSP. Set `csp: false` when the route accepts no CSP.
+A policy that declares `security` alone controls the request pipeline and leaves
+the response without a Content-Security-Policy.
+
 ## Strict documents
 
 `security.strict()` provides a nonce-based Content Security Policy and HSTS on
@@ -477,6 +482,10 @@ headers, static scripts, reporting configuration, and declared third-party
 script dependencies. Audit findings explain policy conflicts. They do not
 replace runtime reports for conditions that only a browser can observe.
 
+A document that declares no `csp` gets the `csp-missing` finding, because that
+document sends no Content-Security-Policy. To accept a document without a
+policy, declare `csp: false`. The finding then stops.
+
 The development server shows this audit for one route. Read the
 [route audit panel](./devtools.md) guide.
 
@@ -484,6 +493,13 @@ The development server shows this audit for one route. Read the
 
 The Vite plugin validates literal CORS, rate-limit, and document policy during
 a production build. A finding identifies the route file and export.
+
+The build also reads the policy cascade of the route tree. A page route that
+has no effective CSP gets the `document-policy-missing` warning. A document
+policy that declares only other headers also gets the warning. The warning
+names the route file and does not stop the build. The development server gives
+the same warning when it starts and after a route file changes. An explicit
+`csp: false` value stops the warning. An unreadable policy gets no warning.
 
 The build reads source without running route modules. The build does not guess
 an environment-derived value or a value from a function call.

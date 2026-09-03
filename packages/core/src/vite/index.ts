@@ -1,6 +1,5 @@
 export {
   assertRootNotFoundRoute as unstable_assertRootNotFoundRoute,
-  declaresPageRoute as unstable_declaresPageRoute,
   createClientEntrySource as unstable_createClientEntrySource,
   createClientEnvSource as unstable_createClientEnvSource,
   createServerEntrySource as unstable_createServerEntrySource,
@@ -15,7 +14,14 @@ export {
   isRouteAuditEnabled as unstable_isRouteAuditEnabled,
 } from "./plugin";
 export {
+  declaresPageRoute as unstable_declaresPageRoute,
+  inspectRouteFile as unstable_inspectRouteFile,
   verifyRoutePolicySource as unstable_verifyRoutePolicySource,
+} from "./policy-verification";
+export type {
+  DocumentCspState as unstable_DocumentCspState,
+  RouteFileInspection as unstable_RouteFileInspection,
+  StaticPolicyFinding as unstable_StaticPolicyFinding,
 } from "./policy-verification";
 export {
   findEnvKeyReferences as unstable_findEnvKeyReferences,

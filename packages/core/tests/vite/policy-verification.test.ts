@@ -1,12 +1,28 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   unstable_verifyRoutePolicies,
   unstable_formatStaticPolicyFindings,
   unstable_verifyRoutePolicySource,
 } from "@demiurgejs/core/vite";
+
+const pageRouteSource = `
+import { page } from "@demiurgejs/core";
+export const GET = page(() => null);`;
+
+async function createRouteTree(files: Record<string, string>) {
+  const root = await mkdtemp(join(tmpdir(), "demiurge-policy-tree-"));
+
+  for (const [name, source] of Object.entries(files)) {
+    const file = join(root, "routes", name);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, source);
+  }
+
+  return root;
+}
 
 describe("Vite static policy verification", () => {
   it("reports invalid literal CORS without evaluating the route module", async () => {
@@ -192,6 +208,227 @@ export const GET = json({}, {
     expect(unstable_formatStaticPolicyFindings(findings)).toContain(
       "[cors-invalid]",
     );
+  });
+
+  it("reports a page route that inherits no document policy", async () => {
+    const root = await createRouteTree({
+      "index.tsx": pageRouteSource,
+      "@policy.ts": `
+import { defineRoutePolicy } from "@demiurgejs/core";
+export const policy = defineRoutePolicy({
+  security: { request: { allowedMethods: ["GET"] } },
+});`,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, {
+      routesDir: "routes",
+    });
+
+    expect(findings).toEqual([
+      expect.objectContaining({
+        code: "document-policy-missing",
+        file: join(root, "routes", "index.tsx"),
+        severity: "warning",
+      }),
+    ]);
+  });
+
+  it("accepts a page route that inherits a document policy from a parent", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `
+import { defineRoutePolicy, security } from "@demiurgejs/core";
+export const policy = defineRoutePolicy({ document: security.strict() });`,
+      "blog/index.tsx": pageRouteSource,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("warns when a route-local document policy has headers but no CSP", async () => {
+    const root = await createRouteTree({
+      "index.tsx": `${pageRouteSource}
+export const policy = { document: { headers: { contentTypeOptions: "nosniff" } } };`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        code: "document-policy-missing",
+        file: join(root, "routes", "index.tsx"),
+      }),
+    ]);
+  });
+
+  it("accepts an inherited policy that explicitly disables CSP", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `export const policy = { document: { csp: false } };`,
+      "index.tsx": pageRouteSource,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("keeps an inherited CSP when a child policy adds only headers", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `
+import { security } from "@demiurgejs/core";
+export const policy = { document: security.strict() };`,
+      "admin/@policy.ts": `
+export const policy = { document: { headers: { contentTypeOptions: "nosniff" } } };`,
+      "admin/index.tsx": pageRouteSource,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("allows an unknown policy expression without a missing-CSP warning", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `export const policy = createPolicy();`,
+      "index.tsx": pageRouteSource,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("allows an unknown route-local policy without a missing-CSP warning", async () => {
+    const root = await createRouteTree({
+      "index.tsx": `${pageRouteSource}
+export const policy = { document: createDocumentPolicy() };`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it.each([
+    {
+      name: "a constant policy with an explicit opt-out",
+      source: `
+const documentPolicy = { csp: false };
+const routePolicy = { document: documentPolicy };
+export const policy = routePolicy;`,
+    },
+    {
+      name: "a constant policy with a CSP object",
+      source: `
+const documentPolicy = { csp: { defaultSrc: ["'self'"] } };
+const routePolicy = { document: documentPolicy };
+export const policy = routePolicy;`,
+    },
+  ])("reads $name", async ({ source }) => {
+    const root = await createRouteTree({
+      "index.tsx": `${pageRouteSource}
+${source}`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("reads static preset options and accepts an unknown preset", async () => {
+    const root = await createRouteTree({
+      "index.tsx": `${pageRouteSource}
+import { security } from "@demiurgejs/core";
+const options = { csp: false };
+export const policy = { document: security.strict(options) };`,
+      "admin/index.tsx": `${pageRouteSource}
+import { security } from "@demiurgejs/core";
+export const policy = { document: security.custom() };`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("keeps unknown static expressions out of missing-CSP diagnostics", async () => {
+    const root = await createRouteTree({
+      "unknown-identifier.tsx": `${pageRouteSource}
+const routePolicy = { document: documentPolicy };
+export const policy = routePolicy;`,
+      "undefined-document.tsx": `${pageRouteSource}
+export const policy = { document: undefined };`,
+      "unknown-member.tsx": `${pageRouteSource}
+export const policy = { document: options.strict() };`,
+      "unknown-csp.tsx": `${pageRouteSource}
+export const policy = { document: { csp: dynamicCsp } };`,
+      "spread-document.tsx": `${pageRouteSource}
+export const policy = { document: { ...dynamicDocument } };`,
+      "computed-document.tsx": `${pageRouteSource}
+const key = "csp";
+export const policy = { document: { [key]: false } };`,
+      "dynamic-preset-options.tsx": `${pageRouteSource}
+import { security } from "@demiurgejs/core";
+export const policy = { document: security.strict(dynamicOptions) };`,
+      "invalid-preset-options.tsx": `${pageRouteSource}
+import { security } from "@demiurgejs/core";
+export const policy = { document: security.strict(1) };`,
+      "constant-csp-value.tsx": `${pageRouteSource}
+const csp = "invalid";
+export const policy = { document: { csp } };`,
+      "constant-primitive-policy.tsx": `${pageRouteSource}
+const routePolicy = 1;
+export const policy = routePolicy;`,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, {
+      routesDir: "routes",
+    });
+
+    expect(
+      findings
+        .filter((finding) => finding.code === "document-policy-missing")
+        .map((finding) => finding.file),
+    ).toEqual([
+      join(root, "routes", "undefined-document.tsx"),
+    ]);
+  });
+
+  it("accepts a page route that declares its own document policy", async () => {
+    const root = await createRouteTree({
+      "index.tsx": `${pageRouteSource}
+export const policy = { document: { csp: false } };`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("reports no document policy for a route tree without a page route", async () => {
+    const root = await createRouteTree({
+      "api.ts": `
+import { json } from "@demiurgejs/core";
+export const GET = json({ ok: true });`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("does not report a policy expression that the build cannot read", async () => {
+    const root = await createRouteTree({
+      "index.tsx": pageRouteSource,
+      "@policy.ts": `
+import { defineRoutePolicy } from "@demiurgejs/core";
+export const policy = defineRoutePolicy(createPolicy());`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
   });
 
   it("returns no findings when the routes directory does not exist", async () => {

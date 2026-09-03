@@ -793,6 +793,34 @@ describe("security policy cascade", () => {
 });
 
 describe("security audit output", () => {
+  it("warns when a document declares no Content-Security-Policy", () => {
+    const audit = createSecurityAudit({
+      document: { policy: {} },
+      route: { method: "GET" },
+    });
+
+    expect(audit.findings).toContainEqual({
+      code: "csp-missing",
+      message:
+        "This document declares no Content-Security-Policy. Add document: security.strict() to the @policy.ts file of the route, or set csp: false to accept a document without a Content-Security-Policy.",
+      severity: "warning",
+    });
+  });
+
+  it("accepts a document that refuses a Content-Security-Policy", () => {
+    const audit = createSecurityAudit({
+      document: { policy: { csp: false } },
+    });
+
+    expect(audit.findings).toEqual([]);
+  });
+
+  it("does not warn about a missing policy for a route without a document", () => {
+    const audit = createSecurityAudit({ route: { method: "GET" } });
+
+    expect(audit.findings).toEqual([]);
+  });
+
   it("warns when report-only Trusted Types has no deliverable target", () => {
     const audit = createSecurityAudit({
       document: {
