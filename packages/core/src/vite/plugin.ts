@@ -7,6 +7,7 @@ import {
   type ConfigEnv,
   parseAst,
   type Plugin,
+  type ResolvedConfig,
   type UserConfig,
   type ViteDevServer,
 } from "vite";
@@ -139,6 +140,10 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
     configResolved(config) {
       root = config.root;
       isBuild = config.command === "build";
+
+      if (!isBuild) {
+        startDevEnvironment(options, config);
+      }
     },
     resolveId(id) {
       if (id === CLIENT_ENTRY_ID) {
@@ -249,8 +254,6 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       await generateTypedRoutes(root, options);
     },
     configureServer(server) {
-      startDevEnvironment(options, server);
-
       const reportPolicyFindings = async () => {
         const findings = await verifyRoutePolicies(server.config.root, options);
 
@@ -1058,16 +1061,19 @@ export function createHandler(options = {}) {
 
 // The development server does not load the generated server entry, so it
 // starts the declared environment here instead. A critical variable that is
-// absent or invalid stops the start of the development server.
+// absent or invalid stops the start of the development server. Vite resolves
+// the configuration before it creates the file watcher, so a failure in this
+// hook rejects `createServer` and leaves no open handle. A failure in
+// `configureServer` would instead hold the process open after the diagnostic.
 function startDevEnvironment(
   options: DemiurgeVitePluginOptions,
-  server: ViteDevServer,
+  config: ResolvedConfig,
 ) {
   if (!options.env || !Object.keys(options.env).length) return;
 
   startEnvironment(options.env, {
     warn: (message) => {
-      server.config.logger.warn(message);
+      config.logger.warn(message);
     },
   });
 }

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createServer, resolveConfig } from "vite";
 import {
   defineEnvSchema,
   env,
@@ -20,6 +21,7 @@ type DevMiddleware = (
 ) => void | Promise<void>;
 
 type PluginHarness = {
+  configResolved?: (config: unknown) => void;
   configureServer?: (server: unknown) => (() => void) | void;
 };
 
@@ -73,6 +75,14 @@ function createLogger() {
   return { error: vi.fn(), info: vi.fn(), warn: vi.fn() };
 }
 
+function startPlugin(
+  plugin: PluginHarness,
+  root: string,
+  logger: ReturnType<typeof createLogger>,
+) {
+  plugin.configResolved?.({ command: "serve", logger, root });
+}
+
 function requestFor(url: string) {
   return Object.assign(Readable.from([]), {
     headers: { host: "example.test" },
@@ -123,10 +133,10 @@ describe("development environment startup", () => {
     const root = await createRoot();
     const plugin = demiurge({ env: schema, routesDir: "routes" }) as PluginHarness;
     const middleware = createMiddlewareHarness();
+    const logger = createLogger();
 
-    plugin.configureServer?.(
-      createServerHarness(root, createLogger(), middleware) as never,
-    );
+    startPlugin(plugin, root, logger);
+    plugin.configureServer?.(createServerHarness(root, logger, middleware) as never);
 
     const response = new CapturingResponse();
     await middleware.handler(requestFor("/") as never, response as never, vi.fn());
@@ -140,13 +150,43 @@ describe("development environment startup", () => {
   it("stops the start when a critical variable is absent", async () => {
     const root = await createRoot();
     const plugin = demiurge({ env: schema, routesDir: "routes" }) as PluginHarness;
-    const middleware = createMiddlewareHarness();
 
-    expect(() =>
-      plugin.configureServer?.(
-        createServerHarness(root, createLogger(), middleware) as never,
-      )
-    ).toThrow(EnvValidationError);
+    expect(() => startPlugin(plugin, root, createLogger())).toThrow(
+      EnvValidationError,
+    );
+  });
+
+  // Vite creates the file watcher after it resolves the configuration and
+  // before it calls `configureServer`. The environment therefore starts while
+  // the configuration resolves, because a failure there leaves no open handle
+  // and `demiurge dev` can exit.
+  it("fails while Vite resolves the configuration", async () => {
+    const root = await createRoot();
+
+    await expect(
+      resolveConfig(
+        {
+          configFile: false,
+          logLevel: "silent",
+          plugins: [demiurge({ env: schema, routesDir: "routes", styles: false })],
+          root,
+        },
+        "serve",
+      ),
+    ).rejects.toThrow(EnvValidationError);
+  });
+
+  it("rejects the development server start and leaves no watcher", async () => {
+    const root = await createRoot();
+    const start = createServer({
+      configFile: false,
+      logLevel: "silent",
+      plugins: [demiurge({ env: schema, routesDir: "routes", styles: false })],
+      root,
+      server: { middlewareMode: true },
+    });
+
+    await expect(start).rejects.toThrow(EnvValidationError);
   });
 
   it("warns and starts when a required variable is not critical", async () => {
@@ -156,9 +196,7 @@ describe("development environment startup", () => {
       env: defineEnvSchema({ ANALYTICS_TOKEN: env.string() }),
       routesDir: "routes",
     }) as PluginHarness;
-    const middleware = createMiddlewareHarness();
-
-    plugin.configureServer?.(createServerHarness(root, logger, middleware) as never);
+    startPlugin(plugin, root, logger);
 
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining("ANALYTICS_TOKEN"),

@@ -178,7 +178,8 @@ separate concern. Demiurge reads the process environment.
 
 The development server validates the same schema. `demiurge dev` starts the
 environment before it serves the first request. A critical variable that is
-absent or invalid stops the start of the development server. A required
+absent or invalid stops the start of the development server, and the command
+exits with the diagnostic. A required
 variable that is not critical writes the same startup warning that a production
 process writes. Therefore, `readEnv` gives the same values in development and
 in a build.

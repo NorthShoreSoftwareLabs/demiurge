@@ -43,7 +43,7 @@ status live in GitHub issues and milestones.
   from one configuration file (#373).
 - `demiurge dev` starts the declared environment before it serves the first
   request. A critical variable that is absent or invalid stops the start of the
-  development server. A required variable that is not critical gives the same
+  development server, and the command exits with the diagnostic. A required variable that is not critical gives the same
   startup warning that a production process gives. `readEnv` earlier threw on
   every request in development, because only the generated server entry started
   the environment (#385).
