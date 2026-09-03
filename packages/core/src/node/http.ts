@@ -243,18 +243,6 @@ function encodeParsedBody(
   contentType: string | undefined,
   method: string,
 ) {
-  const type = mediaType(contentType);
-
-  if (type === "application/json") {
-    const json = JSON.stringify(parsed);
-
-    if (json === undefined) {
-      throw new ConsumedRequestBodyError(method);
-    }
-
-    return { body: json, contentType: undefined, length: Buffer.byteLength(json) };
-  }
-
   if (typeof parsed === "string") {
     return { body: parsed, length: Buffer.byteLength(parsed) };
   }
@@ -269,6 +257,18 @@ function encodeParsedBody(
 
   if (parsed instanceof ArrayBuffer) {
     return { body: parsed, length: parsed.byteLength };
+  }
+
+  const type = mediaType(contentType);
+
+  if (type === "application/json") {
+    const json = JSON.stringify(parsed);
+
+    if (json === undefined) {
+      throw new ConsumedRequestBodyError(method);
+    }
+
+    return { body: json, contentType: undefined, length: Buffer.byteLength(json) };
   }
 
   if (type === "application/x-www-form-urlencoded" && isRecord(parsed)) {

@@ -198,7 +198,7 @@ describe("Node HTTP bridge", () => {
     ).toThrow(ConsumedRequestBodyError);
   });
 
-  it("reconstructs a parsed JSON string as JSON", async () => {
+  it("preserves recovered string bodies with a JSON content type", async () => {
     const request = toWebRequest(
       consumed({
         body: "value",
@@ -210,7 +210,22 @@ describe("Node HTTP bridge", () => {
       { allowedHosts: ["example.test"] },
     );
 
-    await expect(request.json()).resolves.toBe("value");
+    await expect(request.text()).resolves.toBe("value");
+  });
+
+  it("preserves recovered JSON bytes with a JSON content type", async () => {
+    const request = toWebRequest(
+      consumed({
+        body: Buffer.from('{"name":"demiurge"}'),
+        headers: {
+          "content-type": "application/json",
+          host: "example.test",
+        },
+      }),
+      { allowedHosts: ["example.test"] },
+    );
+
+    await expect(request.json()).resolves.toEqual({ name: "demiurge" });
   });
 
   it("uses the raw bytes a host kept for the request", async () => {
