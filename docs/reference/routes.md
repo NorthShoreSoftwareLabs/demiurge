@@ -501,6 +501,11 @@ defineConfig({
 
 The application must then make its own `tsconfig.json` reach that path.
 
+An earlier version wrote the declarations to `.demiurge/route-manifest.d.ts`.
+If `tsconfig.json` names that file in `files` or `include`, remove the entry.
+The generator deletes the file, and TypeScript reports error TS6053 for a named
+file that is not present.
+
 `Link` accepts native anchor attributes except `href`. Use `to`, `path`,
 `search`, and `hash` to create the `href` value.
 

@@ -85,6 +85,11 @@ TypeScript `include` entry that covers `src` also covers the declarations, so
 the application does not name the file. Give `typedRoutes` an `outputFile`
 value to select another path, and make `tsconfig.json` reach that path.
 
+An earlier version wrote the declarations to `.demiurge/route-manifest.d.ts`.
+If `tsconfig.json` names that file in `files` or `include`, remove the entry.
+The generator deletes the file, and TypeScript reports error TS6053 for a named
+file that is not present.
+
 ## Commands
 
 `demiurge dev` starts the development server. `demiurge build` writes
