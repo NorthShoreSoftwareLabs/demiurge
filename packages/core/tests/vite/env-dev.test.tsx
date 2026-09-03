@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -46,11 +46,6 @@ afterEach(async () => {
 async function createRoot(routeSource = "export {}") {
   const root = await mkdtemp(join(tmpdir(), "demiurge-env-dev-"));
   roots.push(root);
-  await mkdir(join(root, "node_modules/@demiurgejs"), { recursive: true });
-  await symlink(
-    fileURLToPath(new URL("../..", import.meta.url)),
-    join(root, "node_modules/@demiurgejs/core"),
-  );
   const routesDir = join(root, "routes");
   await mkdir(routesDir, { recursive: true });
   await writeFile(join(routesDir, "index.tsx"), routeSource);
@@ -153,6 +148,13 @@ export const GET = json({ password: readEnv(schema).SITE_PASSWORD });
       configFile: false,
       logLevel: "silent",
       plugins: [demiurge({ env: schema, routesDir: "routes", styles: false })],
+      resolve: {
+        alias: {
+          "@demiurgejs/core": fileURLToPath(
+            new URL("../../src/index.ts", import.meta.url),
+          ),
+        },
+      },
       root,
       server: { middlewareMode: true },
     });
