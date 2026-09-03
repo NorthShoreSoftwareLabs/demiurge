@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
-import { readFile, readdir, rm } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { dirname, join, resolve, relative, sep } from "node:path";
 import MagicString from "magic-string";
 import {
@@ -111,8 +111,7 @@ const DEV_CLIENT_ENTRY_PATH = `/@id/${CLIENT_ENTRY_ID}`;
 const RESOLVED_CLIENT_ENTRY_ID = `\0${CLIENT_ENTRY_ID}`;
 const SERVER_ENTRY_ID = "virtual:demiurge/server-entry";
 const RESOLVED_SERVER_ENTRY_ID = `\0${SERVER_ENTRY_ID}`;
-const TYPED_ROUTES_FILE_NAME = "route-manifest.d.ts";
-const LEGACY_TYPED_ROUTES_OUTPUT = `.demiurge/${TYPED_ROUTES_FILE_NAME}`;
+const DEFAULT_TYPED_ROUTES_OUTPUT = ".demiurge/route-manifest.d.ts";
 export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
   if (options.locales) options = { ...options, locales: defineLocales(options.locales) };
   let root = process.cwd();
@@ -1655,15 +1654,12 @@ async function generateTypedRoutes(
   options: DemiurgeVitePluginOptions,
 ) {
   const routesDir = resolve(root, options.routesDir ?? "src/routes");
-  const selectedOutputFile = typeof options.typedRoutes === "object"
-    ? options.typedRoutes.outputFile
-    : undefined;
-  // A TypeScript include glob does not match a dot-directory. The default
-  // writes the declarations beside the routes directory, which the include
-  // glob that finds the routes already reaches.
-  const outputFile = selectedOutputFile
-    ? resolve(root, selectedOutputFile)
-    : join(dirname(routesDir), TYPED_ROUTES_FILE_NAME);
+  const outputFile = resolve(
+    root,
+    typeof options.typedRoutes === "object"
+      ? options.typedRoutes.outputFile ?? DEFAULT_TYPED_ROUTES_OUTPUT
+      : DEFAULT_TYPED_ROUTES_OUTPUT,
+  );
 
   await generateRoutes({
     outputFile,
@@ -1675,12 +1671,6 @@ async function generateTypedRoutes(
       ...(options.locales?.path?.reserved ?? []),
     ],
   });
-
-  if (!selectedOutputFile) {
-    // An application built before this default holds a stale declaration file
-    // in the dot-directory. Two files declare the same module, so remove it.
-    await rm(resolve(root, LEGACY_TYPED_ROUTES_OUTPUT), { force: true });
-  }
 }
 
 function isRouteFile(routesDir: string, file: string) {

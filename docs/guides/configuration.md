@@ -79,16 +79,13 @@ export default defineConfig({
 });
 ```
 
-`typedRoutes` writes the generated declarations to `route-manifest.d.ts` beside
-the routes directory. The default file is `src/route-manifest.d.ts`. A
-TypeScript `include` entry that covers `src` also covers the declarations, so
-the application does not name the file. Give `typedRoutes` an `outputFile`
-value to select another path, and make `tsconfig.json` reach that path.
+`typedRoutes` writes the generated declarations to
+`.demiurge/route-manifest.d.ts`. Add that file to the `include` array in
+`tsconfig.json`. A TypeScript directory entry or broad glob does not enter a
+directory that starts with a dot.
 
-An earlier version wrote the declarations to `.demiurge/route-manifest.d.ts`.
-If `tsconfig.json` names that file in `files` or `include`, remove the entry.
-The generator deletes the file, and TypeScript reports error TS6053 for a named
-file that is not present.
+Give `typedRoutes` an `outputFile` value to select another path. Make the
+`tsconfig.json` file include that path.
 
 ## Commands
 

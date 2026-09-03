@@ -523,7 +523,7 @@ try {
     [
       `import { defineConfig } from "@demiurgejs/core/config";`,
       `export default defineConfig({`,
-      `  routing: { typedRoutes: { outputFile: "src/route-manifest.d.ts" } },`,
+      `  routing: { typedRoutes: true },`,
       `});`,
     ].join("\n"),
   );
@@ -541,7 +541,7 @@ try {
           target: "ES2022",
           types: ["node", "vite/client"],
         },
-        include: ["src", "demiurge.config.ts"],
+        include: ["src", ".demiurge/route-manifest.d.ts", "demiurge.config.ts"],
       },
       null,
       2,
@@ -591,7 +591,7 @@ try {
       `import { vercelStatic } from "@demiurgejs/core/static";`,
       `export default defineConfig({`,
       `  deployment: { static: { provider: vercelStatic() } },`,
-      `  routing: { typedRoutes: { outputFile: "src/route-manifest.d.ts" } },`,
+      `  routing: { typedRoutes: true },`,
       `});`,
     ].join("\n"),
   );

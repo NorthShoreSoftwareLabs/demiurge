@@ -486,10 +486,10 @@ The function submits `FormData` through the HTTP route. It sends same-origin
 credentials and the mutation protocol headers. The browser does not import the
 server mutation handler.
 
-Demiurge writes the generated declarations to `route-manifest.d.ts` beside the
-routes directory. The default routes directory is `src/routes`, so the default
-file is `src/route-manifest.d.ts`. A TypeScript `include` entry that covers the
-routes therefore covers the declarations. Do not edit the file by hand.
+Demiurge writes the generated declarations to
+`.demiurge/route-manifest.d.ts`. Add that file to the `include` array in
+`tsconfig.json`. A TypeScript directory entry or broad glob does not enter a
+directory that starts with a dot. Do not edit the generated file.
 
 To select another path, give `typedRoutes` an `outputFile` value:
 
@@ -499,12 +499,7 @@ defineConfig({
 })
 ```
 
-The application must then make its own `tsconfig.json` reach that path.
-
-An earlier version wrote the declarations to `.demiurge/route-manifest.d.ts`.
-If `tsconfig.json` names that file in `files` or `include`, remove the entry.
-The generator deletes the file, and TypeScript reports error TS6053 for a named
-file that is not present.
+The application must then make its own `tsconfig.json` include that path.
 
 `Link` accepts native anchor attributes except `href`. Use `to`, `path`,
 `search`, and `hash` to create the `href` value.

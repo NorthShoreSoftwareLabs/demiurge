@@ -5,15 +5,9 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
-- `typedRoutes` writes the generated route declarations to `route-manifest.d.ts`
-  beside the routes directory. The default file is `src/route-manifest.d.ts`.
-  The earlier default was `.demiurge/route-manifest.d.ts`, which a TypeScript
-  `include` glob does not match, so the route types stayed unresolved. The
-  generator removes that file when the application uses the default path. An
-  application that names `.demiurge/route-manifest.d.ts` in the `files` or
-  `include` array of `tsconfig.json` must remove that entry. TypeScript reports
-  error TS6053 for a named file that is not present. An application that sets
-  `typedRoutes.outputFile` keeps its own path (#384).
+- The application template includes `.demiurge/route-manifest.d.ts` in
+  `tsconfig.json`. TypeScript can now load the generated route declarations.
+  Existing applications must add the file to the `include` array (#384).
 - Applications configure Demiurge in `demiurge.config.ts` at the project root.
   The framework generates the Vite configuration from that file, and it no
   longer exports the `demiurge(options)` plugin factory as an application API.

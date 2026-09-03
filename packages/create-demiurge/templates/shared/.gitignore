@@ -1,4 +1,3 @@
 node_modules
 dist
 .demiurge
-src/route-manifest.d.ts

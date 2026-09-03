@@ -3,7 +3,6 @@ coverage
 test-results
 node_modules
 .demiurge
-route-manifest.d.ts
 .vercel
 .omc
 .DS_Store
