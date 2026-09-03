@@ -13,6 +13,9 @@ status live in GitHub issues and milestones.
   route audit panel shows the same gap. Declare `csp: false` to accept a
   document without a policy. The emitted headers of an existing application do
   not change (#387).
+- The application template includes `.demiurge/route-manifest.d.ts` in
+  `tsconfig.json`. TypeScript can now load the generated route declarations.
+  Existing applications must add the file to the `include` array (#384).
 - Applications configure Demiurge in `demiurge.config.ts` at the project root.
   The framework generates the Vite configuration from that file, and it no
   longer exports the `demiurge(options)` plugin factory as an application API.

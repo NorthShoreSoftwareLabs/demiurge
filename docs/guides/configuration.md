@@ -79,6 +79,14 @@ export default defineConfig({
 });
 ```
 
+`typedRoutes` writes the generated declarations to
+`.demiurge/route-manifest.d.ts`. Add that file to the `include` array in
+`tsconfig.json`. A TypeScript directory entry or broad glob does not enter a
+directory that starts with a dot.
+
+Give `typedRoutes` an `outputFile` value to select another path. Make the
+`tsconfig.json` file include that path.
+
 ## Commands
 
 `demiurge dev` starts the development server. `demiurge build` writes
