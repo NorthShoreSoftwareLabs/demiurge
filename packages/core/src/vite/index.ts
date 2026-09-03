@@ -19,6 +19,7 @@ export {
   verifyRoutePolicySource as unstable_verifyRoutePolicySource,
 } from "./policy-verification";
 export type {
+  DocumentCspState as unstable_DocumentCspState,
   RouteFileInspection as unstable_RouteFileInspection,
   StaticPolicyFinding as unstable_StaticPolicyFinding,
 } from "./policy-verification";

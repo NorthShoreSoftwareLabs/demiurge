@@ -246,6 +246,70 @@ export const policy = defineRoutePolicy({ document: security.strict() });`,
     ).resolves.toEqual([]);
   });
 
+  it("warns when a route-local document policy has headers but no CSP", async () => {
+    const root = await createRouteTree({
+      "index.tsx": `${pageRouteSource}
+export const policy = { document: { headers: { contentTypeOptions: "nosniff" } } };`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        code: "document-policy-missing",
+        file: join(root, "routes", "index.tsx"),
+      }),
+    ]);
+  });
+
+  it("accepts an inherited policy that explicitly disables CSP", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `export const policy = { document: { csp: false } };`,
+      "index.tsx": pageRouteSource,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("keeps an inherited CSP when a child policy adds only headers", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `
+import { security } from "@demiurgejs/core";
+export const policy = { document: security.strict() };`,
+      "admin/@policy.ts": `
+export const policy = { document: { headers: { contentTypeOptions: "nosniff" } } };`,
+      "admin/index.tsx": pageRouteSource,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("allows an unknown policy expression without a missing-CSP warning", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `export const policy = createPolicy();`,
+      "index.tsx": pageRouteSource,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("allows an unknown route-local policy without a missing-CSP warning", async () => {
+    const root = await createRouteTree({
+      "index.tsx": `${pageRouteSource}
+export const policy = { document: createDocumentPolicy() };`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
   it("accepts a page route that declares its own document policy", async () => {
     const root = await createRouteTree({
       "index.tsx": `${pageRouteSource}
