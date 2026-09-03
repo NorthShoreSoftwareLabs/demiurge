@@ -25,6 +25,7 @@ export function createSecurityAudit(options: SecurityAuditOptions = {}) {
     : {};
 
   if (document) {
+    auditMissingCsp(document.policy, findings);
     auditReportOnlyDelivery(document.policy, findings);
   }
   const route = options.route
@@ -54,6 +55,24 @@ export function createSecurityAudit(options: SecurityAuditOptions = {}) {
     headers,
     route,
   } satisfies SecurityAudit;
+}
+
+// A document that declares no CSP sends none. The policy stays valid, so no
+// other check speaks. This finding makes the absent policy visible.
+function auditMissingCsp(
+  policy: SecurityPolicy,
+  findings: SecurityAuditFinding[],
+) {
+  if (policy.csp !== undefined) {
+    return;
+  }
+
+  findings.push({
+    code: "csp-missing",
+    message:
+      "This document declares no Content-Security-Policy. Add document: security.strict() to the @policy.ts file of the route, or set csp: false to accept a document without a policy.",
+    severity: "warning",
+  });
 }
 
 function auditReportOnlyDelivery(

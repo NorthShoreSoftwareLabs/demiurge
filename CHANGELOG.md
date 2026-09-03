@@ -5,6 +5,14 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- The framework reports a page route that sends no Content-Security-Policy. A
+  production build and the development server give the `document-policy-missing`
+  warning for each page route that inherits no `document` policy. The
+  warning names the route file. `createSecurityAudit(...)` gives the
+  `csp-missing` finding for a document policy that declares no `csp`, so the
+  route audit panel shows the same gap. Declare `csp: false` to accept a
+  document without a policy. The emitted headers of an existing application do
+  not change (#387).
 - Applications configure Demiurge in `demiurge.config.ts` at the project root.
   The framework generates the Vite configuration from that file, and it no
   longer exports the `demiurge(options)` plugin factory as an application API.

@@ -135,6 +135,10 @@ export const policy = {
 };
 ```
 
+A page route sends security headers only when a policy above it declares
+`document`. The build warns for a page route that inherits none, and the
+development server reports the same warning.
+
 The strict preset supplies a nonce-based CSP with `'strict-dynamic'`, HSTS,
 `frame-ancestors 'none'`, `nosniff`, a referrer policy, a permissions policy,
 and same-origin COOP and CORP. The request pipeline protects

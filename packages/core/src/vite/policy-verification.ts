@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { basename, dirname, relative, sep } from "node:path";
 import { parseAst, transformWithEsbuild } from "vite";
 import type { HttpMethod } from "../route";
 import {
@@ -12,6 +13,7 @@ import {
   type RouteSecurityPolicy,
   type SecurityPolicy,
 } from "../security";
+import { PACKAGE_NAME } from "../package-name";
 import { isPlainObject } from "../type-guards";
 
 type AstNode = {
@@ -28,12 +30,24 @@ function asAstNode(value: unknown): AstNode {
 }
 
 export type StaticPolicyFinding = {
-  code: "cors-invalid" | "cors-method-unavailable" | "rate-limit-invalid" |
-    "security-header-render-failed";
+  code: "cors-invalid" | "cors-method-unavailable" | "document-policy-missing" |
+    "rate-limit-invalid" | "security-header-render-failed";
   exportName?: string;
   file: string;
   message: string;
-  severity: "error";
+  severity: "error" | "warning";
+};
+
+export type RouteFileInspection = {
+  /**
+   * `true` when the file declares a document policy, and also when the policy
+   * expression is not statically readable. An unreadable expression is not
+   * evidence of an absent policy.
+   */
+  declaresDocumentPolicy: boolean;
+  declaresPageRoute: boolean;
+  file: string;
+  findings: StaticPolicyFinding[];
 };
 
 type ExtractedCapability = {
@@ -44,6 +58,7 @@ type ExtractedCapability = {
 type ExtractedRouteModule = {
   capabilities: Partial<Record<HttpMethod, ExtractedCapability>>;
   declaredMethods: Set<HttpMethod>;
+  declaresDocumentPolicy: boolean;
   policy?: RoutePolicy;
 };
 
@@ -70,20 +85,139 @@ const responseHelpers = new Set([
 ]);
 
 export async function verifyRoutePolicyFile(file: string) {
+  return (await inspectRouteFile(file)).findings;
+}
+
+export async function inspectRouteFile(
+  file: string,
+): Promise<RouteFileInspection> {
   const source = await readFile(file, "utf8");
-  return await verifyRoutePolicySource(source, file);
+  const extracted = await extractRouteModuleSource(source, file);
+
+  return {
+    declaresDocumentPolicy: extracted.declaresDocumentPolicy,
+    // An attached file owns no address, so it never declares a page route.
+    declaresPageRoute: !basename(file).startsWith("@") &&
+      declaresPageRoute(source),
+    file,
+    findings: validateExtractedRouteModule(extracted, file),
+  };
 }
 
 export async function verifyRoutePolicySource(source: string, file: string) {
+  return validateExtractedRouteModule(
+    await extractRouteModuleSource(source, file),
+    file,
+  );
+}
+
+async function extractRouteModuleSource(source: string, file: string) {
   const loader = file.endsWith(".tsx") ? "tsx" : "ts";
   const transformed = await transformWithEsbuild(source, file, {
     format: "esm",
     loader,
     target: "esnext",
   });
-  const extracted = extractRouteModule(transformed.code);
 
-  return validateExtractedRouteModule(extracted, file);
+  return extractRouteModule(transformed.code);
+}
+
+// A page route that inherits no document policy sends no security headers.
+// The application still works, so nothing else reports the gap. This check
+// reads the policy cascade of the route tree and names each page route that
+// no document policy covers.
+export function auditDocumentPolicyCoverage(
+  routesDir: string,
+  inspections: readonly RouteFileInspection[],
+): StaticPolicyFinding[] {
+  const covered = new Set<string>();
+
+  for (const inspection of inspections) {
+    if (!inspection.declaresDocumentPolicy) continue;
+    if (isPolicyFile(inspection.file)) covered.add(dirname(inspection.file));
+  }
+
+  const findings: StaticPolicyFinding[] = [];
+
+  for (const inspection of inspections) {
+    if (!inspection.declaresPageRoute || inspection.declaresDocumentPolicy) {
+      continue;
+    }
+    if (hasCoveringPolicy(routesDir, dirname(inspection.file), covered)) {
+      continue;
+    }
+
+    findings.push({
+      code: "document-policy-missing",
+      file: inspection.file,
+      message:
+        "This page route inherits no document policy, so its HTML response carries no Content-Security-Policy. Add document: security.strict() to a @policy.ts file above this route.",
+      severity: "warning",
+    });
+  }
+
+  return findings;
+}
+
+function isPolicyFile(file: string) {
+  return /^@policy\.tsx?$/.test(basename(file));
+}
+
+function hasCoveringPolicy(
+  routesDir: string,
+  directory: string,
+  covered: ReadonlySet<string>,
+) {
+  let current = directory;
+
+  while (true) {
+    if (covered.has(current)) return true;
+    if (isSameOrAbove(current, routesDir)) return false;
+    const parent = dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
+}
+
+function isSameOrAbove(directory: string, routesDir: string) {
+  const distance = relative(routesDir, directory);
+  return distance === "" || distance.split(sep)[0] === "..";
+}
+
+// Escaped because a package name may contain `.`, which the regex would
+// otherwise read as a wildcard.
+const PACKAGE_NAME_PATTERN = PACKAGE_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const DEMIURGE_NAMED_IMPORT = new RegExp(
+  `import\\s*\\{([^}]*)\\}\\s*from\\s*["']${PACKAGE_NAME_PATTERN}["']`,
+  "g",
+);
+
+// The plugin cannot evaluate route modules during the build. Therefore, page
+// detection reads the source. It checks the import, not only the word. An API
+// application can call `db.users.page(2)` without serving an HTML document.
+// Only a page route imports `page` from the framework package.
+export function declaresPageRoute(source: string) {
+  const locals = [...source.matchAll(DEMIURGE_NAMED_IMPORT)].flatMap((match) =>
+    match[1].split(",").flatMap((binding) => {
+      const [imported, local] = binding.trim().split(/\s+as\s+/);
+
+      // `import type { page }` cannot be called, and an alias renames what the
+      // call site looks like.
+      return imported.replace(/^type\s+/, "") === "page"
+        ? [local ?? imported]
+        : [];
+    }),
+  );
+
+  if (locals.length === 0) {
+    return false;
+  }
+
+  // Strip the import statements first so the binding list is not itself
+  // mistaken for a call.
+  const body = source.replace(DEMIURGE_NAMED_IMPORT, "");
+
+  return locals.some((local) => new RegExp(`\\b${local}\\s*\\(`).test(body));
 }
 
 function extractRouteModule(code: string): ExtractedRouteModule {
@@ -94,12 +228,16 @@ function extractRouteModule(code: string): ExtractedRouteModule {
   const exports = collectNamedExports(ast);
   const capabilities: ExtractedRouteModule["capabilities"] = {};
   const declaredMethods = new Set<HttpMethod>();
+  let declaresDocumentPolicy = false;
   let policy: RoutePolicy | undefined;
 
   for (const [exportName, localName] of exports) {
     const initializer = declarations.get(localName);
 
     if (exportName === "policy") {
+      declaresDocumentPolicy = initializer
+        ? readsDocumentPolicy(initializer, imports)
+        : true;
       if (initializer) {
         policy = extractRoutePolicy(initializer, imports, constants);
       }
@@ -113,7 +251,33 @@ function extractRouteModule(code: string): ExtractedRouteModule {
     if (capability) capabilities[exportName] = capability;
   }
 
-  return { capabilities, declaredMethods, policy };
+  return { capabilities, declaredMethods, declaresDocumentPolicy, policy };
+}
+
+// The coverage check asks whether a file declares a document policy at all,
+// not what that policy renders. A policy expression the build cannot read
+// counts as declared, because an unreadable expression proves nothing.
+function readsDocumentPolicy(
+  node: AstNode,
+  imports: Map<string, string>,
+): boolean {
+  if (node.type === "CallExpression") {
+    const localName = identifierName(node.callee);
+    if (localName && imports.get(localName) === "defineRoutePolicy") {
+      const argument = asNodeArray(node.arguments)[0];
+      return argument ? readsDocumentPolicy(argument, imports) : true;
+    }
+    return true;
+  }
+
+  if (node.type !== "ObjectExpression") return true;
+
+  return asNodeArray(node.properties).some((property) => {
+    if (property.type === "SpreadElement") return true;
+    if (property.type !== "Property") return false;
+    if (property.computed) return true;
+    return propertyName(property.key) === "document";
+  });
 }
 
 function collectVariableInitializers(ast: AstNode) {

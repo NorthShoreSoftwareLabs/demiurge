@@ -1,12 +1,28 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   unstable_verifyRoutePolicies,
   unstable_formatStaticPolicyFindings,
   unstable_verifyRoutePolicySource,
 } from "@demiurgejs/core/vite";
+
+const pageRouteSource = `
+import { page } from "@demiurgejs/core";
+export const GET = page(() => null);`;
+
+async function createRouteTree(files: Record<string, string>) {
+  const root = await mkdtemp(join(tmpdir(), "demiurge-policy-tree-"));
+
+  for (const [name, source] of Object.entries(files)) {
+    const file = join(root, "routes", name);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, source);
+  }
+
+  return root;
+}
 
 describe("Vite static policy verification", () => {
   it("reports invalid literal CORS without evaluating the route module", async () => {
@@ -192,6 +208,78 @@ export const GET = json({}, {
     expect(unstable_formatStaticPolicyFindings(findings)).toContain(
       "[cors-invalid]",
     );
+  });
+
+  it("reports a page route that inherits no document policy", async () => {
+    const root = await createRouteTree({
+      "index.tsx": pageRouteSource,
+      "@policy.ts": `
+import { defineRoutePolicy } from "@demiurgejs/core";
+export const policy = defineRoutePolicy({
+  security: { request: { allowedMethods: ["GET"] } },
+});`,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, {
+      routesDir: "routes",
+    });
+
+    expect(findings).toEqual([
+      expect.objectContaining({
+        code: "document-policy-missing",
+        file: join(root, "routes", "index.tsx"),
+        severity: "warning",
+      }),
+    ]);
+  });
+
+  it("accepts a page route that inherits a document policy from a parent", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `
+import { defineRoutePolicy, security } from "@demiurgejs/core";
+export const policy = defineRoutePolicy({ document: security.strict() });`,
+      "blog/index.tsx": pageRouteSource,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("accepts a page route that declares its own document policy", async () => {
+    const root = await createRouteTree({
+      "index.tsx": `${pageRouteSource}
+export const policy = { document: { csp: false } };`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("reports no document policy for a route tree without a page route", async () => {
+    const root = await createRouteTree({
+      "api.ts": `
+import { json } from "@demiurgejs/core";
+export const GET = json({ ok: true });`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("does not report a policy expression that the build cannot read", async () => {
+    const root = await createRouteTree({
+      "index.tsx": pageRouteSource,
+      "@policy.ts": `
+import { defineRoutePolicy } from "@demiurgejs/core";
+export const policy = defineRoutePolicy(createPolicy());`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
   });
 
   it("returns no findings when the routes directory does not exist", async () => {
