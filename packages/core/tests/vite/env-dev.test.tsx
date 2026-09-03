@@ -1,9 +1,10 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createServer, resolveConfig } from "vite";
+import { createServer, resolveConfig, type ViteDevServer } from "vite";
 import {
   defineEnvSchema,
   env,
@@ -26,11 +27,15 @@ type PluginHarness = {
 };
 
 const roots: string[] = [];
+const servers: ViteDevServer[] = [];
 const schema = defineEnvSchema({
   SITE_PASSWORD: env.secret({ critical: true, minLength: 1 }),
 });
 
 afterEach(async () => {
+  for (const server of servers.splice(0)) {
+    await server.close();
+  }
   resetEnvironment();
   delete process.env.SITE_PASSWORD;
   for (const root of roots.splice(0)) {
@@ -38,12 +43,17 @@ afterEach(async () => {
   }
 });
 
-async function createRoot() {
+async function createRoot(routeSource = "export {}") {
   const root = await mkdtemp(join(tmpdir(), "demiurge-env-dev-"));
   roots.push(root);
+  await mkdir(join(root, "node_modules/@demiurgejs"), { recursive: true });
+  await symlink(
+    fileURLToPath(new URL("../..", import.meta.url)),
+    join(root, "node_modules/@demiurgejs/core"),
+  );
   const routesDir = join(root, "routes");
   await mkdir(routesDir, { recursive: true });
-  await writeFile(join(routesDir, "index.tsx"), "export {}");
+  await writeFile(join(routesDir, "index.tsx"), routeSource);
 
   return root;
 }
@@ -128,6 +138,45 @@ function createServerHarness(
 }
 
 describe("development environment startup", () => {
+  it("serves an actual route module with the initialized environment", async () => {
+    process.env.SITE_PASSWORD = "a-development-password";
+    const root = await createRoot(`
+import { defineEnvSchema, env, json, readEnv } from "@demiurgejs/core";
+
+const schema = defineEnvSchema({
+  SITE_PASSWORD: env.secret({ critical: true, minLength: 1 }),
+});
+
+export const GET = json({ password: readEnv(schema).SITE_PASSWORD });
+`);
+    const server = await createServer({
+      configFile: false,
+      logLevel: "silent",
+      plugins: [demiurge({ env: schema, routesDir: "routes", styles: false })],
+      root,
+      server: { middlewareMode: true },
+    });
+    servers.push(server);
+    const response = new CapturingResponse();
+    const completed = new Promise<void>((resolve, reject) => {
+      response.once("finish", resolve);
+      response.once("error", reject);
+      server.middlewares.handle(
+        requestFor("/") as never,
+        response as never,
+        (error?: unknown) => {
+          if (error) reject(error);
+        },
+      );
+    });
+    await completed;
+
+    expect(response.statusCode, response.body).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({
+      password: "a-development-password",
+    });
+  });
+
   it("gives a request the variables that the configuration declares", async () => {
     process.env.SITE_PASSWORD = "a-development-password";
     const root = await createRoot();
