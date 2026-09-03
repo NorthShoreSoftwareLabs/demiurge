@@ -5,6 +5,9 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- The application template includes `.demiurge/route-manifest.d.ts` in
+  `tsconfig.json`. TypeScript can now load the generated route declarations.
+  Existing applications must add the file to the `include` array (#384).
 - Applications configure Demiurge in `demiurge.config.ts` at the project root.
   The framework generates the Vite configuration from that file, and it no
   longer exports the `demiurge(options)` plugin factory as an application API.
