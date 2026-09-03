@@ -151,6 +151,68 @@ describe("Node HTTP bridge", () => {
     expect(request.headers.get("content-length")).toBe("19");
   });
 
+  it("accepts an empty POST whose stream already ended", async () => {
+    const drained = Readable.from([]);
+
+    await drained.toArray();
+
+    const request = toWebRequest(
+      consumed(
+        { headers: { host: "example.test" } },
+        drained,
+      ),
+      { allowedHosts: ["example.test"] },
+    );
+
+    await expect(request.text()).resolves.toBe("");
+  });
+
+  it("accepts an empty POST after a host read an empty chunk", async () => {
+    const drained = Readable.from([Buffer.alloc(0)]);
+
+    await drained.toArray();
+
+    const request = toWebRequest(
+      consumed(
+        { headers: { "content-length": "0", host: "example.test" } },
+        drained,
+      ),
+      { allowedHosts: ["example.test"] },
+    );
+
+    await expect(request.text()).resolves.toBe("");
+  });
+
+  it.each([
+    "multipart/form-data; boundary=client-boundary",
+    "application/octet-stream",
+  ])("requires raw bytes for a parsed %s body", (contentType) => {
+    expect(() =>
+      toWebRequest(
+        consumed({
+          body: { field: "value" },
+          headers: { "content-type": contentType, host: "example.test" },
+        }),
+        { allowedHosts: ["example.test"] },
+      ),
+    ).toThrow(ConsumedRequestBodyError);
+  });
+
+  it("reconstructs a parsed JSON string as JSON", async () => {
+    const request = toWebRequest(
+      consumed({
+        body: "value",
+        headers: {
+          "content-type": "application/json",
+          host: "example.test",
+        },
+      }),
+      { allowedHosts: ["example.test"] },
+    );
+
+    await expect(request.json()).resolves.toBe("value");
+  });
+
   it("uses the raw bytes a host kept for the request", async () => {
     const request = toWebRequest(
       consumed({
@@ -172,6 +234,74 @@ describe("Node HTTP bridge", () => {
 
     await expect(request.text()).resolves.toBe("a=1&b=2");
     expect(request.headers.get("content-length")).toBe("7");
+  });
+
+  it("updates headers when the caller supplies URL search parameters", async () => {
+    const request = toWebRequest(
+      consumed({
+        headers: {
+          "content-length": "999",
+          "content-type": "application/json",
+          host: "example.test",
+        },
+      }),
+      {
+        allowedHosts: ["example.test"],
+        body: new URLSearchParams({ a: "1" }),
+      },
+    );
+
+    const form = await request.formData();
+
+    expect(form.get("a")).toBe("1");
+    expect(request.headers.get("content-type")).toBe(
+      "application/x-www-form-urlencoded;charset=UTF-8",
+    );
+    expect(request.headers.get("content-length")).toBe("3");
+  });
+
+  it("lets Request create multipart headers for supplied FormData", async () => {
+    const body = new FormData();
+    body.set("a", "1");
+
+    const request = toWebRequest(
+      consumed({
+        headers: {
+          "content-length": "999",
+          "content-type": "application/json",
+          host: "example.test",
+        },
+      }),
+      { allowedHosts: ["example.test"], body },
+    );
+
+    const form = await request.formData();
+
+    expect(form.get("a")).toBe("1");
+    expect(request.headers.get("content-type")).toMatch(
+      /^multipart\/form-data; boundary=/,
+    );
+    expect(request.headers.get("content-length")).toBeNull();
+  });
+
+  it("uses Blob metadata for a supplied body", async () => {
+    const request = toWebRequest(
+      consumed({
+        headers: {
+          "content-length": "999",
+          "content-type": "application/json",
+          host: "example.test",
+        },
+      }),
+      {
+        allowedHosts: ["example.test"],
+        body: new Blob(["raw"], { type: "text/plain" }),
+      },
+    );
+
+    await expect(request.text()).resolves.toBe("raw");
+    expect(request.headers.get("content-type")).toBe("text/plain");
+    expect(request.headers.get("content-length")).toBe("3");
   });
 
   it("reports a read request stream that kept no body", () => {

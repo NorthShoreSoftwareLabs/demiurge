@@ -199,10 +199,13 @@ hosts read that stream before the adapter runs. Vercel Functions parse the body
 and put the result on `request.body`. Express and Connect do the same with
 `express.json()` or `express.urlencoded()`.
 
-When a host leaves a parsed body on the request, `toWebRequest(...)` encodes
-that value again with the media type the client declared. It also corrects
-`content-length`. The bytes then come from the host's parse, not from the
-client, so the field order and the encoding are the host's.
+When a host leaves a parsed JSON or URL-encoded body on the request,
+`toWebRequest(...)` encodes that value again with the declared media type. It
+also corrects `content-length`. The bytes then come from the host's parse, not
+from the client, so the field order and the encoding are the host's.
+
+The adapter cannot reconstruct multipart or unsupported parsed bodies. Supply
+the original bytes with the `body` option for those media types.
 
 To keep the original bytes, read them yourself and pass them with the `body`
 option:

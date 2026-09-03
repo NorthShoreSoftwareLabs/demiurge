@@ -160,6 +160,19 @@ export function toWebRequest(
         // request carries.
         headers.set("content-length", String(recovered.length));
         headers.delete("transfer-encoding");
+      } else {
+        // The supplied body can have a different size from the incoming body.
+        // Remove framing headers when the adapter cannot determine its size.
+        headers.delete("content-length");
+        headers.delete("transfer-encoding");
+      }
+
+      if (recovered.contentType !== undefined) {
+        if (recovered.contentType === null) {
+          headers.delete("content-type");
+        } else {
+          headers.set("content-type", recovered.contentType);
+        }
       }
     }
   }
@@ -180,22 +193,34 @@ function resolveRecoveredBody(
   suppliedBody: BodyInit | null | undefined,
 ) {
   if (suppliedBody !== undefined) {
-    return { body: suppliedBody, length: knownBodyLength(suppliedBody) };
+    return {
+      body: suppliedBody,
+      contentType: suppliedBodyContentType(suppliedBody),
+      length: knownBodyLength(suppliedBody),
+    };
   }
 
   // TYPE-EVIDENCE: a host such as Vercel Functions or Express body-parser adds the parsed body to the request. The cast reads that optional property.
   const parsed = (request as IncomingMessage & { body?: unknown }).body;
 
   if (parsed !== undefined && parsed !== null) {
-    return encodeParsedBody(parsed, request.headers["content-type"]);
+    return encodeParsedBody(
+      parsed,
+      request.headers["content-type"],
+      request.method ?? "",
+    );
   }
 
-  if (
-    request.readableEnded ||
-    request.readableDidRead ||
-    isDrainedByHost(request)
-  ) {
+  if (Number(request.headers["content-length"]) === 0) {
+    return { body: null, length: 0 };
+  }
+
+  if (request.readableDidRead || isDrainedByHost(request)) {
     throw new ConsumedRequestBodyError(request.method ?? "");
+  }
+
+  if (request.readableEnded) {
+    return { body: null, length: 0 };
   }
 
   return null;
@@ -204,7 +229,7 @@ function resolveRecoveredBody(
 // A complete message with no buffered data and no read is a message that
 // another reader took. A message the adapter owns still holds its bytes.
 function isDrainedByHost(request: IncomingMessage) {
-  if (!request.complete || request.readableLength > 0) {
+  if (!request.complete || request.readableLength > 0 || request.readableEnded) {
     return false;
   }
 
@@ -213,7 +238,23 @@ function isDrainedByHost(request: IncomingMessage) {
   return declaredLength > 0 || Boolean(request.headers["transfer-encoding"]);
 }
 
-function encodeParsedBody(parsed: unknown, contentType: string | undefined) {
+function encodeParsedBody(
+  parsed: unknown,
+  contentType: string | undefined,
+  method: string,
+) {
+  const type = mediaType(contentType);
+
+  if (type === "application/json") {
+    const json = JSON.stringify(parsed);
+
+    if (json === undefined) {
+      throw new ConsumedRequestBodyError(method);
+    }
+
+    return { body: json, contentType: undefined, length: Buffer.byteLength(json) };
+  }
+
   if (typeof parsed === "string") {
     return { body: parsed, length: Buffer.byteLength(parsed) };
   }
@@ -230,21 +271,25 @@ function encodeParsedBody(parsed: unknown, contentType: string | undefined) {
     return { body: parsed, length: parsed.byteLength };
   }
 
-  // The host gives the parsed value, not the bytes the client sent. The adapter
-  // encodes that value again with the media type the client declared.
-  if (
-    typeof parsed === "object" &&
-    parsed !== null &&
-    mediaType(contentType) === "application/x-www-form-urlencoded"
-  ) {
+  if (type === "application/x-www-form-urlencoded" && isRecord(parsed)) {
     const encoded = toSearchParams(parsed).toString();
 
-    return { body: encoded, length: Buffer.byteLength(encoded) };
+    return { body: encoded, contentType: undefined, length: Buffer.byteLength(encoded) };
   }
 
-  const json = JSON.stringify(parsed) ?? "";
+  // A parsed multipart or unknown body does not contain the original bytes.
+  // Require the host to pass those bytes through the body option.
+  throw new ConsumedRequestBodyError(method);
+}
 
-  return { body: json, length: Buffer.byteLength(json) };
+function isRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+
+  return prototype === Object.prototype || prototype === null;
 }
 
 function toSearchParams(parsed: object) {
@@ -278,11 +323,31 @@ function knownBodyLength(body: BodyInit | null) {
     return body.byteLength;
   }
 
+  if (body instanceof Blob) {
+    return body.size;
+  }
+
   if (body instanceof URLSearchParams) {
     return Buffer.byteLength(body.toString());
   }
 
   return null;
+}
+
+function suppliedBodyContentType(body: BodyInit | null) {
+  if (body === null || body instanceof FormData) {
+    return null;
+  }
+
+  if (body instanceof URLSearchParams) {
+    return "application/x-www-form-urlencoded;charset=UTF-8";
+  }
+
+  if (body instanceof Blob) {
+    return body.type || null;
+  }
+
+  return undefined;
 }
 
 function mediaType(contentType: string | undefined) {
