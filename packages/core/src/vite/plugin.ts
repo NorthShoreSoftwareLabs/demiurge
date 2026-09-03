@@ -7,6 +7,7 @@ import {
   type ConfigEnv,
   parseAst,
   type Plugin,
+  type ResolvedConfig,
   type UserConfig,
   type ViteDevServer,
 } from "vite";
@@ -47,7 +48,7 @@ import { parseImageVariantPath } from "../platform/image-url";
 import type { ImagePolicy } from "../platform/images";
 import { createCspNonce } from "../security/policy";
 import type { EnvSchema, EnvSource } from "../security/env";
-import { serializeEnvSchema } from "../security/env-startup";
+import { serializeEnvSchema, startEnvironment } from "../security/env-startup";
 import {
   findEnvKeyReferences,
   findImportPath,
@@ -139,6 +140,10 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
     configResolved(config) {
       root = config.root;
       isBuild = config.command === "build";
+
+      if (!isBuild) {
+        startDevEnvironment(options, config);
+      }
     },
     resolveId(id) {
       if (id === CLIENT_ENTRY_ID) {
@@ -1052,6 +1057,25 @@ export function createHandler(options = {}) {
   });
 }
 `;
+}
+
+// The development server does not load the generated server entry, so it
+// starts the declared environment here instead. A critical variable that is
+// absent or invalid stops the start of the development server. Vite resolves
+// the configuration before it creates the file watcher, so a failure in this
+// hook rejects `createServer` and leaves no open handle. A failure in
+// `configureServer` would instead hold the process open after the diagnostic.
+function startDevEnvironment(
+  options: DemiurgeVitePluginOptions,
+  config: ResolvedConfig,
+) {
+  if (!options.env || !Object.keys(options.env).length) return;
+
+  startEnvironment(options.env, {
+    warn: (message) => {
+      config.logger.warn(message);
+    },
+  });
 }
 
 // Both virtual entries use this function. Therefore, their prefix removal and

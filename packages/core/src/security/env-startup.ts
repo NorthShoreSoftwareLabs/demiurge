@@ -20,7 +20,22 @@ export type EnvStartupResult = {
   warnings: string[];
 };
 
-const initialized = new Map<string, unknown>();
+// Vite can load the plugin and the application entry from separate package
+// bundles. Store the values on a registered symbol so both bundles share one
+// process-wide environment state.
+const environmentState = Symbol.for("demiurge.environmentState");
+// TYPE-EVIDENCE: globalThis stores the process-local map under the registered symbol.
+const runtime = globalThis as typeof globalThis & Record<symbol, unknown>;
+const initialized = getInitializedEnvironment();
+
+function getInitializedEnvironment(): Map<string, unknown> {
+  const existing = runtime[environmentState];
+  if (existing instanceof Map) return existing;
+
+  const values = new Map<string, unknown>();
+  runtime[environmentState] = values;
+  return values;
+}
 
 // The configuration file declares the schema. The build writes this
 // description into the generated server entry, because the production process
