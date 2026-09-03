@@ -16,6 +16,9 @@ export type NodeOriginPolicy = {
 };
 
 export type ToWebRequestOptions = NodeOriginPolicy & {
+  // A host that reads the request body before the adapter runs can supply the
+  // bytes it recovered. The adapter then uses them instead of the stream.
+  body?: BodyInit | null;
   signal?: AbortSignal;
 };
 
@@ -53,6 +56,21 @@ export class UntrustedHostError extends Error {
     super(`HTTP host "${host}" is not allowed.`);
     this.host = host;
     this.name = "UntrustedHostError";
+  }
+}
+
+export class ConsumedRequestBodyError extends Error {
+  method: string;
+
+  constructor(method: string) {
+    super(
+      `The request body for the ${method} request was already read. ` +
+        "A host such as Vercel Functions or Express body-parser reads the " +
+        "body before the adapter runs. Supply the recovered bytes with the " +
+        "toWebRequest body option.",
+    );
+    this.method = method;
+    this.name = "ConsumedRequestBodyError";
   }
 }
 
@@ -118,22 +136,157 @@ export function toWebRequest(
   const authority = validateAllowedHost(host, options.allowedHosts);
   const origin = `${protocol}://${authority}`;
   const url = new URL(request.url ?? "/", origin);
+  const headers = toHeaders(request.headers);
   const init: RequestInit & { duplex?: "half" } = {
-    headers: toHeaders(request.headers),
+    headers,
     method,
     signal: options.signal,
   };
 
   if (method !== "GET" && method !== "HEAD") {
-    // TYPE-EVIDENCE: Readable.toWeb returns a web stream that matches the DOM ReadableStream body type.
-    init.body = Readable.toWeb(request) as ReadableStream;
-    init.duplex = "half";
+    const recovered = resolveRecoveredBody(request, options.body);
+
+    if (recovered === null) {
+      // TYPE-EVIDENCE: Readable.toWeb returns a web stream that matches the DOM ReadableStream body type.
+      init.body = Readable.toWeb(request) as ReadableStream;
+      init.duplex = "half";
+    } else {
+      init.body = recovered.body;
+      init.duplex = "half";
+
+      if (recovered.length !== null) {
+        // The host reports the length of the original bytes. Recovered bytes
+        // can have a different length, so the header must describe what this
+        // request carries.
+        headers.set("content-length", String(recovered.length));
+        headers.delete("transfer-encoding");
+      }
+    }
   }
 
   const webRequest = new Request(url, init);
   setRequestConnectionMetadata(webRequest, { clientIp: proxy.clientIp });
 
   return webRequest;
+}
+
+// A host that reads the request body before the adapter runs leaves an
+// IncomingMessage that gives no data and never ends. `Readable.toWeb` on that
+// stream makes a request body that waits forever, and every unsafe request
+// stops with no error. The adapter must use the bytes the host kept instead.
+// A `null` result means the adapter still owns the stream.
+function resolveRecoveredBody(
+  request: IncomingMessage,
+  suppliedBody: BodyInit | null | undefined,
+) {
+  if (suppliedBody !== undefined) {
+    return { body: suppliedBody, length: knownBodyLength(suppliedBody) };
+  }
+
+  // TYPE-EVIDENCE: a host such as Vercel Functions or Express body-parser adds the parsed body to the request. The cast reads that optional property.
+  const parsed = (request as IncomingMessage & { body?: unknown }).body;
+
+  if (parsed !== undefined && parsed !== null) {
+    return encodeParsedBody(parsed, request.headers["content-type"]);
+  }
+
+  if (
+    request.readableEnded ||
+    request.readableDidRead ||
+    isDrainedByHost(request)
+  ) {
+    throw new ConsumedRequestBodyError(request.method ?? "");
+  }
+
+  return null;
+}
+
+// A complete message with no buffered data and no read is a message that
+// another reader took. A message the adapter owns still holds its bytes.
+function isDrainedByHost(request: IncomingMessage) {
+  if (!request.complete || request.readableLength > 0) {
+    return false;
+  }
+
+  const declaredLength = Number(request.headers["content-length"]);
+
+  return declaredLength > 0 || Boolean(request.headers["transfer-encoding"]);
+}
+
+function encodeParsedBody(parsed: unknown, contentType: string | undefined) {
+  if (typeof parsed === "string") {
+    return { body: parsed, length: Buffer.byteLength(parsed) };
+  }
+
+  if (ArrayBuffer.isView(parsed)) {
+    const bytes = Uint8Array.from(
+      new Uint8Array(parsed.buffer, parsed.byteOffset, parsed.byteLength),
+    );
+
+    return { body: bytes, length: bytes.byteLength };
+  }
+
+  if (parsed instanceof ArrayBuffer) {
+    return { body: parsed, length: parsed.byteLength };
+  }
+
+  // The host gives the parsed value, not the bytes the client sent. The adapter
+  // encodes that value again with the media type the client declared.
+  if (
+    typeof parsed === "object" &&
+    parsed !== null &&
+    mediaType(contentType) === "application/x-www-form-urlencoded"
+  ) {
+    const encoded = toSearchParams(parsed).toString();
+
+    return { body: encoded, length: Buffer.byteLength(encoded) };
+  }
+
+  const json = JSON.stringify(parsed) ?? "";
+
+  return { body: json, length: Buffer.byteLength(json) };
+}
+
+function toSearchParams(parsed: object) {
+  const params = new URLSearchParams();
+
+  for (const [name, value] of Object.entries(parsed)) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        params.append(name, String(item));
+      }
+
+      continue;
+    }
+
+    params.append(name, String(value));
+  }
+
+  return params;
+}
+
+function knownBodyLength(body: BodyInit | null) {
+  if (body === null) {
+    return 0;
+  }
+
+  if (typeof body === "string") {
+    return Buffer.byteLength(body);
+  }
+
+  if (ArrayBuffer.isView(body) || body instanceof ArrayBuffer) {
+    return body.byteLength;
+  }
+
+  if (body instanceof URLSearchParams) {
+    return Buffer.byteLength(body.toString());
+  }
+
+  return null;
+}
+
+function mediaType(contentType: string | undefined) {
+  return contentType?.split(";")[0].trim().toLowerCase();
 }
 
 function resolveProtocol(

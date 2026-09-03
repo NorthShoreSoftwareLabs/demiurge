@@ -15,6 +15,7 @@ import { createStaticFileHandler } from "./static";
 import type { StaticFileHandler, StaticFileHandlerOptions } from "./static";
 
 export {
+  ConsumedRequestBodyError,
   UntrustedHostError,
   UnsupportedMethodError,
   toHeaders,
