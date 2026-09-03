@@ -1,7 +1,7 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { build } from "vite";
+import { build, createLogger } from "vite";
 import { describe, expect, it } from "vitest";
 import { unstable_demiurge as demiurge } from "@demiurgejs/core/vite";
 
@@ -22,7 +22,64 @@ async function buildPolicyRoute(source: string) {
   });
 }
 
+async function buildPagePolicyRoute(policy: string) {
+  const root = await mkdtemp(join(tmpdir(), "demiurge-page-policy-build-"));
+  const routesDir = join(root, "src", "routes");
+  await mkdir(routesDir, { recursive: true });
+  await writeFile(
+    join(routesDir, "@not-found.tsx"),
+    "export default function NotFound() { return null; }",
+  );
+  await writeFile(
+    join(routesDir, "index.tsx"),
+    `import { page } from "@demiurgejs/core";
+export const GET = page({ view: () => null });
+${policy}`,
+  );
+
+  const warnings: string[] = [];
+  const logger = createLogger("silent");
+  logger.warn = (message) => warnings.push(message);
+
+  try {
+    await build({
+      build: {
+        outDir: join(root, "dist"),
+        rollupOptions: { external: ["@demiurgejs/core"] },
+      },
+      configFile: false,
+      customLogger: logger,
+      logLevel: "silent",
+      plugins: [demiurge({ styles: false })],
+      root,
+    });
+    return warnings;
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+}
+
 describe("Vite production policy build", () => {
+  it("warns but completes when a page policy has headers without CSP", async () => {
+    const warnings = await buildPagePolicyRoute(`export const policy = {
+  document: { headers: { contentTypeOptions: "nosniff" } },
+};`);
+
+    expect(warnings).toContainEqual(
+      expect.stringContaining("[document-policy-missing]"),
+    );
+  });
+
+  it("completes without a warning when a page policy disables CSP", async () => {
+    const warnings = await buildPagePolicyRoute(
+      "export const policy = { document: { csp: false } };",
+    );
+
+    expect(warnings).not.toContainEqual(
+      expect.stringContaining("[document-policy-missing]"),
+    );
+  });
+
   it.each([
     {
       code: "cors-invalid",
