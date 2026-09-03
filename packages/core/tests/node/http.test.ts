@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";
 import { createMemoryRateLimitStore, enforceRateLimit } from "@demiurgejs/core";
 import {
+  ConsumedRequestBodyError,
   UntrustedHostError,
   UnsupportedMethodError,
   toHeaders,
@@ -16,6 +17,22 @@ function incoming(init: Partial<IncomingMessage> = {}) {
     method: "GET",
     socket: { remoteAddress: "198.51.100.20" },
     url: "/health?ready=true",
+    ...init,
+  }) as IncomingMessage;
+}
+
+// A host such as Vercel Functions reads the stream and leaves a request that
+// gives no data and never ends.
+function consumed(
+  init: Partial<IncomingMessage> & { body?: unknown } = {},
+  stream: Readable = new Readable({ read() {} }),
+) {
+  return Object.assign(stream, {
+    complete: true,
+    headers: {},
+    method: "POST",
+    socket: { remoteAddress: "198.51.100.20" },
+    url: "/submit",
     ...init,
   }) as IncomingMessage;
 }
@@ -64,6 +81,255 @@ describe("Node HTTP bridge", () => {
     );
 
     await expect(request.text()).resolves.toBe("hello");
+  });
+
+  it("streams the body when the adapter owns the request stream", async () => {
+    const stream = new Readable({ read() {} });
+    const request = toWebRequest(
+      Object.assign(stream, {
+        headers: { host: "example.test" },
+        method: "POST",
+        socket: { remoteAddress: "198.51.100.20" },
+        url: "/upload",
+      }) as IncomingMessage,
+      { allowedHosts: ["example.test"] },
+    );
+
+    const reader = request.body!.getReader();
+    stream.push("first");
+
+    const first = await reader.read();
+
+    expect(new TextDecoder().decode(first.value)).toBe("first");
+
+    stream.push(null);
+
+    expect((await reader.read()).done).toBe(true);
+  });
+
+  it("rebuilds a form body that the host parsed before the adapter ran", async () => {
+    const request = toWebRequest(
+      consumed({
+        body: { a: "1", b: "two" },
+        headers: {
+          "content-length": "9",
+          "content-type": "application/x-www-form-urlencoded",
+          host: "example.test",
+        },
+      }),
+      { allowedHosts: ["example.test"] },
+    );
+    const form = await request.formData();
+
+    expect(form.get("a")).toBe("1");
+    expect(form.get("b")).toBe("two");
+    expect(request.headers.get("content-length")).toBe("9");
+  });
+
+  it("rebuilds a JSON body that Express body-parser already read", async () => {
+    const drained = Readable.from([]);
+
+    await drained.toArray();
+
+    const request = toWebRequest(
+      consumed(
+        {
+          body: { name: "demiurge" },
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            host: "example.test",
+          },
+        },
+        drained,
+      ),
+      { allowedHosts: ["example.test"] },
+    );
+
+    expect(drained.readableEnded).toBe(true);
+
+    await expect(request.json()).resolves.toEqual({ name: "demiurge" });
+    expect(request.headers.get("content-length")).toBe("19");
+  });
+
+  it("accepts an empty POST whose stream already ended", async () => {
+    const drained = Readable.from([]);
+
+    await drained.toArray();
+
+    const request = toWebRequest(
+      consumed(
+        { headers: { host: "example.test" } },
+        drained,
+      ),
+      { allowedHosts: ["example.test"] },
+    );
+
+    await expect(request.text()).resolves.toBe("");
+  });
+
+  it("accepts an empty POST after a host read an empty chunk", async () => {
+    const drained = Readable.from([Buffer.alloc(0)]);
+
+    await drained.toArray();
+
+    const request = toWebRequest(
+      consumed(
+        { headers: { "content-length": "0", host: "example.test" } },
+        drained,
+      ),
+      { allowedHosts: ["example.test"] },
+    );
+
+    await expect(request.text()).resolves.toBe("");
+  });
+
+  it.each([
+    "multipart/form-data; boundary=client-boundary",
+    "application/octet-stream",
+  ])("requires raw bytes for a parsed %s body", (contentType) => {
+    expect(() =>
+      toWebRequest(
+        consumed({
+          body: { field: "value" },
+          headers: { "content-type": contentType, host: "example.test" },
+        }),
+        { allowedHosts: ["example.test"] },
+      ),
+    ).toThrow(ConsumedRequestBodyError);
+  });
+
+  it("preserves recovered string bodies with a JSON content type", async () => {
+    const request = toWebRequest(
+      consumed({
+        body: "value",
+        headers: {
+          "content-type": "application/json",
+          host: "example.test",
+        },
+      }),
+      { allowedHosts: ["example.test"] },
+    );
+
+    await expect(request.text()).resolves.toBe("value");
+  });
+
+  it("preserves recovered JSON bytes with a JSON content type", async () => {
+    const request = toWebRequest(
+      consumed({
+        body: Buffer.from('{"name":"demiurge"}'),
+        headers: {
+          "content-type": "application/json",
+          host: "example.test",
+        },
+      }),
+      { allowedHosts: ["example.test"] },
+    );
+
+    await expect(request.json()).resolves.toEqual({ name: "demiurge" });
+  });
+
+  it("uses the raw bytes a host kept for the request", async () => {
+    const request = toWebRequest(
+      consumed({
+        body: Buffer.from("parsed"),
+        headers: { host: "example.test" },
+      }),
+      { allowedHosts: ["example.test"] },
+    );
+
+    await expect(request.text()).resolves.toBe("parsed");
+    expect(request.headers.get("content-length")).toBe("6");
+  });
+
+  it("prefers the body the caller supplies over the request stream", async () => {
+    const request = toWebRequest(
+      incoming({ headers: { host: "example.test" }, method: "POST" }),
+      { allowedHosts: ["example.test"], body: "a=1&b=2" },
+    );
+
+    await expect(request.text()).resolves.toBe("a=1&b=2");
+    expect(request.headers.get("content-length")).toBe("7");
+  });
+
+  it("updates headers when the caller supplies URL search parameters", async () => {
+    const request = toWebRequest(
+      consumed({
+        headers: {
+          "content-length": "999",
+          "content-type": "application/json",
+          host: "example.test",
+        },
+      }),
+      {
+        allowedHosts: ["example.test"],
+        body: new URLSearchParams({ a: "1" }),
+      },
+    );
+
+    const form = await request.formData();
+
+    expect(form.get("a")).toBe("1");
+    expect(request.headers.get("content-type")).toBe(
+      "application/x-www-form-urlencoded;charset=UTF-8",
+    );
+    expect(request.headers.get("content-length")).toBe("3");
+  });
+
+  it("lets Request create multipart headers for supplied FormData", async () => {
+    const body = new FormData();
+    body.set("a", "1");
+
+    const request = toWebRequest(
+      consumed({
+        headers: {
+          "content-length": "999",
+          "content-type": "application/json",
+          host: "example.test",
+        },
+      }),
+      { allowedHosts: ["example.test"], body },
+    );
+
+    const form = await request.formData();
+
+    expect(form.get("a")).toBe("1");
+    expect(request.headers.get("content-type")).toMatch(
+      /^multipart\/form-data; boundary=/,
+    );
+    expect(request.headers.get("content-length")).toBeNull();
+  });
+
+  it("uses Blob metadata for a supplied body", async () => {
+    const request = toWebRequest(
+      consumed({
+        headers: {
+          "content-length": "999",
+          "content-type": "application/json",
+          host: "example.test",
+        },
+      }),
+      {
+        allowedHosts: ["example.test"],
+        body: new Blob(["raw"], { type: "text/plain" }),
+      },
+    );
+
+    await expect(request.text()).resolves.toBe("raw");
+    expect(request.headers.get("content-type")).toBe("text/plain");
+    expect(request.headers.get("content-length")).toBe("3");
+  });
+
+  it("reports a read request stream that kept no body", () => {
+    expect(() =>
+      toWebRequest(
+        consumed({
+          headers: { "content-length": "9", host: "example.test" },
+        }),
+        {
+          allowedHosts: ["example.test"],
+        },
+      ),
+    ).toThrow(ConsumedRequestBodyError);
   });
 
   it("converts Node response metadata and repeated cookies", async () => {

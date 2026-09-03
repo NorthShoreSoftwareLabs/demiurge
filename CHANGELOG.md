@@ -39,9 +39,22 @@ status live in GitHub issues and milestones.
   `client: true` reaches the browser bundle, and the build inlines its value.
   `env.secret(...)` refuses that option, because a secret never leaves the
   server (#376).
+- `toWebRequest(...)` builds the request body from what a host kept when the
+  host read the `IncomingMessage` first. Vercel Functions and Express
+  body-parser leave a parsed body that the adapter now encodes again with the
+  declared media type, and it corrects `content-length`. A new `body` option
+  takes the raw bytes when a host recovered them. A read stream that kept no
+  body raises `ConsumedRequestBodyError` instead of a request that never ends.
+  A request the adapter owns still streams (#386).
 - `demiurge dev` starts the development server. `demiurge build` writes the
   client bundle, the declared application server bundle, and the static output
   from one configuration file (#373).
+- `demiurge dev` starts the declared environment before it serves the first
+  request. A critical variable that is absent or invalid stops the start of the
+  development server, and the command exits with the diagnostic. A required variable that is not critical gives the same
+  startup warning that a production process gives. `readEnv` earlier threw on
+  every request in development, because only the generated server entry started
+  the environment (#385).
 
 - Added a bring-your-own authentication example with session-owner guidance,
   typed principals, application authorization, and explicit cache behavior.

@@ -192,6 +192,35 @@ Route handlers, middleware, and data loaders receive the request's
 Also pass it to applicable SDKs. A browser disconnect can then stop upstream
 work and an unnecessary render.
 
+## Hosts that read the request body
+
+`toWebRequest(...)` streams the request body from the `IncomingMessage`. Some
+hosts read that stream before the adapter runs. Vercel Functions parse the body
+and put the result on `request.body`. Express and Connect do the same with
+`express.json()` or `express.urlencoded()`.
+
+When a host leaves a parsed JSON or URL-encoded body on the request,
+`toWebRequest(...)` encodes that value again with the declared media type. It
+also corrects `content-length`. The bytes then come from the host's parse, not
+from the client, so the field order and the encoding are the host's.
+
+The adapter cannot reconstruct multipart or unsupported parsed bodies. Supply
+the original bytes with the `body` option for those media types.
+
+To keep the original bytes, read them yourself and pass them with the `body`
+option:
+
+```ts
+const webRequest = toWebRequest(request, {
+  allowedHosts: ["app.example.com"],
+  body: rawBodyBuffer,
+});
+```
+
+If a host reads the stream and keeps no body, `toWebRequest(...)` throws
+`ConsumedRequestBodyError` for a method that carries a body. Earlier releases
+made a request body that never ended, and the request stopped with no error.
+
 ## Shared cache and background work
 
 `createHandler(...)` accepts a `CacheStore`. Every request still gets its own
