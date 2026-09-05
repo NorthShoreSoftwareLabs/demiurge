@@ -5,6 +5,20 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- An environment variable is required by default. The framework stops the
+  server start when a required value is absent or invalid, before the process
+  accepts traffic. The `critical` option is removed. `optional: true` and
+  `deferred: true` replace it as separate declarations. `optional: true`
+  permits absence, and the framework validates a supplied optional value at
+  startup. `deferred: true` postpones validation to the first server access of
+  the value, and that access reports a clear error without the value. A
+  declaration cannot combine `optional` with `deferred`, or `client` with
+  `deferred`. The build validates the value of a client variable, so a client
+  variable has no deferred form. A startup error, a
+  deferred access error, and the serialized schema description omit the value
+  of a variable that `env.secret(...)` marks sensitive. Migrate a
+  `critical: true` declaration by removing the option. Migrate a
+  `critical: false` declaration on a required value to `deferred: true` (#398).
 - The framework reports a page route that sends no Content-Security-Policy. A
   production build and the development server give the `document-policy-missing`
   warning when a page route has no effective CSP. The warning names the route

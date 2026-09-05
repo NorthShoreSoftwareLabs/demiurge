@@ -7,7 +7,6 @@ import {
   type ConfigEnv,
   parseAst,
   type Plugin,
-  type ResolvedConfig,
   type UserConfig,
   type ViteDevServer,
 } from "vite";
@@ -144,7 +143,7 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       isBuild = config.command === "build";
 
       if (!isBuild) {
-        startDevEnvironment(options, config);
+        startDevEnvironment(options);
       }
     },
     resolveId(id) {
@@ -972,15 +971,45 @@ export function createClientEnvSource(
   if (!clientVariables.length) return "";
 
   const absent = clientVariables.filter(([key, variable]) =>
-    variable.critical && !source[key]
+    !variable.optional && !source[key]
   );
 
   if (absent.length) {
     throw new Error(
       [
-        "Demiurge stopped the build. The environment of the build does not have a critical client variable.",
+        "Demiurge stopped the build. The environment of the build does not have a required client variable.",
         ...absent.map(([key]) => `  variable: ${key}`),
         "  The build inlines the value of a client variable. Give the value to the build.",
+      ].join("\n"),
+    );
+  }
+
+  // The build inlines the value of a client variable, so the build validates
+  // the value here. A deferred client variable does not exist, because the
+  // type of the builder refuses that combination.
+  const invalid = clientVariables
+    .filter(([key]) => source[key] !== undefined)
+    .flatMap(([key, variable]) => {
+      // TYPE-EVIDENCE: the filter above proves the source has a value for this key.
+      const rawValue = source[key] as string;
+      try {
+        variable.parse(key, rawValue);
+        return [];
+      } catch (error) {
+        return [{
+          key,
+          message: error instanceof Error
+            ? error.message
+            : `Environment variable ${key} is invalid.`,
+        }];
+      }
+    });
+
+  if (invalid.length) {
+    throw new Error(
+      [
+        "Demiurge stopped the build. The environment of the build has an invalid client variable.",
+        ...invalid.map(({ key, message }) => `  variable: ${key}\n  ${message}`),
       ].join("\n"),
     );
   }
@@ -1035,7 +1064,8 @@ export function createServerEntrySource(
   const environmentSource = hasEnv
     ? `
 // The framework validates the declared environment before the server accepts
-// traffic. A critical variable that is absent or invalid stops the start.
+// traffic. A required variable that is absent or invalid stops the start. A
+// deferred variable validates on its first server access.
 export const env = unstable_startEnvironment(${
       JSON.stringify(serializeEnvSchema(options.env ?? {}))
     }).values;
@@ -1070,22 +1100,15 @@ export function createHandler(options = {}) {
 }
 
 // The development server does not load the generated server entry, so it
-// starts the declared environment here instead. A critical variable that is
+// starts the declared environment here instead. A required variable that is
 // absent or invalid stops the start of the development server. Vite resolves
 // the configuration before it creates the file watcher, so a failure in this
 // hook rejects `createServer` and leaves no open handle. A failure in
 // `configureServer` would instead hold the process open after the diagnostic.
-function startDevEnvironment(
-  options: DemiurgeVitePluginOptions,
-  config: ResolvedConfig,
-) {
+function startDevEnvironment(options: DemiurgeVitePluginOptions) {
   if (!options.env || !Object.keys(options.env).length) return;
 
-  startEnvironment(options.env, {
-    warn: (message) => {
-      config.logger.warn(message);
-    },
-  });
+  startEnvironment(options.env);
 }
 
 // Both virtual entries use this function. Therefore, their prefix removal and

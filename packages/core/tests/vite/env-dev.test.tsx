@@ -29,7 +29,7 @@ type PluginHarness = {
 const roots: string[] = [];
 const servers: ViteDevServer[] = [];
 const schema = defineEnvSchema({
-  SITE_PASSWORD: env.secret({ critical: true, minLength: 1 }),
+  SITE_PASSWORD: env.secret({ minLength: 1 }),
 });
 
 afterEach(async () => {
@@ -139,7 +139,7 @@ describe("development environment startup", () => {
 import { defineEnvSchema, env, json, readEnv } from "@demiurgejs/core";
 
 const schema = defineEnvSchema({
-  SITE_PASSWORD: env.secret({ critical: true, minLength: 1 }),
+  SITE_PASSWORD: env.secret({ minLength: 1 }),
 });
 
 export const GET = json({ password: readEnv(schema).SITE_PASSWORD });
@@ -198,7 +198,7 @@ export const GET = json({ password: readEnv(schema).SITE_PASSWORD });
     });
   });
 
-  it("stops the start when a critical variable is absent", async () => {
+  it("stops the start when a required variable is absent", async () => {
     const root = await createRoot();
     const plugin = demiurge({ env: schema, routesDir: "routes" }) as PluginHarness;
 
@@ -240,17 +240,15 @@ export const GET = json({ password: readEnv(schema).SITE_PASSWORD });
     await expect(start).rejects.toThrow(EnvValidationError);
   });
 
-  it("warns and starts when a required variable is not critical", async () => {
+  it("starts when an optional variable is absent", async () => {
     const root = await createRoot();
     const logger = createLogger();
     const plugin = demiurge({
-      env: defineEnvSchema({ ANALYTICS_TOKEN: env.string() }),
+      env: defineEnvSchema({ ANALYTICS_TOKEN: env.string({ optional: true }) }),
       routesDir: "routes",
     }) as PluginHarness;
-    startPlugin(plugin, root, logger);
 
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("ANALYTICS_TOKEN"),
-    );
+    expect(() => startPlugin(plugin, root, logger)).not.toThrow();
+    expect(logger.error).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { defineEnvSchema, env, EnvValidationError } from "../../src/security/env";
 import {
   deserializeEnvSchema,
@@ -13,10 +13,10 @@ afterEach(() => {
 });
 
 describe("environment startup", () => {
-  it("stops the start when a critical variable is absent", () => {
+  it("stops the start when a required variable is absent", () => {
     const schema = defineEnvSchema({
-      DATABASE_URL: env.url({ critical: true }),
-      SESSION_SECRET: env.secret({ critical: true, minLength: 32 }),
+      DATABASE_URL: env.url(),
+      SESSION_SECRET: env.secret({ minLength: 32 }),
     });
 
     try {
@@ -29,19 +29,46 @@ describe("environment startup", () => {
     }
   });
 
-  it("warns and starts when a required variable is not critical", () => {
-    const warn = vi.fn();
+  it("stops the start when a required variable is invalid", () => {
     const schema = defineEnvSchema({
-      ANALYTICS_TOKEN: env.string(),
-      PORT: env.integer({ optional: true }),
+      PORT: env.integer({ min: 1 }),
     });
 
-    const result = startEnvironment(schema, { source: {}, warn });
+    expect(() => startEnvironment(schema, { source: { PORT: "not-a-number" } }))
+      .toThrow(EnvValidationError);
+  });
 
-    expect(result.warnings).toHaveLength(1);
-    expect(result.warnings[0]).toMatch(/ANALYTICS_TOKEN/);
-    expect(warn).toHaveBeenCalledWith(result.warnings[0]);
+  it("starts when an optional variable is absent", () => {
+    const schema = defineEnvSchema({
+      ANALYTICS_TOKEN: env.string({ optional: true }),
+      PORT: env.integer(),
+    });
+
+    const result = startEnvironment(schema, { source: { PORT: "3000" } });
+
     expect(result.values.ANALYTICS_TOKEN).toBeUndefined();
+    expect(result.values.PORT).toBe(3000);
+  });
+
+  it("stops the start when a supplied optional variable is invalid", () => {
+    const schema = defineEnvSchema({
+      ANALYTICS_TOKEN: env.string({ minLength: 8, optional: true }),
+    });
+
+    expect(() =>
+      startEnvironment(schema, { source: { ANALYTICS_TOKEN: "short" } })
+    ).toThrow(EnvValidationError);
+  });
+
+  it("starts when a deferred variable is absent, then validates it on the first access", () => {
+    const schema = defineEnvSchema({
+      QUEUE_URL: env.url({ deferred: true }),
+    });
+
+    const result = startEnvironment(schema, { source: {} });
+    expect(result.values.QUEUE_URL).toBeUndefined();
+
+    expect(() => readEnv(schema)).toThrow(/QUEUE_URL is required/);
   });
 
   it("gives applications the validated values with their declared types", () => {
@@ -68,14 +95,14 @@ describe("environment startup", () => {
     const schema = defineEnvSchema({
       ORIGIN: env.url({ protocols: ["https:"] }),
       RETRIES: env.integer({ max: 5, min: 1 }),
-      SESSION_SECRET: env.secret({ critical: true }),
+      SESSION_SECRET: env.secret(),
       TIER: env.enum(["free", "paid"], { optional: true }),
     });
 
     const descriptor = serializeEnvSchema(schema);
     expect(JSON.parse(JSON.stringify(descriptor))).toEqual(descriptor);
     expect(descriptor.SESSION_SECRET).toMatchObject({
-      critical: true,
+      deferred: false,
       kind: "secret",
       sensitive: true,
     });
@@ -91,26 +118,44 @@ describe("environment startup", () => {
 
     expect(result.values.RETRIES).toBe(3);
     expect(String(result.values.ORIGIN)).toBe("https://example.test/");
-    const invalid = startEnvironment(restored, {
-      source: {
-        ORIGIN: "http://example.test",
-        RETRIES: "9",
-        SESSION_SECRET: "value",
-      },
-      warn: () => {},
-    });
-
-    expect(invalid.warnings).toHaveLength(2);
-    expect(invalid.warnings[0]).toMatch(/protocols: https:/);
-    expect(invalid.warnings[1]).toMatch(/less than or equal to 5/);
+    expect(() =>
+      startEnvironment(restored, {
+        source: {
+          ORIGIN: "http://example.test",
+          RETRIES: "9",
+          SESSION_SECRET: "value",
+        },
+      })
+    ).toThrow(EnvValidationError);
     expect(() =>
       startEnvironment(restored, { source: { ORIGIN: "https://example.test", RETRIES: "3" } })
     ).toThrow(EnvValidationError);
   });
 
+  it("migrates a critical: false declaration to deferred: true", () => {
+    // The old default let a required variable warn instead of stop the start.
+    // The migration for that declaration is `deferred: true`.
+    const schema = defineEnvSchema({
+      LEGACY_TOKEN: env.string({ deferred: true }),
+    });
+
+    const result = startEnvironment(schema, { source: {} });
+    expect(result.values.LEGACY_TOKEN).toBeUndefined();
+  });
+
   it("refuses a secret variable that client code can read", () => {
     expect(() => env.secret({ client: true } as never))
       .toThrow(/cannot reach client code/);
+  });
+
+  it("refuses an optional variable that is also deferred", () => {
+    expect(() => env.string({ deferred: true, optional: true } as never))
+      .toThrow(/optional with deferred/);
+  });
+
+  it("refuses a client variable that is also deferred", () => {
+    expect(() => env.string({ client: true, deferred: true } as never))
+      .toThrow(/client environment variable cannot be deferred/);
   });
 
   it("keeps a client variable in the schema description", () => {
@@ -122,21 +167,62 @@ describe("environment startup", () => {
   });
 });
 
-describe("environment startup branches", () => {
-  it("reads the process environment and warns through the console by default", () => {
-    const schema = defineEnvSchema({ DEMIURGE_TEST_HOME: env.string() });
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+describe("redaction", () => {
+  it("does not put the value of a sensitive variable in a startup error", () => {
+    const schema = defineEnvSchema({
+      SESSION_SECRET: env.secret({ minLength: 32 }),
+    });
+    const secretValue = "too-short";
 
     try {
-      const result = startEnvironment(schema);
-      expect(result.warnings).toHaveLength(1);
-      expect(warn).toHaveBeenCalledTimes(1);
+      startEnvironment(schema, { source: { SESSION_SECRET: secretValue } });
+      throw new Error("expected a startup failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(EnvValidationError);
+      const message = (error as EnvValidationError).message;
+      expect(message).not.toContain(secretValue);
+    }
+  });
+
+  it("does not put the value of a sensitive variable in a deferred access error", () => {
+    const schema = defineEnvSchema({
+      SESSION_SECRET: env.secret({ deferred: true, minLength: 32 }),
+    });
+    const secretValue = "too-short";
+
+    startEnvironment(schema, { source: { SESSION_SECRET: secretValue } });
+
+    try {
+      readEnv(schema);
+      throw new Error("expected a deferred access failure");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).not.toContain(secretValue);
+    }
+  });
+
+  it("does not put the value of a sensitive variable in the serialized description", () => {
+    const schema = defineEnvSchema({
+      SESSION_SECRET: env.secret({ minLength: 32 }),
+    });
+
+    const descriptor = serializeEnvSchema(schema);
+    expect(JSON.stringify(descriptor)).not.toContain("too-short");
+    expect(descriptor.SESSION_SECRET.sensitive).toBe(true);
+  });
+});
+
+describe("environment startup branches", () => {
+  it("reads the process environment by default", () => {
+    const schema = defineEnvSchema({ DEMIURGE_TEST_HOME: env.string() });
+
+    try {
+      expect(() => startEnvironment(schema)).toThrow(EnvValidationError);
 
       process.env.DEMIURGE_TEST_HOME = "present";
       expect(startEnvironment(schema).values.DEMIURGE_TEST_HOME).toBe("present");
     } finally {
       delete process.env.DEMIURGE_TEST_HOME;
-      warn.mockRestore();
     }
   });
 
@@ -144,7 +230,7 @@ describe("environment startup branches", () => {
     const schema = deserializeEnvSchema({
       FLAG: {
         client: false,
-        critical: false,
+        deferred: false,
         kind: "boolean",
         optional: false,
         options: {},
@@ -152,7 +238,7 @@ describe("environment startup branches", () => {
       },
       NAME: {
         client: false,
-        critical: false,
+        deferred: false,
         kind: "string",
         optional: false,
         options: {},
@@ -160,7 +246,7 @@ describe("environment startup branches", () => {
       },
       RETRIES: {
         client: false,
-        critical: false,
+        deferred: false,
         kind: "integer",
         optional: false,
         options: {},
@@ -180,7 +266,7 @@ describe("environment startup branches", () => {
       deserializeEnvSchema({
         TIER: {
           client: false,
-          critical: false,
+          deferred: false,
           kind: "enum",
           optional: false,
           options: {},
