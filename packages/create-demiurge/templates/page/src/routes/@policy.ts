@@ -1,6 +1,7 @@
-import { defineRoutePolicy } from "@demiurgejs/core";
+import { defineRoutePolicy, security } from "@demiurgejs/core";
 
 export const policy = defineRoutePolicy({
+  document: security.strict(),
   security: {
     request: {
       allowedMethods: ["GET"],

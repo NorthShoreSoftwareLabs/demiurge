@@ -11,7 +11,8 @@ async function buildPolicyRoute(source: string) {
   await mkdir(routesDir, { recursive: true });
   await writeFile(
     join(routesDir, "@not-found.tsx"),
-    "export default function NotFound() { return null; }",
+    `export default function NotFound() { return null; }
+export const policy = { document: { csp: false } };`,
   );
   await writeFile(join(routesDir, "api.ts"), source);
 
@@ -26,9 +27,12 @@ async function buildPagePolicyRoute(policy: string) {
   const root = await mkdtemp(join(tmpdir(), "demiurge-page-policy-build-"));
   const routesDir = join(root, "src", "routes");
   await mkdir(routesDir, { recursive: true });
+  // The fallback document declares its own exception so the assertions below
+  // stay focused on the page route under test.
   await writeFile(
     join(routesDir, "@not-found.tsx"),
-    "export default function NotFound() { return null; }",
+    `export default function NotFound() { return null; }
+export const policy = { document: { csp: false } };`,
   );
   await writeFile(
     join(routesDir, "index.tsx"),
@@ -37,6 +41,10 @@ export const GET = page({ view: () => null });
 ${policy}`,
   );
 
+  return { root, routesDir };
+}
+
+async function runPagePolicyBuild(root: string) {
   const warnings: string[] = [];
   const logger = createLogger("silent");
   logger.warn = (message) => warnings.push(message);
@@ -60,23 +68,50 @@ ${policy}`,
 }
 
 describe("Vite production policy build", () => {
-  it("warns but completes when a page policy has headers without CSP", async () => {
-    const warnings = await buildPagePolicyRoute(`export const policy = {
+  it("fails the build and names the route, the source, and the repair when a page policy has no CSP", async () => {
+    const { root, routesDir } = await buildPagePolicyRoute(`export const policy = {
   document: { headers: { contentTypeOptions: "nosniff" } },
 };`);
 
-    expect(warnings).toContainEqual(
+    const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    await expect(runPagePolicyBuild(root)).rejects.toThrow(
+      new RegExp(
+        `${escape(join(routesDir, "index.tsx"))}.*\\[document-policy-missing\\].*No @policy\\.ts file exists.*Create ${escape(join(routesDir, "@policy.ts"))}`,
+        "s",
+      ),
+    );
+  });
+
+  it("completes without a document-policy-missing failure when a page policy disables CSP", async () => {
+    const { root } = await buildPagePolicyRoute(
+      "export const policy = { document: { csp: false } };",
+    );
+    const warnings = await runPagePolicyBuild(root);
+
+    expect(warnings).not.toContainEqual(
       expect.stringContaining("[document-policy-missing]"),
     );
   });
 
-  it("completes without a warning when a page policy disables CSP", async () => {
-    const warnings = await buildPagePolicyRoute(
-      "export const policy = { document: { csp: false } };",
+  it("fails the build when the not-found fallback document inherits no document policy", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-fallback-policy-build-"));
+    const routesDir = join(root, "src", "routes");
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(
+      join(routesDir, "@not-found.tsx"),
+      "export default function NotFound() { return null; }",
+    );
+    await writeFile(
+      join(routesDir, "index.tsx"),
+      `import { page } from "@demiurgejs/core";
+import { defineRoutePolicy, security } from "@demiurgejs/core";
+export const GET = page({ view: () => null });
+export const policy = defineRoutePolicy({ document: security.strict() });`,
     );
 
-    expect(warnings).not.toContainEqual(
-      expect.stringContaining("[document-policy-missing]"),
+    await expect(runPagePolicyBuild(root)).rejects.toThrow(
+      /@not-found\.tsx.*\[document-policy-missing\]/s,
     );
   });
 

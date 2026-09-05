@@ -519,6 +519,13 @@ try {
     ].join("\n"),
   );
   writeFileSync(
+    join(scratch, "src", "routes", "@policy.ts"),
+    [
+      `import { defineRoutePolicy, security } from "@demiurgejs/core";`,
+      `export const policy = defineRoutePolicy({ document: security.strict() });`,
+    ].join("\n"),
+  );
+  writeFileSync(
     join(scratch, "demiurge.config.ts"),
     [
       `import { defineConfig } from "@demiurgejs/core/config";`,
@@ -574,6 +581,15 @@ try {
       `import { page, type RouteProps } from "@demiurgejs/core";`,
       `export const paths = () => [{ id: "packed" }];`,
       `export const GET = page({ render: { mode: "static" }, view: ({ path }: RouteProps<"/items/[id]">) => <main>{path.id}</main> });`,
+    ].join("\n"),
+  );
+  // A statically rendered route delivers no per-request nonce, so the whole
+  // route tree moves to the nonce-free static preset for this build.
+  writeFileSync(
+    join(scratch, "src", "routes", "@policy.ts"),
+    [
+      `import { defineRoutePolicy, security } from "@demiurgejs/core";`,
+      `export const policy = defineRoutePolicy({ document: security.static() });`,
     ].join("\n"),
   );
   writeFileSync(

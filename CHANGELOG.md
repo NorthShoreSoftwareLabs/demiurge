@@ -5,6 +5,21 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- **Breaking:** A page route and an application-owned fallback document,
+  `@not-found.tsx` and the route error document, require an inherited document
+  policy. A production build fails with the `document-policy-missing` error
+  when one inherits none. The development server reports the same gap. The
+  error names the route file, the `@policy.ts` file that would supply the
+  policy or the fact that none exists, and the exact repair. Declare
+  `document: security.strict({ csp: false })` to accept a document without a
+  Content-Security-Policy. The document keeps every other security header.
+  `createSecurityAudit(...)` reports that deliberate exception as the
+  `csp-disabled` finding, so it stays visible in the route audit panel. A
+  static host that cannot deliver a declared policy fails the build instead of
+  the deployment. A nonce-based CSP on a statically rendered route is one
+  example. To migrate, add `document: security.strict()` to a root
+  `@policy.ts` file, or `document: security.strict({ csp: false })` where a
+  route accepts no CSP (#397).
 - The framework reports a page route that sends no Content-Security-Policy. A
   production build and the development server give the `document-policy-missing`
   warning when a page route has no effective CSP. The warning names the route

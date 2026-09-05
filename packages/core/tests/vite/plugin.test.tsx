@@ -2290,7 +2290,8 @@ export const GET = json({}, {
 
   it("reports the same policy finding in development and build", async () => {
     const root = await scaffold({
-      "@not-found.tsx": "export default function NotFound() { return null; }",
+      "@not-found.tsx": `export default function NotFound() { return null; }
+export const policy = { document: { csp: false } };`,
       "api.ts": `
 import { json } from "@demiurgejs/core";
 export const GET = json({}, {

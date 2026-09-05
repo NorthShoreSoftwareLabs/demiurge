@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { basename, dirname, relative, sep } from "node:path";
+import { basename, dirname, join, relative, sep } from "node:path";
 import { parseAst, transformWithEsbuild } from "vite";
 import type { HttpMethod } from "../route";
 import {
@@ -128,10 +128,12 @@ async function extractRouteModuleSource(source: string, file: string) {
   return extractRouteModule(transformed.code);
 }
 
-// A page route that inherits no document policy sends no security headers.
-// The application still works, so nothing else reports the gap. This check
-// reads the policy cascade of the route tree and names each page route that
-// no document policy covers.
+// A route with no document policy sends no security headers. The application
+// still works, so nothing else reports the gap. This check reads the policy
+// cascade of the route tree and names each route that no document policy
+// covers. A page route and an application-owned fallback document, `@not-
+// found.tsx` and the route error document, both render HTML, so both need an
+// inherited policy.
 export function auditDocumentPolicyCoverage(
   routesDir: string,
   inspections: readonly RouteFileInspection[],
@@ -141,14 +143,20 @@ export function auditDocumentPolicyCoverage(
   const findings: StaticPolicyFinding[] = [];
 
   for (const inspection of inspections) {
-    if (!inspection.declaresPageRoute) {
+    if (
+      !inspection.declaresPageRoute &&
+      !isFallbackDocumentFile(inspection.file)
+    ) {
       continue;
     }
-    const state = resolveDocumentCspState(
+    const applicable = applicablePolicies(
       routesDir,
       dirname(inspection.file),
-      inspection.documentCspState,
       policies,
+    );
+    const state = resolveDocumentCspState(
+      applicable,
+      inspection.documentCspState,
     );
     if (state !== "absent") {
       continue;
@@ -157,22 +165,44 @@ export function auditDocumentPolicyCoverage(
     findings.push({
       code: "document-policy-missing",
       file: inspection.file,
-      message:
-        "This page route inherits no document policy, so its HTML response carries no Content-Security-Policy. Add document: security.strict() to this route or an ancestor @policy.ts file.",
-      severity: "warning",
+      message: describeMissingDocumentPolicy(routesDir, applicable),
+      severity: "error",
     });
   }
 
   return findings;
 }
 
-function resolveDocumentCspState(
+// `@not-found.tsx` and `@error.tsx` are application-owned fallback documents.
+// Each renders an HTML response the same way a page route does, so the build
+// requires the same document policy coverage for both.
+function isFallbackDocumentFile(file: string) {
+  return /^@(?:not-found|error)\.tsx?$/.test(basename(file));
+}
+
+function describeMissingDocumentPolicy(
+  routesDir: string,
+  applicable: readonly RouteFileInspection[],
+): string {
+  const exception =
+    "Add document: security.strict({ csp: false }) to accept a document " +
+    "without a Content-Security-Policy.";
+  const nearest = applicable.at(-1);
+
+  if (nearest) {
+    return `This route inherits no document policy. ${nearest.file} does not declare one. Add document: security.strict() to ${nearest.file}. ${exception}`;
+  }
+
+  const rootPolicyFile = join(routesDir, "@policy.ts");
+  return `This route inherits no document policy. No @policy.ts file exists above it. Create ${rootPolicyFile} with document: security.strict(). ${exception}`;
+}
+
+function applicablePolicies(
   routesDir: string,
   routeDirectory: string,
-  routeState: DocumentCspState,
   policies: readonly RouteFileInspection[],
 ) {
-  const applicable = policies
+  return policies
     .filter((inspection) =>
       isSameOrAbove(dirname(inspection.file), routeDirectory) &&
       isSameOrAbove(routesDir, dirname(inspection.file)),
@@ -181,7 +211,12 @@ function resolveDocumentCspState(
       dirname(left.file).length - dirname(right.file).length ||
       left.file.localeCompare(right.file)
     );
+}
 
+function resolveDocumentCspState(
+  applicable: readonly RouteFileInspection[],
+  routeState: DocumentCspState,
+) {
   let state: DocumentCspState = "absent";
   for (const policy of applicable) {
     state = mergeDocumentCspState(state, policy.documentCspState);
