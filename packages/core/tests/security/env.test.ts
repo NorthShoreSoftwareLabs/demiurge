@@ -149,7 +149,7 @@ describe("environment validation", () => {
     const schema: EnvSchema = {
       CUSTOM: {
         client: false,
-        critical: false,
+        deferred: false,
         kind: "string",
         optional: false,
         options: {},
@@ -385,6 +385,73 @@ describe("url environment variables", () => {
       validateEnv(schema, { API_ORIGIN: "http://api.example.com" }),
     ).toThrow(
       "Environment variable API_ORIGIN must use one of these protocols: https:.",
+    );
+  });
+});
+
+describe("required, optional, and deferred declarations", () => {
+  it("declares a variable required by default", () => {
+    const schema = defineEnvSchema({ PORT: env.integer() });
+
+    expect(schema.PORT.optional).toBe(false);
+    expect(schema.PORT.deferred).toBe(false);
+  });
+
+  it("declares an optional variable", () => {
+    const schema = defineEnvSchema({ PORT: env.integer({ optional: true }) });
+
+    expect(schema.PORT.optional).toBe(true);
+    expect(schema.PORT.deferred).toBe(false);
+  });
+
+  it("declares a deferred variable", () => {
+    const schema = defineEnvSchema({ PORT: env.integer({ deferred: true }) });
+
+    expect(schema.PORT.optional).toBe(false);
+    expect(schema.PORT.deferred).toBe(true);
+  });
+
+  it("refuses a variable that combines optional with deferred", () => {
+    expect(() => env.string({ deferred: true, optional: true } as never)).toThrow(
+      "An environment variable cannot combine optional with deferred. Declare one of the two options.",
+    );
+  });
+
+  it("refuses a client variable that is also deferred", () => {
+    expect(() => env.string({ client: true, deferred: true } as never)).toThrow(
+      "A client environment variable cannot be deferred. The build validates the value of a client variable.",
+    );
+  });
+
+  it("refuses a secret variable that combines optional with deferred", () => {
+    expect(() => env.secret({ deferred: true, optional: true } as never)).toThrow(
+      "An environment variable cannot combine optional with deferred. Declare one of the two options.",
+    );
+  });
+
+  it("refuses a boolean variable that combines optional with deferred", () => {
+    expect(() => env.boolean({ deferred: true, optional: true } as never)).toThrow(
+      "An environment variable cannot combine optional with deferred. Declare one of the two options.",
+    );
+  });
+
+  it("refuses an integer variable that combines client with deferred", () => {
+    expect(() => env.integer({ client: true, deferred: true } as never)).toThrow(
+      "A client environment variable cannot be deferred. The build validates the value of a client variable.",
+    );
+  });
+
+  it("refuses a url variable that combines client with deferred", () => {
+    expect(() => env.url({ client: true, deferred: true } as never)).toThrow(
+      "A client environment variable cannot be deferred. The build validates the value of a client variable.",
+    );
+  });
+
+  it("refuses an enum variable that combines optional with deferred", () => {
+    expect(() =>
+      env.enum(["free", "paid"], { deferred: true, optional: true } as never)
+    ).toThrow(
+      "An environment variable cannot combine optional with deferred. Declare one of the two options.",
     );
   });
 });

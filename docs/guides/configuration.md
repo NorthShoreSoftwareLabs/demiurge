@@ -122,19 +122,43 @@ import { defineEnvSchema, env } from "@demiurgejs/core";
 export default defineConfig({
   env: defineEnvSchema({
     ANALYTICS_TOKEN: env.string({ optional: true }),
-    DATABASE_URL: env.url({ critical: true }),
-    SESSION_SECRET: env.secret({ critical: true, minLength: 32 }),
+    DATABASE_URL: env.url(),
+    PAYMENT_KEY: env.secret({ deferred: true, minLength: 32 }),
+    SESSION_SECRET: env.secret({ minLength: 32 }),
   }),
 });
 ```
 
-Each variable has a `critical` option. The default value is `false`.
+A variable is required by default. A required value that is absent or invalid
+stops the server start, before the process accepts traffic.
 
-- `critical: true` stops the server start when the value is absent or invalid.
-  Use it for a value that the whole application needs to start.
-- `critical: false` lets the process start. Demiurge writes a startup warning
-  that names the variable. A request that needs the value fails at the request
-  path that reads it.
+Two options give a variable a different lifetime. Declare exactly one of them,
+or neither.
+
+- `optional: true` permits absence. Demiurge validates a supplied optional
+  value at startup, and stops the start when that value is invalid.
+- `deferred: true` postpones validation to the first server access of the
+  value. The access throws a clear error when the value is absent or invalid.
+  Use it for a value that only one part of the application needs. An
+  unrelated failure then does not stop every route.
+
+Demiurge refuses a declaration that combines `optional` with `deferred`.
+
+`env.secret(...)` marks a variable sensitive. A startup error, a deferred
+access error, and the serialized schema description omit the value of a
+sensitive variable.
+
+### Migration from `critical`
+
+Earlier releases declared a `critical` option. The default value was `false`,
+so a required variable without `critical: true` gave a startup warning instead
+of a startup failure. Demiurge removed that option.
+
+- `critical: true` on a required value: remove the option. A required value
+  now stops the start by default.
+- `critical: false` on a required value: declare `deferred: true` instead. The
+  value keeps its old behavior of not stopping the whole application at
+  startup, and Demiurge validates it before the first read instead of never.
 
 ### The client boundary
 
@@ -144,12 +168,15 @@ A variable stays on the server. A variable that the schema declares with
 ```ts
 env: defineEnvSchema({
   PUBLIC_API_URL: env.url({ client: true }),
-  SESSION_SECRET: env.secret({ critical: true, minLength: 32 }),
+  SESSION_SECRET: env.secret({ minLength: 32 }),
 });
 ```
 
-The build reads the value of a client variable one time. A client variable that
-is critical must have a value in the environment of the build.
+The build inlines the value of a client variable, so the build validates the
+value. A required client variable must have a value in the environment of the
+build, and the build stops when that value is invalid. A client variable has
+no deferred form, because the build validates the value before the server
+starts. Demiurge refuses a declaration that combines `client` with `deferred`.
 
 `env.secret(...)` refuses the `client` option. A secret variable never reaches
 the browser. Read the value on the server, then send the result through route
@@ -177,12 +204,13 @@ The schema declares what a variable is. Where the value comes from is a
 separate concern. Demiurge reads the process environment.
 
 The development server validates the same schema. `demiurge dev` starts the
-environment before it serves the first request. A critical variable that is
+environment before it serves the first request. A required variable that is
 absent or invalid stops the start of the development server, and the command
-exits with the diagnostic. A required
-variable that is not critical writes the same startup warning that a production
-process writes. Therefore, `readEnv` gives the same values in development and
-in a build.
+exits with the diagnostic. Therefore, `readEnv` gives the same values in
+development and in a build.
+
+`readEnv` also gives the value of a deferred variable. Demiurge validates that
+value on this first access, and every later access reads the cached result.
 
 The generated server entry exports the validated values:
 
