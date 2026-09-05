@@ -2,6 +2,7 @@ import type { HttpMethod } from "../route/types";
 import type { ScriptTag } from "../document/scripts";
 import { createSecurityHeaders } from "./policy";
 import { validateCorsPolicy } from "./cors";
+import { DEFAULT_MAX_BODY_SIZE, parseBodySize } from "./request";
 import type {
   ContentSecurityPolicy,
   CorsPolicy,
@@ -311,6 +312,7 @@ function auditRoutePolicy(
 ) {
   auditCorsPolicy(route.cors, findings);
   auditUnsafeMethodPolicy(route.method, route.security, findings);
+  auditRequestBodyLimit(route.security, findings);
 
   return {
     cors: route.cors,
@@ -362,14 +364,44 @@ function auditUnsafeMethodPolicy(
       severity: "warning",
     });
   }
+}
 
-  if (!policy?.request?.maxBodySize) {
-    findings.push({
-      code: "request-body-limit-missing",
-      message: "Unsafe routes should declare a request body size limit.",
-      severity: "warning",
-    });
+// ADR 0015 gives every route an inherited, bounded request body limit, so an
+// omitted declaration is no longer a gap. A route that raises the limit above
+// the default is the one exception that stays typed. This finding makes that
+// exception visible in inspection and audit output.
+function auditRequestBodyLimit(
+  policy: RouteSecurityPolicy | undefined,
+  findings: SecurityAuditFinding[],
+) {
+  const declared = policy?.request?.maxBodySize;
+
+  if (declared === undefined) {
+    return;
   }
+
+  let declaredBytes: number;
+  let defaultBytes: number;
+
+  try {
+    declaredBytes = parseBodySize(declared);
+    defaultBytes = parseBodySize(DEFAULT_MAX_BODY_SIZE);
+  } catch {
+    // An invalid declaration fails at request time with a typed error. The
+    // audit does not repeat that failure.
+    return;
+  }
+
+  if (declaredBytes <= defaultBytes) {
+    return;
+  }
+
+  findings.push({
+    code: "request-body-limit-raised",
+    message:
+      `This route raises the inherited request body limit to ${declared}. Confirm the route accepts an upload or a stream that needs the larger limit.`,
+    severity: "info",
+  });
 }
 
 function getExternalScriptDependency(script: ScriptTag) {

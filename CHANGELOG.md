@@ -5,6 +5,22 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- Every route inherits a bounded request body limit of 1 MB. Previously, a
+  route without a declared `security.request.maxBodySize` buffered a body of
+  any size. The shared pipeline now counts bytes while it reads the body, so a
+  request with no `Content-Length` header cannot pass the limit either. A
+  route that accepts an upload or a stream declares its own
+  `security.request.maxBodySize`. `createSecurityAudit(...)` reports the
+  exception with a `request-body-limit-raised` finding. The finding appears
+  when the declared limit exceeds 1 MB. `AdapterCapabilityMap` gains
+  `requestTimeoutEnforcement`. The Node adapter declares it `true`, backed by
+  its existing server timeouts. The edge and static adapters declare it
+  `false`. Bounding connection duration on those hosts is a platform setting
+  outside Demiurge. Constructing a request handler for such an adapter logs a
+  diagnostic that names the gap. **Migration**: a route that reads a body
+  larger than 1 MB now fails with a 413 response. Add
+  `security: { request: { maxBodySize: "<size>" } }` to that route or an
+  inherited `@policy.ts` file (#399).
 - The framework reports a page route that sends no Content-Security-Policy. A
   production build and the development server give the `document-policy-missing`
   warning when a page route has no effective CSP. The warning names the route
