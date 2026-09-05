@@ -47,6 +47,12 @@ export default defineConfig({
         "static/index": fileURLToPath(
           new URL("src/static/index.ts", import.meta.url),
         ),
+        "server-only/index": fileURLToPath(
+          new URL("src/server-only/index.ts", import.meta.url),
+        ),
+        "server-only/browser": fileURLToPath(
+          new URL("src/server-only/browser.ts", import.meta.url),
+        ),
       },
       formats: ["es"],
     },

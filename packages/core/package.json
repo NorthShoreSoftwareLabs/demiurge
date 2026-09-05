@@ -84,6 +84,11 @@
     "./static": {
       "types": "./dist/static/index.d.ts",
       "default": "./dist/static/index.js"
+    },
+    "./server-only": {
+      "types": "./dist/server-only/index.d.ts",
+      "browser": "./dist/server-only/browser.js",
+      "default": "./dist/server-only/index.js"
     }
   },
   "scripts": {

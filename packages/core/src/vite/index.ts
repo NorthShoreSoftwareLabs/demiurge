@@ -33,6 +33,14 @@ export type {
   EnvBoundaryFinding as unstable_EnvBoundaryFinding,
 } from "./env-boundary";
 export {
+  formatServerOnlyBoundaryFindings as unstable_formatServerOnlyBoundaryFindings,
+  formatServerOnlyDevError as unstable_formatServerOnlyDevError,
+  importsServerOnlyMarker as unstable_importsServerOnlyMarker,
+} from "./server-only-boundary";
+export type {
+  ServerOnlyBoundaryFinding as unstable_ServerOnlyBoundaryFinding,
+} from "./server-only-boundary";
+export {
   createRouteAudit as unstable_createRouteAudit,
   renderRouteAuditDocument as unstable_renderRouteAuditDocument,
   ROUTE_AUDIT_PATH as unstable_ROUTE_AUDIT_PATH,
