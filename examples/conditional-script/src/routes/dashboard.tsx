@@ -44,6 +44,7 @@ function DashboardPage({
 }
 
 export const GET = page({
+  publicData: true,
   data: ({ search }) => ({
     consentGranted: search.get("consent") === "granted",
   }),

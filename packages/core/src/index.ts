@@ -182,6 +182,7 @@ export {
   html,
   httpError,
   HttpError,
+  DataDisclosureError,
   HTTP_ERROR_STATUSES,
   isHttpError,
   json,
@@ -205,6 +206,9 @@ export type {
   AdapterDefinition,
 } from "./adapter";
 export type {
+  DataDisclosure,
+  DataProjection,
+  DataProjectionFunction,
   MutationContext,
   MutationCapability,
   MutationIdempotency,

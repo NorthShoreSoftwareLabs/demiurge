@@ -5,6 +5,20 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- A page route that returns data declares what the browser receives. The route
+  declares `project` to select the fields, or `publicData: true` when the whole
+  result is public. A projection is a typed function or a Standard Schema, and
+  it covers nested fields. The result of `data` stays on the server, and the
+  framework serializes only the projected result. The initial render, the
+  hydration payload, and browser navigation all use that one value. A
+  `mutation(...)` that returns a JSON result takes the same two options. The
+  framework reports a value that it cannot project or cannot serialize, and the
+  report names the route and the field without the value. A production build
+  reports a page route that returns data and declares nothing, with the
+  `page-disclosure-missing` finding. **Breaking change:** every route that
+  returns data must declare a projection. Add `publicData: true` to a route
+  whose data function already returns a minimal public object. Add `project` to
+  a route whose data function returns a full record (#403).
 - The framework reports a page route that sends no Content-Security-Policy. A
   production build and the development server give the `document-policy-missing`
   warning when a page route has no effective CSP. The warning names the route

@@ -7,6 +7,12 @@ export {
   MUTATION_RESPONSE_MEDIA_TYPE,
 } from "./mutation";
 export { page } from "./page";
+export { DataDisclosureError } from "./projection";
+export type {
+  DataDisclosure,
+  DataProjection,
+  DataProjectionFunction,
+} from "./projection";
 export { defineMiddleware } from "./middleware";
 export {
   HTTP_ERROR_STATUSES,

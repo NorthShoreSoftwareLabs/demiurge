@@ -19,6 +19,7 @@ import type {
   RouteSecurityPolicy,
 } from "../security/types";
 import type { HttpErrorStatus } from "./http-error";
+import type { DataProjection } from "./projection";
 export type { RoutePolicy } from "../security/types";
 export type { RouteRequestContexts } from "../routing/types";
 
@@ -158,14 +159,23 @@ export type RouteDefaultComponent =
 
 export type PageCapability<
   TPath extends string = string,
-  TData = undefined,
+  TPublic = undefined,
   TValues extends object = RouteRequestContextFor<TPath>,
 > = {
-  data?: PageDataFunction<TPath, TData, TValues>;
+  data?: PageDataFunction<TPath, unknown, TValues>;
   kind: "page";
   layout?: false;
+  /**
+   * The declared browser projection of this route.
+   *
+   * The framework serializes the result of this projection. It does not
+   * serialize the value that the page data function returned.
+   */
+  project?: DataProjection<never, TPublic>;
+  /** Declares that the whole page data result is public. */
+  publicData?: true;
   render: PageRenderOptions;
-  view: ComponentType<RouteProps<TPath, TData>>;
+  view: ComponentType<RouteProps<TPath, TPublic>>;
 };
 
 export type PageRenderMode = "ssr" | "static" | "streaming";
@@ -182,6 +192,8 @@ export type AnyPageCapability = {
   }["bivarianceHack"];
   kind: "page";
   layout?: false;
+  project?: DataProjection<never, unknown>;
+  publicData?: true;
   render: PageRenderOptions;
   view: unknown;
 };
@@ -347,12 +359,27 @@ export type HttpMethod =
 export type PageOptions<
   TPath extends string = string,
   TData = undefined,
+  TPublic = TData,
   TValues extends object = RouteRequestContextFor<TPath>,
 > = {
   data?: PageDataFunction<TPath, TData, TValues>;
   layout?: false;
+  /**
+   * Selects the fields that the browser receives.
+   *
+   * The projection is a typed function or a Standard Schema. The projection
+   * covers nested fields.
+   */
+  project?: DataProjection<TData, TPublic>;
+  /**
+   * Declares that the whole page data result is public.
+   *
+   * Use this declaration only when the page data function already returns a
+   * minimal public object.
+   */
+  publicData?: true;
   render?: PageRenderOptions;
-  view: ComponentType<RouteProps<TPath, TData>>;
+  view: ComponentType<RouteProps<TPath, TPublic>>;
 };
 
 export type ResponseOptions = ResponseInit & {

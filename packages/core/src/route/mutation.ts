@@ -19,6 +19,11 @@ import type {
 } from "./types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { response, toResponse } from "./response";
+import {
+  projectRouteData,
+  type DataProjection,
+  type DisclosureDeclaration,
+} from "./projection";
 
 declare const mutationInputFields: unique symbol;
 
@@ -149,8 +154,23 @@ export type MutationOptions<
   TValues extends object = RouteRequestContextFor<TPath>,
   TResult extends Response | ResponseCapability<TPath, TValues> =
     Response | ResponseCapability<TPath, TValues>,
+  TPublic = MutationResponseData<TResult>,
 > = {
   cors?: CorsPolicy;
+  /**
+   * Selects the fields that the browser receives from a JSON mutation result.
+   *
+   * The projection is a typed function or a Standard Schema. The projection
+   * covers nested fields.
+   */
+  project?: DataProjection<MutationResponseData<TResult>, TPublic>;
+  /**
+   * Declares that the whole JSON mutation result is public.
+   *
+   * Use this declaration only when the handler already returns a minimal
+   * public object.
+   */
+  publicData?: true;
   handler: (
     context: MutationContext<NoInfer<TInput>, TPath, TValues>,
   ) => MaybePromise<TResult>;
@@ -168,17 +188,19 @@ export function mutation<
   TValues extends object = RouteRequestContextFor<TPath>,
   TResult extends Response | ResponseCapability<TPath, TValues> =
     Response | ResponseCapability<TPath, TValues>,
+  TPublic = MutationResponseData<TResult>,
 >(
   options: Omit<MutationOptions<
     MutationInputValue<TParser>,
     TPath,
     TValues,
-    TResult
+    TResult,
+    TPublic
   >, "input"> & {
     input: TParser;
   },
 ): MutationCapability<
-  MutationResponseData<TResult>,
+  TPublic,
   MutationInputField<TParser>,
   TPath,
   TValues
@@ -190,22 +212,24 @@ export function mutation<
   TValues extends object = RouteRequestContextFor<TPath>,
   TResult extends Response | ResponseCapability<TPath, TValues> =
     Response | ResponseCapability<TPath, TValues>,
+  TPublic = MutationResponseData<TResult>,
 >(
-  options: MutationOptions<TInput, TPath, TValues, TResult> & {
+  options: MutationOptions<TInput, TPath, TValues, TResult, TPublic> & {
     input: MutationInput<TInput, TPath, TValues>;
   },
-): MutationCapability<MutationResponseData<TResult>, string, TPath, TValues>;
+): MutationCapability<TPublic, string, TPath, TValues>;
 
 export function mutation<
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
   TResult extends Response | ResponseCapability<TPath, TValues> =
     Response | ResponseCapability<TPath, TValues>,
+  TPublic = MutationResponseData<TResult>,
 >(
-  options: MutationOptions<undefined, TPath, TValues, TResult> & {
+  options: MutationOptions<undefined, TPath, TValues, TResult, TPublic> & {
     input?: undefined;
   },
-): MutationCapability<MutationResponseData<TResult>, string, TPath, TValues>;
+): MutationCapability<TPublic, string, TPath, TValues>;
 
 export function mutation<
   TInput = undefined,
@@ -214,9 +238,10 @@ export function mutation<
   TResult extends Response | ResponseCapability<TPath, TValues> =
     Response | ResponseCapability<TPath, TValues>,
   TField extends string = string,
+  TPublic = MutationResponseData<TResult>,
 >(
-  options: MutationOptions<TInput, TPath, TValues, TResult>,
-): MutationCapability<MutationResponseData<TResult>, TField, TPath, TValues> {
+  options: MutationOptions<TInput, TPath, TValues, TResult, TPublic>,
+): MutationCapability<TPublic, TField, TPath, TValues> {
   const capability = response<TPath, TValues>(
     async (context) => {
       let input: TInput;
@@ -239,7 +264,7 @@ export function mutation<
         const authoritative = result instanceof Response ||
           result.kind === "response" || result.kind === "not-found";
         const response = await resolveMutationResult(
-          await validateMutationCapability(result, context),
+          await validateMutationCapability(result, context, options),
           context,
         );
         return authoritative || !isMutationProtocolRequest(context.request)
@@ -290,7 +315,7 @@ export function mutation<
     ...capability,
     mutation: true,
   } as MutationCapability<
-    MutationResponseData<TResult>,
+    TPublic,
     TField,
     TPath,
     TValues
@@ -349,19 +374,28 @@ async function mutationProtocolResponse(response: Response, revalidateRoute: boo
   });
 }
 
+// The framework serializes a JSON mutation result, so that result crosses the
+// browser boundary. A raw Response carries bytes that the application wrote,
+// so the framework declares no boundary for it.
 async function validateMutationCapability<
   TPath extends string,
   TValues extends object,
 >(
   result: Response | ResponseCapability<TPath, TValues>,
   context: HttpRouteContext<TPath, TValues>,
+  declaration: DisclosureDeclaration,
 ) {
   if (result instanceof Response || result.kind !== "json") return result;
   const value = typeof result.value === "function"
     ? await result.value(context)
     : result.value;
-  assertJsonValue(value);
-  return { ...result, value };
+  const projected = await projectRouteData({
+    data: value,
+    declaration,
+    kind: "mutation",
+    route: context.pathname,
+  });
+  return { ...result, value: projected };
 }
 
 function serializeMutationResult(value: unknown) {

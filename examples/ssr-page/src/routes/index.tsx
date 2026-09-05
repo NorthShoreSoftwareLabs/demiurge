@@ -6,6 +6,7 @@ type HomeData = {
 };
 
 export const GET = page({
+  publicData: true,
   data: (): HomeData => {
     const renderedAt = new Date().toISOString();
     const checksum = Array.from(renderedAt).reduce(

@@ -3,6 +3,7 @@ import { Link, page, type RouteProps } from "@demiurgejs/core";
 type ItemsData = { items: string[] };
 
 export const GET = page({
+  publicData: true,
   async data({ request }) {
     const response = await fetch(new URL("/api/items", request.url), {
       headers: { accept: "application/json" },

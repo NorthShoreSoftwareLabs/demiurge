@@ -66,6 +66,7 @@ describe("request handler", () => {
       routes: {
         "./routes/posts.ts": routeModule({
           POST: mutation({
+            publicData: true,
             input: () => {
               throw new MutationValidationError({
                 issues: [{ code: "required", message: "Add a title.", path: ["title"] }],
@@ -99,7 +100,7 @@ describe("request handler", () => {
       onError,
       routes: {
         "./routes/posts.ts": routeModule({
-          POST: mutation({ handler: () => json({ savedAt: new Date() }) }),
+          POST: mutation({ publicData: true, handler: () => json({ savedAt: new Date() }) }),
         }),
       },
     });
@@ -114,7 +115,8 @@ describe("request handler", () => {
     await expect(response.text()).resolves.not.toContain("savedAt");
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: "A mutation result contains a value that JSON cannot serialize.",
+        message:
+          "Route /posts could not serialize the field savedAt for the browser. Change the projection to send a JSON value.",
       }),
       { pathname: "/posts", site: "route" },
     );
@@ -380,6 +382,7 @@ describe("request handler", () => {
     const routeModules = {
       "./routes/index.tsx": {
         GET: page({
+          publicData: true,
           data: ({ cache }) => cache.get({
             fn: () => value,
             key: ["value"],
@@ -1683,6 +1686,7 @@ describe("request handler", () => {
       routes: {
         "./routes/api/profile.tsx": routeModule({
           POST: mutation({
+            publicData: true,
             handler: ({ input }) => json({ name: input }),
             input,
             security: { csrf: { field: "_csrf" } },
@@ -1717,6 +1721,7 @@ describe("request handler", () => {
       routes: {
         "./routes/api/profile.tsx": routeModule({
           POST: mutation({
+            publicData: true,
             handler: mutationHandler,
             security: { csrf: { field: "_csrf" } },
           }),
@@ -2152,7 +2157,7 @@ describe("request handler", () => {
           links: defineLinks(layoutLinks),
         }),
         "./routes/index.tsx": routeModule({
-          GET: page<string, { headline: string }>({ data, view: DataView }),
+          GET: page<string, { headline: string }>({ publicData: true, data, view: DataView }),
           metadata: defineMetadata({
             description: "Navigation description",
             title: "Navigation title",
@@ -2225,6 +2230,7 @@ describe("request handler", () => {
       routes: {
         "./routes/index.tsx": routeModule({
           GET: page({
+            publicData: true,
             data: () => {
               throw new Error("private failure");
             },
@@ -2266,6 +2272,7 @@ describe("request handler", () => {
       routes: {
         "./routes/index.tsx": routeModule({
           GET: page<string, { headline: string }>({
+            publicData: true,
             data: async () => ({ headline: "</script><script>alert(1)</script>" }),
             view: DataView,
           }),
@@ -2291,6 +2298,7 @@ describe("request handler", () => {
     const routes = {
       "./routes/index.tsx": routeModule({
         GET: page<string, { scope: CacheScope; value: string }>({
+          publicData: true,
           async data({ cache, search }) {
             const scope = search.get("scope") as CacheScope;
 
@@ -2338,6 +2346,7 @@ describe("request handler", () => {
       routes: {
         "./routes/index.tsx": routeModule({
           GET: page<string, { headline: string }>({
+            publicData: true,
             data: async ({ cache }) => ({
               headline: await cache.get({
                 fn: load,
@@ -2390,6 +2399,7 @@ describe("request handler", () => {
       routes: {
         "./routes/index.tsx": routeModule({
           GET: page({
+            publicData: true,
             data: ({ cache }) => cache.get({
               fn: () => "unreachable",
               key: ["home"],

@@ -152,6 +152,7 @@ function appRoutes(extra: Record<string, ReturnType<typeof routeModule>> = {}) {
     "./routes/@not-found.tsx": routeModule({ default: NotFound }),
     "./routes/index.tsx": routeModule({
       GET: page<string, { message: string }>({
+        publicData: true,
         data: async () => ({ message: "Built at export time" }),
         render: { mode: "static" },
         view: Home,
@@ -353,6 +354,7 @@ describe("static output adapter", () => {
       }),
       "./routes/index.tsx": routeModule({
         GET: page<string, { message: string }>({
+          publicData: true,
           data: async () => ({ message: "Secure static page" }),
           render: { mode: "static" },
           view: Home,

@@ -20,6 +20,7 @@ export {
 } from "./policy-verification";
 export type {
   DocumentCspState as unstable_DocumentCspState,
+  PageDisclosureState as unstable_PageDisclosureState,
   RouteFileInspection as unstable_RouteFileInspection,
   StaticPolicyFinding as unstable_StaticPolicyFinding,
 } from "./policy-verification";

@@ -15,6 +15,7 @@ import { useEffect, useOptimistic, useState } from "react";
 import { readMutationVersion } from "../mutation-state.server";
 
 export const GET = page({
+  publicData: true,
   data: async ({ search }) => {
     const refreshKey = search.get("refreshKey") ?? "example";
     if (search.has("refreshKey")) {
