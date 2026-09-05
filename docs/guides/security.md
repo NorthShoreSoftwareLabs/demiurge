@@ -25,10 +25,14 @@ inherited directive. Use `false` to remove one inherited directive.
 Use `cspNonce` when a custom policy requires the framework nonce. Use a custom
 source string when the built-in `CspSource` values do not contain the source.
 
-A page route sends a Content-Security-Policy when a route-local or ancestor
-policy declares a document CSP. Set `csp: false` when the route accepts no CSP.
-A policy that declares `security` alone controls the request pipeline and leaves
-the response without a Content-Security-Policy.
+Every page route requires an inherited document policy. Add
+`document: security.strict()` to a route-local or ancestor `@policy.ts` file.
+The build stops when a page route inherits none. Set
+`document: security.strict({ csp: false })` when the route must accept no CSP.
+The document then keeps every other header of the policy: HSTS, `nosniff`, the
+referrer policy, the permissions policy, and same-origin COOP and CORP. An
+application-owned fallback document, `@not-found.tsx` and the route error
+document, follows the same rule, because both render HTML.
 
 ## Strict documents
 
@@ -483,8 +487,10 @@ script dependencies. Audit findings explain policy conflicts. They do not
 replace runtime reports for conditions that only a browser can observe.
 
 A document that declares no `csp` gets the `csp-missing` finding, because that
-document sends no Content-Security-Policy. To accept a document without a
-policy, declare `csp: false`. The finding then stops.
+document sends no Content-Security-Policy. This finding is an error. To accept
+a document without a policy, declare `csp: false`. The audit then reports the
+deliberate exception as the `csp-disabled` finding, so it stays visible instead
+of disappearing from the panel.
 
 The development server shows this audit for one route. Read the
 [route audit panel](./devtools.md) guide.
@@ -494,12 +500,21 @@ The development server shows this audit for one route. Read the
 The Vite plugin validates literal CORS, rate-limit, and document policy during
 a production build. A finding identifies the route file and export.
 
-The build also reads the policy cascade of the route tree. A page route that
-has no effective CSP gets the `document-policy-missing` warning. A document
-policy that declares only other headers also gets the warning. The warning
-names the route file and does not stop the build. The development server gives
-the same warning when it starts and after a route file changes. An explicit
-`csp: false` value stops the warning. An unreadable policy gets no warning.
+The build also reads the policy cascade of the route tree. A page route or an
+application-owned fallback document that inherits no document policy fails the
+build with the `document-policy-missing` error. A document policy that
+declares only other headers also fails the build. The error names the route
+file, the `@policy.ts` file that would supply the policy or the fact that none
+exists, and the exact repair. The development server reports the same gap when
+it starts and after a route file changes. An explicit
+`document: security.strict({ csp: false })` value accepts the document and
+stops the error. An unreadable policy expression reports nothing, because the
+build never guesses.
+
+A static host that cannot deliver a declared document policy fails the build
+instead of the deployment. A nonce-based Content-Security-Policy needs a
+per-request nonce, which a static adapter does not inject. Use
+`security.static()` for a statically rendered route.
 
 The build reads source without running route modules. The build does not guess
 an environment-derived value or a value from a function call.

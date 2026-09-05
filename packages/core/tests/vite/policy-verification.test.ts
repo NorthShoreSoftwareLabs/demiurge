@@ -210,7 +210,7 @@ export const GET = json({}, {
     );
   });
 
-  it("reports a page route that inherits no document policy", async () => {
+  it("reports a page route that inherits no document policy as an error", async () => {
     const root = await createRouteTree({
       "index.tsx": pageRouteSource,
       "@policy.ts": `
@@ -228,9 +228,71 @@ export const policy = defineRoutePolicy({
       expect.objectContaining({
         code: "document-policy-missing",
         file: join(root, "routes", "index.tsx"),
-        severity: "warning",
+        severity: "error",
+        message: expect.stringContaining(join(root, "routes", "@policy.ts")),
       }),
     ]);
+  });
+
+  it("names the routes directory when no @policy.ts file exists above the route", async () => {
+    const root = await createRouteTree({
+      "index.tsx": pageRouteSource,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, {
+      routesDir: "routes",
+    });
+
+    expect(findings).toEqual([
+      expect.objectContaining({
+        code: "document-policy-missing",
+        file: join(root, "routes", "index.tsx"),
+        severity: "error",
+        message: expect.stringContaining(join(root, "routes", "@policy.ts")),
+      }),
+    ]);
+  });
+
+  it("reports a fallback document that inherits no document policy", async () => {
+    const root = await createRouteTree({
+      "@not-found.tsx":
+        "export default function NotFound() { return null; }",
+      "@error.tsx":
+        "export default function RouteError() { return null; }",
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, {
+      routesDir: "routes",
+    });
+
+    expect(findings).toEqual([
+      expect.objectContaining({
+        code: "document-policy-missing",
+        file: join(root, "routes", "@error.tsx"),
+        severity: "error",
+      }),
+      expect.objectContaining({
+        code: "document-policy-missing",
+        file: join(root, "routes", "@not-found.tsx"),
+        severity: "error",
+      }),
+    ]);
+  });
+
+  it("accepts a fallback document that inherits a document policy", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `
+import { defineRoutePolicy, security } from "@demiurgejs/core";
+export const policy = defineRoutePolicy({ document: security.strict() });`,
+      "@not-found.tsx":
+        "export default function NotFound() { return null; }",
+      "@error.tsx":
+        "export default function RouteError() { return null; }",
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
   });
 
   it("accepts a page route that inherits a document policy from a parent", async () => {

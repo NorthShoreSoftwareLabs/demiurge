@@ -59,10 +59,25 @@ export function createSecurityAudit(options: SecurityAuditOptions = {}) {
 
 // A document that declares no CSP sends none. The policy stays valid, so no
 // other check speaks. This finding makes the absent policy visible.
+//
+// An absent CSP and a policy that sets `csp: false` are different states. An
+// absent CSP is the unsafe default the build refuses. `csp: false` is a
+// typed, deliberate exception, so it gets its own visible finding instead of
+// the error below.
 function auditMissingCsp(
   policy: SecurityPolicy,
   findings: SecurityAuditFinding[],
 ) {
+  if (policy.csp === false) {
+    findings.push({
+      code: "csp-disabled",
+      message:
+        "This document accepts no Content-Security-Policy. The @policy.ts file of the route sets csp: false.",
+      severity: "info",
+    });
+    return;
+  }
+
   if (policy.csp !== undefined) {
     return;
   }
@@ -71,7 +86,7 @@ function auditMissingCsp(
     code: "csp-missing",
     message:
       "This document declares no Content-Security-Policy. Add document: security.strict() to the @policy.ts file of the route, or set csp: false to accept a document without a Content-Security-Policy.",
-    severity: "warning",
+    severity: "error",
   });
 }
 
