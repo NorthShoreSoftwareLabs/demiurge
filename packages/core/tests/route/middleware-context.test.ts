@@ -116,6 +116,7 @@ describe("typed middleware request context", () => {
         "./routes/@middleware.ts": async () => ({ middleware }),
         "./routes/index.tsx": async () => ({
           GET: page<"/", { id: string }>({
+            publicData: true,
             data: ({ context }) => ({ id: context.user.id }),
             view: ({ data }) => data.id,
           }),

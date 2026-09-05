@@ -81,7 +81,7 @@ describe("client hydration", () => {
     const data = vi.fn(async () => ({ headline: "Server headline" }));
     const routes = {
       "./routes/blog/index.tsx": routeModule({
-        GET: page<string, { headline: string }>({ data, view: HeadlineView }),
+        GET: page<string, { headline: string }>({ publicData: true, data, view: HeadlineView }),
       }),
     };
 
@@ -105,7 +105,7 @@ describe("client hydration", () => {
     const data = vi.fn(async () => ({ headline: "Client headline" }));
     const routes = {
       "./routes/blog/index.tsx": routeModule({
-        GET: page<string, { headline: string }>({ data, view: HeadlineView }),
+        GET: page<string, { headline: string }>({ publicData: true, data, view: HeadlineView }),
       }),
     };
 
@@ -129,7 +129,7 @@ describe("client hydration", () => {
     const data = vi.fn(async () => ({ headline: "Loaded headline" }));
     const routes = {
       "./routes/blog/index.tsx": routeModule({
-        GET: page<string, { headline: string }>({ data, view: HeadlineView }),
+        GET: page<string, { headline: string }>({ publicData: true, data, view: HeadlineView }),
       }),
     };
 

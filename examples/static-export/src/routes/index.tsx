@@ -19,6 +19,7 @@ export const metadata = defineMetadata({
 });
 
 export const GET = page<string, HomeData>({
+  publicData: true,
   data: async () => ({
     output: [
       "Server-rendered HTML",

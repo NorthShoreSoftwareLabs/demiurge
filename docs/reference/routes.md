@@ -337,12 +337,35 @@ export const GET = page({
       key: ["post", path.slug],
       ttl: "5m",
     }),
+  project: (post) => ({ title: post.title }),
   view: ({ data }) => <article>{data.title}</article>,
 });
 ```
 
 Route data runs on the server. Browser navigation requests a typed server-data
 envelope instead of rerunning the function in the browser.
+
+### Browser disclosure
+
+A page route that returns data declares what the browser receives:
+
+| Option | Meaning |
+| --- | --- |
+| `project` | A typed function or a Standard Schema that selects the fields. |
+| `publicData: true` | The whole result is public. |
+
+A route that returns no data declares nothing. The build reports a page route
+that returns data and declares nothing.
+
+The result of `data` stays on the server. The framework serializes the
+projected result, and it uses that one value for the initial render, the
+hydration payload, and browser navigation. A `mutation(...)` that returns a
+JSON result takes the same two options.
+
+Server execution does not make the returned data private, and a projection does
+not stop application code that renders a secret into HTML. Read
+[Browser disclosure](../guides/data-and-caching.md#browser-disclosure) for the
+limits.
 
 Dynamic routes may export `paths` for static generation:
 

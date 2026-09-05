@@ -31,7 +31,8 @@ function asAstNode(value: unknown): AstNode {
 
 export type StaticPolicyFinding = {
   code: "cors-invalid" | "cors-method-unavailable" | "document-policy-missing" |
-    "rate-limit-invalid" | "security-header-render-failed";
+    "page-disclosure-missing" | "rate-limit-invalid" |
+    "security-header-render-failed";
   exportName?: string;
   file: string;
   message: string;
@@ -50,9 +51,20 @@ export type RouteFileInspection = {
   declaresPageRoute: boolean;
   file: string;
   findings: StaticPolicyFinding[];
+  /** The statically provable browser disclosure state of the page route. */
+  pageDisclosureState: PageDisclosureState;
 };
 
 export type DocumentCspState = "present" | "false" | "absent" | "unknown";
+
+/**
+ * The statically provable browser disclosure state of a page route.
+ *
+ * `missing` means that the route returns data and declares neither `project`
+ * nor `publicData`. `unknown` means that the build cannot read the options,
+ * so the build reports nothing.
+ */
+export type PageDisclosureState = "declared" | "missing" | "no-data" | "unknown";
 
 type ExtractedCapability = {
   cors?: CorsPolicy;
@@ -64,6 +76,7 @@ type ExtractedRouteModule = {
   declaredMethods: Set<HttpMethod>;
   declaresDocumentPolicy: boolean;
   documentCspState: DocumentCspState;
+  pageDisclosureState: PageDisclosureState;
   policy?: RoutePolicy;
 };
 
@@ -107,6 +120,7 @@ export async function inspectRouteFile(
       declaresPageRoute(source),
     file,
     findings: validateExtractedRouteModule(extracted, file),
+    pageDisclosureState: extracted.pageDisclosureState,
   };
 }
 
@@ -254,6 +268,7 @@ function extractRouteModule(code: string): ExtractedRouteModule {
   const declaredMethods = new Set<HttpMethod>();
   let declaresDocumentPolicy = false;
   let documentCspState: DocumentCspState = "absent";
+  let pageDisclosureState: PageDisclosureState = "no-data";
   let policy: RoutePolicy | undefined;
 
   for (const [exportName, localName] of exports) {
@@ -273,6 +288,10 @@ function extractRouteModule(code: string): ExtractedRouteModule {
     declaredMethods.add(exportName);
     if (!initializer) continue;
 
+    if (exportName === "GET") {
+      pageDisclosureState = extractPageDisclosureState(initializer, imports);
+    }
+
     const capability = extractCapability(initializer, imports, constants);
     if (capability) capabilities[exportName] = capability;
   }
@@ -282,8 +301,40 @@ function extractRouteModule(code: string): ExtractedRouteModule {
     declaredMethods,
     declaresDocumentPolicy,
     documentCspState,
+    pageDisclosureState,
     policy,
   };
+}
+
+// A page route that returns data must declare what the browser receives. The
+// plugin cannot run the route module, so this check reads the options object
+// of the `page` call. An options object that the build cannot read gives the
+// state `unknown`, and the build reports nothing.
+function extractPageDisclosureState(
+  node: AstNode,
+  imports: Map<string, string>,
+): PageDisclosureState {
+  if (node.type !== "CallExpression") return "unknown";
+  const localName = identifierName(node.callee);
+  if (!localName || imports.get(localName) !== "page") return "no-data";
+
+  const options = asNodeArray(node.arguments)[0];
+  if (!options) return "unknown";
+  if (options.type !== "ObjectExpression") return "unknown";
+
+  let returnsData = false;
+  let declaresDisclosure = false;
+  for (const property of asNodeArray(options.properties)) {
+    if (property.type === "SpreadElement") return "unknown";
+    if (property.type !== "Property") continue;
+    if (property.computed) return "unknown";
+    const name = propertyName(property.key);
+    if (name === "data") returnsData = true;
+    if (name === "project" || name === "publicData") declaresDisclosure = true;
+  }
+
+  if (!returnsData) return "no-data";
+  return declaresDisclosure ? "declared" : "missing";
 }
 
 function extractDocumentCspState(
@@ -628,6 +679,16 @@ function validateExtractedRouteModule(
   file: string,
 ) {
   const findings: StaticPolicyFinding[] = [];
+
+  if (routeModule.pageDisclosureState === "missing") {
+    findings.push(finding(
+      "page-disclosure-missing",
+      file,
+      "This page route returns data and declares no browser disclosure. Add project to select the fields that the browser receives, or add publicData: true when the whole result is public.",
+      "GET",
+    ));
+  }
+
   const availableMethods = new Set(routeModule.declaredMethods);
   if (availableMethods.has("GET")) availableMethods.add("HEAD");
   // Demiurge answers preflight itself, so a route never exports an OPTIONS

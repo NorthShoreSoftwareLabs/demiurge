@@ -1,6 +1,7 @@
 import { page, type RouteProps } from "@demiurgejs/core";
 
 export const GET = page({
+  publicData: true,
   data: () => ({
     renderedBy: "node",
     startedAt: new Date().toISOString(),

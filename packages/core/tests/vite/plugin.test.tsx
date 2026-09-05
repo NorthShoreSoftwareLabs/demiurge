@@ -149,7 +149,7 @@ export const GET = page({ view: () => null });`;
 import { secret } from "./mutation.server.js";
 import { json, mutation, page } from "@demiurgejs/core";
 export const GET = page({ view: () => null });
-export const POST = mutation({ handler: () => json({ secret }) });
+export const POST = mutation({ publicData: true, handler: () => json({ secret }) });
 const update = mutation({ handler: () => new Response(secret) });
 export { update as PATCH };`;
     const transformed = unstable_stripClientPageData(source);
@@ -1182,6 +1182,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
       },
       ssrLoadModule: vi.fn(async () => ({
         GET: page<string, { message: string }>({
+          publicData: true,
           data: async () => ({ message: "Hello from the server" }),
           view: DevPage,
         }),
@@ -1228,6 +1229,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
       },
       ssrLoadModule: vi.fn(async () => ({
         GET: page<string, { message: string }>({
+          publicData: true,
           data: async () => ({ message: "loader payload" }),
           view: DevPage,
         }),
@@ -1574,6 +1576,7 @@ describe("the development route audit panel", () => {
 
         return {
           GET: page({
+            publicData: true,
             data: async ({ cache }: { cache: Cache }) =>
               await cache.get({
                 fn: () => ({ message: "cached message" }),

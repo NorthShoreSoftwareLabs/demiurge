@@ -9,6 +9,7 @@ type HomeData = {
 };
 
 export const GET = page<string, HomeData>({
+  publicData: true,
   data: () => ({
     // The integration probe sets this at build time to prove a redeploy
     // reaches the CDN and a rollback restores the previous release.

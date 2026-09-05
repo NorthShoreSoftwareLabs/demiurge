@@ -24,13 +24,71 @@ export const GET = page({
       tags: [tag("posts")],
       ttl: "5m",
     }),
+  project: (post) => ({ title: post.title }),
   view: ({ data }) => <article>{data.title}</article>,
 });
 ```
 
-The framework passes the result to the page view. It also serializes the result
-in the initial document. Browser navigation gets the result from the server.
-The browser does not receive or run the data function.
+The browser does not receive or run the data function. The framework gives the
+projected result to the page view. It also serializes the projected result in
+the initial document, and it sends the same projected result for browser
+navigation.
+
+## Browser disclosure
+
+Server execution does not make the returned data private. A route that returns
+data must declare what the browser receives.
+
+- Add `project` to select the fields. The projection is a typed function or a
+  Standard Schema, and it covers nested fields.
+- Add `publicData: true` when the data function already returns a minimal
+  public object.
+
+A route that returns no data declares nothing.
+
+```tsx
+type AccountRecord = {
+  displayName: string;
+  email: string;
+  id: string;
+  passwordHash: string;
+};
+
+type PublicAccount = { displayName: string; id: string };
+
+export const GET = page<"/account", AccountRecord, PublicAccount>({
+  data: () => readAccountRecord("acct-1"),
+  project: (record) => ({
+    displayName: record.displayName,
+    id: record.id,
+  }),
+  view: ({ data }) => <h1>{data.displayName}</h1>,
+});
+```
+
+The result of `data` stays on the server. The framework serializes only the
+projected result. The initial render, the hydration payload, and browser
+navigation all use that one value. A hydration mismatch therefore cannot appear
+between a document and a navigation response.
+
+A mutation that returns a JSON result declares the same way. Add `project` or
+`publicData: true` to the `mutation(...)` options.
+
+The build reports a page route that returns data and declares nothing. The
+report has the code `page-disclosure-missing`.
+
+### The limits of a projection
+
+- The framework does not infer sensitivity from a field name. A name such as
+  `token` or `secret` is a weak signal. It misses a sensitive field with an
+  ordinary name, and it gives false confidence.
+- A projection controls the serialized data of a route. It does not stop
+  application code that renders a secret into HTML.
+
+### Failure reports
+
+The framework reports a value that it cannot project or cannot serialize. The
+report names the route and the field. The report does not contain the value.
 
 ## Cache scopes
 

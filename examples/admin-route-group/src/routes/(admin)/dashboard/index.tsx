@@ -6,6 +6,7 @@ export const GET = page<
   { csrfToken: string; name: string },
   AuthenticationContext
 >({
+  publicData: true,
   data: ({ context }) => ({
     csrfToken: context.csrfToken,
     name: context.principal.name,

@@ -7,6 +7,7 @@ export const GET = page<
   { allowed: boolean; csrfToken: string },
   AuthenticationContext
 >({
+  publicData: true,
   data: ({ context }) => ({
     allowed: canManageSettings(context.principal),
     csrfToken: context.csrfToken,

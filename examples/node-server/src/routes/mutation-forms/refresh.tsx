@@ -7,6 +7,7 @@ import {
 import { incrementMutationVersion } from "../../mutation-state.server";
 
 export const POST = mutation({
+  publicData: true,
   input: mutationInput.custom<"outcome", FormData>(async (context) => {
     const input = await mutationInput.formData(context);
     if (input.get("outcome") === "invalid") {

@@ -7,6 +7,7 @@ type MessageData = {
 };
 
 export const GET = page<string, MessageData>({
+  publicData: true,
   data: ({ cache }) => cache.get(messageQuery()),
   view: MessagePage,
 });

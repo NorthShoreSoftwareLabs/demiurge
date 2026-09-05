@@ -33,6 +33,7 @@ function createContext(request: Request): HttpRouteContext {
 describe("mutation helper", () => {
   it("brands the accepted JSON result type for generated route declarations", () => {
     const POST = mutation({
+      publicData: true,
       handler: () => json({ saved: true }),
       input: mutationInput.custom<"title", undefined>(() => undefined),
     });
@@ -104,6 +105,7 @@ describe("mutation helper", () => {
 
   it("marks protocol success results for route revalidation", async () => {
     const capability = mutation({
+      publicData: true,
       revalidateRoute: true,
       handler: () => json({ saved: true }),
     });
@@ -121,6 +123,7 @@ describe("mutation helper", () => {
 
   it("keeps cache-tag invalidation separate from browser route revalidation", async () => {
     const capability = mutation({
+      publicData: true,
       revalidate: { tags: [{ id: "posts" }] },
       revalidateRoute: true,
       handler: () => json({ saved: true }),
@@ -211,28 +214,28 @@ describe("mutation helper", () => {
     ["a non-finite number", { saved: Number.NaN }],
     ["a custom object", { saved: new Date(0) }],
   ])("rejects %s in a structured result", async (_name, data) => {
-    const capability = mutation({ handler: () => json(data) });
+    const capability = mutation({ publicData: true, handler: () => json(data) });
     const context = createContext(new Request("https://example.test/posts", {
       headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE },
       method: "POST",
     }));
 
     await expect(toResponse(capability, context)).rejects.toThrow(
-      "A mutation result contains a value that JSON cannot serialize.",
+      "Route /posts could not serialize the field saved for the browser.",
     );
   });
 
   it("rejects a cyclic structured result", async () => {
     const data: { self?: unknown } = {};
     data.self = data;
-    const capability = mutation({ handler: () => json(data) });
+    const capability = mutation({ publicData: true, handler: () => json(data) });
     const context = createContext(new Request("https://example.test/posts", {
       headers: { [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE },
       method: "POST",
     }));
 
     await expect(toResponse(capability, context)).rejects.toThrow(
-      "A mutation result contains a value that JSON cannot serialize.",
+      "Route /posts could not serialize the field self for the browser.",
     );
   });
 
@@ -251,6 +254,7 @@ describe("mutation helper", () => {
   });
   it("parses JSON input and returns response capabilities", async () => {
     const capability = mutation({
+      publicData: true,
       input: mutationInput.json,
       handler({ input }) {
         return json({
@@ -280,6 +284,7 @@ describe("mutation helper", () => {
 
   it("supports form and text mutation inputs", async () => {
     const formCapability = mutation({
+      publicData: true,
       input: mutationInput.formData,
       handler({ input }) {
         return json({
@@ -341,6 +346,7 @@ describe("mutation helper", () => {
       },
     };
     const capability = mutation({
+      publicData: true,
       input: mutationInput.form(schema, (form) => ({
         title: form.get("title"),
       })),
@@ -440,6 +446,7 @@ describe("mutation helper", () => {
       .mockRejectedValueOnce(new Error("unavailable"))
       .mockResolvedValueOnce(json({ ok: true }));
     const capability = mutation({
+      publicData: true,
       idempotency: {
         key: ["create-post", "retry-key"],
         store,

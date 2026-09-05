@@ -225,6 +225,7 @@ describe("a typed failure inside a page render", () => {
         "./routes/@error.tsx": routeModule({ default: AppError }),
         "./routes/index.tsx": routeModule({
           GET: page({
+            publicData: true,
             data: () => {
               throw httpError(410, "This page has been removed.", {
                 headers: { "cache-control": "public, max-age=60" },
@@ -251,6 +252,7 @@ describe("a typed failure inside a page render", () => {
       routes: {
         "./routes/index.tsx": routeModule({
           GET: page({
+            publicData: true,
             data: () => {
               throw httpError(403, "Not your widget");
             },

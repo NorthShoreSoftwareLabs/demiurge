@@ -470,6 +470,7 @@ describe("Node adapter", () => {
       routes: {
         "./routes/index.tsx": routeModule({
           GET: page({
+            publicData: true,
             data: ({ request }) =>
               new Promise<{ message: string }>((resolveData) => {
                 request.signal.addEventListener(
@@ -657,6 +658,7 @@ describe("Node adapter", () => {
         }),
         "./routes/index.tsx": routeModule({
           GET: page({
+            publicData: true,
             data: () => ({ message: "SSR is running" }),
             view: HomePage,
           }),

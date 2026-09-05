@@ -20,6 +20,7 @@ import type {
   RouteModule,
   RouteProps,
 } from "../route";
+import { projectRouteData } from "../route/projection";
 
 export type RouteRecord = {
   file: string;
@@ -371,14 +372,23 @@ export async function loadPageRoute(
     url,
   };
 
+  const capability = pageModule.GET;
+  // The projection runs here because both the initial document and the
+  // navigation response come from this function. One projected value therefore
+  // reaches the initial render, the hydration payload, and browser navigation.
+  const data = capability.data && !initialData?.hasData
+    ? await projectRouteData({
+      data: await capability.data(context),
+      declaration: capability,
+      route: toRoutePattern(routeMatch.route.segments),
+    })
+    : initialData?.data;
+
   // TYPE-EVIDENCE: the route module view and layout exports are React components. The casts label them as component types.
   return {
     status: "ready",
     match: {
-      data:
-        pageModule.GET.data && !initialData?.hasData
-          ? await pageModule.GET.data(context)
-          : initialData?.data,
+      data,
       error: await loadErrorFallbackForRoute(manifest, routeMatch.route),
       links: documentContributions
         ? await resolveLinks(

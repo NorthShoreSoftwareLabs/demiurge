@@ -1010,6 +1010,7 @@ describe("browser router fallbacks", () => {
       routes: {
         "./routes/index.tsx": routeModule({
           GET: page<string, string>({
+            publicData: true,
             data: () => {
               throw new Error("Page data must not run in the browser.");
             },
@@ -1065,6 +1066,7 @@ describe("browser router fallbacks", () => {
         }),
         "./routes/index.tsx": routeModule({
           GET: page<string, string>({
+            publicData: true,
             data: () => {
               throw new Error("Page data must not run in the browser.");
             },

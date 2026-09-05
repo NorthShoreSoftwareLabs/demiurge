@@ -524,6 +524,33 @@ See [ADR 0002](../../architecture/decisions/0002-static-policy-verification.md)
 for the accepted boundary. [Issue #184](https://github.com/NorthShoreSoftwareLabs/demiurge/issues/184)
 carries the wider proposal's open decisions and later consumers.
 
+## Browser data disclosure
+
+Server execution does not make the returned data private. The framework
+serializes route data into the initial document, and it sends the same data for
+browser navigation. A loader that returns a database record therefore sends
+every column of that record.
+
+A page route that returns data declares what the browser receives. It declares
+`project` to select the fields, or `publicData: true` when the whole result is
+public. A mutation that returns a JSON result declares the same way. The result
+of the loader stays on the server, and the framework serializes only the
+projected result.
+
+The build reports a page route that returns data and declares nothing. The
+finding has the code `page-disclosure-missing`, and it stops the build.
+
+Two limits apply:
+
+- The framework does not infer sensitivity from a field name. A name such as
+  `token` or `secret` misses a sensitive field with an ordinary name, and it
+  gives false confidence.
+- A projection controls the serialized data of a route. It does not stop
+  application code that renders a secret into HTML.
+
+Read [Browser disclosure](./data-and-caching.md#browser-disclosure) for the
+options and the failure reports. ADR 0017 records the accepted decision.
+
 ## Environment validation
 
 `defineEnvSchema(...)`, `env.*(...)`, and `validateEnv(...)` validate required

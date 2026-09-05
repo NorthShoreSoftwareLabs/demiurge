@@ -1,7 +1,10 @@
 import type { ComponentType } from "react";
+import type { DataProjection } from "./projection";
 import type {
   PageCapability,
+  PageDataFunction,
   PageOptions,
+  PageRenderOptions,
   RouteProps,
   RouteRequestContextFor,
 } from "./types";
@@ -11,18 +14,56 @@ export function page<const TPath extends string = string>(
 ): PageCapability<TPath>;
 export function page<
   const TPath extends string = string,
-  TData = undefined,
   TValues extends object = RouteRequestContextFor<TPath>,
 >(
-  options: PageOptions<TPath, TData, TValues>,
-): PageCapability<TPath, TData, TValues>;
+  options: {
+    data?: undefined;
+    layout?: false;
+    project?: undefined;
+    publicData?: undefined;
+    render?: PageRenderOptions;
+    view: ComponentType<RouteProps<TPath>>;
+  },
+): PageCapability<TPath, undefined, TValues>;
+export function page<
+  const TPath extends string = string,
+  TData = undefined,
+  TPublic = TData,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  options: {
+    data: PageDataFunction<TPath, TData, TValues>;
+    layout?: false;
+    project: DataProjection<TData, TPublic>;
+    publicData?: undefined;
+    render?: PageRenderOptions;
+    view: ComponentType<RouteProps<TPath, TPublic>>;
+  },
+): PageCapability<TPath, TPublic, TValues>;
 export function page<
   const TPath extends string = string,
   TData = undefined,
   TValues extends object = RouteRequestContextFor<TPath>,
 >(
-  options: PageOptions<TPath, TData, TValues> | ComponentType<RouteProps<TPath>>,
-): PageCapability<TPath, TData, TValues> | PageCapability<TPath> {
+  options: {
+    data: PageDataFunction<TPath, TData, TValues>;
+    layout?: false;
+    project?: undefined;
+    publicData: true;
+    render?: PageRenderOptions;
+    view: ComponentType<RouteProps<TPath, TData>>;
+  },
+): PageCapability<TPath, TData, TValues>;
+export function page<
+  const TPath extends string = string,
+  TData = undefined,
+  TPublic = TData,
+  TValues extends object = RouteRequestContextFor<TPath>,
+>(
+  options:
+    | PageOptions<TPath, TData, TPublic, TValues>
+    | ComponentType<RouteProps<TPath>>,
+): PageCapability<TPath, TPublic, TValues> | PageCapability<TPath> {
   if (typeof options === "function") {
     return {
       kind: "page",
@@ -36,7 +77,9 @@ export function page<
     data: options.data,
     kind: "page",
     layout: options.layout,
+    project: options.project,
+    publicData: options.publicData,
     render: options.render ?? { mode: "ssr" },
     view: options.view,
-  } as PageCapability<TPath, TData, TValues>;
+  } as PageCapability<TPath, TPublic, TValues>;
 }

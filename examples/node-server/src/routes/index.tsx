@@ -3,6 +3,7 @@ import { Link, page, type RouteProps } from "@demiurgejs/core";
 let sharedDataLoads = 0;
 
 export const GET = page({
+  publicData: true,
   data: ({ cache }) => cache.get({
     fn: async () => {
       await new Promise((resolve) => setTimeout(resolve, 25));
@@ -40,6 +41,8 @@ function HomePage({
       <Link to="/navigation">Test navigation</Link>
       {" | "}
       <Link to="/mutation-forms">Test mutation forms</Link>
+      {" | "}
+      <Link to="/account">View account</Link>
       {" | "}
       <Link to="/items/%E0%A4%A">Test malformed URL</Link>
     </main>

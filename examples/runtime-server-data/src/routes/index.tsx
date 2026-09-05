@@ -46,6 +46,7 @@ const uncachedSample = query({
 });
 
 export const GET = page<string, RuntimeData>({
+  publicData: true,
   async data({ cache, request, url }) {
     const account = request.headers.get("x-demo-account") ?? "guest";
     const [
