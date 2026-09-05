@@ -9,14 +9,14 @@ describe("generated server entry environment", () => {
   it("validates the declared schema while the server module loads", () => {
     const source = createServerEntrySource("/application/app", {
       env: defineEnvSchema({
-        DATABASE_URL: env.url({ critical: true }),
+        DATABASE_URL: env.url(),
         FEATURE_FLAG: env.boolean({ optional: true }),
       }),
     });
 
     expect(source).toContain("unstable_startEnvironment");
     expect(source).toContain("export const env = unstable_startEnvironment(");
-    expect(source).toContain('"DATABASE_URL":{"client":false,"critical":true');
+    expect(source).toContain('"DATABASE_URL":{"client":false,"deferred":false');
     expect(source).toContain('"kind":"url"');
   });
 
@@ -31,7 +31,7 @@ describe("generated server entry environment", () => {
 describe("generated client entry environment", () => {
   const schema = defineEnvSchema({
     PUBLIC_API_URL: env.url({ client: true }),
-    SESSION_SECRET: env.secret({ critical: true }),
+    SESSION_SECRET: env.secret(),
   });
 
   it("gives the browser the values of the client variables", () => {
@@ -56,12 +56,24 @@ describe("generated client entry environment", () => {
     expect(source).not.toContain("unstable_startEnvironment");
   });
 
-  it("refuses a build without the value of a critical client variable", () => {
-    const critical = defineEnvSchema({
-      PUBLIC_API_URL: env.url({ client: true, critical: true }),
+  it("refuses a build without the value of a required client variable", () => {
+    const required = defineEnvSchema({
+      PUBLIC_API_URL: env.url({ client: true }),
     });
 
-    expect(() => createClientEntrySource("/application/app", { env: critical }, {}))
-      .toThrow(/critical client variable/);
+    expect(() => createClientEntrySource("/application/app", { env: required }, {}))
+      .toThrow(/required client variable/);
+  });
+
+  it("refuses a build with an invalid value of a client variable", () => {
+    const invalid = defineEnvSchema({
+      PUBLIC_API_URL: env.url({ client: true }),
+    });
+
+    expect(() =>
+      createClientEntrySource("/application/app", { env: invalid }, {
+        PUBLIC_API_URL: "not a url",
+      })
+    ).toThrow(/invalid client variable/);
   });
 });

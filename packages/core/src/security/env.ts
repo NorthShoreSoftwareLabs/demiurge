@@ -31,7 +31,10 @@ export type EnvVariableDescriptor = {
   // A client variable reaches the browser bundle. The build refuses a client
   // bundle that reads a variable which this field does not mark.
   client: boolean;
-  critical: boolean;
+  // A deferred variable postpones validation until the first server access of
+  // the value. The framework does not stop the start when the value is absent
+  // or invalid.
+  deferred: boolean;
   kind: EnvVariableKind;
   optional: boolean;
   options: Record<string, unknown>;
@@ -61,19 +64,35 @@ type SharedEnvVariableOptions = {
   // A client variable reaches the browser bundle. The build inlines its value.
   // The default value is false, and the value then stays on the server.
   client?: boolean;
-  // A critical variable stops the server start when it is absent or invalid.
-  critical?: boolean;
 };
 
+// A required variable stops the server start when it is absent or invalid.
+// This is the default declaration.
 type RequiredEnvVariableOptions = SharedEnvVariableOptions & {
+  deferred?: false;
   optional?: false;
 };
 
+// An optional variable permits absence. The framework validates a supplied
+// optional value at startup.
 type OptionalEnvVariableOptions = SharedEnvVariableOptions & {
+  deferred?: false;
   optional: true;
 };
 
-type EnvVariableOptions = RequiredEnvVariableOptions | OptionalEnvVariableOptions;
+// A deferred variable postpones validation to the first server access of the
+// value. The build inlines a client variable, so a client variable has no
+// deferred form.
+type DeferredEnvVariableOptions = {
+  client?: never;
+  deferred: true;
+  optional?: false;
+};
+
+type EnvVariableOptions =
+  | RequiredEnvVariableOptions
+  | OptionalEnvVariableOptions
+  | DeferredEnvVariableOptions;
 
 type RequiredStringEnvOptions = RequiredEnvVariableOptions & {
   minLength?: number;
@@ -83,7 +102,14 @@ type OptionalStringEnvOptions = OptionalEnvVariableOptions & {
   minLength?: number;
 };
 
-type StringEnvOptions = RequiredStringEnvOptions | OptionalStringEnvOptions;
+type DeferredStringEnvOptions = DeferredEnvVariableOptions & {
+  minLength?: number;
+};
+
+type StringEnvOptions =
+  | RequiredStringEnvOptions
+  | OptionalStringEnvOptions
+  | DeferredStringEnvOptions;
 
 // A secret variable never reaches the browser. The option is absent from the
 // type of the builder, and the builder also refuses it at run time.
@@ -91,7 +117,12 @@ type RequiredSecretEnvOptions = RequiredStringEnvOptions & { client?: never };
 
 type OptionalSecretEnvOptions = OptionalStringEnvOptions & { client?: never };
 
-type SecretEnvOptions = RequiredSecretEnvOptions | OptionalSecretEnvOptions;
+type DeferredSecretEnvOptions = DeferredStringEnvOptions & { client?: never };
+
+type SecretEnvOptions =
+  | RequiredSecretEnvOptions
+  | OptionalSecretEnvOptions
+  | DeferredSecretEnvOptions;
 
 type RequiredUrlEnvOptions = RequiredEnvVariableOptions & {
   protocols?: readonly string[];
@@ -101,7 +132,14 @@ type OptionalUrlEnvOptions = OptionalEnvVariableOptions & {
   protocols?: readonly string[];
 };
 
-type UrlEnvOptions = RequiredUrlEnvOptions | OptionalUrlEnvOptions;
+type DeferredUrlEnvOptions = DeferredEnvVariableOptions & {
+  protocols?: readonly string[];
+};
+
+type UrlEnvOptions =
+  | RequiredUrlEnvOptions
+  | OptionalUrlEnvOptions
+  | DeferredUrlEnvOptions;
 
 type RequiredIntegerEnvOptions = RequiredEnvVariableOptions & {
   max?: number;
@@ -113,7 +151,15 @@ type OptionalIntegerEnvOptions = OptionalEnvVariableOptions & {
   min?: number;
 };
 
-type IntegerEnvOptions = RequiredIntegerEnvOptions | OptionalIntegerEnvOptions;
+type DeferredIntegerEnvOptions = DeferredEnvVariableOptions & {
+  max?: number;
+  min?: number;
+};
+
+type IntegerEnvOptions =
+  | RequiredIntegerEnvOptions
+  | OptionalIntegerEnvOptions
+  | DeferredIntegerEnvOptions;
 
 export function defineEnvSchema<Schema extends EnvSchema>(schema: Schema) {
   return schema;
@@ -167,7 +213,9 @@ export function validateEnv<Schema extends EnvSchema>(
 }
 
 function booleanEnv(options: OptionalEnvVariableOptions): EnvVariable<boolean, true>;
-function booleanEnv(options?: RequiredEnvVariableOptions): EnvVariable<boolean, false>;
+function booleanEnv(
+  options?: RequiredEnvVariableOptions | DeferredEnvVariableOptions,
+): EnvVariable<boolean, false>;
 function booleanEnv(options: EnvVariableOptions = {}) {
   return createVariable(options, false, (key, value) => {
     if (value === "true" || value === "1") {
@@ -188,7 +236,7 @@ function enumEnv<const Values extends readonly [string, ...string[]]>(
 ): EnvVariable<Values[number], true>;
 function enumEnv<const Values extends readonly [string, ...string[]]>(
   values: Values,
-  options?: RequiredEnvVariableOptions,
+  options?: RequiredEnvVariableOptions | DeferredEnvVariableOptions,
 ): EnvVariable<Values[number], false>;
 function enumEnv<const Values extends readonly [string, ...string[]]>(
   values: Values,
@@ -206,7 +254,9 @@ function enumEnv<const Values extends readonly [string, ...string[]]>(
 }
 
 function integerEnv(options: OptionalIntegerEnvOptions): EnvVariable<number, true>;
-function integerEnv(options?: RequiredIntegerEnvOptions): EnvVariable<number, false>;
+function integerEnv(
+  options?: RequiredIntegerEnvOptions | DeferredIntegerEnvOptions,
+): EnvVariable<number, false>;
 function integerEnv(options: IntegerEnvOptions = {}) {
   return createVariable(options, false, (key, value) => {
     if (!/^-?\d+$/.test(value)) {
@@ -236,7 +286,9 @@ function integerEnv(options: IntegerEnvOptions = {}) {
 }
 
 function secretEnv(options: OptionalSecretEnvOptions): EnvVariable<string, true>;
-function secretEnv(options?: RequiredSecretEnvOptions): EnvVariable<string, false>;
+function secretEnv(
+  options?: RequiredSecretEnvOptions | DeferredSecretEnvOptions,
+): EnvVariable<string, false>;
 function secretEnv(options: SecretEnvOptions = {}) {
   return createVariable(
     options,
@@ -247,7 +299,9 @@ function secretEnv(options: SecretEnvOptions = {}) {
 }
 
 function stringEnv(options: OptionalStringEnvOptions): EnvVariable<string, true>;
-function stringEnv(options?: RequiredStringEnvOptions): EnvVariable<string, false>;
+function stringEnv(
+  options?: RequiredStringEnvOptions | DeferredStringEnvOptions,
+): EnvVariable<string, false>;
 function stringEnv(options: StringEnvOptions = {}) {
   return createVariable(
     options,
@@ -258,7 +312,9 @@ function stringEnv(options: StringEnvOptions = {}) {
 }
 
 function urlEnv(options: OptionalUrlEnvOptions): EnvVariable<URL, true>;
-function urlEnv(options?: RequiredUrlEnvOptions): EnvVariable<URL, false>;
+function urlEnv(
+  options?: RequiredUrlEnvOptions | DeferredUrlEnvOptions,
+): EnvVariable<URL, false>;
 function urlEnv(options: UrlEnvOptions = {}) {
   return createVariable(options, false, (key, value) => {
     let url: URL;
@@ -302,8 +358,8 @@ function createVariable<T>(
   const merged = { ...options, ...extra } as
     & Record<string, unknown>
     & EnvVariableOptions
-    & { client?: boolean };
-  const { client = false, critical = false, optional = false, ...rest } = merged;
+    & { client?: boolean; deferred?: boolean };
+  const { client = false, deferred = false, optional = false, ...rest } = merged;
 
   if (client && sensitive) {
     throw new Error(
@@ -311,9 +367,21 @@ function createVariable<T>(
     );
   }
 
+  if (optional && deferred) {
+    throw new Error(
+      "An environment variable cannot combine optional with deferred. Declare one of the two options.",
+    );
+  }
+
+  if (client && deferred) {
+    throw new Error(
+      "A client environment variable cannot be deferred. The build validates the value of a client variable.",
+    );
+  }
+
   return {
     client,
-    critical,
+    deferred,
     kind,
     optional,
     options: rest,

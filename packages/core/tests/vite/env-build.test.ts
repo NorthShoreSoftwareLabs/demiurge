@@ -15,7 +15,7 @@ afterEach(async () => {
 });
 
 const schema = defineEnvSchema({
-  PUBLIC_API_URL: env.url({ client: true }),
+  PUBLIC_API_URL: env.url({ client: true, optional: true }),
   READ_LIMIT: env.integer({ optional: true }),
   SESSION_SECRET: env.secret({ optional: true }),
 });
@@ -142,5 +142,19 @@ export const GET = page({ view: () => null });`,
   } finally {
     delete process.env.PUBLIC_API_URL;
     delete process.env.SESSION_SECRET;
+  }
+});
+
+test("the build refuses an invalid value of a client variable", async () => {
+  const root = await createApplication({
+    "src/routes/index.tsx": `import { page } from "@demiurgejs/core";
+export const GET = page({ view: () => null });`,
+  });
+  process.env.PUBLIC_API_URL = "not a url";
+
+  try {
+    await expect(buildApplication(root)).rejects.toThrow(/PUBLIC_API_URL/);
+  } finally {
+    delete process.env.PUBLIC_API_URL;
   }
 });

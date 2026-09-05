@@ -12,21 +12,26 @@ import {
 
 export type EnvStartupOptions = {
   source?: EnvSource;
-  warn?: (message: string) => void;
 };
 
 export type EnvStartupResult = {
   values: Record<string, unknown>;
-  warnings: string[];
+};
+
+type DeferredEnvEntry = {
+  rawValue: string | undefined;
+  variable: EnvVariable<unknown, boolean>;
 };
 
 // Vite can load the plugin and the application entry from separate package
-// bundles. Store the values on a registered symbol so both bundles share one
+// bundles. Store the values on registered symbols so both bundles share one
 // process-wide environment state.
 const environmentState = Symbol.for("demiurge.environmentState");
-// TYPE-EVIDENCE: globalThis stores the process-local map under the registered symbol.
+const deferredEnvironmentState = Symbol.for("demiurge.deferredEnvironmentState");
+// TYPE-EVIDENCE: globalThis stores the process-local maps under the registered symbols.
 const runtime = globalThis as typeof globalThis & Record<symbol, unknown>;
 const initialized = getInitializedEnvironment();
+const deferred = getDeferredEnvironment();
 
 function getInitializedEnvironment(): Map<string, unknown> {
   const existing = runtime[environmentState];
@@ -37,6 +42,15 @@ function getInitializedEnvironment(): Map<string, unknown> {
   return values;
 }
 
+function getDeferredEnvironment(): Map<string, DeferredEnvEntry> {
+  const existing = runtime[deferredEnvironmentState];
+  if (existing instanceof Map) return existing;
+
+  const values = new Map<string, DeferredEnvEntry>();
+  runtime[deferredEnvironmentState] = values;
+  return values;
+}
+
 // The configuration file declares the schema. The build writes this
 // description into the generated server entry, because the production process
 // does not read the configuration file.
@@ -44,7 +58,7 @@ export function serializeEnvSchema(schema: EnvSchema): EnvSchemaDescriptor {
   return Object.fromEntries(
     Object.entries(schema).map(([key, variable]) => [key, {
       client: variable.client,
-      critical: variable.critical,
+      deferred: variable.deferred,
       kind: variable.kind,
       optional: variable.optional,
       options: variable.options,
@@ -65,24 +79,30 @@ export function deserializeEnvSchema(
 }
 
 // The server entry calls this function while the module graph loads. A
-// critical failure therefore stops the process before it accepts traffic.
+// required value that is absent or invalid therefore stops the process before
+// it accepts traffic. A deferred value postpones its validation to the first
+// server access of the value.
 export function startEnvironment(
   schema: EnvSchema | EnvSchemaDescriptor,
   options: EnvStartupOptions = {},
 ): EnvStartupResult {
   const resolved = isEnvSchema(schema) ? schema : deserializeEnvSchema(schema);
   const source = options.source ?? readProcessEnvironment();
-  const critical: EnvValidationIssue[] = [];
-  const warnings: string[] = [];
+  const issues: EnvValidationIssue[] = [];
   const values: Record<string, unknown> = {};
 
   for (const [key, variable] of Object.entries(resolved)) {
     const rawValue = source[key];
 
+    if (variable.deferred) {
+      deferred.set(key, { rawValue, variable });
+      continue;
+    }
+
     if (rawValue === undefined || rawValue === "") {
       values[key] = undefined;
       if (variable.optional) continue;
-      record(variable, critical, warnings, {
+      issues.push({
         code: "missing",
         key,
         message: `Environment variable ${key} is required.`,
@@ -94,7 +114,7 @@ export function startEnvironment(
       values[key] = variable.parse(key, rawValue);
     } catch (error) {
       values[key] = undefined;
-      record(variable, critical, warnings, {
+      issues.push({
         code: "invalid",
         key,
         message: error instanceof Error
@@ -104,23 +124,27 @@ export function startEnvironment(
     }
   }
 
-  if (critical.length) throw new EnvValidationError(critical);
+  if (issues.length) throw new EnvValidationError(issues);
 
-  const warn = options.warn ?? defaultWarn;
-  for (const warning of warnings) warn(warning);
   for (const [key, value] of Object.entries(values)) initialized.set(key, value);
 
-  return { values, warnings };
+  return { values };
 }
 
 // Applications read the validated values with the types that the schema
-// declares. This function is server-only.
+// declares. This function is server-only. A deferred value validates here, on
+// its first access, and reports a clear error that does not contain the value.
 export function readEnv<Schema extends EnvSchema>(
   schema: Schema,
 ): InferEnvSchema<Schema> {
   const values: Record<string, unknown> = {};
 
   for (const key of Object.keys(schema)) {
+    if (deferred.has(key)) {
+      values[key] = resolveDeferredValue(key);
+      continue;
+    }
+
     if (!initialized.has(key)) {
       throw new Error(
         `Demiurge did not validate the environment variable ${key}. The framework validates the schema of demiurge.config.ts when the server starts.`,
@@ -135,21 +159,41 @@ export function readEnv<Schema extends EnvSchema>(
 
 export function resetEnvironment() {
   initialized.clear();
+  deferred.clear();
 }
 
-function record(
-  variable: { critical: boolean },
-  critical: EnvValidationIssue[],
-  warnings: string[],
-  issue: EnvValidationIssue,
-) {
-  if (variable.critical) {
-    critical.push(issue);
-    return;
+function resolveDeferredValue(key: string): unknown {
+  // TYPE-EVIDENCE: the has check above proves the map holds an entry for this key.
+  const entry = deferred.get(key) as DeferredEnvEntry;
+  const { rawValue, variable } = entry;
+
+  if (rawValue === undefined || rawValue === "") {
+    if (variable.optional) {
+      deferred.delete(key);
+      initialized.set(key, undefined);
+      return undefined;
+    }
+
+    throw new Error(
+      `Environment variable ${key} is required. Give the variable a value before the code reads it.`,
+    );
   }
-  warnings.push(
-    `Demiurge started without a valid value for ${issue.key}. ${issue.message} A request that needs this value fails.`,
-  );
+
+  let value: unknown;
+  try {
+    value = variable.parse(key, rawValue);
+  } catch (error) {
+    throw new Error(
+      error instanceof Error
+        ? error.message
+        : `Environment variable ${key} is invalid.`,
+      { cause: error },
+    );
+  }
+
+  deferred.delete(key);
+  initialized.set(key, value);
+  return value;
 }
 
 function createVariableFromDescriptor(
@@ -160,7 +204,7 @@ function createVariableFromDescriptor(
   const options = {
     ...descriptor.options,
     client: descriptor.client,
-    critical: descriptor.critical,
+    deferred: descriptor.deferred,
     optional: descriptor.optional,
   } as never;
 
@@ -193,12 +237,4 @@ function readProcessEnvironment(): EnvSource {
   // TYPE-EVIDENCE: the framework runs this function on a server runtime. The cast reads the process environment without a Node type dependency here.
   const runtime = globalThis as { process?: { env?: EnvSource } };
   return runtime.process?.env ?? {};
-}
-
-function defaultWarn(message: string) {
-  // TYPE-EVIDENCE: a server runtime supplies console. The cast keeps the warning optional.
-  const runtime = globalThis as {
-    console?: { warn?: (message: string) => void };
-  };
-  runtime.console?.warn?.(message);
 }
