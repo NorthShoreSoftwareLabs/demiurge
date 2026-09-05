@@ -1302,8 +1302,11 @@ describe("browser router fallbacks", () => {
   });
 });
 
+// Each route needs an inherited access declaration, because the request
+// pipeline denies a route that declares none. A test that does not examine
+// authorization declares public access here.
 function routeModule(module: Record<string, unknown>) {
-  return async () => module;
+  return async () => ({ ...module, policy: { access: { public: true }, ...(module.policy as object) } });
 }
 
 describe("localized browser navigation", () => {

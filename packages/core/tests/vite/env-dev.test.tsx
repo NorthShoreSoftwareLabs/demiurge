@@ -49,6 +49,10 @@ async function createRoot(routeSource = "export {}") {
   const routesDir = join(root, "routes");
   await mkdir(routesDir, { recursive: true });
   await writeFile(join(routesDir, "index.tsx"), routeSource);
+  await writeFile(
+    join(routesDir, "@policy.ts"),
+    'export const policy = { access: { public: true } };',
+  );
 
   return root;
 }
@@ -126,6 +130,7 @@ function createServerHarness(
     middlewares: { use: middleware.use },
     ssrLoadModule: vi.fn(async () => ({
       GET: json({ password: readEnv(schema).SITE_PASSWORD }),
+      policy: { access: { public: true } },
     })),
     transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
     watcher: createWatcherHarness(),

@@ -14,6 +14,10 @@ test("the default build emits small fonts as files", async () => {
     "export default function NotFound() { return null; }",
   );
   await writeFile(
+    join(routesDir, "@policy.ts"),
+    'export const policy = { access: { public: true } };',
+  );
+  await writeFile(
     join(routesDir, "index.tsx"),
     `import { page } from "@demiurgejs/core";
 export const GET = page({ view: () => null });`,

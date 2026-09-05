@@ -29,6 +29,10 @@ async function createApplication(files: Record<string, string>) {
     join(routesDir, "@not-found.tsx"),
     "export default function NotFound() { return null; }",
   );
+  await writeFile(
+    join(routesDir, "@policy.ts"),
+    'export const policy = { access: { public: true } };',
+  );
 
   for (const [file, source] of Object.entries(files)) {
     const path = join(root, file);

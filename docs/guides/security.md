@@ -30,6 +30,107 @@ policy declares a document CSP. Set `csp: false` when the route accepts no CSP.
 A policy that declares `security` alone controls the request pipeline and leaves
 the response without a Content-Security-Policy.
 
+## Route authorization
+
+Demiurge owns sessions, CSRF protection, and the request pipeline. An
+application owns authorization. The route policy cascade carries an `access`
+declaration, so one file protects a subtree.
+
+### The declaration is required
+
+Every route requires an inherited access declaration. Demiurge denies a route
+that inherits none.
+
+```ts
+import { defineRoutePolicy } from "@demiurgejs/core";
+
+export const policy = defineRoutePolicy({
+  access: { public: true },
+});
+```
+
+A public application adds one root declaration. Use `access: { authorize }` for
+a subtree that needs a check.
+
+```ts
+import { defineAuthorization, defineRoutePolicy } from "@demiurgejs/core";
+import type { AuthenticationContext } from "../../session.server";
+
+export const policy = defineRoutePolicy({
+  access: {
+    authorize: defineAuthorization<AuthenticationContext>(
+      ({ context }) => Boolean(context.principal),
+    ),
+  },
+});
+```
+
+The hook reads the request context that inherited middleware filled in. It
+returns `true` or `{ allow: true }` to permit the request. Each other result
+denies the request. A denial uses status 403. Set `denyStatus` to select 401 or
+404 instead.
+
+### Execution order
+
+Demiurge runs authorization before these operations:
+
+- A protected data loader.
+- A read of a protected cache entry.
+- A render.
+- The effect of a mutation.
+
+Demiurge applies the same authorization to a document request, to a navigation
+data request, and to a direct mutation request. A route therefore gives one
+answer to the same person through every entry point. A denied request never
+receives a cached representation of protected data.
+
+Middleware stays available. An application that must do work before
+authorization, such as session resolution, keeps that work in middleware.
+
+### Composition
+
+A child declaration adds a restriction. Demiurge runs each inherited hook, from
+the root of the subtree to the route. Every hook must permit the request. A
+child cannot weaken an ancestor.
+
+An application that must replace an inherited protection declares an explicit
+exception. The exception is typed, and the audit reports it with its source and
+its scope.
+
+```ts
+export const policy = defineRoutePolicy({
+  access: {
+    public: true,
+    replaces: {
+      reason: "The provider signs each webhook body.",
+      scope: "/hooks",
+    },
+  },
+});
+```
+
+### Failure
+
+An authorization hook that throws denies the request. An absent authentication
+context denies the request. Demiurge never reads a denial as a permission.
+
+### The application keeps the permission model
+
+Demiurge supplies no roles, no tenants, and no permission language. A
+route-level check does not replace a record-level check. A route-level check
+cannot see the identifier that a loader resolves. The application still
+verifies that the person owns the record that the loader reads.
+
+### Build detection
+
+The production build reads the policy cascade. A route that inherits no access
+declaration gets the `access-declaration-missing` error, and the build stops.
+The build cannot read every expression. Where the build cannot decide, the
+request pipeline denies the request.
+
+See [ADR 0016](../../architecture/decisions/0016-route-authorization-contract.md)
+for the accepted contract.
+
 ## Strict documents
 
 `security.strict()` provides a nonce-based Content Security Policy and HSTS on
@@ -494,8 +595,10 @@ The development server shows this audit for one route. Read the
 The Vite plugin validates literal CORS, rate-limit, and document policy during
 a production build. A finding identifies the route file and export.
 
-The build also reads the policy cascade of the route tree. A page route that
-has no effective CSP gets the `document-policy-missing` warning. A document
+The build also reads the policy cascade of the route tree. A route that
+inherits no access declaration gets the `access-declaration-missing` error, and
+the build stops. A page route that has no effective CSP gets the
+`document-policy-missing` warning. A document
 policy that declares only other headers also gets the warning. The warning
 names the route file and does not stop the build. The development server gives
 the same warning when it starts and after a route file changes. An explicit

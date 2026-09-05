@@ -511,6 +511,13 @@ try {
     ].join("\n"),
   );
   writeFileSync(
+    join(scratch, "src", "routes", "@policy.ts"),
+    [
+      `import { defineRoutePolicy } from "@demiurgejs/core";`,
+      `export const policy = defineRoutePolicy({ access: { public: true } });`,
+    ].join("\n"),
+  );
+  writeFileSync(
     join(scratch, "src", "routes", "@not-found.tsx"),
     [
       `export default function NotFound({ pathname }: { pathname: string }) {`,

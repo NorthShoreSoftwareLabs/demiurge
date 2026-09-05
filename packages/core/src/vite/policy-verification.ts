@@ -30,7 +30,8 @@ function asAstNode(value: unknown): AstNode {
 }
 
 export type StaticPolicyFinding = {
-  code: "cors-invalid" | "cors-method-unavailable" | "document-policy-missing" |
+  code: "access-declaration-missing" | "cors-invalid" |
+    "cors-method-unavailable" | "document-policy-missing" |
     "rate-limit-invalid" | "security-header-render-failed";
   exportName?: string;
   file: string;
@@ -39,6 +40,10 @@ export type StaticPolicyFinding = {
 };
 
 export type RouteFileInspection = {
+  /** The statically provable access state of the route policy. */
+  accessState: RouteAccessState;
+  /** `true` when the file exports at least one HTTP method capability. */
+  declaresRoute: boolean;
   /**
    * `true` when the file declares a document policy, and also when the policy
    * expression is not statically readable. An unreadable expression is not
@@ -54,12 +59,19 @@ export type RouteFileInspection = {
 
 export type DocumentCspState = "present" | "false" | "absent" | "unknown";
 
+/**
+ * `declared` means the file states access. `unknown` means the expression is
+ * not statically readable, which is not evidence of an absent declaration.
+ */
+export type RouteAccessState = "declared" | "absent" | "unknown";
+
 type ExtractedCapability = {
   cors?: CorsPolicy;
   security?: RouteSecurityPolicy;
 };
 
 type ExtractedRouteModule = {
+  accessState: RouteAccessState;
   capabilities: Partial<Record<HttpMethod, ExtractedCapability>>;
   declaredMethods: Set<HttpMethod>;
   declaresDocumentPolicy: boolean;
@@ -99,12 +111,15 @@ export async function inspectRouteFile(
   const source = await readFile(file, "utf8");
   const extracted = await extractRouteModuleSource(source, file);
 
+  const attached = basename(file).startsWith("@");
+
   return {
+    accessState: extracted.accessState,
     declaresDocumentPolicy: extracted.declaresDocumentPolicy,
     documentCspState: extracted.documentCspState,
-    // An attached file owns no address, so it never declares a page route.
-    declaresPageRoute: !basename(file).startsWith("@") &&
-      declaresPageRoute(source),
+    // An attached file owns no address, so it never declares a route.
+    declaresRoute: !attached && extracted.declaredMethods.size > 0,
+    declaresPageRoute: !attached && declaresPageRoute(source),
     file,
     findings: validateExtractedRouteModule(extracted, file),
   };
@@ -164,6 +179,68 @@ export function auditDocumentPolicyCoverage(
   }
 
   return findings;
+}
+
+// A route that inherits no access declaration is denied at request time. The
+// build finds the gap where the policy cascade is statically readable, so a
+// developer sees the missing declaration before the application runs.
+export function auditRouteAccessCoverage(
+  routesDir: string,
+  inspections: readonly RouteFileInspection[],
+): StaticPolicyFinding[] {
+  const policies = inspections.filter((inspection) =>
+    isPolicyFile(inspection.file)
+  );
+  const findings: StaticPolicyFinding[] = [];
+
+  for (const inspection of inspections) {
+    if (!inspection.declaresRoute) {
+      continue;
+    }
+
+    const state = resolveRouteAccessState(
+      routesDir,
+      dirname(inspection.file),
+      inspection.accessState,
+      policies,
+    );
+
+    if (state !== "absent") {
+      continue;
+    }
+
+    findings.push({
+      code: "access-declaration-missing",
+      file: inspection.file,
+      message:
+        "This route inherits no access declaration, so the request pipeline denies each request. Add access: { public: true } for a public route, or access: { authorize } to this route or an ancestor @policy.ts file.",
+      severity: "error",
+    });
+  }
+
+  return findings;
+}
+
+function resolveRouteAccessState(
+  routesDir: string,
+  routeDirectory: string,
+  routeState: RouteAccessState,
+  policies: readonly RouteFileInspection[],
+) {
+  const applicable = policies.filter((inspection) =>
+    isSameOrAbove(dirname(inspection.file), routeDirectory) &&
+    isSameOrAbove(routesDir, dirname(inspection.file))
+  );
+
+  let state: RouteAccessState = routeState;
+
+  for (const policy of applicable) {
+    if (policy.accessState !== "absent") {
+      state = policy.accessState;
+    }
+  }
+
+  return state;
 }
 
 function resolveDocumentCspState(
@@ -252,6 +329,7 @@ function extractRouteModule(code: string): ExtractedRouteModule {
   const exports = collectNamedExports(ast);
   const capabilities: ExtractedRouteModule["capabilities"] = {};
   const declaredMethods = new Set<HttpMethod>();
+  let accessState: RouteAccessState = "absent";
   let declaresDocumentPolicy = false;
   let documentCspState: DocumentCspState = "absent";
   let policy: RoutePolicy | undefined;
@@ -260,6 +338,9 @@ function extractRouteModule(code: string): ExtractedRouteModule {
     const initializer = declarations.get(localName);
 
     if (exportName === "policy") {
+      accessState = initializer
+        ? extractAccessState(initializer, imports, constants)
+        : "unknown";
       documentCspState = initializer
         ? extractDocumentCspState(initializer, imports, constants)
         : "unknown";
@@ -278,12 +359,60 @@ function extractRouteModule(code: string): ExtractedRouteModule {
   }
 
   return {
+    accessState,
     capabilities,
     declaredMethods,
     declaresDocumentPolicy,
     documentCspState,
     policy,
   };
+}
+
+// The access declaration holds a function, so the build cannot evaluate it.
+// The check therefore proves only that the `access` property is present.
+function extractAccessState(
+  node: AstNode,
+  imports: Map<string, string>,
+  constants: Map<string, unknown>,
+): RouteAccessState {
+  if (node.type === "Identifier") {
+    if (node.name === "undefined") return "absent";
+    const value = constants.get(String(node.name));
+    if (value === undefined && !constants.has(String(node.name))) {
+      return "unknown";
+    }
+    if (!isPlainObject(value)) return "unknown";
+    return Object.prototype.hasOwnProperty.call(value, "access")
+      ? "declared"
+      : "absent";
+  }
+
+  if (node.type === "CallExpression") {
+    const localName = identifierName(node.callee);
+    if (localName && imports.get(localName) === "defineRoutePolicy") {
+      const argument = asNodeArray(node.arguments)[0];
+      return argument
+        ? extractAccessState(argument, imports, constants)
+        : "unknown";
+    }
+    return "unknown";
+  }
+
+  if (node.type !== "ObjectExpression") return "unknown";
+
+  for (const property of asNodeArray(node.properties)) {
+    if (property.type === "SpreadElement") return "unknown";
+    if (property.type !== "Property") continue;
+    if (property.computed) return "unknown";
+    if (propertyName(property.key) !== "access") continue;
+    const value = asNode(property.value);
+    if (value?.type === "Identifier" && value.name === "undefined") {
+      return "absent";
+    }
+    return "declared";
+  }
+
+  return "absent";
 }
 
 function extractDocumentCspState(

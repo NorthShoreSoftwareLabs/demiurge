@@ -9,8 +9,14 @@ import {
 import { createEdgeRequestHandler, edgeAdapter } from "@demiurgejs/core/edge";
 import { verifyAdapterContract } from "../../src/adapter/testing";
 
+// Each route needs an inherited access declaration, because the request
+// pipeline denies a route that declares none. A test that does not examine
+// authorization declares public access here.
 function routeModule(module: RouteModule) {
-  return vi.fn(async () => module);
+  return vi.fn(async () => ({
+    ...module,
+    policy: { access: { public: true }, ...module.policy },
+  }));
 }
 
 // A streaming render needs work that is still pending when the shell flushes.
