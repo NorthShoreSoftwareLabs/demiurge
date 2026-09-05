@@ -2319,6 +2319,8 @@ export const GET = json({}, {
     const root = await scaffold({
       "@not-found.tsx": "export default function NotFound() { return null; }",
       "@policy.ts": 'export const policy = { access: { public: true } };',
+      "@not-found.tsx": `export default function NotFound() { return null; }
+export const policy = { document: { csp: false } };`,
       "api.ts": `
 import { json } from "@demiurgejs/core";
 export const GET = json({}, {

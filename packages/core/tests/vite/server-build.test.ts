@@ -22,6 +22,9 @@ export const middleware = async ({ next }) => await next();`,
     join(routesDir, "@policy.ts"),
     `await Promise.resolve();
 export const policy = { access: { public: true } };`,
+    `import { defineRoutePolicy, security } from "@demiurgejs/core";
+await Promise.resolve();
+export const policy = defineRoutePolicy({ document: security.strict() });`,
   );
   await writeFile(
     join(routesDir, "index.tsx"),
