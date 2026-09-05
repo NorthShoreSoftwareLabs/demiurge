@@ -41,6 +41,7 @@ const postQuery = query({
 });
 
 export const GET = page<"/posts/[id]", PostPageData>({
+  publicData: true,
   async data({ cache, path }) {
     const post = await cache.get(postQuery(path.id));
     return { loadCount, post };

@@ -248,6 +248,7 @@ describe("route loading", () => {
     const manifest = unstable_createRouteManifest({
       "./routes/blog/[slug].tsx": routeModule({
         GET: page({
+          publicData: true,
           data: async ({ cache, path }) => ({
             first: await cache.get(postBySlug(path.slug)),
             second: await cache.get(postBySlug(path.slug)),

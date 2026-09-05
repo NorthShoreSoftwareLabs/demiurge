@@ -36,6 +36,7 @@ const routes = {
   }),
   "./routes/index.tsx": routeModule({
     GET: page<string, { message: string }>({
+      publicData: true,
       data: async () => ({ message: "Built at export time" }),
       render: { mode: "static" },
       view: Home,

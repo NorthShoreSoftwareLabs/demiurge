@@ -3,14 +3,23 @@ import { useState } from "react";
 import { page, type RouteProps } from "@demiurgejs/core";
 import { feedbackSchema, readFeedback, type Feedback } from "../feedback";
 
-type FormData = ReturnType<typeof readFeedback>;
+type FormRecord = ReturnType<typeof readFeedback>;
 
-export const GET = page<string, FormData>({
+// The stored record holds the email address of the person who wrote the
+// feedback. The page shows only the message, so the projection sends the
+// message and the count.
+type PublicForm = { latestMessage: string | null; submissionCount: number };
+
+export const GET = page<string, FormRecord, PublicForm>({
   data: () => readFeedback(),
+  project: (record) => ({
+    latestMessage: record.latest?.message ?? null,
+    submissionCount: record.submissionCount,
+  }),
   view: FormPage,
 });
 
-function FormPage({ data }: RouteProps<"/", FormData>) {
+function FormPage({ data }: RouteProps<"/", PublicForm>) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const form = useForm({
     defaultValues: { email: "", message: "" } satisfies Feedback,
@@ -156,9 +165,9 @@ function FormPage({ data }: RouteProps<"/", FormData>) {
       <p aria-live="polite" data-testid="submission-count">
         Saved submissions: {data.submissionCount}
       </p>
-      {data.latest ? (
+      {data.latestMessage ? (
         <p data-testid="latest-feedback">
-          Latest message: {data.latest.message}
+          Latest message: {data.latestMessage}
         </p>
       ) : null}
     </main>

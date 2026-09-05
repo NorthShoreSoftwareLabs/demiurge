@@ -26,6 +26,7 @@ export const metadata = defineMetadata({
 });
 
 export const GET = page({
+  publicData: true,
   data: ({ search }) => ({
     query: search.getAll("q"),
     server: recordServerNavigationContribution("Page data"),

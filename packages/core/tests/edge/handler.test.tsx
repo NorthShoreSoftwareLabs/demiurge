@@ -27,6 +27,7 @@ const origin = "https://edge.handler.test";
 const cachedRoutes = {
   "./routes/index.tsx": routeModule({
     GET: page<string, { message: string }>({
+      publicData: true,
       data: async ({ cache }) => ({
         message: await cache.get({
           fn: () => "cached message",

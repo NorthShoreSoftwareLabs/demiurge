@@ -102,6 +102,7 @@ describe("localized request routing", () => {
         "./routes/@not-found.tsx": routeModule({ default: NotFound }),
         "./routes/index.tsx": routeModule({
           GET: page({
+            publicData: true,
             data: async ({ cache }) => await cache.get({
               fn: async () => ({ loads: ++loads }),
               key: ["home"],

@@ -7,6 +7,7 @@ import {
 import { feedbackFromFormData, saveFeedback } from "../../feedback";
 
 export const POST = mutation({
+  publicData: true,
   input: mutationInput.formData,
   async handler({ input }) {
     const parsed = feedbackFromFormData(input);
