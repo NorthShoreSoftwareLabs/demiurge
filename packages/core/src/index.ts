@@ -130,6 +130,7 @@ export {
   applyFetchMetadataVary,
   checkFetchMetadata,
   checkWebSocketOrigin,
+  DEFAULT_MAX_BODY_SIZE,
   defineRoutePolicy,
   defineEnvSchema,
   defineSecurityPolicy,

@@ -229,6 +229,13 @@ export type FetchMetadataCheck = {
 
 export type RequestSecurityPolicy = {
   allowedMethods?: readonly HttpMethod[];
+  /**
+   * A route that declares no value still inherits the ADR 0015 default of
+   * `"1mb"`. The shared pipeline enforces the effective value while it reads
+   * the body, so a request with no `Content-Length` header cannot pass it. A
+   * route that raises this value above the default is a typed exception that
+   * `createSecurityAudit(...)` reports.
+   */
   maxBodySize?: number | `${number}${"b" | "gb" | "kb" | "mb"}`;
 };
 

@@ -20,6 +20,7 @@ const everyCapability = {
   backgroundLifetime: true,
   crossOriginIsolationHeaders: true,
   nonceInjection: true,
+  requestTimeoutEnforcement: true,
   sharedCache: true,
   staticOutput: true,
   streaming: true,
