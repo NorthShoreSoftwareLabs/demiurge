@@ -5,6 +5,24 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- **Breaking.** The route policy cascade carries an `access` declaration, and
+  the request pipeline denies a route that inherits none. The declaration
+  states `public: true`, or it supplies an `authorize` hook. Demiurge runs
+  authorization before a protected data loader and before a read of a protected
+  cache entry. It also runs before a render and before the effect of a
+  mutation. A document
+  request, a navigation data request, and a direct mutation request get the same
+  answer. A child declaration adds a restriction, so every inherited hook must
+  permit the request. Only an explicit `replaces` exception removes an
+  inherited hook, and `createSecurityAudit(...)` reports that exception with its
+  source and its scope. A hook that throws denies the request, and a denied
+  request never receives a cached representation of protected data. The
+  production build gives the `access-declaration-missing` error for a route that
+  the cascade cannot cover. Migration: add `access: { public: true }` to the
+  root `@policy.ts` file of a public application. Add `access: { authorize }` to
+  the policy file of each protected subtree. A route-level check does not
+  replace a record-level check (#401).
+
 - The framework reports a page route that sends no Content-Security-Policy. A
   production build and the development server give the `document-policy-missing`
   warning when a page route has no effective CSP. The warning names the route

@@ -34,8 +34,14 @@ function RootNotFound({ pathname }: NotFoundProps) {
   return <p data-not-found="root">Nothing at {pathname}</p>;
 }
 
+// Each route needs an inherited access declaration, because the request
+// pipeline denies a route that declares none. A test that does not examine
+// authorization declares public access here.
 function routeModule(module: RouteModule) {
-  return vi.fn(async () => module);
+  return vi.fn(async () => ({
+    ...module,
+    policy: { access: { public: true }, ...module.policy },
+  }));
 }
 
 const htmlRequest = (path: string) =>

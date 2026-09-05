@@ -1,5 +1,5 @@
 import type { ScriptTag } from "../document/scripts";
-import type { HttpMethod } from "../route/types";
+import type { HttpMethod, HttpRouteContext } from "../route/types";
 
 export type CspSource =
   | "'self'"
@@ -280,9 +280,103 @@ export type RouteSecurityPolicy = {
   request?: RequestSecurityPolicy;
 };
 
+/**
+ * The status that a denied request receives. The default status is 403.
+ */
+export type AuthorizationDenialStatus = 401 | 403 | 404;
+
+export type AuthorizationDenial = {
+  allow: false;
+  status?: AuthorizationDenialStatus;
+};
+
+/**
+ * The result of an authorization hook. The framework permits the request only
+ * for `true` or for an object with `allow: true`. Every other result denies
+ * the request.
+ */
+export type AuthorizationDecision =
+  | boolean
+  | { allow: true }
+  | AuthorizationDenial;
+
+/**
+ * An application check that decides if the person can use the route.
+ *
+ * The hook reads the request context that inherited middleware filled in. The
+ * framework supplies no roles, no tenants, and no permission language.
+ */
+export type RouteAuthorizationHook = {
+  bivarianceHack(
+    context: HttpRouteContext<string, object>,
+  ): AuthorizationDecision | Promise<AuthorizationDecision>;
+}["bivarianceHack"];
+
+/**
+ * An explicit exception that removes each inherited authorization hook for
+ * this subtree. The reason makes the exception auditable.
+ */
+export type RouteAccessException = {
+  reason: string;
+  /** The part of the route tree that the exception covers. */
+  scope?: string;
+  /** The file that declared the exception. */
+  source?: string;
+};
+
+/**
+ * The access declaration of the route policy cascade.
+ *
+ * A route requires an inherited declaration. The declaration states public
+ * access, or it supplies an authorization hook. A child declaration adds a
+ * restriction. Only an explicit exception removes an inherited hook.
+ */
+export type RouteAccessPolicy = {
+  /** An authorization hook that must permit the request. */
+  authorize?: RouteAuthorizationHook;
+  /** The status that a denial from this subtree uses. */
+  denyStatus?: AuthorizationDenialStatus;
+  /** States that the route serves every person. */
+  public?: boolean;
+  /** Removes each inherited authorization hook for this subtree. */
+  replaces?: RouteAccessException;
+};
+
+export type RouteAuthorizationEntry = {
+  authorize: RouteAuthorizationHook;
+  /** The file that declared the hook. */
+  source?: string;
+};
+
+/**
+ * The effective access of one route, after the framework reads the cascade.
+ */
+export type ResolvedRouteAccess = {
+  /** Each inherited hook, from the root of the subtree to the route. */
+  chain: readonly RouteAuthorizationEntry[];
+  /** `true` when some declaration in the cascade states access. */
+  declared: boolean;
+  denyStatus: AuthorizationDenialStatus;
+  exceptions: readonly RouteAccessException[];
+  /** `true` when the declared access leaves no hook to run. */
+  public: boolean;
+};
+
+/** One access declaration and the file that supplied it. */
+export type RouteAccessSource = {
+  policy?: RouteAccessPolicy;
+  source?: string;
+};
+
 export type RoutePolicy = {
+  access?: RouteAccessPolicy;
   document?: SecurityPolicy;
   security?: RouteSecurityPolicy;
+};
+
+/** A route policy after the framework merges the cascade. */
+export type MergedRoutePolicy = Omit<RoutePolicy, "access"> & {
+  access: ResolvedRouteAccess;
 };
 
 export type SecurityAuditFinding = {
@@ -299,6 +393,7 @@ export type SecurityAuditOptions = {
     scripts?: readonly ScriptTag[];
   };
   route?: {
+    access?: ResolvedRouteAccess;
     cors?: CorsPolicy;
     method: HttpMethod;
     security?: RouteSecurityPolicy;

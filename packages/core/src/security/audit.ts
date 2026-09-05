@@ -6,6 +6,7 @@ import type {
   ContentSecurityPolicy,
   CorsPolicy,
   CspSource,
+  ResolvedRouteAccess,
   RouteSecurityPolicy,
   ScriptDependencyAuditOptions,
   SecurityAudit,
@@ -310,13 +311,68 @@ function auditRoutePolicy(
   findings: SecurityAuditFinding[],
 ) {
   auditCorsPolicy(route.cors, findings);
+  auditRouteAccess(route.access, findings);
   auditUnsafeMethodPolicy(route.method, route.security, findings);
 
   return {
+    access: route.access,
     cors: route.cors,
     method: route.method,
     security: route.security,
   };
+}
+
+// The effective authorization of a route is the ordered chain of inherited
+// hooks. The audit names that chain, and it names each exception that removed
+// an inherited hook.
+function auditRouteAccess(
+  access: ResolvedRouteAccess | undefined,
+  findings: SecurityAuditFinding[],
+) {
+  if (!access) {
+    return;
+  }
+
+  if (!access.declared) {
+    findings.push({
+      code: "access-declaration-missing",
+      message:
+        "This route inherits no access declaration, so the request pipeline denies each request. Add access to this route or an ancestor @policy.ts file.",
+      severity: "error",
+    });
+  } else if (access.public) {
+    findings.push({
+      code: "access-public",
+      message: "This route declares public access, so it runs no authorization hook.",
+      severity: "info",
+    });
+  } else {
+    findings.push({
+      code: "access-authorized",
+      message: `This route runs ${access.chain.length} inherited authorization ${
+        access.chain.length === 1 ? "hook" : "hooks"
+      }, from ${describeAccessSources(access)}. A denial uses status ${access.denyStatus}.`,
+      severity: "info",
+    });
+  }
+
+  for (const exception of access.exceptions) {
+    findings.push({
+      code: "access-exception",
+      message: `An access exception in ${
+        exception.source ?? "an unnamed policy file"
+      } removed each inherited authorization hook for ${
+        exception.scope ?? "this subtree"
+      }. Reason: ${exception.reason}`,
+      severity: "warning",
+    });
+  }
+}
+
+function describeAccessSources(access: ResolvedRouteAccess) {
+  const sources = access.chain.map((entry) => entry.source ?? "an unnamed policy file");
+
+  return sources.join(", ");
 }
 
 function auditCorsPolicy(

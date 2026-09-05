@@ -13,6 +13,10 @@ async function buildPolicyRoute(source: string) {
     join(routesDir, "@not-found.tsx"),
     "export default function NotFound() { return null; }",
   );
+  await writeFile(
+    join(routesDir, "@policy.ts"),
+    'export const policy = { access: { public: true } };',
+  );
   await writeFile(join(routesDir, "api.ts"), source);
 
   return await build({
@@ -29,6 +33,10 @@ async function buildPagePolicyRoute(policy: string) {
   await writeFile(
     join(routesDir, "@not-found.tsx"),
     "export default function NotFound() { return null; }",
+  );
+  await writeFile(
+    join(routesDir, "@policy.ts"),
+    'export const policy = { access: { public: true } };',
   );
   await writeFile(
     join(routesDir, "index.tsx"),
