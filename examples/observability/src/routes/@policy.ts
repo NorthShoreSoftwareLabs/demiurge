@@ -11,7 +11,12 @@ import { vitals } from "../web-vitals";
 // connect-src for the endpoint alone.
 export const policy = defineRoutePolicy(
   mergeRoutePolicies(
-    { document: security.strict() },
+    {
+      // This example is public. Demiurge denies a route that inherits no
+      // access declaration.
+      access: { public: true },
+      document: security.strict(),
+    },
     webVitalsPolicy(vitals),
   ),
 );

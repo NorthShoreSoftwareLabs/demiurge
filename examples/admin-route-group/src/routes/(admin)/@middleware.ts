@@ -12,7 +12,15 @@ export const middleware = defineMiddleware<AuthenticationContext>(async (
   const session = await sessions.open(request);
   const record = session.get();
 
+  // A browser document request gets the log-in page, which is a better
+  // experience than a bare denial. Each other request continues to the access
+  // declaration in @policy.ts, which answers 403. The protection is the
+  // declaration, not this redirect.
   if (!record) {
+    if (!request.headers.get("accept")?.includes("text/html")) {
+      return appendSessionCookies(await next(), await session.commit());
+    }
+
     const target = new URL("/login", url);
     target.searchParams.set("from", url.pathname);
     const response = new Response(null, {

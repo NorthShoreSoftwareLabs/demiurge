@@ -1,8 +1,10 @@
+import { mergeRouteAccess } from "./authorization";
 import type {
   ContentSecurityPolicy,
   CspHashAlgorithm,
   CspDirectiveValue,
   ReportingEndpointUrl,
+  MergedRoutePolicy,
   RoutePolicy,
   RouteSecurityNeeds,
   RouteSecurityPolicy,
@@ -135,8 +137,8 @@ export function mergeSecurityPolicies(
 
 export function mergeRoutePolicies(
   ...policies: Array<RoutePolicy | false | undefined>
-) {
-  const merged = policies.reduce<RoutePolicy>((result, policy) => {
+): MergedRoutePolicy {
+  const merged = policies.reduce<Omit<RoutePolicy, "access">>((result, policy) => {
     if (!policy) {
       return result;
     }
@@ -147,8 +149,13 @@ export function mergeRoutePolicies(
     };
   }, {});
 
+  // The access declaration accumulates rather than replaces. A child hook adds
+  // a restriction, so the framework keeps each inherited hook in order.
   return {
     ...merged,
+    access: mergeRouteAccess(
+      policies.map((policy) => (policy ? policy.access : undefined)),
+    ),
     document: applyPolicyNeeds(merged.document, merged.security?.needs),
   };
 }

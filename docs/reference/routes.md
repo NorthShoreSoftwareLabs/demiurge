@@ -370,6 +370,15 @@ their own URL:
 Layouts, middleware, and policy apply root-to-leaf. An ordinary file such as
 `policy.tsx` remains the real `/policy` route.
 
+`@policy.ts` carries the `access` declaration of its subtree. Every route needs
+an inherited declaration, because the request pipeline denies a route that
+inherits none. A public application declares `access: { public: true }` once at
+the root. A protected subtree declares `access: { authorize }`, and each
+inherited hook must permit the request. A route-level check does not replace a
+record-level check, because it cannot see the identifier that a loader
+resolves. Read the [security guide](../guides/security.md#route-authorization)
+for the complete contract.
+
 Page applications must provide a root `@not-found.tsx`. Production builds fail
 without it so missing URLs never fall through to framework-branded markup.
 

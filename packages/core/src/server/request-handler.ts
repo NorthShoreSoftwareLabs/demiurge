@@ -52,6 +52,7 @@ import { createProblemResponse } from "./problem";
 import {
   applyCorsHeaders,
   applyFetchMetadataVary,
+  authorizeRoute,
   createCorsPreflightResponse,
   createMemoryRateLimitStore,
   createSecurityHeaders,
@@ -60,6 +61,7 @@ import {
   enforceRateLimit,
   enforceRequestSecurity,
   mergeRoutePolicies,
+  resolveRouteAccess,
   type RateLimitStore,
   validateRouteModules,
 } from "../security";
@@ -465,6 +467,16 @@ async function handleMatchedRoute(
         // response instead of throwing keeps the failure site distinguishable
         // from a middleware failure further out.
         try {
+          // Authorization runs before the data loader, before a read of a
+          // protected cache entry, and before the render. A document request
+          // and a navigation data request share this path, so one person gets
+          // one answer through each entry point.
+          const denial = await authorizeRoute(policy.access, context);
+
+          if (denial) {
+            return denial;
+          }
+
           const match = await loadPageRoute(
             manifest,
             routePathname,
@@ -595,6 +607,14 @@ async function handleMatchedRoute(
     response = await runRouteMiddleware(middlewares, context, async () => {
       // An API route never gets HTML, whatever the caller asked for.
       try {
+        // Authorization runs before the capability, so a mutation denies
+        // before its effect.
+        const denial = await authorizeRoute(policy.access, context);
+
+        if (denial) {
+          return denial;
+        }
+
         if (capability.kind === "not-found" && capability.body === undefined) {
           return applyCapabilityInit(
             await renderNotFoundResponse(manifest, request, fallbackOptions),
@@ -824,15 +844,14 @@ export async function loadInheritedRoutePolicy(
   routeModule: RouteModule,
   capability: RouteCapability | undefined,
 ) {
+  const policyFiles = manifest.policies.filter((policy) =>
+    isAttachedFileForRoute(policy.fileSegments, route.fileSegments),
+  );
   const policyModules = await Promise.all(
-    manifest.policies
-      .filter((policy) =>
-        isAttachedFileForRoute(policy.fileSegments, route.fileSegments),
-      )
-      .map((policy) => policy.load()),
+    policyFiles.map((policy) => policy.load()),
   );
 
-  return mergeRoutePolicies(
+  const merged = mergeRoutePolicies(
     ...policyModules.map((module) => module.policy),
     routeModule.policy,
     {
@@ -841,6 +860,19 @@ export async function loadInheritedRoutePolicy(
         : capability.security,
     },
   );
+
+  // The merged access carries no file name. Resolving it a second time with
+  // the policy files gives the audit the source of each hook and exception.
+  return {
+    ...merged,
+    access: resolveRouteAccess([
+      ...policyModules.map((module, index) => ({
+        policy: module.policy?.access,
+        source: policyFiles[index]?.file,
+      })),
+      { policy: routeModule.policy?.access },
+    ]),
+  };
 }
 
 async function loadInheritedRouteMiddleware(

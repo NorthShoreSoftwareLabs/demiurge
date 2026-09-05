@@ -14,12 +14,14 @@ export {
   isRouteAuditEnabled as unstable_isRouteAuditEnabled,
 } from "./plugin";
 export {
+  auditRouteAccessCoverage as unstable_auditRouteAccessCoverage,
   declaresPageRoute as unstable_declaresPageRoute,
   inspectRouteFile as unstable_inspectRouteFile,
   verifyRoutePolicySource as unstable_verifyRoutePolicySource,
 } from "./policy-verification";
 export type {
   DocumentCspState as unstable_DocumentCspState,
+  RouteAccessState as unstable_RouteAccessState,
   RouteFileInspection as unstable_RouteFileInspection,
   StaticPolicyFinding as unstable_StaticPolicyFinding,
 } from "./policy-verification";

@@ -6,7 +6,12 @@ import { plausible } from "../analytics";
 // directive, rather than leaving a blocked script in the rendered page.
 export const policy = defineRoutePolicy(
   mergeRoutePolicies(
-    { document: security.strict() },
+    {
+      // This example is public. Demiurge denies a route that inherits no
+      // access declaration.
+      access: { public: true },
+      document: security.strict(),
+    },
     analytics.policy(plausible),
   ),
 );
