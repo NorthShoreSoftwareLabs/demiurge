@@ -17,3 +17,6 @@ after the implementing issue closes. They describe decisions, not task status.
 - [ADR 0012: Locale resolution and routing](./0012-locale-resolution-and-routing.md)
 - [ADR 0013: Framework configuration and Vite integration boundary](./0013-framework-configuration-and-vite-boundary.md)
 - [ADR 0014: Framework-owned Node bootstrap](./0014-framework-owned-node-bootstrap.md)
+- [ADR 0015: Secure defaults for omitted declarations](./0015-secure-defaults-for-omitted-declarations.md)
+- [ADR 0016: Route authorization contract](./0016-route-authorization-contract.md)
+- [ADR 0017: Browser data disclosure](./0017-browser-data-disclosure.md)
