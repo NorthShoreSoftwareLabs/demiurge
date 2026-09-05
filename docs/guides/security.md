@@ -471,6 +471,51 @@ declares a trusted proxy policy. Host allowlists are mandatory. These settings
 prevent rate limits, secure URLs, and origin checks from trusting attacker-owned
 headers.
 
+### Request limits
+
+[ADR 0015](../../architecture/decisions/0015-secure-defaults-for-omitted-declarations.md)
+gives every route an inherited, bounded request body limit of 1 MB. A route
+that declares no `security.request.maxBodySize` still refuses a body larger
+than 1 MB. The shared pipeline counts bytes while it reads the body, so a
+request that sends no `Content-Length` header cannot pass the limit either.
+
+A route that accepts an upload or a stream declares its own limit:
+
+```ts
+export const POST = mutation({
+  input: mutationInput.formData,
+  async handler({ input }) {
+    // ...
+  },
+  security: {
+    request: { maxBodySize: "10mb" },
+  },
+});
+```
+
+`createSecurityAudit(...)` reports a route that raises the limit above the
+1 MB default. The `request-body-limit-raised` finding keeps the exception
+visible in the route audit at `/_demiurge/audit` during development.
+
+The shared pipeline bounds body size and, through the same bounded stream,
+the size of any value that `request.json()` or `request.formData()` parses
+from that body. It does not bound the size of request headers. The host
+parses headers before Demiurge sees the `Request` object, so no framework
+declaration can enforce a header-size limit.
+
+A route inherits this body limit from the shared pipeline in
+`request-handler.ts`, not from the adapter. The adapter can still leave a gap.
+A slow request that never crosses the 1 MB limit can hold a connection open
+for as long as the host allows. `requestTimeoutEnforcement` in
+`AdapterCapabilityMap` names an adapter that bounds connection duration on its
+own. The Node adapter declares it `true`, backed by the `headersTimeout`,
+`keepAliveTimeout`, and `requestTimeout` options on `createNodeServer`. The
+edge and static adapters declare it `false`, because bounding connection
+duration on those hosts is a platform setting outside Demiurge. Constructing
+a request handler for an adapter without `requestTimeoutEnforcement` logs a
+diagnostic naming the adapter and the gap. See the
+[deployment capability matrix](./deployment-capability-matrix.md#request-timeout-enforcement).
+
 ## Reports and audits
 
 `createSecurityReportHandler(...)` accepts CSP and Reporting API payloads with

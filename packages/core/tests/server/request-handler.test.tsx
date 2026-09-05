@@ -1033,6 +1033,90 @@ describe("request handler", () => {
     expect(handlerSpy).not.toHaveBeenCalled();
   });
 
+  it("rejects a body over the inherited default when no route declares a limit", async () => {
+    const handlerSpy = vi.fn(({ request }: { request: Request }) => request.text());
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/echo.tsx": routeModule({
+          POST: text(handlerSpy),
+        }),
+      },
+    });
+    const oversizedLength = 1024 * 1024 + 1;
+
+    const response = await handler(
+      new Request("https://example.test/api/echo", {
+        body: "x".repeat(oversizedLength),
+        headers: {
+          "content-length": String(oversizedLength),
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.text()).resolves.toBe("Request body too large.");
+    expect(handlerSpy).not.toHaveBeenCalled();
+  });
+
+  it("accepts a body within the inherited default when no route declares a limit", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/echo.tsx": routeModule({
+          POST: text(({ request }) => request.text()),
+        }),
+      },
+    });
+    const body = "x".repeat(1024);
+
+    const response = await handler(
+      new Request("https://example.test/api/echo", {
+        body,
+        headers: {
+          "content-length": String(body.length),
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe(body);
+  });
+
+  it("bounds a streaming body without Content-Length at the inherited default", async () => {
+    const handlerSpy = vi.fn(({ request }: { request: Request }) => request.text());
+    const chunk = new Uint8Array(64 * 1024).fill(1);
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        controller.enqueue(chunk);
+      },
+    });
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/api/echo.tsx": routeModule({
+          POST: text(handlerSpy),
+        }),
+      },
+    });
+
+    const response = await handler(
+      new Request("https://example.test/api/echo", {
+        body,
+        duplex: "half",
+        method: "POST",
+      } as RequestInit),
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.text()).resolves.toBe("Request body too large.");
+    // 17 chunks of 64 KiB (1,114,112 bytes) is the first amount that crosses
+    // the 1 MiB default. Reading far past that would mean the pipeline
+    // buffered the body instead of enforcing the limit while it read bytes.
+    expect(pulls).toBeLessThanOrEqual(19);
+  });
+
   it("counts chunked request bytes as handlers consume them", async () => {
     const handlerSpy = vi.fn(({ request }: { request: Request }) => request.text());
     const handler = createRequestHandler({

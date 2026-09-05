@@ -926,7 +926,6 @@ describe("security audit output", () => {
       "cors-invalid",
       "csrf-disabled",
       "rate-limit-missing",
-      "request-body-limit-missing",
     ]);
   });
 
@@ -952,6 +951,56 @@ describe("security audit output", () => {
     });
 
     expect(audit.findings).toEqual([]);
+  });
+
+  it("reports a route that raises the inherited request body limit", () => {
+    const audit = createSecurityAudit({
+      route: {
+        method: "POST",
+        security: {
+          rateLimit: { key: "ip", limit: 10, window: "1m" },
+          request: { maxBodySize: "10mb" },
+        },
+      },
+    });
+
+    expect(audit.findings).toContainEqual({
+      code: "request-body-limit-raised",
+      message:
+        "This route raises the inherited request body limit to 10mb. Confirm the route accepts an upload or a stream that needs the larger limit.",
+      severity: "info",
+    });
+  });
+
+  it("does not report a route that lowers the inherited request body limit", () => {
+    const audit = createSecurityAudit({
+      route: {
+        method: "POST",
+        security: {
+          rateLimit: { key: "ip", limit: 10, window: "1m" },
+          request: { maxBodySize: "16kb" },
+        },
+      },
+    });
+
+    expect(
+      audit.findings.some((finding) => finding.code === "request-body-limit-raised"),
+    ).toBe(false);
+  });
+
+  it("does not report a route that omits a request body limit", () => {
+    const audit = createSecurityAudit({
+      route: {
+        method: "POST",
+        security: {
+          rateLimit: { key: "ip", limit: 10, window: "1m" },
+        },
+      },
+    });
+
+    expect(
+      audit.findings.some((finding) => finding.code === "request-body-limit-raised"),
+    ).toBe(false);
   });
 
   it("reports static document scripts blocked by the effective CSP", () => {

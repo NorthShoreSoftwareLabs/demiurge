@@ -92,6 +92,7 @@ describe("edge adapter contract", () => {
         backgroundLifetime: false,
         crossOriginIsolationHeaders: true,
         nonceInjection: true,
+        requestTimeoutEnforcement: false,
         sharedCache: false,
         staticOutput: false,
         streaming: true,

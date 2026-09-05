@@ -57,6 +57,7 @@ application code calls `assertAdapterCapabilities` directly, proven by
 | Cross-origin isolation headers | Supported | Supported | Not supported |
 | Static output | Not supported | Not supported | Supported |
 | Background lifetime | Supported | Not supported | Not applicable |
+| Request timeout enforcement | Supported | Not supported | Not applicable |
 | Shared cache (adapter-declared) | Not supported | Not supported | Not applicable |
 | WebSocket | Not supported | Not supported | Not supported |
 | WebTransport | Not supported | Not supported | Not supported |
@@ -117,6 +118,26 @@ sequence drains `server.waitUntil(...)` work, including
 Edge declares `backgroundLifetime: false`. A host `waitUntil` call there is
 best effort, and the framework has no shutdown sequence to wait on inside an
 isolate.
+
+### Request timeout enforcement
+
+Every route inherits a bounded request body limit from
+[ADR 0015](../../architecture/decisions/0015-secure-defaults-for-omitted-declarations.md).
+The shared pipeline enforces that limit while it reads bytes, so a body
+without `Content-Length` cannot pass it. The shared pipeline does not own
+every timeout, so a slow request that stays under the limit can still hold a
+connection open. `requestTimeoutEnforcement` names an adapter that backs the
+limit with its own bound on connection duration.
+
+Only Node declares `requestTimeoutEnforcement`. `createNodeServer` sets
+`headersTimeout`, `keepAliveTimeout`, and `requestTimeout` on the underlying
+`http.Server`, documented in the
+[Node deployment guide](./node-deployment.md#timeouts-and-shutdown). Edge and
+static declare `requestTimeoutEnforcement: false`: the host platform, not
+Demiurge, owns any connection-duration bound on those adapters.
+`validateRouteModules` reports the gap by name when it verifies route modules
+against an adapter that lacks the capability, proven by
+`packages/core/tests/security/verification.test.ts`.
 
 ### Shared cache and rate limiting
 

@@ -54,12 +54,18 @@ export type {
 } from "./http";
 export type { StaticFileHandler, StaticFileHandlerOptions } from "./static";
 
+// `requestTimeoutEnforcement` is true because `createNodeServer` sets a real
+// `headersTimeout`, `keepAliveTimeout`, and `requestTimeout` on the
+// `http.Server`. Those bound how long a connection can stay open while the
+// shared pipeline reads a body without a `Content-Length`. The shared
+// pipeline itself does not own that bound.
 export const nodeAdapter = defineAdapter({
   name: "node",
   capabilities: {
     backgroundLifetime: true,
     crossOriginIsolationHeaders: true,
     nonceInjection: true,
+    requestTimeoutEnforcement: true,
     streaming: true,
   },
 });
