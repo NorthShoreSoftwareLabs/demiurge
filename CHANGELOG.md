@@ -5,6 +5,14 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- `import "@demiurgejs/core/server-only";` marks a module that must never
+  enter a browser build. The build fails when a browser bundle reaches a
+  marked module. The diagnostic names the module and the complete import path
+  from the client entry. The bare `server-only` specifier is an equivalent
+  marker, so an application that already uses the community package keeps the
+  same protection. A build in the development server fails as soon as the
+  browser requests a marked module. A server entry, an SSR transform, and a
+  route module loaded only on the server keep working (#256).
 - The framework reports a page route that sends no Content-Security-Policy. A
   production build and the development server give the `document-policy-missing`
   warning when a page route has no effective CSP. The warning names the route

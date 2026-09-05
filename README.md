@@ -151,6 +151,11 @@ user browser. Default Trusted Types enforcement could therefore fail production
 sessions. Trusted Types enforcement is a named option. Report-only mode moves
 the directives to `Content-Security-Policy-Report-Only`.
 
+Add `import "@demiurgejs/core/server-only";` to a module that must never
+enter a browser build. The build fails when a browser bundle reaches the
+module, and the diagnostic gives the complete import path from the client
+entry.
+
 Other security features include typed CORS, rate limits, request size limits,
 webhook verification, WebSocket origin checks, CSP reports, cross-origin
 isolation, and environment schema validation. See the

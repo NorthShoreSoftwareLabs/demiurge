@@ -397,6 +397,7 @@ try {
     "dist/redis/index.d.ts",
     "dist/static/index.d.ts",
     "dist/vite/index.d.ts",
+    "dist/server-only/index.d.ts",
   ]) {
     assert(existsSync(join(installedRoot, file)), `Packed tarball is missing ${file}.`);
   }
@@ -701,6 +702,106 @@ try {
     }
   } finally {
     rmSync(nodeOnlyScratch, { force: true, recursive: true });
+  }
+
+  const serverOnlyScratch = mkdtempSync(
+    join(tmpdir(), "demiurge-pack-server-only-"),
+  );
+  try {
+    writeFileSync(
+      join(serverOnlyScratch, "package.json"),
+      JSON.stringify(
+        {
+          name: "demiurge-pack-server-only-consumer",
+          private: true,
+          type: "module",
+          version: "0.0.0",
+        },
+        null,
+        2,
+      ),
+    );
+    run(
+      "pnpm",
+      [
+        "add",
+        tarballPath,
+        "react@^19.0.0",
+        "react-dom@^19.0.0",
+        "vite@^6.0.7",
+        "typescript@^5.7.2",
+        "@types/node@^22.13.0",
+        "@types/react@^19.0.2",
+        "@types/react-dom@^19.0.2",
+        "@vitejs/plugin-react@^4.3.4",
+      ],
+      serverOnlyScratch,
+    );
+
+    const serverOnlyRoutesDir = join(serverOnlyScratch, "src", "routes");
+    mkdirSync(serverOnlyRoutesDir, { recursive: true });
+    writeFileSync(
+      join(serverOnlyRoutesDir, "@not-found.tsx"),
+      "export default function NotFound() { return null; }",
+    );
+    writeFileSync(
+      join(serverOnlyScratch, "demiurge.config.ts"),
+      [
+        `import { defineConfig } from "@demiurgejs/core/config";`,
+        `export default defineConfig({});`,
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(serverOnlyRoutesDir, "index.tsx"),
+      [
+        `import "@demiurgejs/core/server-only";`,
+        `import { page } from "@demiurgejs/core";`,
+        `export const GET = page({ view: () => null });`,
+      ].join("\n"),
+    );
+
+    let serverOnlyBuildFailure = "";
+    try {
+      run(
+        "node",
+        [join(installedRoot, "bin", "demiurge.mjs"), "build"],
+        serverOnlyScratch,
+      );
+    } catch (error) {
+      serverOnlyBuildFailure = String(
+        (error as { stderr?: string }).stderr ?? (error as Error).message,
+      );
+    }
+    assert(
+      serverOnlyBuildFailure.includes("server-only"),
+      "The packed server-only package export did not stop a browser build that imports it directly.",
+    );
+
+    writeFileSync(
+      join(serverOnlyRoutesDir, "@middleware.ts"),
+      [
+        `import "@demiurgejs/core/server-only";`,
+        `export const middleware = async ({ next }) => await next();`,
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(serverOnlyRoutesDir, "index.tsx"),
+      [
+        `import { page } from "@demiurgejs/core";`,
+        `export const GET = page({ view: () => null });`,
+      ].join("\n"),
+    );
+    run(
+      "node",
+      [join(installedRoot, "bin", "demiurge.mjs"), "build"],
+      serverOnlyScratch,
+    );
+    assert(
+      existsSync(join(serverOnlyScratch, "dist", "index.html")),
+      "The packed server-only package export blocked a build that keeps the marker on the server.",
+    );
+  } finally {
+    rmSync(serverOnlyScratch, { force: true, recursive: true });
   }
 
   console.log("pack artifact and external consumer tests passed");
