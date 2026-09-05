@@ -57,6 +57,12 @@ import {
   type EnvBoundaryFinding,
 } from "./env-boundary";
 import {
+  formatServerOnlyBoundaryFindings,
+  formatServerOnlyDevError,
+  importsServerOnlyMarker,
+  type ServerOnlyBoundaryFinding,
+} from "./server-only-boundary";
+import {
   auditDocumentPolicyCoverage,
   declaresPageRoute,
   inspectRouteFile,
@@ -124,6 +130,10 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
   // references of the modules that a client entry reaches.
   const serverEnvKeys = findServerEnvKeys(options.env);
   const clientEnvReferences = new Map<string, string[]>();
+  // The build refuses a browser bundle that reaches a module marked
+  // server-only. The transform hook records the module id. The buildEnd hook
+  // then finds the import path from a client entry.
+  const serverOnlyMarkers = new Set<string>();
   const viteNoncePlaceholder = `demiurge-${createCspNonce()}`;
 
   return {
@@ -172,6 +182,10 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
     transform: {
       order: "post",
       handler(code, id, transformOptions) {
+        if (!transformOptions?.ssr) {
+          checkServerOnlyBoundary(serverOnlyMarkers, isBuild, root, code, id);
+        }
+
         if (isBuild && !transformOptions?.ssr) {
           recordClientEnvReferences(clientEnvReferences, serverEnvKeys, code, id);
         }
@@ -236,9 +250,21 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       if (findings.length) {
         this.error(formatEnvBoundaryFindings(findings));
       }
+
+      const serverOnlyFindings = collectServerOnlyBoundaryFindings({
+        markers: serverOnlyMarkers,
+        moduleIds: [...this.getModuleIds()],
+        moduleInfo: (id) => this.getModuleInfo(id),
+        root,
+      });
+
+      if (serverOnlyFindings.length) {
+        this.error(formatServerOnlyBoundaryFindings(serverOnlyFindings));
+      }
     },
     async buildStart() {
       clientEnvReferences.clear();
+      serverOnlyMarkers.clear();
 
       if (isBuild) {
         await assertRootNotFoundRoute(root, options);
@@ -958,6 +984,65 @@ function collectEnvBoundaryFindings(options: {
 function toDisplayModule(root: string, id: string) {
   const name = id.startsWith("\0") ? id.slice(1) : id;
   return name.startsWith(root) ? relative(root, name) || name : name;
+}
+
+// A route module loaded only on the server, and a dependency of the framework
+// itself, never enter this check. The build reads only application source,
+// the same rule that the environment boundary check applies.
+function checkServerOnlyBoundary(
+  markers: Set<string>,
+  isBuild: boolean,
+  root: string,
+  code: string,
+  id: string,
+) {
+  if (id.includes("/node_modules/") || id.startsWith("\0")) return;
+  if (!importsServerOnlyMarker(code)) return;
+
+  if (isBuild) {
+    markers.add(id);
+    return;
+  }
+
+  // The development server transforms a module for the browser the same way
+  // the build does. There is no client entry graph to search yet, so the
+  // error names the module and stops the request immediately.
+  throw new Error(formatServerOnlyDevError(toDisplayModule(root, id)));
+}
+
+// A reference is a defect only when the browser bundle holds the module. The
+// search starts at each entry of the client build and gives the import path.
+function collectServerOnlyBoundaryFindings(options: {
+  markers: Set<string>;
+  moduleIds: string[];
+  moduleInfo: (id: string) => EnvModuleInfo;
+  root: string;
+}): ServerOnlyBoundaryFinding[] {
+  const { markers, moduleIds, moduleInfo, root } = options;
+  if (!markers.size) return [];
+
+  const entries = moduleIds.filter((id) => moduleInfo(id)?.isEntry);
+  const importsOf = (id: string) => {
+    const info = moduleInfo(id);
+    return info ? [...info.importedIds, ...info.dynamicallyImportedIds] : [];
+  };
+  const findings: ServerOnlyBoundaryFinding[] = [];
+
+  for (const id of [...markers].sort()) {
+    const paths = entries
+      .map((entry) => findImportPath(entry, id, importsOf))
+      .filter((path): path is string[] => Boolean(path))
+      .sort((first, second) => first.length - second.length);
+    const importPath = paths[0];
+    if (!importPath) continue;
+
+    findings.push({
+      importPath: importPath.map((item) => toDisplayModule(root, item)),
+      module: toDisplayModule(root, id),
+    });
+  }
+
+  return findings;
 }
 
 // The build inlines the value of each client variable. The browser then
