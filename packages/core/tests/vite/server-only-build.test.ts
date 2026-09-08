@@ -19,6 +19,10 @@ async function createApplication(files: Record<string, string>) {
   const routesDir = join(root, "src", "routes");
   await mkdir(routesDir, { recursive: true });
   await writeFile(
+    join(routesDir, "@policy.ts"),
+    'export const policy = { access: { public: true } };',
+  );
+  await writeFile(
     join(routesDir, "@not-found.tsx"),
     "export default function NotFound() { return null; }",
   );
