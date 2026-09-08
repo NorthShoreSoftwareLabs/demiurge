@@ -15,7 +15,7 @@ const CONFIG_KEYS = [
   "rendering",
   "routing",
   "security",
-  "unstable_viteConfig",
+  "unsafe_unstable_viteConfig",
   "vite",
 ] as const;
 
@@ -154,14 +154,14 @@ export function validateDemiurgeConfig(
   }
 
   if (
-    config.unstable_viteConfig !== undefined &&
-    typeof config.unstable_viteConfig !== "function"
+    config.unsafe_unstable_viteConfig !== undefined &&
+    typeof config.unsafe_unstable_viteConfig !== "function"
   ) {
     throw invalid(
       context,
-      "unstable_viteConfig",
+      "unsafe_unstable_viteConfig",
       "a function",
-      config.unstable_viteConfig,
+      config.unsafe_unstable_viteConfig,
     );
   }
 

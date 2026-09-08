@@ -79,6 +79,24 @@ describe("Demiurge configuration validation", () => {
   it("rejects a default export that is not a configuration object", () => {
     expect(validate([])).toThrow(/the default export must be a configuration object/);
     expect(validate("config")).toThrow(/received: "config"/);
-    expect(validate({ unstable_viteConfig: {} })).toThrow(/must be a function/);
+    expect(validate({ unsafe_unstable_viteConfig: {} })).toThrow(/must be a function/);
+  });
+});
+
+describe("the unsafe_unstable_viteConfig field", () => {
+  it("accepts a function", () => {
+    const callback = () => ({});
+    const config = validateDemiurgeConfig(
+      { unsafe_unstable_viteConfig: callback },
+      configFile,
+    );
+
+    expect(config.unsafe_unstable_viteConfig).toBe(callback);
+  });
+
+  it("refuses the removed unstable_viteConfig field", () => {
+    expect(validate({ unstable_viteConfig: () => ({}) })).toThrow(
+      /unstable_viteConfig/,
+    );
   });
 });

@@ -260,17 +260,34 @@ export default defineConfig({
 Demiurge merges these values into the configuration that it generates. Another
 key fails the build.
 
-The `unstable_viteConfig` callback is the escape hatch. It receives the
+### `unsafe_unstable_viteConfig`: the unsafe and unstable escape hatch
+
+The `unsafe_unstable_viteConfig` callback is the escape hatch. It receives the
 resolved Vite configuration of the framework and returns a new one.
 
 ```ts
 export default defineConfig({
-  unstable_viteConfig: (config) => ({ ...config, logLevel: "silent" }),
+  unsafe_unstable_viteConfig: (config) => ({ ...config, logLevel: "silent" }),
 });
 ```
 
-This callback touches a framework internal. It has no compatibility guarantee
-between Demiurge versions. Prefer the `vite` field.
+**Warning: this callback is unsafe and unstable.**
+
+- It has no compatibility guarantee between Demiurge versions. A later
+  version can change the shape of the resolved configuration.
+- It receives the configuration after the framework adds its own build-time
+  security plugins. These plugins enforce the server-only module boundary and
+  the client environment boundary.
+- An application that removes or reorders a framework plugin in this callback
+  loses the boundary that the plugin enforces. Demiurge does not detect this
+  loss and does not fail the build.
+- The application then owns the removed boundary. The application must keep
+  server-only code and client-only code separate through its own review and
+  its own tests.
+
+Prefer the `vite` field. Use `unsafe_unstable_viteConfig` only when the `vite`
+field cannot express the change.
+
 
 ## Related
 

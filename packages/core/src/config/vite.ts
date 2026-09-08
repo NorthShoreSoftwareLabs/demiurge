@@ -40,14 +40,14 @@ export async function createDemiurgeViteConfig(
     ? await mergeViteConfig(generated, options.overrides)
     : generated;
 
-  if (!config.unstable_viteConfig) return merged;
+  if (!config.unsafe_unstable_viteConfig) return merged;
 
   // TYPE-EVIDENCE: InlineConfig extends UserConfig with command options only. The callback reads the same fields.
-  const extended = await config.unstable_viteConfig(merged as UserConfig);
+  const extended = await config.unsafe_unstable_viteConfig(merged as UserConfig);
   if (!extended || typeof extended !== "object" || Array.isArray(extended)) {
     throw new DemiurgeConfigError(
       [
-        "The unstable_viteConfig callback must return a Vite configuration object.",
+        "The unsafe_unstable_viteConfig callback must return a Vite configuration object.",
         `  file: ${config.configFile}`,
       ].join("\n"),
     );
