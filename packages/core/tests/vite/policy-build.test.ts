@@ -85,7 +85,7 @@ describe("Vite production policy build", () => {
 
     await expect(runPagePolicyBuild(root)).rejects.toThrow(
       new RegExp(
-        `${escape(join(routesDir, "index.tsx"))}.*\\[document-policy-missing\\].*No applicable @policy\\.ts file exists above it\\..*Create ${escape(join(routesDir, "@policy.ts"))}`,
+        `${escape(join(routesDir, "index.tsx"))}.*\\[document-policy-missing\\].*${escape(join(routesDir, "@policy.ts"))} does not declare one\\..*Add document: security\\.strict\\(\\) to ${escape(join(routesDir, "@policy.ts"))}`,
         "s",
       ),
     );
