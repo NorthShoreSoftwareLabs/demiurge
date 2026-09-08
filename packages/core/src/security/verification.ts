@@ -16,6 +16,7 @@ import type {
   RouteModule,
 } from "../route";
 import { validateCorsPolicy } from "./cors";
+import { resolveCsp } from "./exceptions";
 import { createSecurityAudit } from "./audit";
 import {
   createSecurityHeaders,
@@ -276,7 +277,7 @@ function validateStaticRouteScripts(
     validateScriptCspNeeds(
       file,
       exportName,
-      effectivePolicy.document.csp,
+      resolveCsp(effectivePolicy.document.csp),
       scripts,
     );
     return;
@@ -430,7 +431,7 @@ function validateRenderModePolicy(
   policy: ReturnType<typeof mergeRoutePolicies>["document"],
 ) {
   if (mode === "static") {
-    const nonceDirective = findNonceDirective(policy?.csp);
+    const nonceDirective = findNonceDirective(resolveCsp(policy?.csp));
 
     if (nonceDirective) {
       throw new Error(
@@ -445,7 +446,7 @@ function validateRenderModePolicy(
     return;
   }
 
-  const scriptPolicy = findEffectiveScriptPolicy(policy?.csp);
+  const scriptPolicy = findEffectiveScriptPolicy(resolveCsp(policy?.csp));
 
   if (!scriptPolicy || allowsStreamingInlineScripts(scriptPolicy.sources)) {
     return;

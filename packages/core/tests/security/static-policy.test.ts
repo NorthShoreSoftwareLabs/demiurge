@@ -301,7 +301,14 @@ describe("static route policy verification", () => {
       },
       "./routes/index.tsx": {
         GET: page(View),
-        policy: defineRoutePolicy({ document: { csp: false } }),
+        policy: defineRoutePolicy({
+          document: {
+            csp: {
+              reason: "The page renders a document without a policy.",
+              value: false,
+            },
+          },
+        }),
       },
     } satisfies Record<string, RouteModule>;
 

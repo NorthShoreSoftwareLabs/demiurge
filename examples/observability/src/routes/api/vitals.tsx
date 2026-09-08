@@ -44,7 +44,11 @@ export const POST = response(async ({ request }) => {
   });
 }, {
   security: {
-    csrf: false,
+    csrf: {
+      reason:
+        "The web vitals beacon sends no CSRF token, because navigator.sendBeacon adds no header.",
+      value: false,
+    },
     rateLimit: { key: "ip", limit: 600, window: "1m" },
     request: { maxBodySize: "8kb" },
   },

@@ -20,6 +20,10 @@ import {
   parseCookieHeader,
   parseBodySize,
   parseRateLimitWindow,
+  attachExceptionSource,
+  getCsrfException,
+  webhook,
+  resolveCsp,
   security,
   script,
   validateCorsPolicy,
@@ -634,22 +638,28 @@ describe("security policy cascade", () => {
     ).toBe("no-referrer");
   });
 
-  it("lets child policy explicitly disable inherited CSP", () => {
+  it("lets a child policy declare a CSP exception", () => {
     const policy = mergeSecurityPolicies(
       security.strict(),
       {
-        csp: false,
+        csp: {
+          reason: "The example accepts a document without a Content-Security-Policy.",
+          value: false,
+        },
       },
     );
 
     expect(createSecurityHeaders(policy).has("content-security-policy")).toBe(false);
   });
 
-  it("keeps every other security header when csp is false", () => {
+  it("keeps every other security header when a policy declares a CSP exception", () => {
     const policy = mergeSecurityPolicies(
       security.strict(),
       {
-        csp: false,
+        csp: {
+          reason: "The example accepts a document without a Content-Security-Policy.",
+          value: false,
+        },
       },
     );
     const headers = createSecurityHeaders(policy);
@@ -761,7 +771,9 @@ describe("security policy cascade", () => {
       },
     );
 
-    expect(policy.document?.csp && policy.document.csp.scriptSrc).toEqual([
+    const csp = resolveCsp(policy.document?.csp);
+
+    expect(csp && csp.scriptSrc).toEqual([
       "'self'",
       "https://cdn.example.com",
     ]);
@@ -822,24 +834,33 @@ describe("security audit output", () => {
     });
 
     expect(audit.findings).toContainEqual({
-      code: "csp-missing",
+      code: "document-policy-missing",
       message:
-        "This document declares no Content-Security-Policy. Add document: security.strict() to the @policy.ts file of the route, or set csp: false to accept a document without a Content-Security-Policy.",
+        "This document declares no Content-Security-Policy. Add document: security.strict() to the @policy.ts file of the route. To accept a document without a Content-Security-Policy, declare csp with a value of false and a reason.",
       severity: "error",
     });
   });
 
   it("reports the deliberate exception when a document refuses a Content-Security-Policy", () => {
     const audit = createSecurityAudit({
-      document: { policy: { csp: false } },
+      document: {
+        policy: {
+          csp: {
+            reason: "The marketing page renders no script and no style.",
+            value: false,
+          },
+        },
+      },
     });
 
     expect(audit.findings).toEqual([
       {
         code: "csp-disabled",
         message:
-          "This document accepts no Content-Security-Policy. The @policy.ts file of the route sets csp: false.",
+          "This document accepts no Content-Security-Policy. The application declared this exception. Reason: The marketing page renders no script and no style.",
+        origin: "application",
         severity: "info",
+        source: undefined,
       },
     ]);
   });
@@ -946,7 +967,10 @@ describe("security audit output", () => {
         },
         method: "POST",
         security: {
-          csrf: false,
+          csrf: {
+            reason: "The sender signs each request with an HMAC signature.",
+            value: false,
+          },
         },
       },
     });
@@ -988,7 +1012,13 @@ describe("security audit output", () => {
         method: "POST",
         security: {
           rateLimit: { key: "ip", limit: 10, window: "1m" },
-          request: { maxBodySize: "10mb" },
+          request: {
+            maxBodySize: {
+              reason: "The route accepts a video upload of up to ten megabytes.",
+              source: "./routes/uploads/@policy.ts",
+              value: "10mb",
+            },
+          },
         },
       },
     });
@@ -996,9 +1026,111 @@ describe("security audit output", () => {
     expect(audit.findings).toContainEqual({
       code: "request-body-limit-raised",
       message:
-        "This route raises the inherited request body limit to 10mb. Confirm the route accepts an upload or a stream that needs the larger limit.",
+        "This route raises the inherited request body limit to 10mb. The application declared this exception in ./routes/uploads/@policy.ts. Reason: The route accepts a video upload of up to ten megabytes.",
+      origin: "application",
       severity: "info",
+      source: "./routes/uploads/@policy.ts",
     });
+  });
+
+  it("reports a raised request body limit that states no reason", () => {
+    const audit = createSecurityAudit({
+      route: {
+        method: "POST",
+        security: {
+          rateLimit: { key: "ip", limit: 10, window: "1m" },
+          request: { maxBodySize: "10mb" },
+        },
+      },
+    });
+
+    expect(audit.findings).toContainEqual({
+      code: "security-exception-reason-missing",
+      message:
+        "This route raises the inherited request body limit to 10mb and states no reason. Declare maxBodySize with a limit value and a reason.",
+      severity: "error",
+    });
+  });
+
+  it("names the framework helper that declared the CSRF exception", () => {
+    const capability = webhook.hmac({
+      handler: () => new Response("ok"),
+      secret: "shared-secret",
+    });
+    const audit = createSecurityAudit({
+      route: {
+        method: "POST",
+        security: capability.security,
+      },
+    });
+    const finding = audit.findings.find((entry) => entry.code === "csrf-disabled");
+
+    expect(finding?.origin).toBe("framework");
+    expect(finding?.source).toBe("webhook.hmac()");
+    expect(finding?.message).toContain("A framework helper declared this exception");
+    expect(finding?.message).toContain("HMAC signature");
+  });
+
+  it("names the application file that declared the CSRF exception", () => {
+    const policy = attachExceptionSource(
+      {
+        security: {
+          csrf: {
+            reason: "The sender signs each request with an HMAC signature.",
+            value: false,
+          },
+        },
+      },
+      "./routes/hooks/@policy.ts",
+    );
+    const audit = createSecurityAudit({
+      route: {
+        method: "POST",
+        security: policy?.security,
+      },
+    });
+    const finding = audit.findings.find((entry) => entry.code === "csrf-disabled");
+
+    expect(finding?.origin).toBe("application");
+    expect(finding?.source).toBe("./routes/hooks/@policy.ts");
+    expect(finding?.message).toContain(
+      "The application declared this exception in ./routes/hooks/@policy.ts.",
+    );
+  });
+
+  it("keeps the source that a framework helper declared", () => {
+    const capability = webhook.hmac({
+      handler: () => new Response("ok"),
+      secret: "shared-secret",
+    });
+    const policy = attachExceptionSource(
+      { security: capability.security },
+      "./routes/hooks/@policy.ts",
+    );
+
+    expect(getCsrfException(policy?.security?.csrf)?.source).toBe(
+      "webhook.hmac()",
+    );
+  });
+
+  it("names the application file that declared the document exception", () => {
+    const policy = attachExceptionSource(
+      {
+        document: {
+          csp: {
+            reason: "The marketing page renders no script and no style.",
+            value: false,
+          },
+        },
+      },
+      "./routes/marketing/@policy.ts",
+    );
+    const audit = createSecurityAudit({
+      document: { policy: policy?.document ?? {} },
+    });
+    const finding = audit.findings.find((entry) => entry.code === "csp-disabled");
+
+    expect(finding?.source).toBe("./routes/marketing/@policy.ts");
   });
 
   it("does not report a route that lowers the inherited request body limit", () => {

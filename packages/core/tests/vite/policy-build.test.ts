@@ -12,7 +12,7 @@ async function buildPolicyRoute(source: string) {
   await writeFile(
     join(routesDir, "@not-found.tsx"),
     `export default function NotFound() { return null; }
-export const policy = { document: { csp: false } };`,
+export const policy = { document: { csp: { reason: "The example page renders no script.", value: false } } };`,
   );
   await writeFile(
     join(routesDir, "@policy.ts"),
@@ -36,7 +36,7 @@ async function buildPagePolicyRoute(policy: string) {
   await writeFile(
     join(routesDir, "@not-found.tsx"),
     `export default function NotFound() { return null; }
-export const policy = { document: { csp: false } };`,
+export const policy = { document: { csp: { reason: "The example page renders no script.", value: false } } };`,
   );
   await writeFile(
     join(routesDir, "@policy.ts"),
@@ -93,7 +93,7 @@ describe("Vite production policy build", () => {
 
   it("completes without a document-policy-missing failure when a page policy disables CSP", async () => {
     const { root } = await buildPagePolicyRoute(
-      "export const policy = { document: { csp: false } };",
+      "export const policy = { document: { csp: { reason: 'The example page renders no script.', value: false } } };",
     );
     const warnings = await runPagePolicyBuild(root);
 

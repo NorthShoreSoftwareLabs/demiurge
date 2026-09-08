@@ -1,4 +1,5 @@
 import type { HttpMethod } from "../route/types";
+import { resolveMaxBodySize } from "./exceptions";
 import type { RequestSecurityPolicy } from "./types";
 import { copyRequestConnectionMetadata } from "../server/request-metadata";
 
@@ -40,7 +41,7 @@ export function enforceRequestSecurity(
     });
   }
 
-  const maxBodySize = parseBodySize(policy?.maxBodySize ?? DEFAULT_MAX_BODY_SIZE);
+  const maxBodySize = parseBodySize(resolveMaxBodySize(policy?.maxBodySize) ?? DEFAULT_MAX_BODY_SIZE);
 
   if (declaredSize > maxBodySize) {
     return new Response("Request body too large.", {
@@ -66,7 +67,7 @@ export function limitRequestBody(
     return request;
   }
 
-  const maximumBytes = parseBodySize(policy?.maxBodySize ?? DEFAULT_MAX_BODY_SIZE);
+  const maximumBytes = parseBodySize(resolveMaxBodySize(policy?.maxBodySize) ?? DEFAULT_MAX_BODY_SIZE);
   const reader = request.body.getReader();
   let bytesRead = 0;
   const body = new ReadableStream<Uint8Array>({

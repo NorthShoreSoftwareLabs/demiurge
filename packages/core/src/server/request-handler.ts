@@ -52,6 +52,7 @@ import { createProblemResponse } from "./problem";
 import {
   applyCorsHeaders,
   applyFetchMetadataVary,
+  attachExceptionSource,
   authorizeRoute,
   createCorsPreflightResponse,
   createMemoryRateLimitStore,
@@ -851,8 +852,13 @@ export async function loadInheritedRoutePolicy(
     policyFiles.map((policy) => policy.load()),
   );
 
+  // ADR 0018: the audit reports the declaring file of each exception. The
+  // merge keeps no file name, so the framework stamps the file before it
+  // merges the cascade.
   const merged = mergeRoutePolicies(
-    ...policyModules.map((module) => module.policy),
+    ...policyModules.map((module, index) =>
+      attachExceptionSource(module.policy, policyFiles[index]?.file)
+    ),
     routeModule.policy,
     {
       security: !capability || capability.kind === "page"

@@ -1,4 +1,5 @@
 import { mergeRouteAccess } from "./authorization";
+import { isSecurityException, resolveCsp } from "./exceptions";
 import type {
   ContentSecurityPolicy,
   CspHashAlgorithm,
@@ -213,17 +214,19 @@ function applyPolicyNeeds(
   document: SecurityPolicy | undefined,
   needs: RouteSecurityNeeds | undefined,
 ) {
-  if (!document?.csp || !needs) {
+  const declared = resolveCsp(document?.csp);
+
+  if (!document || !declared || !needs) {
     return document;
   }
 
-  let csp = document.csp;
+  let csp = declared;
 
   for (const { directive, need } of routeNeedDirectives) {
     csp = applyPolicyNeed(csp, directive, need, needs[need]);
   }
 
-  return csp === document.csp ? document : { ...document, csp };
+  return csp === declared ? document : { ...document, csp };
 }
 
 function applyPolicyNeed(
@@ -281,16 +284,16 @@ export function createSecurityHeaders(
   policy: SecurityPolicy,
   options: SecurityHeadersOptions = {},
 ) {
-  if (policy.csp) {
-    validateCspDirectiveValues(policy.csp);
+  const declaredCsp = resolveCsp(policy.csp);
+
+  if (declaredCsp) {
+    validateCspDirectiveValues(declaredCsp);
   }
 
   validateReportingConfiguration(policy);
 
   const headers = new Headers();
-  const csp = policy.csp !== false && policy.csp
-    ? renderCsp(policy.csp, options)
-    : undefined;
+  const csp = declaredCsp ? renderCsp(declaredCsp, options) : undefined;
   const trustedTypes = renderTrustedTypes(policy.trustedTypes);
 
   // Trusted Types is carried by CSP directives, so report-only means moving
@@ -310,7 +313,7 @@ export function createSecurityHeaders(
     headers,
     "content-security-policy-report-only",
     reportsTrustedTypes
-      ? joinCspDirectives(trustedTypes, renderCspReportingDirectives(policy.csp))
+      ? joinCspDirectives(trustedTypes, renderCspReportingDirectives(declaredCsp))
       : undefined,
   );
 
@@ -322,11 +325,13 @@ export function createSecurityHeaders(
 export function securityPolicyRequiresNonce(
   policy: SecurityPolicy | false | undefined,
 ) {
-  if (!policy || !policy.csp) {
+  const csp = policy ? resolveCsp(policy.csp) : undefined;
+
+  if (!csp) {
     return false;
   }
 
-  return cspDirectiveEntries(policy.csp).some(([, value]) => {
+  return cspDirectiveEntries(csp).some(([, value]) => {
     const resolved = resolveCspDirectiveValue(value);
 
     return Array.isArray(resolved) &&
@@ -387,22 +392,24 @@ function mergeObject<T extends object>(
 }
 
 function mergeCsp(
-  base: ContentSecurityPolicy | false | undefined,
-  override: ContentSecurityPolicy | false | undefined,
-) {
-  if (override === false) {
-    return false;
+  base: SecurityPolicy["csp"],
+  override: SecurityPolicy["csp"],
+): SecurityPolicy["csp"] {
+  if (isSecurityException(override)) {
+    return override;
   }
 
   if (!override) {
     return base;
   }
 
-  if (!base) {
+  const resolvedBase = resolveCsp(base);
+
+  if (!resolvedBase) {
     return normalizeCsp(override);
   }
 
-  const normalizedBase = normalizeCsp(base);
+  const normalizedBase = normalizeCsp(resolvedBase);
   const normalizedOverride = normalizeCsp(override);
   const merged: ContentSecurityPolicy = {
     ...normalizedBase,
@@ -666,7 +673,7 @@ function validateReportingConfiguration(policy: SecurityPolicy) {
     }
   }
 
-  const csp = policy.csp || undefined;
+  const csp = resolveCsp(policy.csp) || undefined;
 
   if (csp?.reportTo) {
     validateReportingEndpointName(csp.reportTo);

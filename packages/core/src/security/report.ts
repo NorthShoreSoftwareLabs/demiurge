@@ -4,13 +4,14 @@ import {
   RequestBodyTooLargeError,
 } from "./request";
 import { isObjectLike } from "../type-guards";
+import type { BodySizeValue } from "./types";
 
 type MaybePromise<T> = Promise<T> | T;
 
 export type SecurityReportPayload = unknown;
 
 export type SecurityReportHandlerOptions = {
-  maxBodySize?: number | `${number}${"b" | "gb" | "kb" | "mb"}`;
+  maxBodySize?: BodySizeValue;
   onReport?: (
     report: SecurityReportPayload,
     context: SecurityReportContext,
