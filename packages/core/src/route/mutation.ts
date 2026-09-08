@@ -19,6 +19,7 @@ import type {
 } from "./types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import { response, toResponse } from "./response";
+import { RouteSerializationError } from "./serialization";
 
 declare const mutationInputFields: unique symbol;
 
@@ -228,7 +229,11 @@ export function mutation<
           : absentInput;
       } catch (error) {
         if (!(error instanceof MutationValidationError)) throw error;
-        return mutationValidationResponse(context.request, error.validation);
+        return mutationValidationResponse(
+          context.request,
+          error.validation,
+          context.pathname,
+        );
       }
       const mutationContext: MutationContext<TInput, TPath, TValues> = {
         ...context,
@@ -247,6 +252,7 @@ export function mutation<
           : await mutationProtocolResponse(
             response,
             options.revalidateRoute === true,
+            context.pathname,
           );
       };
 
@@ -257,7 +263,11 @@ export function mutation<
           options.revalidate,
           mutationContext,
         );
-        return await addRevalidationHeader(result, revalidation);
+        return await addRevalidationHeader(
+          result,
+          revalidation,
+          context.pathname,
+        );
       }
 
       const key = typeof options.idempotency.key === "function"
@@ -275,7 +285,11 @@ export function mutation<
         options.revalidate,
         mutationContext,
       );
-      return await addRevalidationHeader(result.value, revalidation);
+      return await addRevalidationHeader(
+        result.value,
+        revalidation,
+        context.pathname,
+      );
     },
     {
       cors: options.cors,
@@ -304,11 +318,12 @@ function isMutationProtocolRequest(request: Request) {
 function mutationValidationResponse(
   request: Request,
   validation: MutationValidation,
+  route: string,
 ) {
   const body = isMutationProtocolRequest(request)
     ? { version: 1, status: "invalid", validation }
     : { type: "validation-error", validation };
-  const serialized = serializeMutationResult(body);
+  const serialized = serializeMutationResult(body, route);
   if (isMutationProtocolRequest(request)) {
     return new Response(serialized, {
       headers: { "content-type": MUTATION_RESPONSE_MEDIA_TYPE },
@@ -321,7 +336,11 @@ function mutationValidationResponse(
   });
 }
 
-async function mutationProtocolResponse(response: Response, revalidateRoute: boolean) {
+async function mutationProtocolResponse(
+  response: Response,
+  revalidateRoute: boolean,
+  route: string,
+) {
   if (response.status >= 300 && response.status < 400) {
     const location = response.headers.get("location");
     if (!location) return response;
@@ -330,7 +349,7 @@ async function mutationProtocolResponse(response: Response, revalidateRoute: boo
       status: "redirect",
       location,
       history: response.status === 301 || response.status === 308 ? "replace" : "push",
-    }), {
+    }, route), {
       headers: { "content-type": MUTATION_RESPONSE_MEDIA_TYPE },
       status: 200,
     });
@@ -343,7 +362,7 @@ async function mutationProtocolResponse(response: Response, revalidateRoute: boo
     status: response.ok ? "success" : "failed",
     ...(revalidateRoute && response.ok ? { revalidate: true } : {}),
     ...(response.ok && data !== undefined ? { data } : {}),
-  }), {
+  }, route), {
     headers: { "content-type": MUTATION_RESPONSE_MEDIA_TYPE },
     status: response.status,
   });
@@ -360,53 +379,74 @@ async function validateMutationCapability<
   const value = typeof result.value === "function"
     ? await result.value(context)
     : result.value;
-  assertJsonValue(value);
+  // The value of a JSON mutation result is the browser payload. The framework
+  // sends the same value in the mutation response.
+  assertJsonValue(value, context.pathname);
   return { ...result, value };
 }
 
-function serializeMutationResult(value: unknown) {
-  assertJsonValue(value);
+function serializeMutationResult(value: unknown, route: string) {
+  assertJsonValue(value, route);
   return JSON.stringify(value);
 }
 
-function assertJsonValue(value: unknown, seen = new Set<object>()): void {
+function assertJsonValue(
+  value: unknown,
+  route: string,
+  path: readonly string[] = [],
+  seen = new Set<object>(),
+): void {
   if (value === null || typeof value === "string" || typeof value === "boolean") {
     return;
   }
   if (typeof value === "number") {
     if (Number.isFinite(value)) return;
-    throw unsupportedMutationValue();
+    throw unsupportedMutationValue(route, path);
   }
-  if (typeof value !== "object") throw unsupportedMutationValue();
-  if (seen.has(value)) throw unsupportedMutationValue();
+  if (typeof value !== "object") throw unsupportedMutationValue(route, path);
+  if (seen.has(value)) throw unsupportedMutationValue(route, path);
   seen.add(value);
 
   if (Array.isArray(value)) {
     for (const key of Reflect.ownKeys(value)) {
       if (key === "length") continue;
       if (typeof key !== "string" || !/^(0|[1-9][0-9]*)$/.test(key)) {
-        throw unsupportedMutationValue();
+        throw unsupportedMutationValue(route, [...path, String(key)]);
       }
     }
     for (let index = 0; index < value.length; index += 1) {
-      if (!(index in value)) throw unsupportedMutationValue();
-      assertJsonValue(value[index], seen);
+      if (!(index in value)) {
+        throw unsupportedMutationValue(route, [...path, String(index)]);
+      }
+      assertJsonValue(value[index], route, [...path, String(index)], seen);
     }
   } else {
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) {
-      throw unsupportedMutationValue();
+      throw unsupportedMutationValue(route, path);
     }
     for (const key of Reflect.ownKeys(value)) {
-      if (typeof key !== "string") throw unsupportedMutationValue();
-      assertJsonValue(Object.getOwnPropertyDescriptor(value, key)?.value, seen);
+      if (typeof key !== "string") {
+        throw unsupportedMutationValue(route, [...path, "<symbol>"]);
+      }
+      assertJsonValue(
+        Object.getOwnPropertyDescriptor(value, key)?.value,
+        route,
+        [...path, key],
+        seen,
+      );
     }
   }
   seen.delete(value);
 }
 
-function unsupportedMutationValue() {
-  return new TypeError("A mutation result contains a value that JSON cannot serialize.");
+function unsupportedMutationValue(route: string, path: readonly string[]) {
+  const field = path.length === 0 ? "<root>" : path.join(".");
+  return new RouteSerializationError(
+    `Route ${route} could not serialize the field ${field} for the browser. A mutation result contains a value that JSON cannot serialize.`,
+    route,
+    field,
+  );
 }
 
 function isSuccessfulMutationResponse(response: Response) {
@@ -430,6 +470,7 @@ async function resolveRevalidation<
 async function addRevalidationHeader(
   result: Response,
   invalidation: MutationRevalidationDeclaration,
+  route: string,
 ) {
   const headers = new Headers(result.headers);
   headers.delete(MUTATION_REVALIDATION_HEADER);
@@ -442,7 +483,7 @@ async function addRevalidationHeader(
         keys,
         tags: tags.map((value) => value.id),
         version: 1,
-      })),
+      }, route)),
     );
   }
   return new Response(result.body, {

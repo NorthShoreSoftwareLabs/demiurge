@@ -41,6 +41,8 @@ function HomePage({
       {" | "}
       <Link to="/mutation-forms">Test mutation forms</Link>
       {" | "}
+      <Link to="/account">Browser payload example</Link>
+      {" | "}
       <Link to="/items/%E0%A4%A">Test malformed URL</Link>
     </main>
   );

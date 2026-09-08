@@ -196,6 +196,7 @@ export {
   page,
   redirect,
   response,
+  RouteSerializationError,
   serverTiming,
   sse,
   stream,

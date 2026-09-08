@@ -693,6 +693,33 @@ See [ADR 0002](../../architecture/decisions/0002-static-policy-verification.md)
 for the accepted boundary. [Issue #184](https://github.com/NorthShoreSoftwareLabs/demiurge/issues/184)
 carries the wider proposal's open decisions and later consumers.
 
+## Browser data disclosure
+
+A page `data` function runs on the server, but server execution does not make
+its return value private. The framework serializes the return value of `data`
+into the initial document, and it sends the same value for a browser
+navigation. A `data` function that returns a database record therefore sends
+every field of that record to the browser. A mutation result and an error
+response follow the same rule.
+
+The return value of `data` is the only browser payload declaration. To keep a
+value on the server, return a smaller value from `data`.
+
+Two limits apply:
+
+- The framework does not infer sensitivity from a field name. A name such as
+  `token` or `secret` misses a sensitive field with an ordinary name, and it
+  gives false confidence.
+- The shape of `data` controls the serialized value of a route. It does not
+  stop application code that renders a secret into HTML.
+
+The framework reports a value that it cannot serialize into the browser
+payload. The report names the route and the field. The report does not
+contain the value.
+
+Read [The browser payload](./data-and-caching.md#the-browser-payload) for the
+examples and the failure reports. ADR 0017 records the accepted decision.
+
 ## Environment validation
 
 `defineEnvSchema(...)`, `env.*(...)`, and `validateEnv(...)` validate required

@@ -133,6 +133,8 @@ finite numbers, strings, arrays, and plain objects with string keys.
 
 Demiurge rejects unsupported data before it writes a structured result. This
 rule rejects cycles, undefined values, non-finite numbers, and class instances.
+The report names the route and the field. The report does not contain the
+value.
 
 An unexpected exception uses the application error boundary and production
 redaction rules. A raw application `Response` keeps its original body, status,
@@ -343,6 +345,20 @@ export const GET = page({
 
 Route data runs on the server. Browser navigation requests a typed server-data
 envelope instead of rerunning the function in the browser.
+
+### Browser payload
+
+The return value of `data` is the browser payload. The framework serializes
+that value into the initial document, the hydration payload, and the
+navigation response. All three uses see the same value. A `mutation(...)`
+that returns a JSON result follows the same rule.
+
+Server execution does not make the returned data private. To keep a value on
+the server, return a smaller value from `data`. The framework does not infer
+sensitivity from a field name, and it does not stop application code that
+renders a secret into HTML. Read
+[The browser payload](../guides/data-and-caching.md#the-browser-payload) for
+the examples and the failure reports.
 
 Dynamic routes may export `paths` for static generation:
 
