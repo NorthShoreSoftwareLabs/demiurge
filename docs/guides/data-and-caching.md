@@ -32,6 +32,65 @@ The framework passes the result to the page view. It also serializes the result
 in the initial document. Browser navigation gets the result from the server.
 The browser does not receive or run the data function.
 
+## The browser payload
+
+The return value of `data` is the browser payload. Server execution does not
+make the returned value private. A `data` function that returns a database
+record sends every field of that record to the browser.
+
+```tsx
+type AccountRecord = {
+  displayName: string;
+  email: string;
+  id: string;
+  passwordHash: string;
+};
+
+export const GET = page({
+  data: () => readAccountRecord("acct-1"),
+  view: ({ data }) => <h1>{data.displayName}</h1>,
+});
+```
+
+This route sends `email` and `passwordHash` to the browser, because `data`
+returns them. To keep a value on the server, return a smaller value from
+`data`:
+
+```tsx
+type PublicAccount = { displayName: string; id: string };
+
+export const GET = page({
+  data: (): PublicAccount => {
+    const record = readAccountRecord("acct-1");
+    return { displayName: record.displayName, id: record.id };
+  },
+  view: ({ data }) => <h1>{data.displayName}</h1>,
+});
+```
+
+The framework serializes the return value of `data` one time. The initial
+render, the hydration payload, and browser navigation all use that one value.
+A hydration mismatch therefore cannot appear between a document and a
+navigation response.
+
+A mutation result and an error response follow the same rule. The framework
+sends the value that a mutation handler returns, and it sends only the
+`title` and `detail` fields of an error response by default.
+
+### The limits of a return value
+
+- The framework does not infer sensitivity from a field name. A name such as
+  `token` or `secret` is a weak signal. It misses a sensitive field with an
+  ordinary name, and it gives false confidence.
+- The shape of `data` controls the serialized value of a route. It does not
+  stop application code that renders a secret into HTML.
+
+### Failure reports
+
+The framework reports a value that it cannot serialize into the browser
+payload, such as a circular reference or a `bigint` value. The report names
+the route and the field. The report does not contain the value.
+
 ## Cache scopes
 
 Every cache request declares how broadly its result may be reused:

@@ -120,7 +120,10 @@ describe("request handler", () => {
     await expect(response.text()).resolves.not.toContain("savedAt");
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: "A mutation result contains a value that JSON cannot serialize.",
+        field: "savedAt",
+        message:
+          "Route /posts could not serialize the field savedAt for the browser. A mutation result contains a value that JSON cannot serialize.",
+        route: "/posts",
       }),
       { pathname: "/posts", site: "route" },
     );

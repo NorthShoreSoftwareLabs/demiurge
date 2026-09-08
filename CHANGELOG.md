@@ -5,6 +5,16 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- The return value of a page `data` function is the browser payload. The
+  framework serializes that value into the initial document, the hydration
+  payload, and the navigation response, and every use sees the same value. A
+  mutation result and an error response follow the same rule. Server
+  execution does not make the returned data private, and the framework does
+  not infer sensitivity from a field name. To keep a value on the server,
+  return a smaller value from `data`. The framework reports a browser payload
+  value that it cannot serialize, such as a circular reference or a `bigint`
+  value. The report names the route and the field, and it does not contain
+  the value (#403).
 - `import "@demiurgejs/core/server-only";` marks a module that must never
   enter a browser build. The build fails when a browser bundle reaches a
   marked module. The diagnostic names the module and the complete import path

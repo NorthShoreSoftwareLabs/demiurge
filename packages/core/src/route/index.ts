@@ -9,6 +9,10 @@ export {
 export { page } from "./page";
 export { defineMiddleware } from "./middleware";
 export {
+  assertSerializableValue,
+  RouteSerializationError,
+} from "./serialization";
+export {
   HTTP_ERROR_STATUSES,
   HttpError,
   httpError,

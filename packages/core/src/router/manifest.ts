@@ -20,6 +20,7 @@ import type {
   RouteModule,
   RouteProps,
 } from "../route";
+import { assertSerializableValue } from "../route/serialization";
 
 export type RouteRecord = {
   file: string;
@@ -371,14 +372,25 @@ export async function loadPageRoute(
     url,
   };
 
+  // The framework serializes the return value of `data` into the initial
+  // document, the hydration payload, and the navigation response. This check
+  // runs once, before that value reaches any of the three. It catches an
+  // unserializable value at the single place where the framework computes
+  // the value.
+  let data: unknown;
+
+  if (pageModule.GET.data && !initialData?.hasData) {
+    data = await pageModule.GET.data(context);
+    assertSerializableValue(data, toRoutePattern(routeMatch.route.segments));
+  } else {
+    data = initialData?.data;
+  }
+
   // TYPE-EVIDENCE: the route module view and layout exports are React components. The casts label them as component types.
   return {
     status: "ready",
     match: {
-      data:
-        pageModule.GET.data && !initialData?.hasData
-          ? await pageModule.GET.data(context)
-          : initialData?.data,
+      data,
       error: await loadErrorFallbackForRoute(manifest, routeMatch.route),
       links: documentContributions
         ? await resolveLinks(
