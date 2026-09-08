@@ -7,5 +7,11 @@ export const GET = json(({ request }) => {
   const clientIp = xForwardedFor?.split(",")[0]?.trim() ?? "unknown";
   return { clientIp };
 }, {
-  security: { csrf: false },
+  security: {
+    csrf: {
+      reason:
+        "A diagnostic probe sends no browser session, so the route runs no CSRF check.",
+      value: false,
+    },
+  },
 });

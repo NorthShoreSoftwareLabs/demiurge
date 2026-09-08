@@ -339,8 +339,85 @@ export const policy = { document: { headers: { contentTypeOptions: "nosniff" } }
   it("accepts an inherited policy that explicitly disables CSP", async () => {
     const root = await createRouteTree({
       "@policy.ts":
+        `export const policy = { access: { public: true }, document: { csp: { reason: "The example page renders no script.", value: false } } };`,
+      "index.tsx": pageRouteSource,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("refuses a document exception that states no reason", async () => {
+    const root = await createRouteTree({
+      "@policy.ts":
         `export const policy = { access: { public: true }, document: { csp: false } };`,
       "index.tsx": pageRouteSource,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toContainEqual(
+      expect.objectContaining({
+        code: "security-exception-reason-missing",
+        file: join(root, "routes", "@policy.ts"),
+        severity: "error",
+      }),
+    );
+  });
+
+  it("refuses a CSRF exception that states no reason", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": publicAccessPolicy,
+      "index.tsx": `
+import { text } from "@demiurgejs/core";
+export const POST = text("ok", { security: { csrf: false } });`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toContainEqual(
+      expect.objectContaining({
+        code: "security-exception-reason-missing",
+        exportName: "POST",
+        file: join(root, "routes", "index.tsx"),
+        severity: "error",
+      }),
+    );
+  });
+
+  it("refuses a raised request body limit that states no reason", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": publicAccessPolicy,
+      "index.tsx": `
+import { text } from "@demiurgejs/core";
+export const POST = text("ok", { security: { request: { maxBodySize: "10mb" } } });`,
+    });
+
+    await expect(
+      unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
+    ).resolves.toContainEqual(
+      expect.objectContaining({
+        code: "security-exception-reason-missing",
+        exportName: "POST",
+        file: join(root, "routes", "index.tsx"),
+        severity: "error",
+      }),
+    );
+  });
+
+  it("accepts a raised request body limit that states a reason", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": publicAccessPolicy,
+      "index.tsx": `
+import { text } from "@demiurgejs/core";
+export const POST = text("ok", {
+  security: {
+    request: {
+      maxBodySize: { reason: "The route accepts a video upload.", value: "10mb" },
+    },
+  },
+});`,
     });
 
     await expect(
@@ -389,7 +466,7 @@ export const policy = { document: createDocumentPolicy() };`,
     {
       name: "a constant policy with an explicit opt-out",
       source: `
-const documentPolicy = { csp: false };
+const documentPolicy = { csp: { reason: "The example page renders no script.", value: false } };
 const routePolicy = { document: documentPolicy };
 export const policy = routePolicy;`,
     },
@@ -415,7 +492,7 @@ ${source}`,
     const root = await createRouteTree({
       "index.tsx": `${pageRouteSource}
 import { security } from "@demiurgejs/core";
-const options = { csp: false };
+const options = { csp: { reason: "The example page renders no script.", value: false } };
 export const policy = { document: security.strict(options) };`,
       "admin/index.tsx": `${pageRouteSource}
 import { security } from "@demiurgejs/core";
@@ -473,7 +550,7 @@ export const policy = routePolicy;`,
   it("accepts a page route that declares its own document policy", async () => {
     const root = await createRouteTree({
       "index.tsx": `${pageRouteSource}
-export const policy = { document: { csp: false } };`,
+export const policy = { document: { csp: { reason: "The example page renders no script.", value: false } } };`,
     });
 
     await expect(

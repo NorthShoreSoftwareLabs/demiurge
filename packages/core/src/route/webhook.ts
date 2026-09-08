@@ -49,8 +49,17 @@ export const webhook = {
           text: () => new TextDecoder().decode(rawBody),
         });
       },
+      // ADR 0018: a framework helper that declares an exception names itself
+      // as the source, so the audit separates it from an application
+      // declaration.
       security: {
-        csrf: false,
+        csrf: {
+          origin: "framework",
+          reason:
+            "A webhook sender holds no browser session, so an HMAC signature replaces the CSRF check.",
+          source: "webhook.hmac()",
+          value: false,
+        },
       },
     } satisfies RawResponseCapability;
   },

@@ -1,15 +1,15 @@
 import { parseBodySize } from "./request";
-import type { RequestSecurityPolicy } from "./types";
+import type { BodySizeValue } from "./types";
 
 export type UploadFilePolicy = {
-  maxSize?: RequestSecurityPolicy["maxBodySize"];
+  maxSize?: BodySizeValue;
   required?: boolean;
   types?: readonly string[];
 };
 
 export type UploadPolicy = {
   files: Record<string, UploadFilePolicy>;
-  maxTotalSize?: RequestSecurityPolicy["maxBodySize"];
+  maxTotalSize?: BodySizeValue;
 };
 
 export type UploadValidationIssue = {

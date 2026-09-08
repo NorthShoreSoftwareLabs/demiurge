@@ -27,8 +27,20 @@ source string when the built-in `CspSource` values do not contain the source.
 
 Every page route requires an inherited document policy. Add
 `document: security.strict()` to a route-local or ancestor `@policy.ts` file.
-The build stops when a page route inherits none. Set
-`document: security.strict({ csp: false })` when the route must accept no CSP.
+The build stops when a page route inherits none. Declare a `csp` exception
+when the route must accept no CSP:
+
+```ts
+export const policy = defineRoutePolicy({
+  document: security.strict({
+    csp: {
+      reason: "The marketing page renders no script and no style.",
+      value: false,
+    },
+  }),
+});
+```
+
 The document then keeps every other header of the policy: HSTS, `nosniff`, the
 referrer policy, the permissions policy, and same-origin COOP and CORP. An
 application-owned fallback document, `@not-found.tsx` and the route error
@@ -501,6 +513,23 @@ inapplicable.
 `createCsrfCookie(...)` keeps the unprefixed `csrf-token` name for
 compatibility. Pass a `cookie` option to move the token to a prefixed name.
 
+A route that runs no CSRF check declares an exception with a reason:
+
+```ts
+export const POST = response(handleBeacon, {
+  security: {
+    csrf: {
+      reason: "The beacon sends no CSRF token, because sendBeacon adds no header.",
+      value: false,
+    },
+  },
+});
+```
+
+`webhook.hmac(...)` declares this exception for the application. The audit
+names the helper as the source, so a reader separates it from an application
+declaration.
+
 ## Fetch Metadata resource isolation
 
 A browser sends `Sec-Fetch-Site`, `Sec-Fetch-Mode`, and `Sec-Fetch-Dest` with
@@ -593,14 +622,25 @@ export const POST = mutation({
     // ...
   },
   security: {
-    request: { maxBodySize: "10mb" },
+    request: {
+      maxBodySize: {
+        reason: "The route accepts a video upload of up to ten megabytes.",
+        value: "10mb",
+      },
+    },
   },
 });
 ```
 
+A limit above the 1 MB default is a security exception, so it states a reason.
+A limit at or below the default takes a plain value, such as
+`maxBodySize: "8kb"`.
+
 `createSecurityAudit(...)` reports a route that raises the limit above the
 1 MB default. The `request-body-limit-raised` finding keeps the exception
-visible in the route audit at `/_demiurge/audit` during development.
+visible in the route audit at `/_demiurge/audit` during development. A raised
+limit without a reason gets the `security-exception-reason-missing` error, and
+the build stops.
 
 The shared pipeline bounds body size and, through the same bounded stream,
 the size of any value that `request.json()` or `request.formData()` parses
@@ -621,6 +661,76 @@ a request handler for an adapter without `requestTimeoutEnforcement` logs a
 diagnostic naming the adapter and the gap. See the
 [deployment capability matrix](./deployment-capability-matrix.md#request-timeout-enforcement).
 
+## Security exceptions
+
+[ADR 0018](../../architecture/decisions/0018-extension-and-exception-contracts.md)
+gives every typed security exception one shape. An exception carries the value
+that the application accepts, and it carries the reason for that acceptance.
+
+```ts
+{
+  reason: "The route accepts a video upload of up to ten megabytes.",
+  value: "10mb",
+}
+```
+
+Three declarations use this shape.
+
+- `document.csp` with a `value` of `false` accepts a document without a
+  Content-Security-Policy.
+- `security.csrf` with a `value` of `false` accepts an unsafe method that runs
+  no CSRF check.
+- `security.request.maxBodySize` with a `value` above 1 MB raises the
+  inherited request body limit.
+
+The `reason` field is mandatory. The compiler refuses a bare `csp: false` and
+a bare `csrf: false`. The build refuses a raised `maxBodySize` that states no
+reason, and it reports the `security-exception-reason-missing` error.
+
+`RouteAccessException.reason` follows the same rule. An access exception
+removes each inherited authorization hook, so it also states a reason.
+
+The audit reports the reason with the finding. It also reports the origin of
+the declaration and the file that holds it. An exception that a framework
+helper declared carries the name of that helper. For example,
+`webhook.hmac(...)` reports `webhook.hmac()` as the source.
+
+The framework fills the `source` field, so an application declares only the
+`reason` and the `value`.
+
+## Finding codes
+
+The build verifier and the runtime audit share one diagnostic code
+vocabulary. A code names one condition.
+
+| Code | Severity | Condition |
+| --- | --- | --- |
+| `access-authorized` | info | The route runs each inherited authorization hook. |
+| `access-declaration-missing` | error | The route inherits no access declaration. |
+| `access-exception` | warning | An access exception removed each inherited hook. |
+| `access-public` | info | The route declares public access. |
+| `cors-invalid` | error | The CORS policy is invalid. |
+| `cors-method-unavailable` | error | The CORS policy names a method that the route does not serve. |
+| `csp-disabled` | info | The document accepts no Content-Security-Policy. |
+| `csp-script-missing-nonce` | error | A document script needs a nonce. |
+| `csp-script-src-blocked` | error | The script-src policy blocks a document script. |
+| `csrf-disabled` | info | The route runs no CSRF check. |
+| `document-policy-missing` | error | The route inherits no document policy. |
+| `rate-limit-invalid` | error | The rate limit policy is invalid. |
+| `rate-limit-missing` | warning | The unsafe route declares no rate limit. |
+| `report-only-target-missing` | warning | Trusted Types report-only mode has no target. |
+| `request-body-limit-raised` | info | The route raises the request body limit. |
+| `script-gtm-wide-trust-boundary` | warning | Google Tag Manager is a wide trust boundary. |
+| `script-integrity-missing` | warning | A third-party script declares no integrity hash. |
+| `script-purpose-missing` | warning | A third-party script declares no purpose. |
+| `script-third-party-before-interactive` | warning | A third-party script runs before the application is interactive. |
+| `security-exception-reason-missing` | error | A security exception states no reason. |
+| `security-header-render-failed` | error | The security headers failed to render. |
+
+Two codes changed name in this release. The runtime audit used `csp-missing`
+for a document that declares no Content-Security-Policy. That condition now
+uses `document-policy-missing`, which the build verifier already used.
+
 ## Reports and audits
 
 `createSecurityReportHandler(...)` accepts CSP and Reporting API payloads with
@@ -632,11 +742,16 @@ headers, static scripts, reporting configuration, and declared third-party
 script dependencies. Audit findings explain policy conflicts. They do not
 replace runtime reports for conditions that only a browser can observe.
 
-A document that declares no `csp` gets the `csp-missing` finding, because that
-document sends no Content-Security-Policy. This finding is an error. To accept
-a document without a policy, declare `csp: false`. The audit then reports the
-deliberate exception as the `csp-disabled` finding, so it stays visible instead
-of disappearing from the panel.
+A document that declares no `csp` gets the `document-policy-missing` finding,
+because that document sends no Content-Security-Policy. This finding is an
+error. To accept a document without a policy, declare a `csp` exception. The
+audit then reports the deliberate exception as the `csp-disabled` finding, so
+it stays visible instead of disappearing from the panel.
+
+Each finding carries a `code`, a `message`, and a `severity`. A finding that
+reports an exception also carries an `origin` and a `source`. The `origin` is
+`"application"` or `"framework"`. The `source` is the declaring file, or the
+name of the framework helper that declared the exception.
 
 The development server shows this audit for one route. Read the
 [route audit panel](./devtools.md) guide.
@@ -652,17 +767,16 @@ the build stops. A page route that has no effective CSP gets the
 `document-policy-missing` warning. A document
 policy that declares only other headers also gets the warning. The warning
 names the route file and does not stop the build. The development server gives
-the same warning when it starts and after a route file changes. An explicit
-`csp: false` value stops the warning. An unreadable policy gets no warning.
+the same warning when it starts and after a route file changes. A declared
+`csp` exception stops the warning. An unreadable policy gets no warning.
 The build also reads the policy cascade of the route tree. A page route or an
 application-owned fallback document that inherits no document policy fails the
 build with the `document-policy-missing` error. A document policy that
 declares only other headers also fails the build. The error names the route
 file, the `@policy.ts` file that would supply the policy or the fact that none
 exists, and the exact repair. The development server reports the same gap when
-it starts and after a route file changes. An explicit
-`document: security.strict({ csp: false })` value accepts the document and
-stops the error. An unreadable policy expression reports nothing, because the
+it starts and after a route file changes. A declared `csp` exception accepts
+the document and stops the error. An unreadable policy expression reports nothing, because the
 build never guesses.
 
 A static host that cannot deliver a declared document policy fails the build

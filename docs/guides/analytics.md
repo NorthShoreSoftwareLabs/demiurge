@@ -221,7 +221,10 @@ export const POST = response(async ({ request }) => {
   return new Response(null, { status: 202 });
 }, {
   security: {
-    csrf: false,
+    csrf: {
+      reason: "The beacon sends no CSRF token, because sendBeacon adds no header.",
+      value: false,
+    },
     rateLimit: { key: "ip", limit: 600, window: "1m" },
     request: { maxBodySize: "8kb" },
   },
@@ -233,7 +236,7 @@ it without a conversion. See [`defineInstrumentation`](#server-instrumentation)
 for the server side of the same pipeline.
 
 `navigator.sendBeacon` sends no CSRF token and no custom header, so the route
-turns the CSRF check off. Set a rate limit and a body size limit instead.
+declares a CSRF exception with a reason. Set a rate limit and a body size limit instead.
 
 The result reports one of three rejections:
 

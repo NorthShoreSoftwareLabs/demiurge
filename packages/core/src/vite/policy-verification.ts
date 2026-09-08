@@ -4,14 +4,21 @@ import { parseAst, transformWithEsbuild } from "vite";
 import type { HttpMethod } from "../route";
 import {
   createSecurityHeaders,
+  getBodySizeException,
+  isSecurityException,
+  resolveCsp,
+  resolveMaxBodySize,
   security,
   validateCorsPolicy,
   validateRateLimitPolicy,
+  DEFAULT_MAX_BODY_SIZE,
+  parseBodySize,
   type ContentSecurityPolicy,
   type CorsPolicy,
   type RoutePolicy,
   type RouteSecurityPolicy,
   type SecurityPolicy,
+  type StaticPolicyFindingCode,
 } from "../security";
 import { PACKAGE_NAME } from "../package-name";
 import { isPlainObject } from "../type-guards";
@@ -30,9 +37,7 @@ function asAstNode(value: unknown): AstNode {
 }
 
 export type StaticPolicyFinding = {
-  code: "access-declaration-missing" | "cors-invalid" |
-    "cors-method-unavailable" | "document-policy-missing" |
-    "rate-limit-invalid" | "security-header-render-failed";
+  code: StaticPolicyFindingCode;
   exportName?: string;
   file: string;
   message: string;
@@ -262,8 +267,8 @@ function describeMissingDocumentPolicy(
   applicable: readonly RouteFileInspection[],
 ): string {
   const exception =
-    "Add document: security.strict({ csp: false }) to accept a document " +
-    "without a Content-Security-Policy.";
+    "To accept a document without a Content-Security-Policy, declare csp " +
+    "with a value of false and a reason.";
   const nearest = applicable.at(-1);
 
   if (nearest) {
@@ -544,7 +549,12 @@ function extractDocumentSecurityCspState(
       if (literal === unresolved) return "unknown";
       return extractCspValueState(literal);
     }
-    if (value.type === "ObjectExpression" || value.type === "ArrayExpression") {
+    if (value.type === "ObjectExpression") {
+      const literal = evaluateLiteral(value, constants);
+      if (literal === unresolved) return "unknown";
+      return extractCspValueState(literal);
+    }
+    if (value.type === "ArrayExpression") {
       return "present";
     }
     return "unknown";
@@ -588,6 +598,7 @@ function extractCspOptionState(value: unknown): DocumentCspState {
 
 function extractCspValueState(value: unknown): DocumentCspState {
   if (value === false) return "false";
+  if (isSecurityException(value)) return value.value === false ? "false" : "unknown";
   if (value === undefined || value === null) return "absent";
   if (isPlainObject(value) || Array.isArray(value)) return "present";
   return "unknown";
@@ -828,9 +839,23 @@ function validateExtractedRouteModule(
     }
 
     validateRateLimit(capability.security, file, exportName, findings);
+    validateExceptionReasons(
+      undefined,
+      capability.security,
+      file,
+      exportName,
+      findings,
+    );
   }
 
   validateRateLimit(routeModule.policy?.security, file, undefined, findings);
+  validateExceptionReasons(
+    routeModule.policy?.document,
+    routeModule.policy?.security,
+    file,
+    undefined,
+    findings,
+  );
   if (routeModule.policy?.document) {
     try {
       createSecurityHeaders(toFragmentDocument(routeModule.policy.document), {
@@ -859,7 +884,8 @@ function toFragmentDocument(document: SecurityPolicy): SecurityPolicy {
   const declaresEndpoints = Boolean(
     endpoints && Object.keys(endpoints).length,
   );
-  const reportTo = document.csp === false ? undefined : document.csp?.reportTo;
+  const declaredCsp = resolveCsp(document.csp);
+  const reportTo = declaredCsp ? declaredCsp.reportTo : undefined;
 
   if (declaresEndpoints || !reportTo) {
     return document;
@@ -868,11 +894,96 @@ function toFragmentDocument(document: SecurityPolicy): SecurityPolicy {
   // TYPE-EVIDENCE: the guard above returns early when the csp field is false or missing. The remaining value is therefore a policy object.
   return {
     ...document,
-    csp: { ...document.csp as ContentSecurityPolicy, reportTo: undefined },
+    csp: { ...declaredCsp as ContentSecurityPolicy, reportTo: undefined },
     headers: endpoints
       ? { ...document.headers, reportingEndpoints: undefined }
       : document.headers,
   };
+}
+
+// ADR 0018 gives every typed security exception a mandatory reason. The type
+// system refuses a bare `csp: false` and a bare `csrf: false`. A raised body
+// limit is a valid value. The build therefore compares the declared limit with
+// the default limit. It refuses a raised limit that states no reason.
+function validateExceptionReasons(
+  document: SecurityPolicy | undefined,
+  securityPolicy: RouteSecurityPolicy | undefined,
+  file: string,
+  exportName: string | undefined,
+  findings: StaticPolicyFinding[],
+) {
+  if (document && statesNoReason(document.csp)) {
+    findings.push(finding(
+      "security-exception-reason-missing",
+      file,
+      "This document policy accepts no Content-Security-Policy and states no reason. Declare csp with a value of false and a reason.",
+      exportName,
+    ));
+  }
+
+  if (securityPolicy && statesNoReason(securityPolicy.csrf)) {
+    findings.push(finding(
+      "security-exception-reason-missing",
+      file,
+      "This route runs no CSRF check and states no reason. Declare csrf with a value of false and a reason.",
+      exportName,
+    ));
+  }
+
+  validateRaisedBodyLimit(securityPolicy, file, exportName, findings);
+}
+
+// The build reads a JavaScript route file as well as a TypeScript route file.
+// A bare `false` and an object without a reason therefore both reach here.
+function statesNoReason(declaration: unknown) {
+  if (declaration === false) {
+    return true;
+  }
+
+  return (
+    isPlainObject(declaration) &&
+    "value" in declaration &&
+    typeof declaration.reason !== "string"
+  );
+}
+
+function validateRaisedBodyLimit(
+  securityPolicy: RouteSecurityPolicy | undefined,
+  file: string,
+  exportName: string | undefined,
+  findings: StaticPolicyFinding[],
+) {
+  const declared = securityPolicy?.request?.maxBodySize;
+
+  if (declared === undefined || getBodySizeException(declared)) {
+    return;
+  }
+
+  let declaredBytes: number;
+  let defaultBytes: number;
+
+  try {
+    // TYPE-EVIDENCE: the exception guard above leaves a body size value. The cast labels the resolved value for the parser.
+    declaredBytes = parseBodySize(resolveMaxBodySize(declared) as number | string);
+    defaultBytes = parseBodySize(DEFAULT_MAX_BODY_SIZE);
+  } catch {
+    // An invalid value fails at request time with a typed error. The build
+    // does not repeat that failure here.
+    return;
+  }
+
+  if (declaredBytes <= defaultBytes) {
+    return;
+  }
+
+  findings.push(finding(
+    "security-exception-reason-missing",
+    file,
+    `This route raises the request body limit to ${
+      String(declared)
+    } and states no reason. Declare maxBodySize with a limit value and a reason.`,
+    exportName,
+  ));
 }
 
 function validateRateLimit(

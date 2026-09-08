@@ -1,4 +1,5 @@
-import type { CsrfPolicy } from "./types";
+import { resolveCsrf } from "./exceptions";
+import type { CsrfPolicy, CsrfPolicyOptions } from "./types";
 
 const unsafeMethods = new Set(["DELETE", "PATCH", "POST", "PUT"]);
 const cookieNamePattern = /^[!#$%&'*+\-.^_`|~A-Za-z0-9]+$/;
@@ -63,7 +64,9 @@ export async function enforceCsrfProtection(
   policy: CsrfPolicy | undefined,
   request: Request,
 ) {
-  if (!unsafeMethods.has(request.method.toUpperCase()) || policy === false) {
+  const declared = resolveCsrf(policy);
+
+  if (!unsafeMethods.has(request.method.toUpperCase()) || declared === false) {
     return null;
   }
 
@@ -72,11 +75,11 @@ export async function enforceCsrfProtection(
   // An omitted policy uses the secure default only when browser credentials
   // are present. Explicit `true` remains useful for routes that require a
   // double-submit token regardless of whether another cookie was sent.
-  if (policy === undefined && !cookieHeader?.trim()) {
+  if (declared === undefined && !cookieHeader?.trim()) {
     return null;
   }
 
-  const options = normalizeCsrfPolicy(policy ?? true);
+  const options = normalizeCsrfPolicy(declared ?? true);
   const cookies = parseCookieHeader(cookieHeader);
   const cookieToken = cookies.get(options.cookie);
   const headerToken = request.headers.get(options.header);
@@ -129,7 +132,7 @@ export function parseCookieHeader(header: string | null) {
   return cookies;
 }
 
-function normalizeCsrfPolicy(policy: Exclude<CsrfPolicy, false>) {
+function normalizeCsrfPolicy(policy: true | CsrfPolicyOptions) {
   if (policy === true) {
     return {
       cookie: "csrf-token",

@@ -3,8 +3,16 @@ import type { ScriptTag } from "../document/scripts";
 import { createSecurityHeaders } from "./policy";
 import { validateCorsPolicy } from "./cors";
 import { DEFAULT_MAX_BODY_SIZE, parseBodySize } from "./request";
+import {
+  getBodySizeException,
+  getCspException,
+  getCsrfException,
+  resolveCsp,
+  resolveMaxBodySize,
+} from "./exceptions";
 import type {
   ContentSecurityPolicy,
+  SecurityException,
   CorsPolicy,
   CspSource,
   ResolvedRouteAccess,
@@ -36,7 +44,7 @@ export function createSecurityAudit(options: SecurityAuditOptions = {}) {
 
   if (document?.scripts) {
     auditDocumentScripts(
-      document.policy.csp,
+      resolveCsp(document.policy.csp),
       document.scripts,
       document.headers,
       findings,
@@ -62,20 +70,24 @@ export function createSecurityAudit(options: SecurityAuditOptions = {}) {
 // A document that declares no CSP sends none. The policy stays valid, so no
 // other check speaks. This finding makes the absent policy visible.
 //
-// An absent CSP and a policy that sets `csp: false` are different states. An
-// absent CSP is the unsafe default the build refuses. `csp: false` is a
-// typed, deliberate exception, so it gets its own visible finding instead of
-// the error below.
+// An absent CSP and a declared exception are different states. An absent CSP
+// is the unsafe default that the build refuses. An exception is typed and
+// deliberate, so it gets its own visible finding instead of the error below.
 function auditMissingCsp(
   policy: SecurityPolicy,
   findings: SecurityAuditFinding[],
 ) {
-  if (policy.csp === false) {
+  const exception = getCspException(policy.csp);
+
+  if (exception) {
     findings.push({
       code: "csp-disabled",
-      message:
-        "This document accepts no Content-Security-Policy. The @policy.ts file of the route sets csp: false.",
+      message: `This document accepts no Content-Security-Policy. ${
+        describeExceptionSource(exception)
+      } Reason: ${exception.reason}`,
+      origin: exception.origin ?? "application",
       severity: "info",
+      source: exception.source,
     });
     return;
   }
@@ -85,11 +97,22 @@ function auditMissingCsp(
   }
 
   findings.push({
-    code: "csp-missing",
+    code: "document-policy-missing",
     message:
-      "This document declares no Content-Security-Policy. Add document: security.strict() to the @policy.ts file of the route, or set csp: false to accept a document without a Content-Security-Policy.",
+      "This document declares no Content-Security-Policy. Add document: security.strict() to the @policy.ts file of the route. To accept a document without a Content-Security-Policy, declare csp with a value of false and a reason.",
     severity: "error",
   });
+}
+
+// A finding names the declaration source, so a reader separates an
+// application decision from a framework helper decision.
+function describeExceptionSource(exception: SecurityException<unknown>) {
+  const origin = exception.origin ?? "application";
+  const actor = origin === "framework"
+    ? "A framework helper declared this exception"
+    : "The application declared this exception";
+
+  return exception.source ? `${actor} in ${exception.source}.` : `${actor}.`;
 }
 
 function auditReportOnlyDelivery(
@@ -100,7 +123,7 @@ function auditReportOnlyDelivery(
     return;
   }
 
-  const csp = policy.csp || undefined;
+  const csp = resolveCsp(policy.csp) || undefined;
   const hasLegacyTarget = Boolean(resolveCspArray(csp?.reportUri)?.length);
   const endpoints = policy.headers?.reportingEndpoints;
   const hasReportingApiTarget = Boolean(
@@ -190,7 +213,7 @@ function auditDocumentPolicy(
 }
 
 function auditDocumentScripts(
-  policy: SecurityPolicy["csp"],
+  policy: ContentSecurityPolicy | false | undefined,
   scripts: readonly ScriptTag[],
   options: SecurityHeadersOptions | undefined,
   findings: SecurityAuditFinding[],
@@ -382,6 +405,7 @@ function auditRouteAccess(
         exception.scope ?? "this subtree"
       }. Reason: ${exception.reason}`,
       severity: "warning",
+      source: exception.source,
     });
   }
 }
@@ -420,11 +444,17 @@ function auditUnsafeMethodPolicy(
     return;
   }
 
-  if (policy?.csrf === false) {
+  const csrfException = getCsrfException(policy?.csrf);
+
+  if (csrfException) {
     findings.push({
       code: "csrf-disabled",
-      message: "CSRF protection is explicitly disabled for this unsafe route.",
+      message: `This unsafe route runs no CSRF check. ${
+        describeExceptionSource(csrfException)
+      } Reason: ${csrfException.reason}`,
+      origin: csrfException.origin ?? "application",
       severity: "info",
+      source: csrfException.source,
     });
   }
 
@@ -445,7 +475,8 @@ function auditRequestBodyLimit(
   policy: RouteSecurityPolicy | undefined,
   findings: SecurityAuditFinding[],
 ) {
-  const declared = policy?.request?.maxBodySize;
+  const exception = getBodySizeException(policy?.request?.maxBodySize);
+  const declared = resolveMaxBodySize(policy?.request?.maxBodySize);
 
   if (declared === undefined) {
     return;
@@ -467,11 +498,24 @@ function auditRequestBodyLimit(
     return;
   }
 
+  if (!exception) {
+    findings.push({
+      code: "security-exception-reason-missing",
+      message:
+        `This route raises the inherited request body limit to ${declared} and states no reason. Declare maxBodySize with a limit value and a reason.`,
+      severity: "error",
+    });
+    return;
+  }
+
   findings.push({
     code: "request-body-limit-raised",
-    message:
-      `This route raises the inherited request body limit to ${declared}. Confirm the route accepts an upload or a stream that needs the larger limit.`,
+    message: `This route raises the inherited request body limit to ${declared}. ${
+      describeExceptionSource(exception)
+    } Reason: ${exception.reason}`,
+    origin: exception.origin ?? "application",
     severity: "info",
+    source: exception.source,
   });
 }
 

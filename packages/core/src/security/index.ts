@@ -151,6 +151,11 @@ export type {
   FetchMetadataPolicy,
   FetchMetadataPolicyOptions,
   FetchMetadataReason,
+  BodySizeException,
+  BodySizeValue,
+  CspException,
+  CsrfException,
+  CsrfPolicyOptions,
   MemoryRateLimitStoreOptions,
   RateLimitKey,
   RateLimitPolicy,
@@ -161,6 +166,8 @@ export type {
   ReportingEndpoints,
   SecurityAudit,
   SecurityAuditFinding,
+  SecurityException,
+  SecurityExceptionOrigin,
   SecurityAuditOptions,
   ScriptDependencyAuditOptions,
   MergedRoutePolicy,
@@ -181,6 +188,20 @@ export type {
   StrictTransportSecurityPolicy,
   TrustedTypesPolicy,
 } from "./types";
+export type {
+  SecurityFindingCode,
+  StaticPolicyFindingCode,
+} from "./finding-codes";
+export {
+  attachExceptionSource,
+  getBodySizeException,
+  getCspException,
+  getCsrfException,
+  isSecurityException,
+  resolveCsp,
+  resolveCsrf,
+  resolveMaxBodySize,
+} from "./exceptions";
 export type {
   UploadFilePolicy,
   UploadPolicy,

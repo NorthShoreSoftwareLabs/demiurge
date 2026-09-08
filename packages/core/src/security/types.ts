@@ -1,4 +1,5 @@
 import type { ScriptTag } from "../document/scripts";
+import type { SecurityFindingCode } from "./finding-codes";
 import type { HttpMethod, HttpRouteContext } from "../route/types";
 
 export type CspSource =
@@ -129,6 +130,43 @@ export type TrustedTypesPolicy = {
   requireFor?: readonly ["script"];
 };
 
+/**
+ * The origin of a security exception. An application declares an exception in
+ * a `@policy.ts` file or in a route file. A framework helper declares an
+ * exception on behalf of the application.
+ */
+export type SecurityExceptionOrigin = "application" | "framework";
+
+/**
+ * A typed security exception.
+ *
+ * Every exception states a reason, and the audit reports that reason. The
+ * `value` field holds the value that the application accepts. Each exception
+ * of the framework uses this one shape, so a reader learns one syntax.
+ */
+export type SecurityException<Value> = {
+  /** The origin of the declaration. The default origin is "application". */
+  origin?: SecurityExceptionOrigin;
+  /** The reason that the application accepts this value. */
+  reason: string;
+  /** The file or the framework helper that declared the exception. */
+  source?: string;
+  /** The value that the application accepts. */
+  value: Value;
+};
+
+/** Accepts a document that carries no Content-Security-Policy. */
+export type CspException = SecurityException<false>;
+
+/** Accepts an unsafe method that runs no CSRF check. */
+export type CsrfException = SecurityException<false>;
+
+/** A request body limit, in bytes or with a b, kb, mb, or gb suffix. */
+export type BodySizeValue = number | `${number}${"b" | "gb" | "kb" | "mb"}`;
+
+/** Accepts a request body limit above the default limit. */
+export type BodySizeException = SecurityException<BodySizeValue>;
+
 export type CorsPolicy = {
   credentials?: boolean;
   exposeHeaders?: readonly string[];
@@ -152,11 +190,17 @@ export type CorsResponseOptions =
     preflight?: false;
   };
 
-export type CsrfPolicy = false | true | {
+export type CsrfPolicyOptions = {
   cookie?: string;
   field?: string;
   header?: string;
 };
+
+/**
+ * A route declares `true` or an options object to protect an unsafe method.
+ * A route that accepts no CSRF protection declares a `CsrfException`.
+ */
+export type CsrfPolicy = true | CsrfException | CsrfPolicyOptions;
 
 /**
  * A value of the `Sec-Fetch-Dest` header. The list holds the destinations that
@@ -236,7 +280,7 @@ export type RequestSecurityPolicy = {
    * route that raises this value above the default is a typed exception that
    * `createSecurityAudit(...)` reports.
    */
-  maxBodySize?: number | `${number}${"b" | "gb" | "kb" | "mb"}`;
+  maxBodySize?: BodySizeValue | BodySizeException;
 };
 
 export type RateLimitKey = "ip" | {
@@ -387,9 +431,16 @@ export type MergedRoutePolicy = Omit<RoutePolicy, "access"> & {
 };
 
 export type SecurityAuditFinding = {
-  code: string;
+  code: SecurityFindingCode;
   message: string;
+  /**
+   * The origin of the declaration that caused the finding. The audit sets
+   * this field for a finding that reports a typed security exception.
+   */
+  origin?: SecurityExceptionOrigin;
   severity: "error" | "info" | "warning";
+  /** The file or the framework helper that declared the exception. */
+  source?: string;
 };
 
 export type SecurityAuditOptions = {
@@ -431,7 +482,7 @@ export type SecurityHeaderPolicy = {
 };
 
 export type SecurityPolicy = {
-  csp?: ContentSecurityPolicy | false;
+  csp?: ContentSecurityPolicy | CspException;
   headers?: SecurityHeaderPolicy;
   trustedTypes?: TrustedTypesPolicy | false;
 };

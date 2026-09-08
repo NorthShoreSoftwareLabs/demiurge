@@ -5,6 +5,26 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- A typed security exception states a reason. The `csp` field, the `csrf`
+  field, and a `maxBodySize` above the 1 MB default take an object with a
+  `reason` and a `value`. One example is `csrf: { reason: "...", value: false }`.
+  The
+  compiler refuses a bare `csp: false` and a bare `csrf: false`. The build
+  refuses a raised `maxBodySize` that states no reason, and it reports
+  `security-exception-reason-missing`. The audit reports the reason with the
+  finding. **Migration**: give each exception a `reason` and move the accepted
+  value to `value` (#404).
+- A security audit finding reports the origin and the source of an exception.
+  The `origin` field states `application` or `framework`. The `source` field
+  gives the file that holds the declaration, or the name of the framework
+  helper. `webhook.hmac()` names itself as the source of its CSRF exception
+  (#404).
+- `SecurityAuditFinding.code` is a closed union. The build verifier and the
+  runtime audit share the `SecurityFindingCode` vocabulary. The framework
+  removes the runtime `csp-missing` code. A document that declares no
+  Content-Security-Policy reports `document-policy-missing`, which the build
+  verifier already used. **Migration**: match `document-policy-missing` where
+  a tool matched `csp-missing` (#404).
 - The return value of a page `data` function is the browser payload. The
   framework serializes that value into the initial document, the hydration
   payload, and the navigation response, and every use sees the same value. A

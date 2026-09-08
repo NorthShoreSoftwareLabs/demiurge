@@ -1898,7 +1898,14 @@ describe("request handler", () => {
     const handler = createRequestHandler({
       routes: {
         "./routes/hooks/@policy.ts": routeModule({
-          policy: defineRoutePolicy({ security: { csrf: false } }),
+          policy: defineRoutePolicy({
+            security: {
+              csrf: {
+                reason: "Each delivery carries a signature that the route checks.",
+                value: false,
+              },
+            },
+          }),
         }),
         "./routes/hooks/incoming.tsx": routeModule({
           POST: text("accepted"),
