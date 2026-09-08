@@ -9,6 +9,12 @@ const byteUnits = {
   mb: 1024 ** 2,
 } as const;
 
+// ADR 0015 sets this bound. A route that omits a request policy still
+// inherits a bounded body limit, so a route never buffers a body of any size
+// by omission. A route that needs a larger limit declares
+// `security.request.maxBodySize` and the audit reports the exception.
+export const DEFAULT_MAX_BODY_SIZE = "1mb" as const;
+
 export function enforceRequestSecurity(
   policy: RequestSecurityPolicy | undefined,
   request: Request,
@@ -18,10 +24,6 @@ export function enforceRequestSecurity(
 
   if (methodResponse) {
     return methodResponse;
-  }
-
-  if (policy?.maxBodySize === undefined) {
-    return null;
   }
 
   const contentLength = request.headers.get("content-length");
@@ -38,7 +40,7 @@ export function enforceRequestSecurity(
     });
   }
 
-  const maxBodySize = parseBodySize(policy.maxBodySize);
+  const maxBodySize = parseBodySize(policy?.maxBodySize ?? DEFAULT_MAX_BODY_SIZE);
 
   if (declaredSize > maxBodySize) {
     return new Response("Request body too large.", {
@@ -60,11 +62,11 @@ export function limitRequestBody(
   policy: RequestSecurityPolicy | undefined,
   request: Request,
 ) {
-  if (policy?.maxBodySize === undefined || request.body === null) {
+  if (request.body === null) {
     return request;
   }
 
-  const maximumBytes = parseBodySize(policy.maxBodySize);
+  const maximumBytes = parseBodySize(policy?.maxBodySize ?? DEFAULT_MAX_BODY_SIZE);
   const reader = request.body.getReader();
   let bytesRead = 0;
   const body = new ReadableStream<Uint8Array>({

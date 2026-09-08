@@ -111,6 +111,7 @@ export {
   createSecurityReportHandler,
 } from "./report";
 export {
+  DEFAULT_MAX_BODY_SIZE,
   enforceAllowedMethods,
   enforceRequestSecurity,
   parseBodySize,

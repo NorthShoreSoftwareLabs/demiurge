@@ -1,5 +1,6 @@
 import {
   assertAdapterCapabilities,
+  checkAdapterCapabilities,
   type Adapter,
 } from "../adapter";
 import {
@@ -43,6 +44,10 @@ export function validateRouteModules(
   modules: Readonly<Record<string, RouteModule>>,
   options: RouteModuleVerificationOptions = {},
 ) {
+  if (options.adapter) {
+    warnUnsupportedRequestBoundaries(options.adapter);
+  }
+
   for (const [file, routeModule] of Object.entries(modules)) {
     validateModulePolicy(file, routeModule);
 
@@ -72,6 +77,25 @@ export function validateRouteModules(
   validatePagePolicies(manifest, modules, options.adapter);
 
   return manifest;
+}
+
+// Every route inherits a bounded body limit, so a request without
+// `Content-Length` cannot read past it. An adapter with no
+// `requestTimeoutEnforcement` guarantee still lets a slow request hold a
+// connection open below that limit. The shared pipeline does not own every
+// timeout. This names the gap once per handler construction rather than
+// refusing to build. The gap is inherent to the adapter, not a mistake in an
+// application's declared policy.
+function warnUnsupportedRequestBoundaries(adapter: Adapter) {
+  const check = checkAdapterCapabilities(adapter, ["requestTimeoutEnforcement"]);
+
+  if (check.ok) {
+    return;
+  }
+
+  console.warn(
+    `Demiurge adapter "${adapter.name}" does not report requestTimeoutEnforcement. Every route inherits a bounded request body limit. This adapter gives the shared pipeline no guarantee against a slow request. A slow request can hold a connection open below that limit. Bound connection duration at the host or platform.`,
+  );
 }
 
 function validateModulePolicy(file: string, routeModule: RouteModule) {
