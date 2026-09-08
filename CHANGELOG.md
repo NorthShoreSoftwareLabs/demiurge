@@ -25,6 +25,17 @@ status live in GitHub issues and milestones.
   Content-Security-Policy reports `document-policy-missing`, which the build
   verifier already used. **Migration**: match `document-policy-missing` where
   a tool matched `csp-missing` (#404).
+- `unstable_viteConfig` is renamed to `unsafe_unstable_viteConfig`. The name
+  states both properties of the callback. It has no compatibility guarantee
+  between Demiurge versions, and it can remove a security boundary. The
+  callback keeps its current capability. It still receives the resolved Vite
+  configuration of the framework and still returns a rewritten configuration.
+  The framework adds no check that its own plugins survived the rewrite. An
+  application that removes a framework plugin in this callback loses the
+  server-only module boundary or the client environment boundary. The
+  application then owns the removed boundary. **Migration**: rename
+  `unstable_viteConfig` to `unsafe_unstable_viteConfig`. The framework removes
+  the old name, and a configuration that declares it fails (#404).
 - The return value of a page `data` function is the browser payload. The
   framework serializes that value into the initial document, the hydration
   payload, and the navigation response, and every use sees the same value. A

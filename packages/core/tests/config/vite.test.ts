@@ -80,18 +80,18 @@ describe("generated Vite configuration", () => {
   });
 
   it("gives the escape hatch the resolved configuration last", async () => {
-    const unstable_viteConfig = vi.fn((resolved) => ({
+    const unsafe_unstable_viteConfig = vi.fn((resolved) => ({
       ...resolved,
       logLevel: "silent" as const,
     }));
     const generated = await createDemiurgeViteConfig({
-      config: config({ unstable_viteConfig }),
+      config: config({ unsafe_unstable_viteConfig }),
       loadReactPlugin,
       overrides: { mode: "production" },
     });
 
-    expect(unstable_viteConfig).toHaveBeenCalledTimes(1);
-    expect(unstable_viteConfig.mock.calls[0]![0]).toMatchObject({
+    expect(unsafe_unstable_viteConfig).toHaveBeenCalledTimes(1);
+    expect(unsafe_unstable_viteConfig.mock.calls[0]![0]).toMatchObject({
       configFile: false,
       mode: "production",
     });
@@ -101,7 +101,7 @@ describe("generated Vite configuration", () => {
   it("fails when the escape hatch does not return a configuration", async () => {
     await expect(createDemiurgeViteConfig({
       // TYPE-EVIDENCE: the callback returns a wrong value on purpose. The cast reaches the runtime check.
-      config: config({ unstable_viteConfig: (() => undefined) as never }),
+      config: config({ unsafe_unstable_viteConfig: (() => undefined) as never }),
       loadReactPlugin,
     })).rejects.toThrow(/must return a Vite configuration object/);
   });

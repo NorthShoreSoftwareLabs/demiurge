@@ -76,10 +76,17 @@ export type DemiurgeConfig<Locale extends string = string> = {
   routing?: DemiurgeRoutingConfig<Locale>;
   security?: DemiurgeSecurityConfig;
   vite?: DemiurgeViteExtension;
-  // This callback receives the resolved Vite configuration of the framework.
-  // It is a framework internal. It has no compatibility guarantee between
-  // Demiurge versions.
-  unstable_viteConfig?: (
+  /**
+   * This callback is unsafe and unstable.
+   *
+   * It has no compatibility guarantee between Demiurge versions. It receives
+   * the resolved Vite configuration of the framework, after the framework
+   * adds its own build-time security plugins. Those plugins enforce the
+   * server-only module boundary and the client environment boundary. An
+   * application that removes or reorders a framework plugin in this callback
+   * loses that boundary. The application then owns the removed boundary.
+   */
+  unsafe_unstable_viteConfig?: (
     config: ViteUserConfig,
   ) => ViteUserConfig | Promise<ViteUserConfig>;
 };
