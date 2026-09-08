@@ -135,9 +135,11 @@ export const policy = {
 };
 ```
 
-A page route sends security headers only when its policy cascade declares
-`document`. The build warns when the effective document policy has no CSP.
-The development server reports the same warning.
+A page route requires an inherited `document` policy. The build fails when
+the effective document policy has no CSP. Declare
+`document: security.strict({ csp: false })` to accept a document without a
+Content-Security-Policy and keep every other header. The development server
+reports the same gap.
 
 The strict preset supplies a nonce-based CSP with `'strict-dynamic'`, HSTS,
 `frame-ancestors 'none'`, `nosniff`, a referrer policy, a permissions policy,

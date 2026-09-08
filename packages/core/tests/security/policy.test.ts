@@ -645,6 +645,28 @@ describe("security policy cascade", () => {
     expect(createSecurityHeaders(policy).has("content-security-policy")).toBe(false);
   });
 
+  it("keeps every other security header when csp is false", () => {
+    const policy = mergeSecurityPolicies(
+      security.strict(),
+      {
+        csp: false,
+      },
+    );
+    const headers = createSecurityHeaders(policy);
+
+    expect(headers.has("content-security-policy")).toBe(false);
+    expect(headers.get("x-content-type-options")).toBe("nosniff");
+    expect(headers.get("referrer-policy")).toBe(
+      "strict-origin-when-cross-origin",
+    );
+    expect(headers.get("permissions-policy")).toBe(
+      "camera=(), microphone=(), geolocation=(), payment=()",
+    );
+    expect(headers.get("cross-origin-opener-policy")).toBe("same-origin");
+    expect(headers.get("cross-origin-resource-policy")).toBe("same-origin");
+    expect(headers.get("strict-transport-security")).toBe("max-age=31536000");
+  });
+
   it("defines and merges route policy from parent to child", () => {
     const policy = mergeRoutePolicies(
       defineRoutePolicy({
@@ -793,7 +815,7 @@ describe("security policy cascade", () => {
 });
 
 describe("security audit output", () => {
-  it("warns when a document declares no Content-Security-Policy", () => {
+  it("reports an error when a document declares no Content-Security-Policy", () => {
     const audit = createSecurityAudit({
       document: { policy: {} },
       route: { method: "GET" },
@@ -803,16 +825,23 @@ describe("security audit output", () => {
       code: "csp-missing",
       message:
         "This document declares no Content-Security-Policy. Add document: security.strict() to the @policy.ts file of the route, or set csp: false to accept a document without a Content-Security-Policy.",
-      severity: "warning",
+      severity: "error",
     });
   });
 
-  it("accepts a document that refuses a Content-Security-Policy", () => {
+  it("reports the deliberate exception when a document refuses a Content-Security-Policy", () => {
     const audit = createSecurityAudit({
       document: { policy: { csp: false } },
     });
 
-    expect(audit.findings).toEqual([]);
+    expect(audit.findings).toEqual([
+      {
+        code: "csp-disabled",
+        message:
+          "This document accepts no Content-Security-Policy. The @policy.ts file of the route sets csp: false.",
+        severity: "info",
+      },
+    ]);
   });
 
   it("does not warn about a missing policy for a route without a document", () => {

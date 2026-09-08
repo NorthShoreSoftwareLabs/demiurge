@@ -10,12 +10,16 @@ test("the default build emits small fonts as files", async () => {
   const routesDir = join(root, "src", "routes");
   await mkdir(routesDir, { recursive: true });
   await writeFile(
-    join(routesDir, "@not-found.tsx"),
-    "export default function NotFound() { return null; }",
+    join(routesDir, "@policy.ts"),
+    `import { defineRoutePolicy, security } from "@demiurgejs/core";
+export const policy = defineRoutePolicy({
+  access: { public: true },
+  document: security.strict(),
+});`,
   );
   await writeFile(
-    join(routesDir, "@policy.ts"),
-    'export const policy = { access: { public: true } };',
+    join(routesDir, "@not-found.tsx"),
+    "export default function NotFound() { return null; }",
   );
   await writeFile(
     join(routesDir, "index.tsx"),
