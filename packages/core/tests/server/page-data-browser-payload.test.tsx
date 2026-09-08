@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createRequestHandler,
+  defineRoutePolicy,
   json,
   mutation,
   MUTATION_REQUEST_HEADER,
@@ -53,8 +54,16 @@ function PublicAccountView({ data }: RouteProps<string, PublicAccount>) {
   return <main>{data.displayName}</main>;
 }
 
+// Demiurge denies a route that inherits no access declaration. These tests
+// examine the browser payload, not authorization, so each route is public.
 function routeModule(module: RouteModule) {
-  return vi.fn(async () => module);
+  return vi.fn(async () => ({
+    ...module,
+    policy: defineRoutePolicy({
+      access: { public: true },
+      ...module.policy,
+    }),
+  }));
 }
 
 describe("page data is the browser payload", () => {
