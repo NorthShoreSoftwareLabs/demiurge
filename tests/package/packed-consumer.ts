@@ -530,7 +530,7 @@ try {
     join(scratch, "src", "routes", "@policy.ts"),
     [
       `import { defineRoutePolicy, security } from "@demiurgejs/core";`,
-      `export const policy = defineRoutePolicy({ document: security.strict() });`,
+      `export const policy = defineRoutePolicy({ access: { public: true }, document: security.strict() });`,
     ].join("\n"),
   );
   writeFileSync(
@@ -597,7 +597,7 @@ try {
     join(scratch, "src", "routes", "@policy.ts"),
     [
       `import { defineRoutePolicy, security } from "@demiurgejs/core";`,
-      `export const policy = defineRoutePolicy({ document: security.static() });`,
+      `export const policy = defineRoutePolicy({ access: { public: true }, document: security.static() });`,
     ].join("\n"),
   );
   writeFileSync(
