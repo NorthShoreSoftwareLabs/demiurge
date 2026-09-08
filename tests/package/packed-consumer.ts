@@ -748,6 +748,13 @@ try {
     const serverOnlyRoutesDir = join(serverOnlyScratch, "src", "routes");
     mkdirSync(serverOnlyRoutesDir, { recursive: true });
     writeFileSync(
+      join(serverOnlyRoutesDir, "@policy.ts"),
+      [
+        `import { defineRoutePolicy, security } from "@demiurgejs/core";`,
+        `export const policy = defineRoutePolicy({ access: { public: true }, document: security.strict() });`,
+      ].join("\n"),
+    );
+    writeFileSync(
       join(serverOnlyRoutesDir, "@not-found.tsx"),
       "export default function NotFound() { return null; }",
     );
