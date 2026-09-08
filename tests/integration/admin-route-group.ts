@@ -45,6 +45,21 @@ try {
     "settings redirect target",
   );
 
+  // The access declaration in `(admin)/@policy.ts` answers a direct request.
+  // The middleware redirect covers a browser document request only.
+  const dashboardDataResponse = await fetch(`${origin}/dashboard`, {
+    headers: { "x-demiurge-navigation": "data" },
+    redirect: "manual",
+  });
+  const dashboardDataBody = await dashboardDataResponse.text();
+
+  assertEqual(dashboardDataResponse.status, 403, "denied navigation data status");
+  assertEqual(
+    dashboardDataBody.includes("Demo operator"),
+    false,
+    "denied navigation data body",
+  );
+
   const invalidResponse = await fetch(`${origin}/login`, {
     body: new URLSearchParams({ password: "incorrect", username: "operator" }),
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -135,7 +150,7 @@ try {
   );
 
   const staleSessionResponse = await fetch(`${origin}/dashboard`, {
-    headers: { cookie: sessionCookie },
+    headers: { accept: "text/html", cookie: sessionCookie },
     redirect: "manual",
   });
   const staleSessionBody = await staleSessionResponse.text();
@@ -144,6 +159,17 @@ try {
     staleSessionResponse.status,
     302,
     `logged-out session status (${staleSessionBody || "empty body"})`,
+  );
+
+  const staleSessionDataResponse = await fetch(`${origin}/dashboard`, {
+    headers: { cookie: sessionCookie, "x-demiurge-navigation": "data" },
+    redirect: "manual",
+  });
+
+  assertEqual(
+    staleSessionDataResponse.status,
+    403,
+    "logged-out navigation data status",
   );
 
   console.log("admin route group probe passed");

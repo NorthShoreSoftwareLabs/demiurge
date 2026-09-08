@@ -17,8 +17,14 @@ function NotFound() {
   return <main>Localized missing page</main>;
 }
 
+// Each route needs an inherited access declaration, because the request
+// pipeline denies a route that declares none. A test that does not examine
+// authorization declares public access here.
 function routeModule(module: RouteModule) {
-  return async () => module;
+  return async () => ({
+    ...module,
+    policy: { access: { public: true }, ...module.policy },
+  });
 }
 
 function handler() {

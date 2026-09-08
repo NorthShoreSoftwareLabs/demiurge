@@ -21,7 +21,7 @@ export const middleware = async ({ next }) => await next();`,
   await writeFile(
     join(routesDir, "@policy.ts"),
     `await Promise.resolve();
-export const policy = {};`,
+export const policy = { access: { public: true } };`,
   );
   await writeFile(
     join(routesDir, "index.tsx"),

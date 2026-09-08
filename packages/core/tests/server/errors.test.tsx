@@ -34,8 +34,14 @@ function BrokenError(_props: RouteErrorProps): never {
   throw new Error("The error page is broken too.");
 }
 
+// Each route needs an inherited access declaration, because the request
+// pipeline denies a route that declares none. A test that does not examine
+// authorization declares public access here.
 function routeModule(module: RouteModule) {
-  return vi.fn(async () => module);
+  return vi.fn(async () => ({
+    ...module,
+    policy: { access: { public: true }, ...module.policy },
+  }));
 }
 
 function throwingModule(message: string) {

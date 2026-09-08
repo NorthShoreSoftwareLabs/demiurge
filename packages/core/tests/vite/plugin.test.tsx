@@ -93,8 +93,14 @@ type PluginHarness = {
   resolveId?: (id: string) => string | null;
 };
 
+// Each route needs an inherited access declaration, because the request
+// pipeline denies a route that declares none. A test that does not examine
+// authorization declares public access here.
 function routeModule(module: RouteModule) {
-  return vi.fn(async () => module);
+  return vi.fn(async () => ({
+    ...module,
+    policy: { access: { public: true }, ...module.policy },
+  }));
 }
 
 describe("Vite plugin dev request handling", () => {
@@ -728,7 +734,10 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     await writeFile(join(routesDir, "api", "health.tsx"), "export {}");
 
     const server = {
-      ssrLoadModule: vi.fn(async () => ({ GET: json({ ok: true }) })),
+      ssrLoadModule: vi.fn(async () => ({
+        GET: json({ ok: true }),
+        policy: { access: { public: true } },
+      })),
     };
 
     const routes = await unstable_createDevRouteImporters(
@@ -787,7 +796,10 @@ export const GET = page({ data: () => secret, view: () => secret });`;
       middlewares: {
         use: middleware.use,
       },
-      ssrLoadModule: vi.fn(async () => ({ GET: json({ ok: true }) })),
+      ssrLoadModule: vi.fn(async () => ({
+        GET: json({ ok: true }),
+        policy: { access: { public: true } },
+      })),
       watcher,
     };
 
@@ -846,6 +858,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
 
         return {
           GET: page(View),
+          policy: { access: { public: true } },
           links: defineLinks(({ search }) =>
             search.get("hero") === "true"
               ? [preload("/hero.avif", { as: "image" })]
@@ -943,6 +956,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
         file.endsWith("@policy.ts")
           ? {
             policy: defineRoutePolicy({
+              access: { public: true },
               document: {
                 csp: {
                   defaultSrc: ["'self'"],
@@ -1036,6 +1050,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
             </main>
           ),
         }),
+        policy: { access: { public: true } },
       })),
       transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
       watcher: createWatcherHarness(),
@@ -1097,6 +1112,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
           render: { mode: "streaming" },
           view: () => <main>Streaming dev</main>,
         }),
+        policy: { access: { public: true } },
       })),
       transformIndexHtml,
       watcher: createWatcherHarness(),
@@ -1185,6 +1201,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
           data: async () => ({ message: "Hello from the server" }),
           view: DevPage,
         }),
+        policy: { access: { public: true } },
       })),
       transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
       watcher: createWatcherHarness(),
@@ -1231,6 +1248,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
           data: async () => ({ message: "loader payload" }),
           view: DevPage,
         }),
+        policy: { access: { public: true } },
       })),
       transformIndexHtml: vi.fn(async (_url: string, html: string) => html),
       watcher: createWatcherHarness(),
@@ -1317,6 +1335,7 @@ export const GET = page({ data: () => secret, view: () => secret });`;
           body: await request.text(),
           header: request.headers.get("x-demo"),
         })),
+        policy: { access: { public: true } },
       })),
       watcher: createWatcherHarness(),
     };
@@ -1353,7 +1372,10 @@ export const GET = page({ data: () => secret, view: () => secret });`;
       middlewares: {
         use: middleware.use,
       },
-      ssrLoadModule: vi.fn(async () => ({ GET: json({ ok: true }) })),
+      ssrLoadModule: vi.fn(async () => ({
+        GET: json({ ok: true }),
+        policy: { access: { public: true } },
+      })),
       watcher: createWatcherHarness(),
     };
 
@@ -1412,6 +1434,10 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     const warn = vi.fn();
 
     await mkdir(routesDir, { recursive: true });
+    await writeFile(
+      join(routesDir, "@policy.ts"),
+      'export const policy = { access: { public: true } };',
+    );
     await writeFile(
       join(routesDir, "api.ts"),
       `import { json } from "@demiurgejs/core";
@@ -2273,6 +2299,7 @@ export const GET = json(() => db.widgets.page(2));
   it("fails buildStart for invalid literal route policy", async () => {
     const root = await scaffold({
       "@not-found.tsx": "export default function NotFound() { return null; }",
+      "@policy.ts": 'export const policy = { access: { public: true } };',
       "api.ts": `
 import { json } from "@demiurgejs/core";
 export const GET = json({}, {
@@ -2291,6 +2318,7 @@ export const GET = json({}, {
   it("reports the same policy finding in development and build", async () => {
     const root = await scaffold({
       "@not-found.tsx": "export default function NotFound() { return null; }",
+      "@policy.ts": 'export const policy = { access: { public: true } };',
       "api.ts": `
 import { json } from "@demiurgejs/core";
 export const GET = json({}, {

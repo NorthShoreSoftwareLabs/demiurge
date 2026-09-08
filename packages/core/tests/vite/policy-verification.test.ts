@@ -12,10 +12,17 @@ const pageRouteSource = `
 import { page } from "@demiurgejs/core";
 export const GET = page(() => null);`;
 
+// The build denies a route that inherits no access declaration. A fixture
+// that does not examine access gets a public declaration at the root.
+const publicAccessPolicy = "export const policy = { access: { public: true } };";
+
 async function createRouteTree(files: Record<string, string>) {
   const root = await mkdtemp(join(tmpdir(), "demiurge-policy-tree-"));
+  const tree = "@policy.ts" in files
+    ? files
+    : { "@policy.ts": publicAccessPolicy, ...files };
 
-  for (const [name, source] of Object.entries(files)) {
+  for (const [name, source] of Object.entries(tree)) {
     const file = join(root, "routes", name);
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, source);
@@ -194,6 +201,7 @@ export const GET = json({}, {
     await import("node:fs/promises").then((fs) =>
       fs.mkdir(routesDir, { recursive: true })
     );
+    await writeFile(join(routesDir, "@policy.ts"), publicAccessPolicy);
     await writeFile(join(routesDir, "api.ts"), `
 import { json } from "@demiurgejs/core";
 export const GET = json({}, {
@@ -216,6 +224,7 @@ export const GET = json({}, {
       "@policy.ts": `
 import { defineRoutePolicy } from "@demiurgejs/core";
 export const policy = defineRoutePolicy({
+  access: { public: true },
   security: { request: { allowedMethods: ["GET"] } },
 });`,
     });
@@ -237,7 +246,10 @@ export const policy = defineRoutePolicy({
     const root = await createRouteTree({
       "@policy.ts": `
 import { defineRoutePolicy, security } from "@demiurgejs/core";
-export const policy = defineRoutePolicy({ document: security.strict() });`,
+export const policy = defineRoutePolicy({
+  access: { public: true },
+  document: security.strict(),
+});`,
       "blog/index.tsx": pageRouteSource,
     });
 
@@ -264,7 +276,8 @@ export const policy = { document: { headers: { contentTypeOptions: "nosniff" } }
 
   it("accepts an inherited policy that explicitly disables CSP", async () => {
     const root = await createRouteTree({
-      "@policy.ts": `export const policy = { document: { csp: false } };`,
+      "@policy.ts":
+        `export const policy = { access: { public: true }, document: { csp: false } };`,
       "index.tsx": pageRouteSource,
     });
 
@@ -277,7 +290,7 @@ export const policy = { document: { headers: { contentTypeOptions: "nosniff" } }
     const root = await createRouteTree({
       "@policy.ts": `
 import { security } from "@demiurgejs/core";
-export const policy = { document: security.strict() };`,
+export const policy = { access: { public: true }, document: security.strict() };`,
       "admin/@policy.ts": `
 export const policy = { document: { headers: { contentTypeOptions: "nosniff" } } };`,
       "admin/index.tsx": pageRouteSource,
@@ -429,6 +442,90 @@ export const policy = defineRoutePolicy(createPolicy());`,
     await expect(
       unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
     ).resolves.toEqual([]);
+  });
+
+  it("reports a route that inherits no access declaration", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `
+import { defineRoutePolicy, security } from "@demiurgejs/core";
+export const policy = defineRoutePolicy({ document: security.strict() });`,
+      "index.tsx": pageRouteSource,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, {
+      routesDir: "routes",
+    });
+
+    expect(findings).toContainEqual(
+      expect.objectContaining({
+        code: "access-declaration-missing",
+        file: join(root, "routes", "index.tsx"),
+        severity: "error",
+      }),
+    );
+  });
+
+  it("accepts a route that inherits an access declaration from a parent", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `
+import { defineRoutePolicy, security } from "@demiurgejs/core";
+export const policy = defineRoutePolicy({
+  access: { public: true },
+  document: security.strict(),
+});`,
+      "blog/index.tsx": pageRouteSource,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, {
+      routesDir: "routes",
+    });
+
+    expect(
+      findings.filter((finding) =>
+        finding.code === "access-declaration-missing"
+      ),
+    ).toEqual([]);
+  });
+
+  it("accepts a route that declares access with a hook", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `
+import { defineRoutePolicy, security } from "@demiurgejs/core";
+export const policy = defineRoutePolicy({
+  access: { authorize: ({ context }) => Boolean(context.principal) },
+  document: security.strict(),
+});`,
+      "index.tsx": pageRouteSource,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, {
+      routesDir: "routes",
+    });
+
+    expect(
+      findings.filter((finding) =>
+        finding.code === "access-declaration-missing"
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not report an access expression that the build cannot read", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `
+import { defineRoutePolicy } from "@demiurgejs/core";
+export const policy = defineRoutePolicy(createPolicy());`,
+      "index.tsx": pageRouteSource,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, {
+      routesDir: "routes",
+    });
+
+    expect(
+      findings.filter((finding) =>
+        finding.code === "access-declaration-missing"
+      ),
+    ).toEqual([]);
   });
 
   it("returns no findings when the routes directory does not exist", async () => {

@@ -512,6 +512,13 @@ try {
     ].join("\n"),
   );
   writeFileSync(
+    join(scratch, "src", "routes", "@policy.ts"),
+    [
+      `import { defineRoutePolicy } from "@demiurgejs/core";`,
+      `export const policy = defineRoutePolicy({ access: { public: true } });`,
+    ].join("\n"),
+  );
+  writeFileSync(
     join(scratch, "src", "routes", "@not-found.tsx"),
     [
       `export default function NotFound({ pathname }: { pathname: string }) {`,
@@ -740,6 +747,13 @@ try {
 
     const serverOnlyRoutesDir = join(serverOnlyScratch, "src", "routes");
     mkdirSync(serverOnlyRoutesDir, { recursive: true });
+    writeFileSync(
+      join(serverOnlyRoutesDir, "@policy.ts"),
+      [
+        `import { defineRoutePolicy, security } from "@demiurgejs/core";`,
+        `export const policy = defineRoutePolicy({ access: { public: true }, document: security.strict() });`,
+      ].join("\n"),
+    );
     writeFileSync(
       join(serverOnlyRoutesDir, "@not-found.tsx"),
       "export default function NotFound() { return null; }",

@@ -44,6 +44,10 @@ describe("typed middleware request context", () => {
       });
     const handler = createRequestHandler({
       routes: {
+        // The pipeline denies a route with no inherited access declaration.
+        "./routes/@policy.ts": async () => ({
+          policy: { access: { public: true } },
+        }),
         "./routes/api/@middleware.ts": async () => ({ middleware }),
         "./routes/api/profile.tsx": async () => ({
           GET: json<
@@ -72,6 +76,10 @@ describe("typed middleware request context", () => {
     });
     const handler = createRequestHandler({
       routes: {
+        // The pipeline denies a route with no inherited access declaration.
+        "./routes/@policy.ts": async () => ({
+          policy: { access: { public: true } },
+        }),
         "./routes/@middleware.ts": async () => ({ middleware: root }),
         "./routes/admin/@middleware.ts": async () => ({ middleware: admin }),
         "./routes/admin/index.tsx": async () => ({
@@ -113,6 +121,10 @@ describe("typed middleware request context", () => {
     );
     const handler = createRequestHandler({
       routes: {
+        // The pipeline denies a route with no inherited access declaration.
+        "./routes/@policy.ts": async () => ({
+          policy: { access: { public: true } },
+        }),
         "./routes/@middleware.ts": async () => ({ middleware }),
         "./routes/index.tsx": async () => ({
           GET: page<"/", { id: string }>({

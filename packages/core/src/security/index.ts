@@ -3,6 +3,13 @@ export {
   createSecurityAudit,
 } from "./audit";
 export {
+  authorizeRoute,
+  defineAuthorization,
+  mergeRouteAccess,
+  permitsRequest,
+  resolveRouteAccess,
+} from "./authorization";
+export {
   applyCorsHeaders,
   createCorsHeaders,
   createCorsPreflightResponse,
@@ -126,6 +133,9 @@ export {
   enforceWebSocketOrigin,
 } from "./websocket";
 export type {
+  AuthorizationDecision,
+  AuthorizationDenial,
+  AuthorizationDenialStatus,
   ContentSecurityPolicy,
   CorsPolicy,
   CorsRequestContext,
@@ -153,7 +163,14 @@ export type {
   SecurityAuditFinding,
   SecurityAuditOptions,
   ScriptDependencyAuditOptions,
+  MergedRoutePolicy,
   RequestSecurityPolicy,
+  ResolvedRouteAccess,
+  RouteAccessException,
+  RouteAccessPolicy,
+  RouteAccessSource,
+  RouteAuthorizationEntry,
+  RouteAuthorizationHook,
   RoutePolicy,
   RouteSecurityNeeds,
   RouteSecurityPolicy,

@@ -25,7 +25,7 @@ import { loadInheritedRoutePolicy } from "../server";
 import {
   createSecurityAudit,
   type CorsPolicy,
-  type RoutePolicy,
+  type MergedRoutePolicy,
   type SecurityAudit,
   type SecurityAuditFinding,
 } from "../security";
@@ -83,7 +83,7 @@ export type RouteAudit = {
   method: HttpMethod;
   nonce?: string;
   pathname: string;
-  policy: RoutePolicy;
+  policy: MergedRoutePolicy;
   route?: RouteAuditRoute;
   scripts: RouteAuditScript[];
 };
@@ -214,7 +214,7 @@ function finishRouteAudit(input: {
   metadata?: ResolvedMetadata;
   method: HttpMethod;
   pathname: string;
-  policy: RoutePolicy;
+  policy: MergedRoutePolicy;
   request: Request;
   route?: RouteAuditRoute;
   scripts: readonly ScriptTag[];
@@ -240,6 +240,9 @@ function finishRouteAudit(input: {
   const audit = createSecurityAudit({
     document: document ? { ...auditOptions, scripts } : undefined,
     route: {
+      // A path that matches no route file has no access declaration to
+      // report, so the audit says nothing about its authorization.
+      access: input.kind === "unmatched" ? undefined : input.policy.access,
       cors: input.cors,
       method: input.method,
       security: input.policy.security,
