@@ -530,6 +530,33 @@ carries the wider proposal's open decisions and later consumers.
 configuration and secrets before request handling begins. Keep secrets on the
 server and pass only deliberate public values into document or browser data.
 
+## Server-only module boundaries
+
+Add `import "@demiurgejs/core/server-only";` to a module that must never enter
+a browser build. The build fails when a browser bundle reaches the module,
+through a direct import, a transitive import, a re-export, or a dynamic
+import. The diagnostic names the module and the complete import path from the
+client entry.
+
+The bare `server-only` specifier is an equivalent marker. An application that
+migrates from the community package of the same name keeps the same
+protection.
+
+The development server applies the same rule. The server fails as soon as the
+browser requests a module that carries the marker. The server names the
+module. It cannot give the import path, because it has not built the client
+graph yet.
+
+A server entry, an SSR transform, and a route module loaded only on the
+server keep working. Reach the marked module through `@middleware.ts`,
+`@policy.ts`, or a page route `data` function. The build then keeps that
+module off the browser bundle without a failure.
+
+This boundary complements the environment boundary above. The environment
+boundary catches a server variable that client code reads. The server-only
+boundary catches an entire module that client code must never load, whether
+or not the module reads a declared variable.
+
 ## Cross-origin isolation
 
 `security.crossOriginIsolated()` configures COOP, COEP, and CORP for features
