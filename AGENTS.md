@@ -96,6 +96,38 @@ writing standard. Make the text around these items compliant.
 Run `pnpm lint:writing` after you change prose. The check finds objective
 violations. You must also review terminology, meaning, and active voice.
 
+### Register
+
+The controlled vocabulary above does not stop prose from reading as machine
+output. These rules cover the register that ASD-STE100 alone does not.
+
+- Vary the sentence opener. No more than 35 percent of the sentences in a file
+  start with "The", and no two-word opener starts more than 3 sentences.
+- State a claim directly. Write at most one antithesis for each file. An
+  antithesis is a construction such as "X, not Y", "A is not the same as B", or
+  "X instead of Y".
+- Give one example or none. Do not list several examples to illustrate one
+  point.
+- Do not write an em-dash in prose. A definition list can still separate a term
+  from its description.
+- Do not write a sentence that only sounds insightful. Cut a clause that asserts
+  worth without adding a fact.
+
+### Comments
+
+Code is the source of truth for what the code intends. A comment goes out of
+date, and a reader then trusts a false statement.
+
+- Use a comment sparingly in `packages/core/src` and in `tooling`.
+- Prefer a clearer name or a smaller function over a comment that explains
+  unclear code.
+- Write a comment for something the code cannot state, such as an external
+  constraint or the reason for a decision.
+- A comment in `examples` or in a test is acceptable, because both teach a
+  reader.
+- A `TYPE-EVIDENCE:` comment is required by `eslint-plugin-type-evidence` and
+  does not fall under this rule.
+
 ## Commits
 
 Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/).
