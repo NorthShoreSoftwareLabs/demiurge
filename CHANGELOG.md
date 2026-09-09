@@ -8,8 +8,7 @@ status live in GitHub issues and milestones.
 - A typed security exception states a reason. The `csp` field, the `csrf`
   field, and a `maxBodySize` above the 1 MB default take an object with a
   `reason` and a `value`. One example is `csrf: { reason: "...", value: false }`.
-  The
-  compiler refuses a bare `csp: false` and a bare `csrf: false`. The build
+  The compiler refuses a bare `csp: false` and a bare `csrf: false`. The build
   refuses a raised `maxBodySize` that states no reason, and it reports
   `security-exception-reason-missing`. The audit reports the reason with the
   finding. **Migration**: give each exception a `reason` and move the accepted
