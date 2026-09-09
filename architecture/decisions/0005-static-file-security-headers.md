@@ -42,7 +42,7 @@ An application that serves a font or an image to another origin declares that
 exception in one typed place. The Node adapter, the preview server, and the
 Vercel output read the same rules.
 
-An application without a root document policy receives cache rules only. The
+Without a root document policy, an application receives cache rules only. The
 framework does not invent a policy the application did not declare.
 
 The Vercel translator accepts an arbitrary file pattern. It converts an

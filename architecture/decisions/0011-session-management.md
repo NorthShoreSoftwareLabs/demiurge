@@ -64,7 +64,7 @@ for a user, principal, role, or identity provider.
 A store does not return an expired record. It removes an expired record when
 practical.
 
-The manager treats a malformed record as unavailable. It does not send record
+To the manager, a malformed record is unavailable. It does not send record
 contents in a diagnostic.
 
 ### SessionStore contract
@@ -113,23 +113,23 @@ The request-scoped API supports these operations:
 - `commit()` returns the required `Set-Cookie` header values.
 
 Lifecycle operations fail closed after a store conflict or unavailable result.
-The manager does not emit a new cookie for a failed operation.
+After a failed operation, the manager emits no new cookie.
 
-The manager does not mutate a response automatically. The application adds the
-returned headers to its response.
+Nothing in the manager mutates a response automatically. The application adds
+the returned headers to its response.
 
 This rule keeps middleware, routes, redirects, and custom authentication
 libraries interoperable.
 
 ### Expiration defaults
 
-The default absolute lifetime is seven days. The default idle lifetime is 24
+The default absolute lifetime is seven days. Idle lifetime defaults to 24
 hours.
 
 The absolute expiration never moves. A valid access can extend idle expiration
 without exceeding absolute expiration.
 
-The manager rotates a session after authentication privilege changes. The
+After authentication privilege changes, the manager rotates a session. The
 application calls `rotate()` after login, logout, or a privilege elevation.
 
 The default renewal threshold is one quarter of the idle lifetime. The manager
@@ -143,8 +143,8 @@ option. Absolute expiration cannot be disabled.
 
 ### Fixation and replay protection
 
-The manager creates identifiers with a cryptographically secure random source.
-An application cannot supply a session identifier.
+For identifiers, the manager uses a cryptographically secure random source.
+No application can supply a session identifier.
 
 Rotation invalidates the previous identifier before the manager emits the new
 cookie. A store cannot implement rotation as an uncoordinated read and write.
@@ -192,8 +192,8 @@ and does not derive it from a short password.
 Authentication failure, unsupported versions, malformed data, and expired data
 all produce an unavailable session.
 
-The parser does not reveal which validation failed. The manager expires an
-invalid cookie on the next commit.
+The parser does not reveal which validation failed. On the next commit, the
+manager expires an invalid cookie.
 
 ### Static output
 
@@ -214,7 +214,7 @@ this limit.
 A multi-replica deployment uses a shared conforming store. Redis and KV
 integrations state their consistency and atomicity requirements.
 
-The manager does not infer deployment topology. Adapter configuration and
+Nothing in the manager infers deployment topology. Adapter configuration and
 deployment documentation identify when a process-local store is unsafe.
 
 A provider without atomic rotation cannot claim full SessionStore conformance.

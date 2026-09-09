@@ -51,10 +51,10 @@ pnpm add @demiurgejs/core@nightly
 ```
 
 Pin the exact nightly version in an application that must reproduce a build.
-The `nightly` dist-tag moves every time the workflow publishes.
+Every publish of the workflow moves the `nightly` dist-tag.
 
-Only `@demiurgejs/core` publishes to this channel. The `create-demiurge`
-scaffold publishes from signed version tags alone.
+Only `@demiurgejs/core` publishes to this channel. Signed version tags alone
+publish the `create-demiurge` scaffold.
 
 ### How the nightly workflow runs
 
@@ -152,9 +152,9 @@ v0.2.0-beta.1
 v0.2.0-rc.1
 ```
 
-The release workflow maps any semantic version containing a prerelease suffix
-to the `next` dist-tag. Prereleases run the same verification, packed-consumer,
-provenance, and GitHub Release steps as stable versions. Consumers opt in with:
+A prerelease suffix in the semantic version maps that release to the `next`
+dist-tag. Prereleases run the same verification, packed-consumer, provenance,
+and GitHub Release steps as stable versions. Consumers opt in with:
 
 ```sh
 pnpm add @demiurgejs/core@next
@@ -174,8 +174,8 @@ The scaffold carries the framework version because its template pins
 framework release that does not exist. `pnpm test:scaffold` asserts both the
 shared version and the template pin, so a forgotten bump fails the gate.
 
-Set both versions and the template pin together in the release commit. The
-release workflow checks the shared version again before it publishes.
+Set both versions and the template pin together in the release commit. Before
+it publishes, the workflow checks the shared version again.
 
 The scaffold publishes in its own job after the framework release. A scaffold
 registry failure therefore cannot withhold the framework artifact or the GitHub

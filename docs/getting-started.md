@@ -10,9 +10,9 @@ Run the scaffold and select a page or API template:
 npm create demiurge
 ```
 
-The page template includes the root layout, fallback documents, policy, styles,
-and the framework configuration file. The API template does not include
-page-route files.
+Selecting the page template adds the root layout, fallback documents, policy,
+styles, and the framework configuration file. The API template does not
+include page-route files.
 
 The scaffold carries the framework version. A prerelease scaffold publishes
 under the `next` tag:
@@ -42,8 +42,8 @@ export default defineConfig({
 });
 ```
 
-The file is required. A framework command fails when the file is absent, and
-the diagnostic gives the expected path. The
+Demiurge requires the file. A framework command fails when the file is absent,
+and the diagnostic gives the expected path. The
 [configuration guide](./guides/configuration.md) describes each boundary.
 
 ## Add the first route

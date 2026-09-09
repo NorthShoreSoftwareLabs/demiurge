@@ -23,7 +23,7 @@ document scanning would find nothing.
 
 ## Decision
 
-A font set is a declaration rather than a render result. The application
+A font set is a declaration. The application
 declares it with `defineFonts` and passes the same value to the Vite plugin,
 the way an image policy already travels. The build reads the declaration from
 the plugin API and publishes every font in it.
@@ -34,8 +34,8 @@ sharing state. That is the property ADR 0007 protects, reached by a different
 route.
 
 The build writes each font file and one `@font-face` stylesheet under
-`/_demiurge/font`. A stylesheet file rather than an inline `style` element
-keeps `style-src 'self'` intact.
+`/_demiurge/font`. A stylesheet file keeps `style-src 'self'` intact, and an
+inline `style` element would break it.
 
 `fontLinks` returns the stylesheet link and one preload for each font. It
 returns plain `LinkTag` values, so a font uses the resource hint primitive that
@@ -62,5 +62,5 @@ output therefore uses a revalidated cache policy, matching image variants.
 family, and it is the honest cost of never contacting the font host at render
 time.
 
-No font component exists. A font governs the whole document rather than one
+No font component exists. A font governs the whole document and never one
 element, so `links` carries it and the public API gains no second spelling.

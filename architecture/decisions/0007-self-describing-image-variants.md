@@ -16,8 +16,8 @@ string is provider-specific. ADR 0004 already keeps provider-specific output
 inside the Vercel adapter, so a second provider-specific rule would spread that
 boundary.
 
-The build must also learn which variants an application asked for. The
-application renders through the framework, so the build could record each plan
+The build must also learn which variants an application asked for. Because
+the application renders through the framework, the build could record each plan
 in module state. That fails in practice. The Vite SSR build inlines
 `@demiurgejs/core` into the application server bundle. The rendered planner and
 the build planner are then different modules with different state.
@@ -50,7 +50,7 @@ adapter gains no image-specific route.
 
 The build emits only the variants that a rendered document references. A
 variant that reaches a client only through a stylesheet or a script is not
-emitted. The application must reference such a variant from a document.
+emitted. An application must reference such a variant from a document.
 
 A variant path is readable and reversible, which makes the build output easy to
 audit. It is not content-addressed, so a replaced source file keeps its URL.

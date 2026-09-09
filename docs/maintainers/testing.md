@@ -26,9 +26,9 @@ Each behavior should be tested at the layer where it can fail.
 | Packed consumer | `tests/package` | Tarball contents, declarations, entry points, and clean installation |
 | Repository tooling | `tests/tooling` | Release metadata rules, pull request title rules, and the type-evidence ESLint rules |
 
-Unit tests live beside the package rather than in the repository-level `tests`
-directory. The repository-level tests deliberately exercise built examples or a
-packed artifact and therefore cross package boundaries.
+Unit tests live beside the package they test. The repository-level `tests`
+directory deliberately exercises built examples or a packed artifact and
+therefore crosses package boundaries.
 
 ## Adapter contract suite
 

@@ -1,9 +1,9 @@
 # Framework Vision
 
-Demiurge is a React framework built from first principles. The goal is not to
-copy all features of an existing framework. Its primitives give one model for
-pages, APIs, redirects, realtime connections, streams, server rendering, and
-strict security policies.
+Demiurge is a React framework built from first principles. Copying the complete
+feature set of an existing framework is a non-goal. Its primitives give one
+model for pages, APIs, redirects, realtime connections, streams, server
+rendering, and strict security policies.
 
 ## Core Principles
 
@@ -51,8 +51,7 @@ Here, `@policy.ts` is inherited framework policy, while `policy.ts` is the real
 
 ## Rendering Philosophy
 
-React rendering should be modeled as a set of traits instead of one exclusive
-mode:
+A set of traits models React rendering better than one exclusive mode:
 
 ```ts
 react({
@@ -118,7 +117,7 @@ Development applies rule 3 to runtime-only controls. A build cannot verify a
 browser sink. Development can show a violation while the developer writes the
 code. This result meets the same goal at a later stage.
 
-Document contributions such as metadata, scripts, links, preloads, and styles
+Metadata, scripts, links, preloads, and styles are document contributions that
 also belong to this pipeline. They should be collected, deduped, ordered, and
-checked against the final security policy instead of being emitted as arbitrary
-raw head markup.
+checked against the final security policy. The framework must never emit them as
+arbitrary raw head markup.

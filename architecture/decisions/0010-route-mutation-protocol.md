@@ -9,8 +9,8 @@ Accepted.
 Tracking: [GitHub issue #307](https://github.com/NorthShoreSoftwareLabs/demiurge/issues/307)
 
 Demiurge routes can use `action(...)` to parse input, run a handler, and
-invalidate cache tags. The browser router can enhance forms and refresh route
-data after a successful request.
+invalidate cache tags. After a successful request, the browser router can
+enhance forms and refresh route data.
 
 React also uses the term Action for client functions. The shared term gives two
 different framework boundaries one name.
@@ -29,7 +29,7 @@ capability under an unsafe HTTP method.
 The supporting server API uses the `Mutation` prefix. The helper object is
 `mutationInput`.
 
-The browser result type is `MutationResult`. Browser submission state uses
+`MutationResult` is the browser result type. Browser submission state uses
 `MutationNavigationState` until React form state replaces that compatibility
 API.
 
@@ -40,8 +40,8 @@ and path values.
 The generated function sends `FormData` to the HTTP route. It returns a
 `MutationResult` and accepts the signature that `useActionState` requires.
 
-The browser bundle contains the route identity and input types. It does not
-contain the server handler, security policy, or invalidation declaration.
+Route identity and input types travel in the browser bundle. That bundle does
+not contain the server handler, security policy, or invalidation declaration.
 
 ### Migration before version 0.2.0
 
@@ -76,7 +76,7 @@ No released client uses the earlier nightly identifiers.
 The HTTP route is the authoritative mutation boundary. Native forms and direct
 HTTP clients can call it without browser JavaScript.
 
-An enhanced form keeps a real HTTP URL and native method. The browser enhancement
+An enhanced form keeps a real HTTP URL and native method. Browser enhancement
 sends the same successful controls, submitter value, and encoding.
 
 The browser enhances only a supported, same-origin, unsafe submission with the
@@ -111,7 +111,7 @@ its body into a structured application result.
 ### Invalidation, refresh, and redirect order
 
 The server resolves declared invalidation only after the mutation commits
-successfully. The browser cannot supply or change an invalidation declaration.
+successfully. No browser can supply or change an invalidation declaration.
 
 The server completes required invalidation before it completes the mutation
 response. An invalidation failure uses the mutation failure path.
@@ -128,8 +128,8 @@ destination and does not refresh the previous route.
 A redirect takes effect after required server invalidation completes. Permanent
 redirects replace history. Other redirects push history.
 
-The browser accepts an enhanced redirect only for the current origin and
-protocol. A rejected redirect becomes a mutation failure.
+For an enhanced redirect, the browser requires the current origin and protocol.
+A rejected redirect becomes a mutation failure.
 
 ### Cancellation and stale work
 
