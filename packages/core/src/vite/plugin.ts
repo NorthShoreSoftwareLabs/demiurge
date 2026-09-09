@@ -66,6 +66,7 @@ import {
   auditRouteAccessCoverage,
   declaresPageRoute,
   inspectRouteFile,
+  type RouteFileInspection,
   type StaticPolicyFinding,
 } from "./policy-verification";
 import {
@@ -1859,13 +1860,32 @@ async function mapWithConcurrency<Item, Result>(
   return results;
 }
 
-export async function verifyRoutePolicies(
+/** The result of one static pass over the route tree. */
+export type RoutePolicyInspection = {
+  /** Every finding of the pass, in a stable order. */
+  findings: StaticPolicyFinding[];
+  /** The inspection of each route file, in the order that the walk found. */
+  inspections: RouteFileInspection[];
+  /** The absolute path of the route directory. */
+  routesDir: string;
+};
+
+/**
+ * Reads the route tree once and returns the findings and the inspections.
+ *
+ * The build verifier and the `demiurge inspect` command both call this
+ * function, so one pass gives one answer for the route tree.
+ */
+export async function inspectRoutePolicies(
   root: string,
   options: DemiurgeVitePluginOptions = {},
-) {
+): Promise<RoutePolicyInspection> {
   const routesDir = resolve(root, options.routesDir ?? "src/routes");
 
-  if (!existsSync(routesDir)) return [];
+  if (!existsSync(routesDir)) {
+    return { findings: [], inspections: [], routesDir };
+  }
+
   const inspections = await mapWithConcurrency(
     await findRouteFiles(routesDir),
     policyVerificationConcurrency,
@@ -1877,11 +1897,20 @@ export async function verifyRoutePolicies(
     ...auditRouteAccessCoverage(routesDir, inspections),
   ];
 
-  return findings.sort((left, right) =>
+  findings.sort((left, right) =>
     left.file.localeCompare(right.file) ||
     (left.exportName ?? "").localeCompare(right.exportName ?? "") ||
     left.code.localeCompare(right.code)
   );
+
+  return { findings, inspections, routesDir };
+}
+
+export async function verifyRoutePolicies(
+  root: string,
+  options: DemiurgeVitePluginOptions = {},
+) {
+  return (await inspectRoutePolicies(root, options)).findings;
 }
 
 export function formatStaticPolicyFindings(findings: StaticPolicyFinding[]) {

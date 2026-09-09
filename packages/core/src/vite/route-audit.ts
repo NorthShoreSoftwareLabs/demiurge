@@ -30,6 +30,14 @@ import {
   type SecurityAuditFinding,
 } from "../security";
 import { createCspNonce, securityPolicyRequiresNonce } from "../security/policy";
+import { serializeInspectionReport } from "../inspect/redact";
+import type { InspectionResolution } from "../inspect/types";
+
+/**
+ * The version of the route report. ADR 0019 raises this integer when the
+ * framework removes a field or changes the meaning of a field.
+ */
+export const ROUTE_AUDIT_VERSION = 1;
 
 // The development server reserves this path. The name matches the image
 // optimizer path, so every framework endpoint keeps one prefix.
@@ -74,6 +82,27 @@ export type RouteAuditRoute = {
   render?: PageRenderMode;
 };
 
+/** The named sections of the route report. */
+export type RouteAuditSection =
+  | "audit"
+  | "cacheReads"
+  | "metadata"
+  | "policy"
+  | "route"
+  | "scripts";
+
+// The route report answers for one request. The route section and the policy
+// section come from the route tree, so a build knows them. Each other section
+// needs the request.
+const routeAuditResolutions: Record<RouteAuditSection, InspectionResolution> = {
+  audit: "request",
+  cacheReads: "request",
+  metadata: "request",
+  policy: "static",
+  route: "static",
+  scripts: "request",
+};
+
 export type RouteAudit = {
   audit: SecurityAudit;
   cacheControl?: string;
@@ -84,8 +113,12 @@ export type RouteAudit = {
   nonce?: string;
   pathname: string;
   policy: MergedRoutePolicy;
+  /** The resolution of each section of the report. */
+  resolutions: Record<RouteAuditSection, InspectionResolution>;
   route?: RouteAuditRoute;
   scripts: RouteAuditScript[];
+  /** The version of this report shape. */
+  version: number;
 };
 
 export function isRouteAuditRequest(request: Request) {
@@ -106,7 +139,7 @@ export async function createRouteAuditResponse(
 
   return new Response(
     json
-      ? JSON.stringify(report, null, 2)
+      ? serializeInspectionReport(report)
       : renderRouteAuditDocument(report),
     {
       headers: {
@@ -261,6 +294,7 @@ function finishRouteAudit(input: {
     nonce,
     pathname: input.pathname,
     policy: input.policy,
+    resolutions: routeAuditResolutions,
     route: input.route,
     scripts: scripts.map((script) => ({
       // One audit for each script gives the status of that script alone. The
@@ -274,6 +308,7 @@ function finishRouteAudit(input: {
       src: script.src,
       strategy: script.strategy,
     })),
+    version: ROUTE_AUDIT_VERSION,
   };
 }
 

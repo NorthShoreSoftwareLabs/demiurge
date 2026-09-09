@@ -60,6 +60,8 @@ export type RouteFileInspection = {
   declaresPageRoute: boolean;
   file: string;
   findings: StaticPolicyFinding[];
+  /** The HTTP methods that the file exports, in a stable order. */
+  methods: HttpMethod[];
 };
 
 export type DocumentCspState = "present" | "false" | "absent" | "unknown";
@@ -127,6 +129,9 @@ export async function inspectRouteFile(
     declaresPageRoute: !attached && declaresPageRoute(source),
     file,
     findings: validateExtractedRouteModule(extracted, file),
+    methods: attached
+      ? []
+      : httpMethods.filter((method) => extracted.declaredMethods.has(method)),
   };
 }
 

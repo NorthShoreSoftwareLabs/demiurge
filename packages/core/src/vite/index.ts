@@ -46,6 +46,7 @@ export {
   createRouteAudit as unstable_createRouteAudit,
   renderRouteAuditDocument as unstable_renderRouteAuditDocument,
   ROUTE_AUDIT_PATH as unstable_ROUTE_AUDIT_PATH,
+  ROUTE_AUDIT_VERSION as unstable_ROUTE_AUDIT_VERSION,
 } from "./route-audit";
 export {
   demiurge as unstable_demiurge,
@@ -54,9 +55,17 @@ export type {
   DemiurgeVitePluginApi as unstable_DemiurgeVitePluginApi,
   DemiurgeVitePluginOptions as unstable_DemiurgeVitePluginOptions,
 } from "./plugin";
+// ADR 0019: a type and the function that returns it carry the same prefix.
 export type {
-  RouteAudit,
-  RouteAuditCacheRead,
-  RouteAuditRoute,
-  RouteAuditScript,
+  RouteAudit as unstable_RouteAudit,
+  RouteAuditCacheRead as unstable_RouteAuditCacheRead,
+  RouteAuditRoute as unstable_RouteAuditRoute,
+  RouteAuditScript as unstable_RouteAuditScript,
+  RouteAuditSection as unstable_RouteAuditSection,
 } from "./route-audit";
+export {
+  inspectRoutePolicies as unstable_inspectRoutePolicies,
+} from "./plugin";
+export type {
+  RoutePolicyInspection as unstable_RoutePolicyInspection,
+} from "./plugin";

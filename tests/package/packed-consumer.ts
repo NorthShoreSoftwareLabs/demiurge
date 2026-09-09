@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -34,6 +34,20 @@ function run(command: string, args: string[], cwd: string) {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
+}
+
+function runForResult(command: string, args: string[], cwd: string) {
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  return {
+    status: result.status,
+    stderr: result.stderr ?? "",
+    stdout: result.stdout ?? "",
+  };
 }
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -565,6 +579,70 @@ try {
 
   run("node", [join(installedRoot, "bin", "demiurge.mjs"), "build"], scratch);
   run("pnpm", ["exec", "tsc", "--noEmit"], scratch);
+
+  // ADR 0019: the inspect command writes one JSON document to standard output.
+  // It writes a human summary to standard error, so a pipe gets the JSON alone.
+  const inspectResult = runForResult(
+    "node",
+    [join(installedRoot, "bin", "demiurge.mjs"), "inspect"],
+    scratch,
+  );
+  assert(
+    inspectResult.status === 0 || inspectResult.status === 1,
+    `The packed inspect command exited with ${inspectResult.status}.`,
+  );
+  const inspectReport = JSON.parse(inspectResult.stdout) as {
+    findings: Array<{ severity: string }>;
+    redactions: unknown[];
+    resolutions: Record<string, string>;
+    routes: Array<{ file: string }>;
+    routesDir: string;
+    version: number;
+  };
+  assert(inspectReport.version === 1, "The packed inspect report states no version.");
+  assert(
+    inspectReport.routesDir === "src/routes",
+    "The packed inspect report names the wrong route directory.",
+  );
+  assert(
+    inspectReport.resolutions.routes === "static" &&
+      inspectReport.resolutions.request === "request",
+    "The packed inspect report does not separate a static fact from a request fact.",
+  );
+  assert(
+    inspectReport.routes.length > 0,
+    "The packed inspect report describes no route file.",
+  );
+  assert(
+    Array.isArray(inspectReport.redactions),
+    "The packed inspect report states no redaction section.",
+  );
+  const inspectErrors = inspectReport.findings.filter(
+    (finding) => finding.severity === "error",
+  ).length;
+  assert(
+    inspectResult.status === (inspectErrors > 0 ? 1 : 0),
+    "The packed inspect command does not match its exit code to its findings.",
+  );
+  assert(
+    inspectResult.stderr.includes("Demiurge inspected"),
+    "The packed inspect command writes no summary to standard error.",
+  );
+
+  const invalidInspect = runForResult(
+    "node",
+    [join(installedRoot, "bin", "demiurge.mjs"), "inspect", "--verbose"],
+    scratch,
+  );
+  assert(
+    invalidInspect.status === 2,
+    `The packed inspect command accepted an invalid argument with ${invalidInspect.status}.`,
+  );
+  assert(
+    (JSON.parse(invalidInspect.stdout) as { code: string }).code ===
+      "invalid-argument",
+    "The packed inspect command states no problem code for an invalid argument.",
+  );
   const packedBrowserJavaScript = readdirSync(
     join(scratch, "dist", "assets"),
   )
