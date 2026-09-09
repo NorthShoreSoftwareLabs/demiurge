@@ -165,7 +165,7 @@ isolation, and environment schema validation. See the
 behavior.
 
 Streaming SSR keeps the strict policy. React's flush payloads carry the request
-nonce rather than escaping through an inline-script exception.
+nonce, so streamed markup never needs an inline-script exception.
 
 ## Data and caching
 
@@ -188,8 +188,8 @@ export const GET = page({
 ```
 
 Scopes are `build`, `public`, `private`, `request`, and `none`. Stale-while-
-revalidate coordinates one refresh across replicas rather than letting every
-request start its own. Custom stores implement a published contract, and
+revalidate coordinates one refresh across replicas, so no single request
+starts its own. Custom stores implement a published contract, and
 `@demiurgejs/core/data/testing` verifies an implementation against it.
 
 ## Documents
@@ -248,9 +248,9 @@ depends on a fixed nonce.
 ### Edge
 
 `@demiurgejs/core/edge` runs the same request pipeline on a Web-platform
-runtime. It streams through a Web `ReadableStream` and serves static assets from
-a bundled asset map instead of a filesystem. It also refuses to fall back to an
-in-memory cache or rate limit store:
+runtime. It streams through a Web `ReadableStream` and serves static assets
+from a bundled asset map, since the edge runtime has no filesystem. It also
+refuses to fall back to an in-memory cache or rate limit store:
 
 ```js
 import { createEdgeRequestHandler } from "@demiurgejs/core/edge";

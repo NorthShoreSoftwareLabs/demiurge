@@ -27,30 +27,31 @@ catalogs. Applications must also be able to replace the locale resolver.
 
 ### Ownership
 
-Demiurge owns locale identity when the identity changes framework output. It
-also owns routing integration, canonical redirects, and cache isolation rules.
+Demiurge owns locale identity when the identity changes framework output.
+Routing integration, canonical redirects, and cache isolation rules belong to
+Demiurge too.
 
-The application owns its supported locales, default locale, translations, and
-message loading. It also owns the locale preference interface.
+Supported locales, default locale, translations, and message loading belong to
+the application. It also owns the locale preference interface.
 
 Core does not define a translation function or a message catalog format.
 
 ### Locale identity
 
-An application declares a non-empty ordered set of supported locale identifiers.
-It also selects one supported identifier as the default locale.
+Each application declares a non-empty ordered set of supported locale
+identifiers. It also selects one supported identifier as the default locale.
 
 Each identifier is a canonical Unicode BCP 47 language tag. Configuration
 normalizes identifiers with the platform locale canonicalization algorithm.
 
-Configuration fails when an identifier is invalid. It also fails when two
-configured values have the same canonical form.
+Configuration fails when an identifier is invalid. Two configured values with
+the same canonical form also fail configuration.
 
 The canonical configured identifier is the framework locale identity. It is
 the value that routes, documents, metadata, static paths, and cache keys use.
 
-Language matching uses the application set only. The resolver does not create
-an unconfigured regional locale from a less-specific language match.
+Language matching uses the application set only. A less-specific language match
+never creates an unconfigured regional locale.
 
 The application can declare aliases for incoming URL labels and domain labels.
 An alias resolves to one supported identity. An alias is never an output locale.
@@ -63,7 +64,7 @@ for an explicit URL or domain value.
 An application binds each locale-aware page to a path prefix or a domain.
 Path and domain bindings can exist together for explicit migrations.
 
-An application can omit both bindings only when it supports one locale. It can
+Only an application that supports one locale can omit both bindings. It can
 also omit them for a route that explicitly declares locale-neutral output.
 
 Configuration fails when a locale-aware page supports multiple locales without
@@ -297,7 +298,7 @@ the preference cookie value or the complete `Accept-Language` header.
 The locale cookie is a preference, not an authentication value. Its default
 scope is `Path=/`, `SameSite=Lax`, `HttpOnly`, and `Secure` on secure origins.
 
-The default cookie is not available to browser JavaScript. A locale switcher
+Browser JavaScript cannot read the default cookie. A locale switcher
 navigates to an explicit locale URL or calls an application endpoint.
 
 An application can disable `HttpOnly` as an explicit security opt-out. The

@@ -12,7 +12,7 @@ A document navigation gives the browser a new document. The browser resets the
 focus context and exposes the new document title to assistive technology.
 Browser navigation replaces route content without these browser actions.
 
-The router can show loading, ready, not-found, and error content. A newer
+Demiurge routing can show loading, ready, not-found, and error content. A newer
 navigation can also cancel a pending navigation. Focus and announcements must
 describe only content that the router commits.
 
@@ -23,23 +23,24 @@ Criterion 4.1.3 requires software to expose applicable status messages without
 moving focus.
 
 ADR 0001 gives the application ownership of layouts, pages, fallbacks, and
-styles. It gives Demiurge ownership of the document and the React mount. The
-router therefore cannot select an application heading or landmark. It can
+styles. It gives Demiurge ownership of the document and the React mount.
+Because of that split, the router cannot select an application heading or
+landmark. It can
 supply an opt-in boundary that the application puts on an owned element.
 
 ## Decision
 
 ### Navigation states
 
-The router performs no accessibility transition during initial hydration. The
+During initial hydration, the router performs no accessibility transition. The
 server document and the browser already establish the initial context.
 
-The router performs no focus action while it shows loading content. It does not
+While it shows loading content, the router performs no focus action. It does not
 announce loading content by default. An application can put its own status
 semantics in an app-owned loading fallback.
 
-The router performs one accessibility transition after it commits ready,
-not-found, or error content. A render error is an error commit. The router must
+After it commits ready, not-found, or error content, the router performs one
+accessibility transition. A render error is an error commit. The router must
 wait until the final fallback commits before it performs the transition.
 
 A cancelled or superseded navigation performs no accessibility transition.
@@ -117,7 +118,7 @@ not-found commit uses the resolved document title. An error commit uses the
 resolved error-document title. If no new error title exists, it uses
 `Navigation failed`.
 
-The router does not use an assertive alert by default. An application error
+By default, the router does not use an assertive alert. An application error
 fallback can provide an alert when the error requires immediate attention.
 
 Automated tests verify that the region exists before navigation. They verify
@@ -127,18 +128,18 @@ tests record that result when a release needs that evidence.
 
 ### Hash navigation
 
-A change to only the URL fragment is not a route commit. The router does not
-move focus to the route boundary and does not announce the document title.
+A change to only the URL fragment is not a route commit. In that case, the
+router moves no focus to the route boundary and announces no document title.
 
 The browser owns fragment targeting. Demiurge preserves browser scrolling and
 focus behavior for a matching fragment. A missing or malformed fragment does
 not cause a route accessibility transition.
 
-A route commit with a fragment performs the route transition first. The router
-then applies fragment behavior instead of focusing the registered boundary. A
-matching fragment target gets browser fragment behavior. A missing or malformed
-target preserves focus. The router does not announce the route title because
-the fragment supplies the requested context.
+A route commit with a fragment performs the route transition first. Fragment
+behavior then applies, and the router leaves the registered boundary unfocused.
+A matching fragment target gets browser fragment behavior. A missing or
+malformed target preserves focus. Because the fragment supplies the requested
+context, the router announces no route title.
 
 History traversal uses the same fragment rules as link navigation. Scroll
 restoration can restore a saved position only when no fragment target applies.
@@ -166,7 +167,7 @@ The announcement override runs only for a final committed navigation. It does
 not run for hydration, loading, cancellation, or a hash-only change.
 
 The router catches an announcement callback error and skips the announcement.
-An application callback cannot break route rendering.
+No application callback can break route rendering.
 
 Native document navigation does not act on a registered boundary. The hook is
 a safe no-op without a browser router. Document navigation does not create the

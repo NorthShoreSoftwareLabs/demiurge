@@ -244,10 +244,9 @@ async function run() {
     // The /api/client-ip route is optional for this test. The request
     // itself might fail to connect, for example if the route genuinely
     // does not exist and the server tears down the socket. In that case,
-    // skip this test but still verify the core functionality works. An
-    // assertion thrown above, including the 500-status check, whose
-    // message happens to contain "route" — must always be rethrown
-    // rather than swallowed here.
+    // skip this test but still verify the core functionality works. Always
+    // rethrow an assertion thrown above, including the 500-status check,
+    // even when its message contains "route".
     if (error instanceof Error && error.message.startsWith("VM Node client-ip route returned")) {
       throw error;
     }

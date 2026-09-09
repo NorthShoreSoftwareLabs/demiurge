@@ -154,12 +154,12 @@ server-rendered form contains a real HTTP URL and the `post` method.
 After hydration, React submits the same `FormData` through the typed mutation
 client. React owns the pending state through `useFormStatus`.
 
-The router sends `X-Demiurge-Mutation: data;v=1` and accepts
+On the request, the router sends `X-Demiurge-Mutation: data;v=1` and accepts
 `application/vnd.demiurge.mutation+json;v=1`. A typed result has `version: 1` and
 one status: `success`, `invalid`, `redirect`, or `failed`.
 
-The `success` result can contain application data. The `invalid` result contains
-typed validation issues. The `failed` result does not contain application data.
+A `success` result can contain application data, an `invalid` result carries
+typed validation issues, and a `failed` result contains none.
 
 The mutation helper gives each redirect an explicit history operation. It uses
 `replace` for `301` and `308`. It uses `push` for `302`, `303`, and `307`.
@@ -230,8 +230,8 @@ If the refresh fails, the router renders the resolved route error boundary.
 The mutation can remain successful because its server commit already finished.
 
 An `invalid` or `failed` result does not refresh the route. A redirect takes
-precedence over refresh. The router does not refresh the previous route before
-it follows the redirect.
+precedence over refresh, so the router follows it without refreshing the
+previous route first.
 
 Cache invalidation and route refresh have different purposes. The `revalidate`
 option changes cached server authority. The `revalidateRoute` option retrieves
@@ -344,7 +344,7 @@ export const GET = page({
 ```
 
 Route data runs on the server. Browser navigation requests a typed server-data
-envelope instead of rerunning the function in the browser.
+envelope, never rerunning the function in the browser.
 
 ### Browser payload
 
@@ -529,8 +529,8 @@ The application must then make its own `tsconfig.json` include that path.
 `Link` accepts native anchor attributes except `href`. Use `to`, `path`,
 `search`, and `hash` to create the `href` value.
 
-The router intercepts an unmodified primary click on a same-origin HTTP link.
-The router does not intercept these links:
+An unmodified primary click on a same-origin HTTP link triggers router
+interception. It skips these links:
 
 - A link with `reloadDocument`.
 - A link with `download`.
@@ -569,14 +569,14 @@ prevents the default action, the router does not navigate.
 
 The server navigation router controls the scroll position after it commits a
 route. A new path scrolls to the top of the document. This applies to ready,
-not-found, and error content. The router waits for the final content before it
-changes the scroll position.
+not-found, and error content. Before it changes the scroll position, the
+router waits for the final content.
 
-The router saves each entry position in its history state. Back and forward
-navigation restores the saved position. The router preserves other values in
-the history state. It uses manual restoration while the router is mounted.
+In its history state, the router saves each entry position and preserves
+other values. Back and forward navigation restores the saved position. It uses
+manual restoration while the router is mounted.
 
-The router applies a URL fragment after it commits the route. A matching
+After it commits the route, the router applies a URL fragment. A matching
 fragment target receives normal browser fragment behavior. A missing target
 does not change the scroll position. A hash-only navigation does not load a
 route or apply the top position.
