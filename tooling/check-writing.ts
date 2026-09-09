@@ -135,9 +135,7 @@ function trackedFiles(...patterns: string[]) {
 }
 
 function changedLineNumbers(files: string[]) {
-  const base = execFileSync("git", ["merge-base", "HEAD", "origin/main"], {
-    encoding: "utf8",
-  }).trim();
+  const base = comparisonBase();
   const output = execFileSync("git", ["diff", "--unified=0", "--no-color", base, "--", ...files], {
     encoding: "utf8",
   });
@@ -170,6 +168,24 @@ function changedLineNumbers(files: string[]) {
   }
 
   return lines;
+}
+
+function comparisonBase() {
+  const parents = execFileSync("git", ["rev-list", "--parents", "-n", "1", "HEAD"], {
+    encoding: "utf8",
+  })
+    .trim()
+    .split(" ");
+
+  if (parents.length > 2) return parents[1];
+
+  try {
+    return execFileSync("git", ["merge-base", "HEAD", "origin/main"], {
+      encoding: "utf8",
+    }).trim();
+  } catch {
+    return "HEAD";
+  }
 }
 
 function changedParagraphs(paragraphs: Paragraph[]) {
