@@ -77,6 +77,29 @@ covers host allowlists, proxy trust, timeouts, and graceful shutdown.
 Vite is an optional peer dependency with `@vitejs/plugin-react`. A consumer
 that only runs the built output does not install them.
 
+## Export prefixes
+
+The package uses three levels for an export name. The two prefixes describe
+different properties, so one name can carry both.
+
+| Prefix | Promise |
+| --- | --- |
+| none | The name is stable. Demiurge changes it under the semantic version policy of the package. |
+| `unstable_` | The shape can change in any release. A consumer accepts that risk. |
+| `unsafe_` | Use of the export moves a framework guarantee to the application. The shape can still be stable. |
+
+A type and the function that returns it carry the same prefix. The function
+`unstable_createRouteAudit` therefore returns `unstable_RouteAudit`.
+
+A name leaves the `unstable_` prefix when it meets three conditions. An
+accepted decision record describes the interface. The report of the interface
+states a version. A packed-consumer test covers the interface.
+
+The `unsafe_` prefix does not describe maturity, so a name never leaves it.
+[ADR 0019](https://github.com/NorthShoreSoftwareLabs/demiurge/blob/main/architecture/decisions/0019-versioned-inspection-interfaces.md)
+records these levels.
+
+
 ## Support and license
 
 Report defects through [GitHub Issues](https://github.com/NorthShoreSoftwareLabs/demiurge/issues).

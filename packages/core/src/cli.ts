@@ -15,6 +15,13 @@ import {
 
 export { parseClientManifest } from "./manifest";
 export type { ClientBuildManifest } from "./manifest";
+export {
+  INSPECT_EXIT_FINDINGS,
+  INSPECT_EXIT_INVALID,
+  INSPECT_EXIT_OK,
+  runInspectCommand,
+} from "./inspect";
+export type { InspectCommandResult } from "./inspect";
 
 type CliEnvironment = Record<string, string | undefined>;
 
@@ -27,7 +34,7 @@ const DEFAULT_SERVER_OUT_DIR = "dist/server";
 const FRAMEWORK_SERVER_OUT_DIR = ".demiurge/server";
 
 export type CliOptions = {
-  command: "build" | "dev" | "help" | "preview";
+  command: "build" | "dev" | "help" | "inspect" | "preview";
   host: string;
   origin?: string;
   outDir?: string;
@@ -64,7 +71,10 @@ export function parseCliArguments(
       port: 4173,
     };
   }
-  if (command !== "build" && command !== "dev" && command !== "preview") {
+  if (
+    command !== "build" && command !== "dev" && command !== "inspect" &&
+    command !== "preview"
+  ) {
     throw new Error(`Unknown command: ${command}`);
   }
 
@@ -109,6 +119,7 @@ export const helpText = `Usage: demiurge <command> [options]
 Commands:
   dev                   Start the development server
   build                 Build production output
+  inspect               Write the static inspection report as JSON
   preview               Serve static output with its declared headers
 
 Options:
@@ -117,6 +128,10 @@ Options:
   --out-dir <directory> Set the client output directory (default: dist)
   --port <port>         Set the server port (dev: 5173, preview: 4173)
   -h, --help            Show this help
+
+The inspect command writes JSON to standard output and a summary to standard
+error. It exits with 0 for no error finding, 1 for at least one error finding,
+and 2 for an invalid argument or an unreadable configuration.
 
 Demiurge reads demiurge.config.ts from the project root.`;
 

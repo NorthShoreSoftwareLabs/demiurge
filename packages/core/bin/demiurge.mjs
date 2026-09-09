@@ -9,6 +9,7 @@ import {
   resolvePreviewOutputDirectory,
   runBuild,
   runDev,
+  runInspectCommand,
 } from "../dist/cli.js";
 import { loadDemiurgeConfig } from "../dist/config/index.js";
 import {
@@ -16,7 +17,22 @@ import {
 } from "../dist/static/index.js";
 
 async function main() {
-  const options = parseCliArguments(process.argv.slice(2), process.env);
+  const commandArguments = process.argv.slice(2);
+
+  // The inspect command owns its exit codes and its problem document, so it
+  // runs before the shared argument parser and the shared configuration load.
+  if (commandArguments[0] === "inspect") {
+    const result = await runInspectCommand({
+      arguments: commandArguments.slice(1),
+      loadConfig: () => loadDemiurgeConfig(),
+    });
+    console.error(result.stderr);
+    console.log(result.stdout);
+    process.exitCode = result.exitCode;
+    return;
+  }
+
+  const options = parseCliArguments(commandArguments, process.env);
 
   if (options.command === "help") {
     console.log(helpText);

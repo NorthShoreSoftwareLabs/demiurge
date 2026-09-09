@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { InlineConfig } from "vite";
 import {
+  helpText,
   parseCliArguments,
   parseClientManifest,
   resolvePreviewOutputDirectory,
@@ -89,6 +90,12 @@ describe("Demiurge CLI arguments", () => {
       .toThrow(/server port/);
     expect(() => parseCliArguments(["preview", "--host"]))
       .toThrow(/requires a value/);
+  });
+
+  it("accepts the inspect command and names it in the help", () => {
+    expect(parseCliArguments(["inspect"]).command).toBe("inspect");
+    expect(helpText).toContain("inspect");
+    expect(helpText).toContain("standard output");
   });
 
   it("returns help without a command and after a command", () => {

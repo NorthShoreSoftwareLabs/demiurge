@@ -12,6 +12,7 @@ that exists in the current source tree. Planned work and delivery status live in
 - [Route reference](./reference/routes.md)
 - [Security guide](./guides/security.md)
 - [Route audit panel](./guides/devtools.md)
+- [Static inspection](./guides/inspection.md)
 - [Data and caching](./guides/data-and-caching.md)
 - [Localization](./guides/localization.md)
 - [Errors and not-found](./guides/errors-and-not-found.md)
