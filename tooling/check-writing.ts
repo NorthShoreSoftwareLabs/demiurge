@@ -64,7 +64,7 @@ const antithesis =
   /\b(?:is|are|was|were)\s+not\s+(?:the\s+same\s+as|about|to)\b|,\s+not\s+(?:a|an|the|one)\b|\b(?:instead\s+of|rather\s+than)\b/giu;
 
 const ANTITHESIS_LIMIT = 1;
-const ENUMERATION_LIMIT = 3;
+const ENUMERATION_LIMIT = 1;
 const REPEATED_OPENER_LIMIT = 3;
 const DEFINITE_OPENER_SHARE = 0.35;
 const MONOTONY_SENTENCE_FLOOR = 12;
