@@ -72,6 +72,7 @@ const MONOTONY_SENTENCE_FLOOR = 12;
 type Paragraph = {
   file: string;
   line: number;
+  endLine: number;
   list?: boolean;
   text: string;
 };
@@ -84,24 +85,26 @@ type Finding = {
 
 const markdownFiles = trackedFiles("*.md");
 const sourceFiles = trackedFiles("*.ts", "*.tsx", "*.js", "*.mjs", "*.cjs");
+const changedLines = changedLineNumbers([...markdownFiles, ...sourceFiles]);
 
 const findings: Finding[] = [];
 
 for (const file of markdownFiles) {
   const paragraphs = markdownParagraphs(file);
-  for (const paragraph of paragraphs) {
+  const changed = changedParagraphs(paragraphs);
+  for (const paragraph of changed) {
     checkParagraph(paragraph);
   }
   checkRegister(
     file,
-    paragraphs
+    changed
       .filter((paragraph) => !paragraph.list)
       .map((paragraph) => normalizeMarkdown(paragraph.text)),
   );
 }
 
 for (const file of sourceFiles) {
-  for (const paragraph of sourceCommentParagraphs(file)) {
+  for (const paragraph of changedParagraphs(sourceCommentParagraphs(file))) {
     checkParagraph(paragraph);
   }
 }
@@ -129,6 +132,56 @@ function trackedFiles(...patterns: string[]) {
     .split("\n")
     .filter(Boolean)
     .sort();
+}
+
+function changedLineNumbers(files: string[]) {
+  const base = execFileSync("git", ["merge-base", "HEAD", "origin/main"], {
+    encoding: "utf8",
+  }).trim();
+  const output = execFileSync("git", ["diff", "--unified=0", "--no-color", base, "--", ...files], {
+    encoding: "utf8",
+  });
+  const lines = new Map<string, Set<number>>();
+  let file: string | undefined;
+  let nextLine = 0;
+
+  for (const line of output.split("\n")) {
+    const fileMatch = line.match(/^\+\+\+ b\/(.+)$/u);
+    if (fileMatch) {
+      file = fileMatch[1];
+      continue;
+    }
+
+    const hunkMatch = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/u);
+    if (hunkMatch) {
+      nextLine = Number(hunkMatch[1]);
+      continue;
+    }
+
+    if (!file || nextLine === 0) continue;
+    if (line.startsWith("+")) {
+      const fileLines = lines.get(file) ?? new Set<number>();
+      fileLines.add(nextLine);
+      lines.set(file, fileLines);
+      nextLine += 1;
+    } else if (!line.startsWith("-")) {
+      nextLine += 1;
+    }
+  }
+
+  return lines;
+}
+
+function changedParagraphs(paragraphs: Paragraph[]) {
+  return paragraphs.filter((paragraph) => {
+    const fileLines = changedLines.get(paragraph.file);
+    if (!fileLines) return false;
+
+    for (let line = paragraph.line; line <= paragraph.endLine; line += 1) {
+      if (fileLines.has(line)) return true;
+    }
+    return false;
+  });
 }
 
 function checkRegister(file: string, prose: string[]) {
@@ -279,9 +332,10 @@ function markdownParagraphs(file: string): Paragraph[] {
     }
 
     if (!current) {
-      current = { file, line: lineNumber, list: listItem, text };
+      current = { file, line: lineNumber, endLine: lineNumber, list: listItem, text };
     } else {
       current.text += ` ${text}`;
+      current.endLine = lineNumber;
     }
   }
 
@@ -311,9 +365,10 @@ function sourceCommentParagraphs(file: string): Paragraph[] {
 
     const text = match[1].trim();
     if (!current) {
-      current = { file, line: index + 1, text };
+      current = { file, line: index + 1, endLine: index + 1, text };
     } else {
       current.text += ` ${text}`;
+      current.endLine = index + 1;
     }
   }
 
