@@ -52,7 +52,7 @@ import {
   unstable_isRouteAuditEnabled,
   unstable_ROUTE_AUDIT_PATH,
   unstable_stripClientPageData,
-  type RouteAudit,
+  type unstable_RouteAudit as RouteAudit,
 } from "@demiurgejs/core/vite";
 
 function View(_props: RouteProps) {
@@ -1695,6 +1695,17 @@ describe("the development route audit panel", () => {
     const report = JSON.parse(response.body) as RouteAudit;
 
     expect(report.kind).toBe("page");
+    expect(report.version).toBe(1);
+    // ADR 0019: the report states which fact the build knows and which fact
+    // only a request supplies.
+    expect(report.resolutions).toEqual({
+      audit: "request",
+      cacheReads: "request",
+      metadata: "request",
+      policy: "static",
+      route: "static",
+      scripts: "request",
+    });
     expect(report.method).toBe("GET");
     expect(report.route?.pattern).toBe("/blog/[slug]");
     expect(report.route?.params).toEqual({ slug: "hello" });

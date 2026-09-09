@@ -288,10 +288,27 @@ export default defineConfig({
 Prefer the `vite` field. Use `unsafe_unstable_viteConfig` only when the `vite`
 field cannot express the change.
 
+### The export prefixes
+
+Demiurge uses three levels for an export name and a configuration field. The
+two prefixes describe different properties, so one name can carry both.
+
+| Prefix | Promise |
+| --- | --- |
+| none | The name is stable. Demiurge changes it under the semantic version policy of the package. |
+| `unstable_` | The shape can change in any release. A consumer accepts that risk. |
+| `unsafe_` | Use of the export moves a framework guarantee to the application. The shape can still be stable. |
+
+A type and the function that returns it carry the same prefix.
+
 
 ## Related
 
 - [ADR 0013](../../architecture/decisions/0013-framework-configuration-and-vite-boundary.md)
   records this decision.
+- [ADR 0019](../../architecture/decisions/0019-versioned-inspection-interfaces.md)
+  records the export prefixes.
+- The [static inspection guide](./inspection.md) describes the
+  `demiurge inspect` command.
 - The [security guide](./security.md) describes the policy declarations that
   routes own.

@@ -35,6 +35,12 @@ The panel audits a page route with the document policy. The request handler
 renders the document policy for a page response only. A resource route
 therefore reports no document header and no nonce.
 
+## Inspect the build instead of one request
+
+The panel answers for one request. The `demiurge inspect` command answers for
+the build. Read the [static inspection guide](./inspection.md) for the command,
+its exit codes, and its report.
+
 ## Read the report as JSON
 
 Add `format=json` to get the same report as JSON:
@@ -45,6 +51,10 @@ http://localhost:5173/_demiurge/audit?path=/blog/hello&format=json
 
 A script or an editor can read this report. The JSON report holds the same
 fields that the panel shows.
+
+The report states a `version` integer and a `resolutions` record. Read the
+version before you parse the report. The `resolutions` record states which
+section the build knows and which section needs a request.
 
 ## The panel runs the data loader
 

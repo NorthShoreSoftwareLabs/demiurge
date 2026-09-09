@@ -5,6 +5,37 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- `demiurge inspect` writes the static inspection report. The command reads the
+  route tree, resolves the policy cascade, and writes one JSON document to
+  standard output. It writes a human summary to standard error, so a pipe
+  receives the JSON alone. The command loads no route module, so it runs no
+  data loader and no mutation handler. It exits with `0` for no error finding,
+  `1` for at least one error finding, and `2` for an invalid argument or an
+  unreadable configuration. The command and the development server endpoint
+  `/_demiurge/audit` call the same functions (#406).
+- Each inspection report states an integer `version`. The framework raises the
+  integer when it removes a field or changes the meaning of a field. It does
+  not raise the integer when it adds a field. The route report, the static
+  policy report, and the problem document each carry their own version.
+  **Migration**: read the `version` field before you parse a report (#406).
+- Each inspection report states a `resolutions` record. The value `static`
+  states that the build knows the facts of a section. The value `request`
+  states that only a request supplies them. An agent reads the record and
+  learns which answer needs a running application (#406).
+- One serialization function removes a secret value from a report. A value is
+  secret when an `env.secret(...)` declaration produced it, when a session
+  record holds it, or when a cookie holds it. The report states the name of the
+  field and the reason, and never the value (#406).
+- The route report types carry the prefix of the function that returns them.
+  The documentation now states the three prefix levels. No prefix means stable.
+  The `unstable_` prefix means that the shape can change in any release. The
+  `unsafe_` prefix means that use of the export moves a framework guarantee to
+  the application.
+  **Migration**: rename an import of `RouteAudit` to `unstable_RouteAudit`,
+  `RouteAuditCacheRead` to `unstable_RouteAuditCacheRead`, `RouteAuditRoute` to
+  `unstable_RouteAuditRoute`, and `RouteAuditScript` to
+  `unstable_RouteAuditScript` (#406).
+
 - A typed security exception states a reason. The `csp` field, the `csrf`
   field, and a `maxBodySize` above the 1 MB default take an object with a
   `reason` and a `value`. One example is `csrf: { reason: "...", value: false }`.
