@@ -94,10 +94,10 @@ describe.skipIf(!hasRedisServer)("createRedisRateLimitStore", () => {
     expect(first.count).toBe(1);
     expect(second.count).toBe(2);
     expect(third.count).toBe(3);
-    // The window's reset time is fixed by the first increment, not extended
-    // by later ones, matching the memory store's fixed-window semantics.
-    expect(second.resetAt).toBe(first.resetAt);
-    expect(third.resetAt).toBe(first.resetAt);
+    // Redis rounds its clock and TTL values separately. The reported reset
+    // time can differ by one millisecond without extending the fixed window.
+    expect(Math.abs(second.resetAt - first.resetAt)).toBeLessThanOrEqual(1);
+    expect(Math.abs(third.resetAt - first.resetAt)).toBeLessThanOrEqual(1);
   });
 
   it("tracks independent keys separately", async () => {

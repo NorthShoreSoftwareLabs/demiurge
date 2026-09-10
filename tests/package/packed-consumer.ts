@@ -19,13 +19,16 @@ import { join, resolve } from "node:path";
 
 const packageDir = resolve("packages/core");
 const scratch = mkdtempSync(join(tmpdir(), "demiurge-pack-"));
+const packageVersion = JSON.parse(
+  readFileSync(join(packageDir, "package.json"), "utf8"),
+) as { version: string };
 const expectedPackage = {
   author: "North Shore Software Labs",
   homepage: "https://github.com/NorthShoreSoftwareLabs/demiurge#readme",
   license: "MIT",
   name: "@demiurgejs/core",
   repository: "git+https://github.com/NorthShoreSoftwareLabs/demiurge.git",
-  version: "0.2.0-beta.4",
+  version: packageVersion.version,
 } as const;
 
 function run(command: string, args: string[], cwd: string) {
