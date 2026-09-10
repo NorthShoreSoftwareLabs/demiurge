@@ -20,4 +20,6 @@ after the implementing issue closes. They describe decisions, not task status.
 - [ADR 0015: Secure defaults for omitted declarations](./0015-secure-defaults-for-omitted-declarations.md)
 - [ADR 0016: Route authorization contract](./0016-route-authorization-contract.md)
 - [ADR 0017: Browser data disclosure](./0017-browser-data-disclosure.md)
+- [ADR 0018: Extension and security exception contracts](./0018-extension-and-exception-contracts.md)
+- [ADR 0019: Versioned inspection and diagnostic interfaces](./0019-versioned-inspection-interfaces.md)
 - [ADR 0020: Public application testing interface](./0020-public-application-testing-interface.md)

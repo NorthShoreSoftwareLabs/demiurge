@@ -64,7 +64,7 @@ keeps its status, headers, body, redirects, and problem representation.
 ### A built application remains a separate test boundary
 
 The entry point does not build an application or start a process. Issue #273
-owns tests that verify packed applications and running production output.
+adds an external application example that uses the public entry point.
 
 An application test can prove a route decision quickly. A production process
 test proves build output, files, listener configuration, and deployment
@@ -72,8 +72,8 @@ behavior.
 
 ### Internal helpers remain internal
 
-The framework does not support `@demiurgejs/core/internal/testing` for
-applications. The following helpers remain internal framework-test helpers:
+Applications cannot rely on `@demiurgejs/core/internal/testing`. These helpers
+remain internal framework-test helpers:
 
 - `handleRequestWithManifest`
 - `unstable_createRouteManifest`
@@ -82,12 +82,11 @@ applications. The following helpers remain internal framework-test helpers:
 - `unstable_loadPageRoute`
 - `unstable_loadRoute`
 
-Issue #269 removes the `internal/testing` package export after it publishes the
-supported application entry point. Framework tests can import the source
-helpers through repository-local paths.
+Framework tests retain these helpers. Their package path has no support
+promise.
 
-The existing adapter, deployment, data, and security testing entries remain
-public conformance interfaces. They do not become application route helpers.
+Existing adapter, deployment, data, and security testing entries remain public
+conformance interfaces. They do not become application route helpers.
 
 ### Packed consumers prove the public contract
 
@@ -117,4 +116,3 @@ export when an application needs custom composition.
 - Issue #269 implements the application test harness.
 - Issue #270 adds document and security assertions.
 - Issue #271 adds static-output application test utilities.
-
