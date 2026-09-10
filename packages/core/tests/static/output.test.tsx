@@ -865,6 +865,14 @@ describe("static output adapter", () => {
     ).rejects.toThrow(/must be an HTTP\(S\) origin/);
   });
 
+  it("keeps an undeclared build origin out of the output manifest", async () => {
+    const { outDir } = await createOutputDirectory();
+
+    const manifest = await generateStaticOutput({ outDir, routes: appRoutes() });
+
+    expect(manifest.origin).toBeUndefined();
+  });
+
   it("adds the root policy's document headers to file rules, excluding CSP", async () => {
     const { outDir } = await createOutputDirectory();
     const routes = appRoutes({
