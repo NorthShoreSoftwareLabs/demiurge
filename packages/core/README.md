@@ -17,6 +17,18 @@ pnpm add @demiurgejs/core react react-dom
 pnpm add -D vite @vitejs/plugin-react typescript @types/node @types/react @types/react-dom
 ```
 
+Declare the root policy for a public page application:
+
+```ts
+// src/routes/@policy.ts
+import { security } from "@demiurgejs/core";
+
+export const policy = {
+  access: { public: true },
+  document: security.strict(),
+};
+```
+
 Define a route under `src/routes`:
 
 ```tsx

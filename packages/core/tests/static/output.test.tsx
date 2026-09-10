@@ -32,6 +32,10 @@ import {
   type RouteProps,
 } from "@demiurgejs/core";
 import { generateStaticOutput } from "@demiurgejs/core/static";
+import {
+  createVercelOutputConfig,
+  vercelStatic,
+} from "../../src/static/vercel";
 
 const temporaryRoots: string[] = [];
 
@@ -863,6 +867,17 @@ describe("static output adapter", () => {
         routes: appRoutes(),
       }),
     ).rejects.toThrow(/must be an HTTP\(S\) origin/);
+  });
+
+  it("keeps an undeclared build origin out of Vercel CORS headers", async () => {
+    const { outDir } = await createOutputDirectory();
+
+    const manifest = await generateStaticOutput({ outDir, routes: appRoutes() });
+
+    expect(manifest.origin).toBeUndefined();
+    expect(() => createVercelOutputConfig(manifest, vercelStatic())).toThrow(
+      /requires a build origin/,
+    );
   });
 
   it("adds the root policy's document headers to file rules, excluding CSP", async () => {

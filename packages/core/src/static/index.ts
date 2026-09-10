@@ -89,10 +89,10 @@ export type StaticOutputManifest = {
   // files rather than route entries. A host therefore serves them with the
   // framework file header rules and no route rule of their own.
   imageFiles?: string[];
-  // The normalized build origin. The Vercel static generator falls back to
-  // this value for `access-control-allow-origin` when the deployment
-  // declares no CORS policy of its own. A manifest that a caller builds by
-  // hand, such as a static preview fixture, can omit this field.
+  // The application-declared build origin. The Vercel static generator falls
+  // back to this value for `access-control-allow-origin` when the deployment
+  // declares no CORS policy of its own. Internal rendering placeholders never
+  // appear in this field.
   origin?: string;
   version: 1;
 };
@@ -190,7 +190,10 @@ export async function generateStaticOutput(
     adapter: staticAdapter,
   });
 
-  const origin = normalizeOrigin(options.origin);
+  const origin = options.origin === undefined
+    ? undefined
+    : normalizeOrigin(options.origin);
+  const renderOrigin = origin ?? "http://demiurge.local";
   const outDir = resolve(options.outDir);
   const routeKinds = await validateStaticRoutes(manifest);
   const resourcePaths = await collectStaticRoutePaths(manifest, {
@@ -198,7 +201,7 @@ export async function generateStaticOutput(
     includeResources: true,
   });
   const localeTargets = options.locales
-    ? staticLocalesForOrigin(origin, options.locales)
+    ? staticLocalesForOrigin(renderOrigin, options.locales)
     : [undefined];
   const pagePaths = (
     await Promise.all(
@@ -223,8 +226,8 @@ export async function generateStaticOutput(
       }
 
       const localized = new URL(
-        localizeHref(path.pathname, path.locale, options.locales, origin),
-        origin,
+        localizeHref(path.pathname, path.locale, options.locales, renderOrigin),
+        renderOrigin,
       );
       return [{ kind, pathname: `${localized.pathname}${localized.search}` }];
     }),
@@ -244,7 +247,7 @@ export async function generateStaticOutput(
     : undefined;
 
   for (const entry of outputEntries) {
-    const request = createStaticRequest(origin, entry.pathname, entry.kind);
+    const request = createStaticRequest(renderOrigin, entry.pathname, entry.kind);
     const response = requestHandler
       ? await requestHandler(request)
       : await handleRequestWithManifest(manifest, request, {
@@ -260,7 +263,7 @@ export async function generateStaticOutput(
     );
   }
 
-  const notFoundRequest = createStaticRequest(origin, "/404", "document");
+  const notFoundRequest = createStaticRequest(renderOrigin, "/404", "document");
   const notFoundLocale = options.locales
     ? resolveLocale(notFoundRequest, defineLocales(options.locales)).locale
     : undefined;
