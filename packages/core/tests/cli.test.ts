@@ -9,6 +9,7 @@ import {
   parseClientManifest,
   resolvePreviewOutputDirectory,
   runBuild,
+  runStart,
   validateBuildOutputDirectory,
 } from "../src/cli";
 import type { ResolvedDemiurgeConfig } from "../src/config/types";
@@ -96,6 +97,11 @@ describe("Demiurge CLI arguments", () => {
     expect(parseCliArguments(["inspect"]).command).toBe("inspect");
     expect(helpText).toContain("inspect");
     expect(helpText).toContain("standard output");
+  });
+
+  it("accepts the start command and names it in the help", () => {
+    expect(parseCliArguments(["start"]).command).toBe("start");
+    expect(helpText).toContain("start");
   });
 
   it("returns help without a command and after a command", () => {
@@ -286,5 +292,52 @@ describe("Demiurge build", () => {
     } finally {
       await rm(root, { force: true, recursive: true });
     }
+  });
+});
+
+describe("Demiurge start", () => {
+  it("starts a built server entry with an explicit host allowlist", async () => {
+    const importModule = vi.fn(async () => ({
+      createHandler: vi.fn(() => async () => new Response("ok")),
+    }));
+    const serve = vi.fn(async () => undefined);
+
+    await runStart(
+      parseCliArguments(["start", "--host", "0.0.0.0", "--port", "8080"]),
+      resolvedConfig({
+        deployment: {
+          outDir: "dist/client",
+          server: { entry: "src/server-entry.ts", outDir: "dist/server" },
+        },
+      }),
+      { ALLOWED_HOSTS: "app.example.test, www.example.test" },
+      { importModule, serve },
+    );
+
+    expect(importModule).toHaveBeenCalledWith(
+      "file:///application/app/dist/server/server-entry.js",
+    );
+    expect(serve).toHaveBeenCalledWith(expect.objectContaining({
+      allowedHosts: ["app.example.test", "www.example.test"],
+      clientDir: "dist/client",
+      host: "0.0.0.0",
+      port: 8080,
+      readyPath: "/.well-known/ready",
+      shutdown: { signals: ["SIGINT", "SIGTERM"] },
+    }));
+  });
+
+  it("requires an application server entry and an allowed-host policy", async () => {
+    await expect(
+      runStart(parseCliArguments(["start"]), resolvedConfig()),
+    ).rejects.toThrow(/deployment.server/);
+
+    await expect(
+      runStart(
+        parseCliArguments(["start"]),
+        resolvedConfig({ deployment: { server: { entry: "src/server-entry.ts" } } }),
+        {},
+      ),
+    ).rejects.toThrow(/ALLOWED_HOSTS/);
   });
 });
