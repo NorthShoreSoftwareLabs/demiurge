@@ -65,7 +65,7 @@ and listens. Set `ALLOWED_HOSTS` before you start the process.
 `createHandler` receives the manifest `page` options, the resolved client
 `root`, and a `waitUntil` binding. Pass that binding to a cache store:
 
-```js
+```ts
 export function createHandler({ page, waitUntil }: NodeBuildContext) {
     return createDemiurgeHandler({
       ...page,
@@ -214,6 +214,6 @@ from the `createHandler` context to the cache store.
 
 ## What to deploy
 
-Ship `dist/client`, `dist/server`, `server.js`, `package.json`, and installed
+Ship `dist/client`, `dist/server`, `package.json`, and installed
 production dependencies together. The server defaults to `127.0.0.1:4173`.
 Override `PORT` and `HOST` for the target environment.

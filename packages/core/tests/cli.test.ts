@@ -162,7 +162,10 @@ describe("Demiurge build", () => {
     expect(runtime.build.mock.calls[1]![0].build).toMatchObject({
       copyPublicDir: false,
       outDir: "/application/app/dist/server",
-      rollupOptions: { input: "/application/app/src/server-entry.ts" },
+      rollupOptions: {
+        input: "/application/app/src/server-entry.ts",
+        output: { entryFileNames: "server-entry.js" },
+      },
       ssr: true,
     });
     expect(result.outDir).toBe("/application/app/dist/client");

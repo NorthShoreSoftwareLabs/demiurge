@@ -130,7 +130,7 @@ Commands:
   preview               Serve static output with its declared headers
 
 Options:
-  --host <host>         Set the server host (default: localhost)
+  --host <host>         Set the server host (start: HOST or 127.0.0.1; otherwise: localhost)
   --origin <origin>     Set the build origin (default: SITE_ORIGIN)
   --out-dir <directory> Set the client output directory (default: dist)
   --port <port>         Set the server port (dev: 5173, preview: 4173)
@@ -209,7 +209,10 @@ export async function runBuild(
           copyPublicDir: false,
           emptyOutDir: true,
           outDir: serverOutDir,
-          rollupOptions: { input: resolve(root, applicationServer.entry) },
+          rollupOptions: {
+            input: resolve(root, applicationServer.entry),
+            output: { entryFileNames: "server-entry.js" },
+          },
           ssr: true,
         },
       }),
