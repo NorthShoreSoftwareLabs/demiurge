@@ -8,8 +8,6 @@ import {
 } from "@demiurgejs/core/node";
 import { createHandler as createDemiurgeHandler, routes } from "virtual:demiurge/server-entry";
 import { fonts } from "./fonts";
-import { images } from "./images";
-import { locales } from "./localization";
 
 export { routes };
 
@@ -30,7 +28,6 @@ export function createHandler({ page, waitUntil }: NodeBuildContext) {
       store: createMemoryCacheStore(),
       waitUntil,
     },
-    locales,
   });
 }
 
@@ -39,7 +36,7 @@ export function createStatic({ root }: NodeBuildContext) {
     fonts,
     root: resolve(root, "..", ".."),
   });
-  const optimizeImage = createImageOptimizer({ images, root });
+  const optimizeImage = createImageOptimizer({ root });
   const serveFile = createStaticFileHandler({ root });
 
   return async (request: Request) =>
