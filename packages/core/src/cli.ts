@@ -5,6 +5,7 @@ import type { InlineConfig } from "vite";
 import { createDemiurgeViteConfig } from "./config/vite";
 import type { ResolvedDemiurgeConfig } from "./config/types";
 import { parseClientManifest } from "./manifest";
+import type { NodeBuildRuntime, ServeNodeBuildOptions } from "./node";
 import type { RouteImporter } from "./route";
 import {
   generateVercelStaticOutput,
@@ -34,7 +35,7 @@ const DEFAULT_SERVER_OUT_DIR = "dist/server";
 const FRAMEWORK_SERVER_OUT_DIR = ".demiurge/server";
 
 export type CliOptions = {
-  command: "build" | "dev" | "help" | "inspect" | "preview";
+  command: "build" | "dev" | "help" | "inspect" | "preview" | "start";
   host: string;
   origin?: string;
   outDir?: string;
@@ -59,6 +60,11 @@ export type BuildResult = {
   serverOutDir?: string;
 };
 
+export type StartRuntime = {
+  importModule: (specifier: string) => Promise<Record<string, unknown>>;
+  serve: (options: ServeNodeBuildOptions) => Promise<unknown>;
+};
+
 export function parseCliArguments(
   arguments_: string[],
   environment: CliEnvironment = {},
@@ -73,14 +79,14 @@ export function parseCliArguments(
   }
   if (
     command !== "build" && command !== "dev" && command !== "inspect" &&
-    command !== "preview"
+    command !== "preview" && command !== "start"
   ) {
     throw new Error(`Unknown command: ${command}`);
   }
 
   const options: CliOptions = {
     command,
-    host: "localhost",
+    host: command === "start" ? environment.HOST ?? "127.0.0.1" : "localhost",
     origin: environment.SITE_ORIGIN,
     port: command === "dev" ? 5173 : 4173,
   };
@@ -119,11 +125,12 @@ export const helpText = `Usage: demiurge <command> [options]
 Commands:
   dev                   Start the development server
   build                 Build production output
+  start                 Run built Node production output
   inspect               Write the static inspection report as JSON
   preview               Serve static output with its declared headers
 
 Options:
-  --host <host>         Set the server host (default: localhost)
+  --host <host>         Set the server host (start: HOST or 127.0.0.1; otherwise: localhost)
   --origin <origin>     Set the build origin (default: SITE_ORIGIN)
   --out-dir <directory> Set the client output directory (default: dist)
   --port <port>         Set the server port (dev: 5173, preview: 4173)
@@ -202,7 +209,10 @@ export async function runBuild(
           copyPublicDir: false,
           emptyOutDir: true,
           outDir: serverOutDir,
-          rollupOptions: { input: resolve(root, applicationServer.entry) },
+          rollupOptions: {
+            input: resolve(root, applicationServer.entry),
+            output: { entryFileNames: "server-entry.js" },
+          },
           ssr: true,
         },
       }),
@@ -223,6 +233,68 @@ export async function runBuild(
   });
 
   return { ...staticResult, outDir, serverOutDir };
+}
+
+export async function runStart(
+  options: CliOptions,
+  config: ResolvedDemiurgeConfig,
+  environment: CliEnvironment = process.env,
+  runtime?: StartRuntime,
+) {
+  const applicationServer = config.deployment?.server;
+  if (!applicationServer) {
+    throw new Error(
+      "The start command requires deployment.server in demiurge.config.ts.",
+    );
+  }
+
+  const allowedHosts = environment.ALLOWED_HOSTS
+    ?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!allowedHosts?.length) {
+    throw new Error(
+      "The start command requires ALLOWED_HOSTS as a comma-separated host allowlist.",
+    );
+  }
+
+  const root = config.root;
+  const clientDir = resolve(
+    root,
+    options.outDir ?? config.deployment?.outDir ?? DEFAULT_CLIENT_OUT_DIR,
+  );
+  const serverOutDir = resolve(
+    root,
+    applicationServer.outDir ?? DEFAULT_SERVER_OUT_DIR,
+  );
+  const serverEntryUrl = pathToFileURL(join(serverOutDir, "server-entry.js")).href;
+  const serverEntry = runtime
+    ? await runtime.importModule(serverEntryUrl)
+    : await import(serverEntryUrl);
+  if (!isNodeBuildRuntime(serverEntry)) {
+    throw new Error(
+      "The application server bundle does not export a Node build runtime.",
+    );
+  }
+
+  const serve = runtime?.serve ?? (await import("./node")).serveNodeBuild;
+  return serve({
+    allowedHosts,
+    base: pathToFileURL(`${root}/`).href,
+    clientDir: relative(root, clientDir),
+    createHandler: serverEntry.createHandler,
+    env: environment,
+    host: options.host,
+    port: options.port,
+    readyPath: "/.well-known/ready",
+    shutdown: { signals: ["SIGINT", "SIGTERM"] },
+    static: serverEntry.createStatic,
+  });
+}
+
+function isNodeBuildRuntime(value: Record<string, unknown>): value is NodeBuildRuntime {
+  return typeof value.createHandler === "function" &&
+    (value.createStatic === undefined || typeof value.createStatic === "function");
 }
 
 async function buildStaticOutput({

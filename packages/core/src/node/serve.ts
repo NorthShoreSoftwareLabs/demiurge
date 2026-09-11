@@ -26,6 +26,15 @@ export type NodeBuildContext = {
   waitUntil: (promise: Promise<unknown>) => void;
 };
 
+export type NodeBuildRuntime = {
+  createHandler: (
+    context: NodeBuildContext,
+  ) => RequestHandler | Promise<RequestHandler>;
+  createStatic?: (
+    context: NodeBuildContext,
+  ) => StaticFileHandler | StaticFileHandlerOptions;
+};
+
 export type ServeNodeBuildEnvironment = Record<string, string | undefined>;
 
 export type ServeNodeBuildOptions = {
