@@ -13,7 +13,12 @@ const readyPort = 42_176;
 const servers = [
   {
     args: ["--filter", "@demiurge-examples/node-server", "start"],
-    env: { HOST: "localhost", NODE_ENV: "production", PORT: "42177" },
+    env: {
+      ALLOWED_HOSTS: "localhost",
+      HOST: "localhost",
+      NODE_ENV: "production",
+      PORT: "42177",
+    },
     name: "node-server",
     url: "http://localhost:42177/",
   },
