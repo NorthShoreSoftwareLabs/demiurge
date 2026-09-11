@@ -94,6 +94,9 @@ framework at seven public surfaces. For each surface, the table states the
 public API, the guarantee the framework keeps, and the responsibility the
 application takes on.
 
+Issue #408 verifies a public example for each representative replacement that
+this table identifies.
+
 | Surface | Public API | Framework keeps | Application owns |
 | --- | --- | --- | --- |
 | Custom servers | `nodeAdapter`, `createNodeServer`, `createNodeRequestListener` (`node/index.ts`), `createEdgeRequestHandler` (`edge/index.ts`), `generateStaticOutput` (`static/index.ts`) | Request timeout enforcement, graceful shutdown draining, abort propagation, origin policy validation, and typed adapter capabilities that refuse to start on a gap | The server process, the listener, deployment, and any adapter capability the chosen runtime does not provide |
