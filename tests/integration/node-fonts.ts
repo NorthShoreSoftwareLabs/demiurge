@@ -3,7 +3,10 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve("examples/node-server");
-const child = spawn("pnpm", ["start"], {
+const child = spawn(process.execPath, [
+  "node_modules/@demiurgejs/core/bin/demiurge.mjs",
+  "start",
+], {
   cwd: root,
   env: {
     ...process.env,
