@@ -3,11 +3,15 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve("examples/node-server");
-const child = spawn(process.execPath, ["server.js"], {
+const child = spawn(process.execPath, [
+  "node_modules/@demiurgejs/core/bin/demiurge.mjs",
+  "start",
+], {
   cwd: root,
   env: {
     ...process.env,
     HOST: "127.0.0.1",
+    ALLOWED_HOSTS: "127.0.0.1",
     NODE_ENV: "production",
     PORT: "0",
   },

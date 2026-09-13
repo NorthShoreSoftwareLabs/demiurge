@@ -10,6 +10,7 @@ import {
   runBuild,
   runDev,
   runInspectCommand,
+  runStart,
 } from "../dist/cli.js";
 import { loadDemiurgeConfig } from "../dist/config/index.js";
 import {
@@ -61,6 +62,11 @@ async function main() {
     if (result.deploymentOutDir) {
       console.log(`Demiurge generated provider output in ${result.deploymentOutDir}.`);
     }
+    return;
+  }
+
+  if (options.command === "start") {
+    await runStart(options, config);
     return;
   }
 

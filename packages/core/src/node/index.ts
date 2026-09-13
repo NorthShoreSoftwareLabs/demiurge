@@ -39,6 +39,7 @@ export {
 export type {
   NodeBuildContext,
   NodeBuildPageOptions,
+  NodeBuildRuntime,
   ServeNodeBuildEnvironment,
   ServeNodeBuildOptions,
 } from "./serve";

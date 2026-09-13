@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "demiurge build",
-    "start": "node server.js"
+    "start": "demiurge start"
   },
   "dependencies": {
     "@demiurgejs/core": "workspace:*",

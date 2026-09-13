@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const instructionVerbs = new Set([
   "add",
@@ -131,6 +131,7 @@ function trackedFiles(...patterns: string[]) {
     .trim()
     .split("\n")
     .filter(Boolean)
+    .filter((file) => existsSync(file))
     .sort();
 }
 

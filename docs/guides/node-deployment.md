@@ -19,12 +19,17 @@ A production app builds two bundles.
   `demiurge-manifest.json`.
 - The SSR bundle contains a generated route map and a request-handler factory.
 
-Expose the framework-owned SSR entry from an application file so the server
-build has something to compile:
+Export a server-only runtime module so the server build has something to
+compile:
 
 ```ts
 // src/server-entry.ts
-export { createHandler, routes } from "virtual:demiurge/server-entry";
+import type { NodeBuildContext } from "@demiurgejs/core/node";
+import { createHandler as createDemiurgeHandler } from "virtual:demiurge/server-entry";
+
+export function createHandler({ page }: NodeBuildContext) {
+  return createDemiurgeHandler(page);
+}
 ```
 
 Declare the entry in `demiurge.config.ts`. `demiurge build` then writes the
@@ -46,63 +51,36 @@ export default defineConfig({
 {
   "scripts": {
     "build": "demiurge build",
-    "start": "node server.js"
+    "start": "demiurge start"
   }
 }
 ```
 
 ## The production process
 
-`serveNodeBuild(...)` owns the bootstrap. It reads the browser manifest, serves
-the client build, resolves the bind address and the host allowlist, answers the
-readiness path, and listens.
-
-```js
-// server.js
-import { serveNodeBuild } from "@demiurgejs/core/node";
-import { createHandler } from "./dist/server/server-entry.js";
-
-await serveNodeBuild({
-  base: import.meta.url,
-  createHandler: ({ page }) => createHandler(page),
-  name: "Demiurge server",
-  port: 4173,
-});
-```
-
-`base` is the `import.meta.url` of `server.js`. The helper resolves
-`dist/client` against it, so the process finds its own build wherever the image
-puts it. Set `clientDir` when the client build lands somewhere else.
+`demiurge start` owns the standard bootstrap. It reads the browser manifest,
+loads the server runtime, serves the client build, answers the readiness path,
+and listens. Set `ALLOWED_HOSTS` before you start the process.
 
 `createHandler` receives the manifest `page` options, the resolved client
-`root`, and a `waitUntil` binding for the server that does not exist yet. Pass
-that binding to a cache store, and return a wrapped handler when the app owns
-paths of its own:
+`root`, and a `waitUntil` binding. Pass that binding to a cache store:
 
-```js
-await serveNodeBuild({
-  base: import.meta.url,
-  createHandler({ page, waitUntil }) {
-    const routes = createHandler({
+```ts
+export function createHandler({ page, waitUntil }: NodeBuildContext) {
+    return createDemiurgeHandler({
       ...page,
       cacheStore: { namespace, store, waitUntil },
     });
 
-    return (request) =>
-      new URL(request.url).pathname === "/healthz"
-        ? new Response("ok")
-        : routes(request);
-  },
-  port: 4173,
-});
+}
 ```
 
 An application that needs a different process shape can still call
-`createNodeServer(...)` directly. The helper is a default, not a boundary.
+`createNodeServer(...)` or `serveNodeBuild(...)` directly.
 
 ## Host allowlist
 
-`allowedHosts` is mandatory. The adapter checks the request authority before it
+`ALLOWED_HOSTS` is mandatory for `demiurge start`. The adapter checks the request authority before it
 becomes a Web `Request` URL, so a forged `Host` header never reaches route code
 or absolute-URL generation.
 
@@ -111,9 +89,8 @@ be exact. This is not the bind address. `HOST` decides which interface the
 process listens on. Set `HOST=0.0.0.0` when a container or platform connects to
 the process directly.
 
-`serveNodeBuild(...)` reads the allowlist from `ALLOWED_HOSTS` as a
-comma-separated list. Without that variable it allows the bind address and
-`localhost`. Pass `allowedHosts` to state the list in code instead.
+`demiurge start` reads `ALLOWED_HOSTS` as a comma-separated list. The command
+stops before it listens when the variable is absent.
 
 ## Trusted proxies
 
@@ -237,6 +214,6 @@ from the `createHandler` context to the cache store.
 
 ## What to deploy
 
-Ship `dist/client`, `dist/server`, `server.js`, `package.json`, and installed
+Ship `dist/client`, `dist/server`, `package.json`, and installed
 production dependencies together. The server defaults to `127.0.0.1:4173`.
 Override `PORT` and `HOST` for the target environment.
