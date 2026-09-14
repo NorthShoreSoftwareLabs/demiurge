@@ -66,8 +66,8 @@ Freshness lifetime
 ### Separate contracts
 
 `CacheStore` tags identify data entries only. `revalidate` invalidates only
-the configured `CacheStore`. It does not emit a header, call a CDN API, or
-change a representation cache.
+the configured `CacheStore`. It emits no client-visible cache or purge header,
+calls no CDN API, and changes no representation cache.
 
 Demiurge does not map a data tag to a route, URL, surrogate key, or provider
 purge key. The framework cannot prove that such a mapping covers every
@@ -80,14 +80,16 @@ versions.
 
 ### Mutation outcome
 
-A successful data invalidation remains required before Demiurge returns a
-successful mutation result. An optional representation purge must not change
-that result to a failure.
+A mutation that requests `revalidate` must complete successful data invalidation
+before Demiurge returns a successful mutation result. An optional representation
+purge must not change that result to a failure.
 
-If a purge starts from a mutation, the integration must run it after the
-application commit. The integration must record and retry a failed purge by
-its own reliable mechanism. Failure handling must not assume that the mutation
-can roll back an application commit.
+If a purge starts from a mutation that requests `revalidate`, the integration
+must schedule it only after successful data invalidation. If a mutation does
+not request `revalidate`, the integration must schedule a purge after the
+application commit. The integration must record and retry a failed purge by its
+own reliable mechanism. Failure handling must not assume that the mutation can
+roll back an application commit.
 
 An integration can report purge state through application telemetry or an
 operator channel. Telemetry must not expose provider credentials, provider
@@ -99,11 +101,13 @@ An operator may place a response in a shared cache only when all conditions
 below are true.
 
 - The response has an explicit shared-cache policy.
+- The request method is `GET` or `HEAD`.
+- The response status is cacheable under HTTP caching rules.
 - The response body and headers are identical for all requests with one cache
   key.
 - The cache key includes each request header named by `Vary`.
 - The response does not depend on a cookie, authorization credential, client
-  identity, or request-specific security value.
+  identity, secret, or anti-CSRF value.
 - The response does not contain `Set-Cookie`.
 - The CDN preserves the framework security and response headers.
 
@@ -119,6 +123,9 @@ a per-request nonce.
 An application must treat authorization, session state, anti-CSRF values,
 personalized metadata, and user-specific redirects as private response inputs.
 The application must set a response policy that prevents shared storage.
+
+Public `Origin` or `Sec-Fetch-*` metadata can vary a response. `Vary` must
+declare each input, and the shared cache key must include each declared value.
 
 ### Vary and cache keys
 
@@ -164,7 +171,7 @@ before it publishes mutable representations that reference them. Immutable
 assets use a content-addressed URL and do not require purge when their bytes
 change.
 
-After a mutable representation changes, the pipeline can purge its former
+After a mutable representation changes, the pipeline must purge its former
 representation. The pipeline must purge all affected variants, including
 variants created from `Vary`, host, or query inputs. A path-only purge is
 insufficient when the provider stores variants outside that path scope.
