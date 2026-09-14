@@ -53,19 +53,24 @@ export async function assertDocument(
 ): Promise<void> {
   const document = await response.clone().text();
 
-  if (expected.title) {
+  if (expected.title !== undefined) {
     const title = /<title>([\s\S]*?)<\/title>/i.exec(document)?.[1] ?? "";
     assertValue(title, expected.title, "document title");
   }
 
   for (const script of expected.scripts ?? []) {
-    const match = [...document.matchAll(/<script\b([^>]*)>/gi)].find(([, attributes]) => {
-      if (!attributes.includes("data-demiurge-document-contribution")) return false;
+    const managedScripts = [...document.matchAll(/<script\b([^>]*)>/gi)].filter(([, attributes]) =>
+      /(?:^|\s)data-demiurge-document-contribution(?:\s|=|$)/i.test(attributes),
+    );
+    const match = managedScripts.find(([, attributes]) => {
       return (!script.src || matchesValue(readAttribute(attributes, "src") ?? "", script.src)) &&
         (!script.strategy || matchesValue(readAttribute(attributes, "data-demiurge-script-strategy") ?? "", script.strategy));
     });
     if (!match) {
-      throw new Error("Expected a framework-managed script, but the document has none.");
+      if (managedScripts.length === 0) {
+        throw new Error("Expected a framework-managed script, but the document has none.");
+      }
+      throw new Error(`Expected a matching framework-managed script${describeScript(script)}, but none matched.`);
     }
 
     if (script.src) assertValue(readAttribute(match[1], "src") ?? "", script.src, "managed script source");
@@ -80,10 +85,10 @@ export async function assertSecurity(
   response: Response,
   expected: SecurityAssertion,
 ): Promise<void> {
-  if (expected.csp) {
+  if (expected.csp !== undefined) {
     assertValue(response.headers.get("content-security-policy") ?? "", expected.csp, "Content-Security-Policy header");
   }
-  if (expected.cacheControl) {
+  if (expected.cacheControl !== undefined) {
     assertValue(response.headers.get("cache-control") ?? "", expected.cacheControl, "cache-control header");
   }
   for (const [name, value] of Object.entries(expected.headers ?? {})) {
@@ -99,10 +104,10 @@ export async function assertSecurity(
   if (!expected.nonce && nonce) {
     throw new Error("Expected no document nonce, but the document has one.");
   }
-  if (nonce && !response.headers.get("content-security-policy")?.includes(`'nonce-${nonce}'`)) {
+  if (nonce && !hasCspNonce(response.headers.get("content-security-policy") ?? "", nonce)) {
     throw new Error("The document nonce is absent from the Content-Security-Policy header.");
   }
-  if (nonce && !/\bprivate\b|\bno-store\b/i.test(response.headers.get("cache-control") ?? "")) {
+  if (nonce && !hasPrivateNonceCache(response.headers.get("cache-control") ?? "")) {
     throw new Error("A nonce-backed document must use a private or no-store cache policy.");
   }
 }
@@ -129,5 +134,23 @@ function matchesValue(actual: string, expected: ExpectedValue) {
 }
 
 function readAttribute(attributes: string, name: string) {
-  return new RegExp(`\\s${name}="([^"]*)"`, "i").exec(attributes)?.[1];
+  const match = new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, "i").exec(attributes);
+  return match?.[1]?.replaceAll("&amp;", "&") ?? match?.[2]?.replaceAll("&amp;", "&");
+}
+
+function describeScript(script: NonNullable<DocumentAssertion["scripts"]>[number]) {
+  const parts = [script.src && ` source ${String(script.src)}`, script.strategy && ` strategy ${String(script.strategy)}`].filter(Boolean);
+  return parts.join(" with");
+}
+
+function hasCspNonce(csp: string, nonce: string) {
+  return csp.split(";").some((directive) =>
+    directive.trim().split(/\s+/).slice(1).includes(`'nonce-${nonce}'`),
+  );
+}
+
+function hasPrivateNonceCache(cacheControl: string) {
+  return cacheControl.split(",").some((directive) =>
+    ["private", "no-store"].includes(directive.trim().split("=", 1)[0]?.toLowerCase() ?? ""),
+  );
 }
