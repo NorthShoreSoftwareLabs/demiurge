@@ -241,6 +241,8 @@ export type {
   CacheKey,
   CacheKeyPart,
   CacheRequest,
+  CacheStoreAtomicity,
+  CacheStoreCapabilities,
   CacheScope,
   CacheNamespace,
   CacheStore,

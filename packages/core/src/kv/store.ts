@@ -144,6 +144,7 @@ export function createKvCacheStore(options: KvCacheStoreOptions): CacheStore {
   }
 
   return {
+    capabilities: { atomicity: "best-effort" },
     async acquireRefreshLease(key, token, expiresAt) {
       const existing = await kv.get(leaseKey(key));
 

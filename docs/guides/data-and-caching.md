@@ -233,6 +233,11 @@ atomicity and a compare-and-swap primitive. `set()`, `delete()`, and
 atomic script. A reader racing with one of these calls can briefly see a
 partially updated entry.
 
+Every `CacheStore` declares `capabilities.atomicity`. The value is `strong`
+when the store keeps its related writes atomic. The value is `best-effort`
+when the provider cannot make that guarantee. Memory and Redis stores declare
+`strong`. The KV store declares `best-effort`.
+
 Tag invalidation stores tag membership as key-prefixed entries and uses
 `list()` plus bulk delete to invalidate a tag, the usual KV pattern for this.
 `list()` on a real KV store is typically eventually consistent. A membership

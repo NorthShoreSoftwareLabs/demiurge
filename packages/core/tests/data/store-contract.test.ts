@@ -6,6 +6,11 @@ import {
 } from "../../src/data/testing";
 
 describe("cache store contract", () => {
+  it("reports the atomicity capability", async () => {
+    const memoryStore = createMemoryCacheStore();
+
+    expect(memoryStore.capabilities.atomicity).toBe("strong");
+  });
   it("is satisfied by the framework memory store", async () => {
     await expect(
       verifyCacheStoreContract(createMemoryCacheStore),
@@ -26,6 +31,7 @@ describe("cache store contract", () => {
 
   it("reports the violated operation", async () => {
     const brokenStore: CacheStore = {
+      capabilities: { atomicity: "best-effort" },
       delete: () => false,
       get: () => undefined,
       invalidateTags: () => 0,
@@ -44,6 +50,7 @@ function asynchronousMemoryStore(): CacheStore {
   const store = createMemoryCacheStore();
 
   return {
+    capabilities: store.capabilities,
     async delete(key) {
       return await store.delete(key);
     },

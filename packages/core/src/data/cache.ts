@@ -75,7 +75,14 @@ export type CacheStoreEntry = {
   value: unknown;
 };
 
+export type CacheStoreAtomicity = "best-effort" | "strong";
+
+export type CacheStoreCapabilities = {
+  atomicity: CacheStoreAtomicity;
+};
+
 export type CacheStore = {
+  capabilities: CacheStoreCapabilities;
   acquireRefreshLease?: (
     key: string,
     token: string,
@@ -417,6 +424,7 @@ export function createMemoryCacheStore(
   let nextExpiration = findNextCacheExpiration(entries);
 
   return {
+    capabilities: { atomicity: "strong" },
     acquireRefreshLease(key, token, expiresAt) {
       const currentTime = now();
       const existing = refreshLeases.get(key);
