@@ -89,6 +89,10 @@
       "types": "./dist/static/index.d.ts",
       "default": "./dist/static/index.js"
     },
+    "./static/testing": {
+      "types": "./dist/static/testing.d.ts",
+      "default": "./dist/static/testing.js"
+    },
     "./server-only": {
       "types": "./dist/server-only/index.d.ts",
       "browser": "./dist/server-only/browser.js",
