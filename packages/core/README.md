@@ -84,6 +84,7 @@ covers host allowlists, proxy trust, timeouts, and graceful shutdown.
 - `@demiurgejs/core/adapter/testing` — adapter capability conformance contract
 - `@demiurgejs/core/deployment/testing` — deployment conformance kit for provider translation and production artifacts
 - `@demiurgejs/core/data/testing` — cache-store conformance contract
+- `@demiurgejs/core/testing` — application route-pipeline test boundary
 - `@demiurgejs/core/internal/testing` — explicitly unstable test helpers
 
 Vite is an optional peer dependency with `@vitejs/plugin-react`. A consumer
