@@ -51,6 +51,20 @@ describe("assertSerializableValue", () => {
     );
   });
 
+  it("names the field when toJSON returns a bigint", () => {
+    expect(() =>
+      assertSerializableValue({
+        profile: {
+          toJSON() {
+            return 1n;
+          },
+        },
+      }, "/account")
+    ).toThrow(
+      "Route /account could not serialize the field profile for the browser.",
+    );
+  });
+
   it("accepts an array of serializable values", () => {
     expect(() =>
       assertSerializableValue({ tags: ["a", "b", 1] }, "/account")
