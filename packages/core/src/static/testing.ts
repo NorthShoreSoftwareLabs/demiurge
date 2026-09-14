@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, realpath } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import {
   generateStaticOutput,
@@ -61,6 +61,7 @@ export async function inspectStaticOutput(
 export async function readStaticOutputManifest(
   outDir: string,
 ): Promise<StaticOutputManifest> {
+  // TYPE-EVIDENCE: the static generator writes this JSON using StaticOutputManifest.
   return JSON.parse(await readFile(join(resolve(outDir), manifestFile), "utf8")) as StaticOutputManifest;
 }
 
@@ -74,11 +75,16 @@ export async function verifyStaticOutput(
 ): Promise<StaticOutputManifest> {
   const output = await inspectStaticOutput(outDir, manifest);
   const files = new Set(await output.files());
-  for (const entry of output.manifest.entries) {
-    if (!files.has(entry.file)) {
-      throw new Error(`Static output is missing the manifest file ${JSON.stringify(entry.file)}.`);
+  const declaredFiles = [
+    ...output.manifest.entries.map((entry) => entry.file),
+    ...(output.manifest.fontFiles ?? []),
+    ...(output.manifest.imageFiles ?? []),
+  ];
+  for (const file of declaredFiles) {
+    if (!files.has(file)) {
+      throw new Error(`Static output is missing the declared file ${JSON.stringify(file)}.`);
     }
-    await output.readFile(entry.file);
+    await output.readFile(file);
   }
   return output.manifest;
 }
@@ -98,7 +104,13 @@ async function readContainedFile(root: string, file: string) {
   if (!isContained(root, file)) {
     throw new Error(`Static output file is outside the output directory: ${JSON.stringify(file)}.`);
   }
-  return await readFile(join(root, file));
+  const realRoot = await realpath(root);
+  const realFile = await realpath(join(root, file));
+  const fromRoot = relative(realRoot, realFile);
+  if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`)) {
+    throw new Error(`Static output file is outside the output directory: ${JSON.stringify(file)}.`);
+  }
+  return await readFile(realFile);
 }
 
 async function listFiles(root: string, directory = root): Promise<string[]> {
