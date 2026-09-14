@@ -14,6 +14,7 @@
       "@demiurgejs/core/node": ["src/node/index.ts"],
       "@demiurgejs/core/redis": ["src/redis/index.ts"],
       "@demiurgejs/core/static": ["src/static/index.ts"],
+      "@demiurgejs/core/static/testing": ["src/static/testing.ts"],
       "@demiurgejs/core/testing": ["src/testing/index.ts"],
       "@demiurgejs/core/vite": ["src/vite/index.ts"]
     }
