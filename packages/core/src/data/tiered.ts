@@ -32,6 +32,7 @@ export function createTieredCacheStore(
   const { l1, l2 } = options;
 
   return {
+    capabilities: l2.capabilities,
     async acquireRefreshLease(key, token, expiresAt) {
       if (!l2.acquireRefreshLease) {
         throw new Error(

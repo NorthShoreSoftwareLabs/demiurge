@@ -24,6 +24,7 @@ export function createUnavailableCacheStore(): CacheStore {
   };
 
   return {
+    capabilities: { atomicity: "best-effort" },
     acquireRefreshLease: refuse,
     delete: refuse,
     get: refuse,

@@ -206,6 +206,7 @@ describe.skipIf(!hasRedisServer)("createTieredCacheStore", () => {
     // A plain object satisfying only the required CacheStore members, none
     // of the optional lease/refresh coordination methods.
     const l2: CacheStore = {
+      capabilities: { atomicity: "best-effort" },
       async delete() {
         return false;
       },

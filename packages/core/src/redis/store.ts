@@ -231,6 +231,7 @@ export function createRedisCacheStore(
   const leasePrefix = `${prefix}lease:`;
 
   return {
+    capabilities: { atomicity: "strong" },
     async acquireRefreshLease(key, token, expiresAt) {
       // ioredis's typed SET overloads do not cover every flag order the
       // Redis SET command accepts, so this issues the raw command instead.

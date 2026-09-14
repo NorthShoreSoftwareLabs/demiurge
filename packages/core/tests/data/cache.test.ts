@@ -146,6 +146,7 @@ describe("data cache primitives", () => {
 
   it("rejects invalid keys before cache store access", async () => {
     const store = {
+      capabilities: { atomicity: "strong" as const },
       delete: vi.fn(),
       get: vi.fn(),
       invalidateTags: vi.fn(),
@@ -398,6 +399,7 @@ describe("data cache primitives", () => {
     let now = 0;
     const memory = createMemoryCacheStore({ now: () => now });
     const store = {
+      capabilities: memory.capabilities,
       delete: memory.delete,
       get: memory.get,
       invalidateTags: memory.invalidateTags,

@@ -26,6 +26,11 @@ export async function verifyCacheStoreContract(
 
   try {
     assert(
+      store.capabilities.atomicity === "best-effort" ||
+        store.capabilities.atomicity === "strong",
+      "capabilities.atomicity must be `best-effort` or `strong`",
+    );
+    assert(
       await store.get(alphaKey) === undefined,
       "get() must return undefined for a missing key",
     );

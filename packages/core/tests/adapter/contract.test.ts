@@ -370,6 +370,7 @@ describe("adapter contract suite", () => {
       partialAdapter({ sharedCache: true }),
       {
         sharedCache: () => ({
+          capabilities: { atomicity: "strong" },
           delete: () => false,
           get: () => undefined,
           invalidateTags: () => 0,
@@ -546,6 +547,7 @@ describe("adapter contract suite", () => {
 
 function withoutRefreshLeases(store: CacheStore): CacheStore {
   return {
+    capabilities: store.capabilities,
     delete: (key) => store.delete(key),
     get: (key) => store.get(key),
     invalidateTags: (tags) => store.invalidateTags(tags),
