@@ -85,4 +85,29 @@ describe("document and security assertions", () => {
 
     await expect(assertSecurity(response, { nonce: true })).rejects.toThrow("private or no-store");
   });
+
+  it("accepts a static policy with no document nonce", async () => {
+    const response = new Response("<title>Static</title>", {
+      headers: { "cache-control": "public, max-age=0, must-revalidate" },
+    });
+
+    await expect(assertSecurity(response, {
+      cacheControl: "public, max-age=0, must-revalidate",
+      nonce: false,
+    })).resolves.toBeUndefined();
+  });
+
+  it("reports a nonce missing from the CSP header", async () => {
+    const response = new Response(document, {
+      headers: { "cache-control": "private, no-store", "content-security-policy": "script-src 'self'" },
+    });
+
+    await expect(assertSecurity(response, { nonce: true })).rejects.toThrow("absent from the Content-Security-Policy");
+  });
+
+  it("reports an unexpected document nonce", async () => {
+    const response = new Response(document);
+
+    await expect(assertSecurity(response, { nonce: false })).rejects.toThrow("Expected no document nonce");
+  });
 });
