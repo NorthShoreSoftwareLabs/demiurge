@@ -10,7 +10,8 @@ Tracking: [GitHub issue #231](https://github.com/NorthShoreSoftwareLabs/demiurge
 
 `@middleware.ts` runs in the Demiurge route pipeline. It receives the matched
 route, the normalized request, and the request context. The pipeline applies
-route policy and request security before application middleware runs.
+request-security policy before application middleware runs. Authorization runs
+after middleware calls `next()` and before the route capability runs.
 
 Some deployment providers offer middleware before an origin or a function.
 That middleware has no matched Demiurge route. It can have different request
@@ -27,9 +28,9 @@ provider output.
 
 Demiurge owns application middleware.
 
-An application declares request middleware only through `@middleware.ts` and
-`defineMiddleware`. Demiurge runs each applicable middleware once in the shared
-route pipeline.
+An application declares request middleware through `@middleware.ts`. It can
+use `defineMiddleware` for typed context contributions. Demiurge runs each
+applicable middleware once in the shared route pipeline.
 
 Each provider owns its own pre-origin behavior. Provider configuration can
 route traffic, serve provider assets, and perform provider-required checks.
@@ -42,32 +43,40 @@ middleware receives.
 
 ### Execution order
 
-The default request order is fixed.
+The default request order applies after a request continues past method and
+CORS preflight handling.
 
 1. The provider accepts the request and applies its transport rules.
 2. The adapter creates the Web `Request` and starts the shared route pipeline.
 3. Route matching resolves the method capability.
-4. Inherited policy then applies request security.
+4. Inherited request-security policy then applies request security.
 5. Inherited application middleware runs from root to leaf.
 6. Authorization then applies before the route capability runs.
 7. Response finalization, error handling, and document security output apply.
 
-Request security includes Fetch Metadata, CSRF, rate limits, and request body
-limits when the resolved route policy declares them.
+Request security includes Fetch Metadata, CSRF, rate limits, and a request body
+limit. Every route inherits the bounded body limit when no policy overrides it.
+
+A CORS preflight or unsupported method can end the request before this order.
+A request-security check can also end the request before middleware runs.
 
 An application middleware response short-circuits later application middleware
 and the route capability. Response finalization still applies as the route
 contract requires.
 
-Provider middleware is outside this order. It cannot bypass a framework
-security check, change the matched route after policy resolution, or replace a
+Provider middleware is outside this order. This provider can reject a request
+before Demiurge receives it. That rejection is provider-owned. It does not
+promise a framework error document or route security behavior.
+
+For a request that enters Demiurge, provider middleware cannot bypass framework
+security, change the matched route after policy resolution, or replace a
 framework error document.
 
 ### No split execution by default
 
 An adapter must use the shared route pipeline for development, Node production,
-edge production, and static behavior where that pipeline applies. A provider
-integration must not split application middleware to improve an unmeasured
+edge production, and static behavior where that pipeline applies. An integration
+must not split application middleware to improve an unmeasured
 latency, locality, or provider-routing concern.
 
 This RFC defines no host middleware extension. An application
@@ -97,14 +106,19 @@ build must reject a declaration that requires a forbidden input.
 
 ### Typed data boundary
 
-A future split phase may send values to the route pipeline only through an
-adapter-owned envelope. A public request header, cookie, URL value, or body
-field is not an envelope.
+A future split phase may send request-context values to the route pipeline only
+through an adapter-owned envelope. A public request header, cookie, URL value,
+or body field is not an envelope. Rewrites and short-circuit decisions use
+their separately declared decision types.
 
 The envelope must meet all these rules.
 
 - The adapter creates and verifies it for one request.
-- The provider binds it to the request method, URL, and a short lifetime.
+- The envelope is valid only between the declared provider phase and adapter.
+- The provider binds it to the deployment, build, request method, URL, and a
+  short lifetime.
+- A unique nonce is consumed atomically during verification.
+- The adapter rejects an envelope after its nonce is consumed.
 - An external client cannot create, modify, or replay it as a trusted value.
 - Its fields use a versioned, runtime-validated schema.
 - Its context fields have generated TypeScript declarations for later
@@ -124,18 +138,25 @@ static artifacts. The build must reject a server-only transfer.
 
 ### Security and response boundary
 
-A provider phase may continue a request, select a predeclared route rewrite,
+A host phase may continue a request, select a predeclared route rewrite,
 or return a declared short-circuit decision. Demiurge must validate each
 decision before it takes effect.
 
-After a rewrite, Demiurge matches the rewritten request and runs the complete
-shared pipeline. The provider phase cannot select a route capability directly.
+Before a rewrite, the provider phase discards the original envelope. It creates
+a replacement only after it resolves the final request method and URL. Demiurge
+matches that request and runs the complete shared pipeline. The provider phase
+cannot select a route capability directly.
 
 For a short-circuit decision, the provider integration must prove that the
 result preserves route policy, response headers, error format, redirect
 semantics, and observability output. The generated provider program must use
 framework-generated declarations. Generated code must not build an application response
 from arbitrary code.
+
+Routes with dynamic authorization always continue through the shared pipeline.
+A host short-circuit can serve only a route with statically representable
+public access policy. It cannot execute `defineAuthorization` hooks or use
+application middleware context to make an authorization decision.
 
 Without this proof, an integration must continue the request to the shared
 pipeline. No integration may claim the host middleware capability.
@@ -149,21 +170,26 @@ The adapter contract must prove at least these behaviors.
 
 - The shared pipeline executes each `@middleware.ts` file once in root-to-leaf
   order.
-- A provider phase cannot bypass Fetch Metadata, CSRF, rate limit, or request
-  body enforcement.
+- The host phase cannot bypass Fetch Metadata, CSRF, rate limit, or request
+  body enforcement. It also cannot bypass authorization.
 - A verified envelope provides declared context values and rejects changed,
   expired, and replayed envelopes.
-- A rewrite resolves policy from the final matched route.
-- A short-circuit preserves required headers, status, redirect, and error
-  behavior.
+- A rewrite discards the old envelope, verifies a replacement, and resolves
+  policy from the final matched route.
+- A protected route and a route with dynamic authorization continue through the
+  shared pipeline.
+- A declared short-circuit preserves required headers, status, redirect, and
+  error behavior.
 - Generated output excludes server-only modules, secrets, and envelope data.
 
-The deployment conformance kit must run the same probes against a real provider
-deployment. It must cover a document request, a navigation data request, an
-API request, a rejected request, a redirect, and a provider short-circuit.
+The deployment conformance kit must run the same base probes against a real
+provider deployment. The base probes cover document, navigation data, API,
+rejected, and redirect requests. Each declared operation adds its own probe.
+Rewrite support requires a rewrite probe. Short-circuit support requires a
+short-circuit probe.
 
 Each provider integration must declare the exact environments and operations
-that it supports. A provider that supports only rewrites must not claim
+that it supports. Rewrite-only integrations must not claim
 short-circuit support. A capability without passing adapter and deployment
 probes remains false.
 
