@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  assertDocument,
+  assertSecurity,
   createApplicationTest,
 } from "../../src/testing";
 import { text } from "../../src/route";
@@ -41,5 +43,46 @@ describe("createApplicationTest", () => {
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toBe("message");
     expect(middleware).toHaveBeenCalledOnce();
+  });
+});
+
+describe("document and security assertions", () => {
+  const document = '<title>Reports</title><script data-demiurge-document-contribution data-demiurge-script-strategy="afterInteractive" src="/assets/reports.js" nonce="fresh"></script>';
+
+  it("asserts resolved document metadata and managed scripts", async () => {
+    await expect(assertDocument(new Response(document), {
+      scripts: [{ src: "/assets/reports.js", strategy: "afterInteractive" }],
+      title: "Reports",
+    })).resolves.toBeUndefined();
+  });
+
+  it("reports a missing managed script contract", async () => {
+    await expect(assertDocument(new Response(document), {
+      scripts: [{ src: "/assets/missing.js" }],
+    })).rejects.toThrow("framework-managed script");
+  });
+
+  it("asserts a nonce-backed strict policy and private cache", async () => {
+    const response = new Response(document, {
+      headers: {
+        "cache-control": "private, no-store",
+        "content-security-policy": "script-src 'nonce-fresh'",
+        "x-content-type-options": "nosniff",
+      },
+    });
+
+    await expect(assertSecurity(response, {
+      csp: /nonce-fresh/,
+      headers: { "x-content-type-options": "nosniff" },
+      nonce: true,
+    })).resolves.toBeUndefined();
+  });
+
+  it("reports an unsafe nonce cache policy", async () => {
+    const response = new Response(document, {
+      headers: { "content-security-policy": "script-src 'nonce-fresh'" },
+    });
+
+    await expect(assertSecurity(response, { nonce: true })).rejects.toThrow("private or no-store");
   });
 });
