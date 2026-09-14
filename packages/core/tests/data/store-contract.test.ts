@@ -31,7 +31,7 @@ describe("cache store contract", () => {
 
   it("reports the violated operation", async () => {
     const brokenStore: CacheStore = {
-      capabilities: { atomicity: "strong" },
+      capabilities: { atomicity: "best-effort" },
       delete: () => false,
       get: () => undefined,
       invalidateTags: () => 0,

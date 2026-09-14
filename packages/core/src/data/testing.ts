@@ -13,6 +13,7 @@ export async function verifyCacheStoreContract(
   const betaKey = `${prefix}:beta`;
   const gammaKey = `${prefix}:gamma`;
   const deltaKey = `${prefix}:delta`;
+  const atomicKey = `${prefix}:atomic`;
   const alphaTag = `${prefix}:tag:alpha`;
   const betaTag = `${prefix}:tag:beta`;
   const deltaTag = `${prefix}:tag:delta`;
@@ -30,6 +31,27 @@ export async function verifyCacheStoreContract(
         store.capabilities.atomicity === "strong",
       "capabilities.atomicity must be `best-effort` or `strong`",
     );
+    if (store.capabilities.atomicity === "strong") {
+      const atomicTag = `${prefix}:tag:atomic`;
+      await store.set(atomicKey, {
+        expiresAt: future,
+        staleUntil: future,
+        tags: [atomicTag],
+        value: "atomic",
+      });
+      const invalidations = await Promise.all([
+        store.invalidateTags([atomicTag]),
+        store.invalidateTags([atomicTag]),
+      ]);
+      assert(
+        invalidations.reduce((total, count) => total + count, 0) === 1,
+        "strong atomicity must count one concurrent tag invalidation exactly once",
+      );
+      assert(
+        await store.get(atomicKey) === undefined,
+        "strong atomicity must remove an entry during concurrent tag invalidation",
+      );
+    }
     assert(
       await store.get(alphaKey) === undefined,
       "get() must return undefined for a missing key",
@@ -115,6 +137,7 @@ export async function verifyCacheStoreContract(
       store.delete(betaKey),
       store.delete(gammaKey),
       store.delete(deltaKey),
+      store.delete(atomicKey),
     ]);
   }
 }
@@ -156,25 +179,38 @@ export async function verifyCacheStoreRefreshContract(
 
   try {
     await store.set(key, original);
+    let ownerToken: string;
+    let otherToken: string;
+    if (store.capabilities.atomicity === "strong") {
+      const acquired = await Promise.all([
+        acquireRefreshLease(key, firstToken, leaseExpiresAt),
+        acquireRefreshLease(key, secondToken, leaseExpiresAt),
+      ]);
+      assert(
+        acquired.filter(Boolean).length === 1,
+        "strong atomicity must allow exactly one concurrent refresh lease owner",
+      );
+      ownerToken = acquired[0] ? firstToken : secondToken;
+      otherToken = acquired[0] ? secondToken : firstToken;
+    } else {
+      assert(
+        await acquireRefreshLease(key, firstToken, leaseExpiresAt),
+        "acquireRefreshLease() must acquire an unowned key",
+      );
+      ownerToken = firstToken;
+      otherToken = secondToken;
+    }
     assert(
-      await acquireRefreshLease(key, firstToken, leaseExpiresAt),
-      "acquireRefreshLease() must acquire an unowned key",
-    );
-    assert(
-      !await acquireRefreshLease(key, secondToken, leaseExpiresAt),
-      "acquireRefreshLease() must exclude a second owner",
-    );
-    assert(
-      !await publishRefresh(key, secondToken, refreshed),
+      !await publishRefresh(key, otherToken, refreshed),
       "publishRefresh() must reject a non-owner token",
     );
-    await releaseRefreshLease(key, secondToken);
+    await releaseRefreshLease(key, otherToken);
     assert(
-      !await acquireRefreshLease(key, secondToken, leaseExpiresAt),
+      !await acquireRefreshLease(key, otherToken, leaseExpiresAt),
       "releaseRefreshLease() must not release another owner's lease",
     );
     assert(
-      await publishRefresh(key, firstToken, refreshed),
+      await publishRefresh(key, ownerToken, refreshed),
       "publishRefresh() must atomically publish for the current owner",
     );
     assertEntry(
@@ -183,12 +219,12 @@ export async function verifyCacheStoreRefreshContract(
       "publishRefresh() for the current owner",
     );
     assert(
-      await acquireRefreshLease(key, secondToken, leaseExpiresAt),
+      await acquireRefreshLease(key, otherToken, leaseExpiresAt),
       "successful publication must release the refresh lease",
     );
     assert(await store.delete(key), "delete() must remove the refreshed entry");
     assert(
-      !await publishRefresh(key, secondToken, original),
+      !await publishRefresh(key, otherToken, original),
       "delete() must cancel an in-flight refresh lease",
     );
 
