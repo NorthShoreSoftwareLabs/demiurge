@@ -65,6 +65,22 @@ describe("assertSerializableValue", () => {
     );
   });
 
+  it("does not call toJSON on an object that toJSON returns", () => {
+    const result = {
+      toJSON() {
+        return 1n;
+      },
+    };
+
+    expect(() =>
+      assertSerializableValue({
+        toJSON() {
+          return result;
+        },
+      }, "/account")
+    ).not.toThrow();
+  });
+
   it("accepts an array of serializable values", () => {
     expect(() =>
       assertSerializableValue({ tags: ["a", "b", 1] }, "/account")
