@@ -23,3 +23,5 @@ after the implementing issue closes. They describe decisions, not task status.
 - [ADR 0018: Extension and security exception contracts](./0018-extension-and-exception-contracts.md)
 - [ADR 0019: Versioned inspection and diagnostic interfaces](./0019-versioned-inspection-interfaces.md)
 - [ADR 0020: Public application testing interface](./0020-public-application-testing-interface.md)
+- [ADR 0021: Typed cache-store atomicity capability](./0021-cache-store-atomicity-capability.md)
+- [ADR 0022: Runtime route-data serialization verification](./0022-runtime-route-data-serialization.md)
