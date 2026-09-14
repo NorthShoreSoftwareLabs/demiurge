@@ -32,6 +32,7 @@ export function assertSerializableValue(
   route: string,
   path: readonly string[] = [],
   seen = new Set<object>(),
+  applyToJSON = true,
 ): void {
   if (value === null) return;
 
@@ -46,27 +47,28 @@ export function assertSerializableValue(
   // TYPE-EVIDENCE: the typeof check above proves that the value is an object.
   const objectValue = value as object;
 
-  if (seen.has(objectValue)) {
-    throw unserializableValue(route, path, "a circular reference");
-  }
-
-  seen.add(objectValue);
-
-  const toJSON = (objectValue as { toJSON?: unknown }).toJSON;
-  if (typeof toJSON === "function") {
-    let jsonValue: unknown;
+  if (applyToJSON) {
+    let jsonValue: unknown = objectValue;
     try {
-      jsonValue = toJSON.call(objectValue, path.at(-1) ?? "");
+      const toJSON = (objectValue as { toJSON?: unknown }).toJSON;
+      if (typeof toJSON === "function") {
+        jsonValue = toJSON.call(objectValue, path.at(-1) ?? "");
+      }
     } catch {
       throw unserializableValue(route, path, "a failing toJSON result");
     }
 
     if (jsonValue !== objectValue) {
-      assertSerializableValue(jsonValue, route, path, seen);
-      seen.delete(objectValue);
+      assertSerializableValue(jsonValue, route, path, seen, false);
       return;
     }
   }
+
+  if (seen.has(objectValue)) {
+    throw unserializableValue(route, path, "a circular reference");
+  }
+
+  seen.add(objectValue);
 
   if (Array.isArray(objectValue)) {
     for (let index = 0; index < objectValue.length; index += 1) {
