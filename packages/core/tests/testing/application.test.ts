@@ -62,6 +62,20 @@ describe("document and security assertions", () => {
     })).rejects.toThrow("framework-managed script");
   });
 
+  it("reads an escaped single-quoted managed script source", async () => {
+    const escaped = "<script data-demiurge-document-contribution src='/assets/reports.js?a=1&amp;b=2'></script>";
+
+    await expect(assertDocument(new Response(escaped), {
+      scripts: [{ src: "/assets/reports.js?a=1&b=2" }],
+    })).resolves.toBeUndefined();
+  });
+
+  it("reports a managed script that does not match the expected contract", async () => {
+    await expect(assertDocument(new Response(document), {
+      scripts: [{ strategy: "idle" }],
+    })).rejects.toThrow("matching framework-managed script");
+  });
+
   it("asserts a nonce-backed strict policy and private cache", async () => {
     const response = new Response(document, {
       headers: {
@@ -109,5 +123,21 @@ describe("document and security assertions", () => {
     const response = new Response(document);
 
     await expect(assertSecurity(response, { nonce: false })).rejects.toThrow("Expected no document nonce");
+  });
+
+  it("reports a missing document nonce", async () => {
+    await expect(assertSecurity(new Response("<title>Static</title>"), {
+      nonce: true,
+    })).rejects.toThrow("Expected a document nonce");
+  });
+
+  it("checks headers without reading a document nonce", async () => {
+    const response = new Response("<title>Static</title>", {
+      headers: { "content-security-policy": "default-src 'self'" },
+    });
+
+    await expect(assertSecurity(response, {
+      csp: "default-src 'self'",
+    })).resolves.toBeUndefined();
   });
 });
