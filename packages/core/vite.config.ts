@@ -47,6 +47,9 @@ export default defineConfig({
         "static/index": fileURLToPath(
           new URL("src/static/index.ts", import.meta.url),
         ),
+        "static/testing": fileURLToPath(
+          new URL("src/static/testing.ts", import.meta.url),
+        ),
         "testing/index": fileURLToPath(
           new URL("src/testing/index.ts", import.meta.url),
         ),
