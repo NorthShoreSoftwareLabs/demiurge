@@ -17,13 +17,18 @@ type Serializable =
   | boolean
   | number
   | string
-  | Serializable[]
-  | { [key: string]: Serializable };
+  | readonly Serializable[]
+  | { readonly [key: string]: Serializable };
 ```
 
-That type rejects a known `bigint`, function, symbol, `undefined` value, class
-instance, `Map`, and `Set`. It also rejects a value that `JSON.stringify`
-accepts or changes. JSON omits an object property whose value is `undefined`.
+That type rejects a known `bigint`, function, symbol value, `undefined` value,
+`Map`, and `Set`. It also rejects a class instance with a member outside the
+object branch.
+
+A structural class instance with only serializable properties can satisfy the
+object branch. The type also accepts non-finite numbers and symbol-keyed
+properties. JSON changes non-finite numbers and omits symbol-keyed properties.
+JSON also omits an object property whose value is `undefined`.
 
 The type cannot reject `any`, a type assertion, or a value that an external
 service supplies at run time. It also cannot report the route and field of a
