@@ -50,6 +50,7 @@ export function assertSerializableValue(
   if (applyToJSON) {
     let jsonValue: unknown = objectValue;
     try {
+      // TYPE-EVIDENCE: the typeof check above proves that objectValue is an object. The assertion reads its optional toJSON property.
       const toJSON = (objectValue as { toJSON?: unknown }).toJSON;
       if (typeof toJSON === "function") {
         jsonValue = toJSON.call(objectValue, path.at(-1) ?? "");
