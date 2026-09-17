@@ -1,7 +1,11 @@
 import { Readable, Writable } from "node:stream";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";
-import { createMemoryRateLimitStore, enforceRateLimit } from "@demiurgejs/core";
+import {
+  createMemoryRateLimitStore,
+  enforceRateLimit,
+  getRequestClientAddress,
+} from "@demiurgejs/core";
 import {
   ConsumedRequestBodyError,
   UntrustedHostError,
@@ -385,6 +389,36 @@ describe("Node HTTP bridge", () => {
     );
 
     expect(request.url).toBe("http://example.test/health?ready=true");
+  });
+
+  it("accepts host-owned scheme and client address values independently", () => {
+    const request = toWebRequest(
+      incoming({
+        headers: {
+          host: "example.test",
+          "x-forwarded-for": "192.0.2.40",
+          "x-forwarded-host": "evil.example",
+          "x-forwarded-proto": "http",
+        },
+      }),
+      {
+        allowedHosts: ["example.test"],
+        clientIp: "203.0.113.8",
+        scheme: "https",
+      },
+    );
+
+    expect(request.url).toBe("https://example.test/health?ready=true");
+    expect(getRequestClientAddress(request)).toBe("203.0.113.8");
+  });
+
+  it("rejects an invalid host-owned client address", () => {
+    expect(() =>
+      toWebRequest(incoming({ headers: { host: "example.test" } }), {
+        allowedHosts: ["example.test"],
+        clientIp: "203.0.113.8, 192.0.2.1",
+      })
+    ).toThrow('clientIp "203.0.113.8, 192.0.2.1" is invalid');
   });
 
   it("rejects direct and trusted-forwarded hosts outside the allowlist", () => {

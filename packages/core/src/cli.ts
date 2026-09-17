@@ -13,6 +13,7 @@ import {
   type GenerateStaticOutputOptions,
   type StaticOutputManifest,
 } from "./static";
+import { generateVercelNodeOutput } from "./vercel";
 
 export { parseClientManifest } from "./manifest";
 export type { ClientBuildManifest } from "./manifest";
@@ -215,8 +216,27 @@ export async function runBuild(
           },
           ssr: true,
         },
+        ...(applicationServer.provider
+          ? {
+            ssr: {
+              external: ["react", "react-dom"],
+              noExternal: true,
+            },
+          }
+          : {}),
       }),
     );
+  }
+
+  const provider = applicationServer?.provider;
+  if (provider && applicationServer && serverOutDir) {
+    const deploymentOutDir = await generateVercelNodeOutput({
+      clientDir: outDir,
+      deployment: provider,
+      projectRoot: root,
+      serverDir: serverOutDir,
+    });
+    return { deploymentOutDir, outDir, serverOutDir };
   }
 
   if (!config.deployment?.static) return { outDir, serverOutDir };

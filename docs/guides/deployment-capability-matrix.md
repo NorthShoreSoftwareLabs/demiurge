@@ -1,8 +1,8 @@
 # Deployment Capability Matrix
 
-Every shipped deployment runs one of three adapters. Node deploys as a
-process, edge deploys as a Web-platform isolate, and static deploys as build
-output with no runtime process at all. Each adapter declares an
+Each deployment selects an adapter. Node deploys as a process. Vercel Node
+deploys as a function. Edge deploys as a Web-platform isolate. Static deploys
+as build output with no runtime process. Each adapter declares an
 `AdapterCapabilityMap` from `@demiurgejs/core/adapter`, and the shared
 contract suite in `@demiurgejs/core/adapter/testing` proves every declared
 capability against a real deployment of that adapter. This document maps
@@ -19,6 +19,7 @@ not here. Every claim below cites the source or test that proves it today.
 | Node process on a VM or bare-metal host | Node | [Node deployment](./node-deployment.md), [`examples/vm-node`](../../examples/vm-node) |
 | Node process in a container | Node | [Cloud Run deployment](./cloud-run-deployment.md), [`examples/cloud-run`](../../examples/cloud-run) |
 | Node process, general | Node | [Node deployment](./node-deployment.md), [`examples/node-server`](../../examples/node-server) |
+| Vercel Node Function | Vercel Node | [Vercel Node deployment](./vercel-node-deployment.md), [`examples/vercel-node`](../../examples/vercel-node) |
 | Web-platform isolate | Edge | [Edge deployment](./edge-deployment.md) |
 | Static build output | Static | [`examples/static-export`](../../examples/static-export), [object-storage and CDN deployment](./object-storage-cdn-deployment.md), [`examples/object-storage-cdn`](../../examples/object-storage-cdn) |
 
@@ -49,21 +50,22 @@ application code calls `assertAdapterCapabilities` directly, proven by
 
 ## Capability matrix
 
-| Capability | Node | Edge | Static |
+| Capability | Node | Vercel Node | Edge | Static |
 | --- | --- | --- | --- |
-| Streaming | Supported | Supported | Not supported |
-| Request cancellation | Supported | Supported | Not applicable |
-| Nonce injection | Supported | Supported | Not supported |
-| Cross-origin isolation headers | Supported | Supported | Not supported |
-| Static output | Not supported | Not supported | Supported |
-| Background lifetime | Supported | Not supported | Not applicable |
-| Request timeout enforcement | Supported | Not supported | Not applicable |
-| Shared cache (adapter-declared) | Not supported | Not supported | Not applicable |
-| WebSocket | Not supported | Not supported | Not supported |
-| WebTransport | Not supported | Not supported | Not supported |
+| Streaming | Supported | Supported | Supported | Not supported |
+| Request cancellation | Supported | Supported | Supported | Not applicable |
+| Nonce injection | Supported | Supported | Supported | Not supported |
+| Cross-origin isolation headers | Supported | Supported | Supported | Not supported |
+| Static output | Not supported | Not supported | Not supported | Supported |
+| Background lifetime | Supported | Not supported | Not supported | Not applicable |
+| Request timeout enforcement | Supported | Not supported | Not supported | Not applicable |
+| Shared cache (adapter-declared) | Not supported | Not supported | Not supported | Not applicable |
+| WebSocket | Not supported | Not supported | Not supported | Not supported |
+| WebTransport | Not supported | Not supported | Not supported | Not supported |
 
 Each row is proven by the contract test for its adapter:
 `packages/core/tests/node/adapter-contract.test.tsx`,
+`packages/core/tests/vercel/runtime.test.ts`,
 `packages/core/tests/edge/adapter-contract.test.tsx`, and
 `packages/core/tests/static/adapter-contract.test.tsx`. The `declares the
 capabilities the contract proved` case in each file is the exact assertion

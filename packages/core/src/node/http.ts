@@ -19,6 +19,12 @@ export type ToWebRequestOptions = NodeOriginPolicy & {
   // A host that reads the request body before the adapter runs can supply the
   // bytes it recovered. The adapter then uses them instead of the stream.
   body?: BodyInit | null;
+  // A managed host can provide a client address from a provider-owned header
+  // without trusting the forwarded host or the full proxy chain.
+  clientIp?: string;
+  // A managed host can provide its protocol without trusting forwarded host
+  // or address headers from the same proxy hop.
+  scheme?: HttpScheme;
   signal?: AbortSignal;
 };
 
@@ -128,7 +134,7 @@ export function toWebRequest(
     request.headers[forwardedHeaders.protocol],
     proxy.forwardedDepth,
   );
-  const protocol = resolveProtocol(request, forwardedProtocol);
+  const protocol = options.scheme ?? resolveProtocol(request, forwardedProtocol);
   const host = selectForwardedValue(
     request.headers[forwardedHeaders.host],
     proxy.forwardedDepth,
@@ -178,9 +184,23 @@ export function toWebRequest(
   }
 
   const webRequest = new Request(url, init);
-  setRequestConnectionMetadata(webRequest, { clientIp: proxy.clientIp });
+  setRequestConnectionMetadata(webRequest, {
+    clientIp: resolveClientIp(options.clientIp, proxy.clientIp),
+  });
 
   return webRequest;
+}
+
+function resolveClientIp(configured: string | undefined, fallback: string) {
+  if (configured === undefined) {
+    return fallback;
+  }
+
+  if (isIP(configured) === 0) {
+    throw new Error(`Demiurge Node clientIp "${configured}" is invalid.`);
+  }
+
+  return normalizeIpAddress(configured)!;
 }
 
 // A host that reads the request body before the adapter runs leaves an
