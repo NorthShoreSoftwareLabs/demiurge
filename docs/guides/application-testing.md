@@ -19,8 +19,34 @@ Pass a handler when the application composes the handler before the test:
 const application = createApplicationTest(handler);
 ```
 
-The helper returns the production `Response`. Your test runner owns assertions,
-mocks, and fixtures. A build or process test verifies deployment output.
+The helper returns the production `Response`. Your test runner owns assertions
+and mocks. A build or process test verifies deployment output.
+
+## Deterministic fixtures
+
+Use `createTestRequest(...)` when a test needs a standard `Request` with the
+application test origin. It returns the browser `Request` type. Pass a normal
+`RequestInit` object to set a method, body, or headers.
+
+Use `createTestClock(...)` where a store or manager accepts `now`. The clock
+starts at `0` unless the test gives an initial time. Call `set(...)` or
+`advance(...)` to control time.
+
+```ts
+import {
+  createTestClock,
+  createTestRequest,
+} from "@demiurgejs/core/testing";
+
+const clock = createTestClock(1_000);
+const request = createTestRequest("/reports", { method: "POST" });
+```
+
+Use `createMemoryCacheStore`, `createMemoryIdempotencyStore`, and
+`createMemorySessionStore` from `@demiurgejs/core` for local tests. The stores
+do not share entries across processes or replicas. Give the cache and
+idempotency stores `now: clock.now` when a test controls expiration. Give a
+session manager `now: clock.now` when a test controls session expiration.
 
 Use the document and security assertions for framework-owned output:
 
