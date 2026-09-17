@@ -21,9 +21,9 @@ export class RouteSerializationError extends Error {
  * Proves that the framework can serialize a page route browser payload.
  *
  * The return value of a page `data` function is the browser payload. This
- * check names the value that `JSON.stringify` cannot represent, so it
- * matches exactly the failures that already occur: a circular reference and
- * a `bigint` value. It does not add a check for a value that
+ * check names the value that `JSON.stringify` cannot represent. It checks a
+ * `toJSON` result, a circular reference, and a `bigint` value. It does not
+ * add a check for a value that
  * `JSON.stringify` already accepts or silently drops, such as `undefined`,
  * a function, a symbol key, or a non-finite number.
  */
@@ -32,6 +32,7 @@ export function assertSerializableValue(
   route: string,
   path: readonly string[] = [],
   seen = new Set<object>(),
+  applyToJSON = true,
 ): void {
   if (value === null) return;
 
@@ -45,6 +46,24 @@ export function assertSerializableValue(
 
   // TYPE-EVIDENCE: the typeof check above proves that the value is an object.
   const objectValue = value as object;
+
+  if (applyToJSON) {
+    let jsonValue: unknown = objectValue;
+    try {
+      // TYPE-EVIDENCE: the typeof check above proves that objectValue is an object. The assertion reads its optional toJSON property.
+      const toJSON = (objectValue as { toJSON?: unknown }).toJSON;
+      if (typeof toJSON === "function") {
+        jsonValue = toJSON.call(objectValue, path.at(-1) ?? "");
+      }
+    } catch {
+      throw unserializableValue(route, path, "a failing toJSON result");
+    }
+
+    if (jsonValue !== objectValue) {
+      assertSerializableValue(jsonValue, route, path, seen, false);
+      return;
+    }
+  }
 
   if (seen.has(objectValue)) {
     throw unserializableValue(route, path, "a circular reference");
