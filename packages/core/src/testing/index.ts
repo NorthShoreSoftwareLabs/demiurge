@@ -10,6 +10,12 @@ export type ApplicationTest = {
   request(input: Request | string | URL): Promise<Response>;
 };
 
+export type TestClock = {
+  advance: (milliseconds: number) => number;
+  now: () => number;
+  set: (epochMilliseconds: number) => number;
+};
+
 type ExpectedValue = RegExp | string;
 
 export type DocumentAssertion = {
@@ -40,6 +46,39 @@ export function createApplicationTest(
   return {
     async request(input) {
       return await handler(toRequest(input));
+    },
+  };
+}
+
+/**
+ * Creates a standard Request with the application test origin.
+ */
+export function createTestRequest(
+  input: string | URL,
+  init?: RequestInit,
+): Request {
+  return new Request(new URL(input, testOrigin), init);
+}
+
+/**
+ * Creates a deterministic clock for time-dependent application tests.
+ */
+export function createTestClock(initial = 0): TestClock {
+  assertTestTime(initial, "initial time");
+  let current = initial;
+
+  return {
+    advance(milliseconds) {
+      assertTestTime(milliseconds, "clock advance");
+      current += milliseconds;
+      assertTestTime(current, "clock time");
+      return current;
+    },
+    now: () => current,
+    set(epochMilliseconds) {
+      assertTestTime(epochMilliseconds, "clock time");
+      current = epochMilliseconds;
+      return current;
     },
   };
 }
@@ -117,7 +156,13 @@ function toRequest(input: Request | string | URL): Request {
     return input;
   }
 
-  return new Request(new URL(input, testOrigin));
+  return createTestRequest(input);
+}
+
+function assertTestTime(value: number, subject: string) {
+  if (!Number.isFinite(value)) {
+    throw new Error(`Demiurge test ${subject} must be finite.`);
+  }
 }
 
 function assertValue(actual: string, expected: ExpectedValue, subject: string) {

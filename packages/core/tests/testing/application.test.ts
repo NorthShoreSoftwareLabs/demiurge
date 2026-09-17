@@ -3,10 +3,35 @@ import {
   assertDocument,
   assertSecurity,
   createApplicationTest,
+  createTestClock,
+  createTestRequest,
 } from "../../src/testing";
 import { text } from "../../src/route";
 
 describe("createApplicationTest", () => {
+  it("creates standard requests at the application test origin", () => {
+    const request = createTestRequest("/messages", {
+      headers: { "x-test": "fixture" },
+      method: "POST",
+    });
+
+    expect(request).toBeInstanceOf(Request);
+    expect(request.method).toBe("POST");
+    expect(request.headers.get("x-test")).toBe("fixture");
+    expect(request.url).toBe("https://demiurge.test/messages");
+  });
+
+  it("creates a deterministic clock", () => {
+    const clock = createTestClock(1_000);
+
+    expect(clock.now()).toBe(1_000);
+    expect(clock.advance(250)).toBe(1_250);
+    expect(clock.set(500)).toBe(500);
+    expect(() => clock.advance(Number.POSITIVE_INFINITY)).toThrow(
+      "Demiurge test clock advance must be finite.",
+    );
+  });
+
   it("passes a pathname through the supplied production handler", async () => {
     const handler = vi.fn(async (request: Request) => new Response(request.url));
     const application = createApplicationTest(handler);
