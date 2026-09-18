@@ -232,6 +232,11 @@ export async function runBuild(
 
   const provider = applicationServer?.provider;
   if (provider && applicationServer && serverOutDir) {
+    if (config.security?.staticFileHeaders?.length) {
+      throw new Error(
+        "Vercel Node deployment does not support security.staticFileHeaders. Remove the rules or use a deployment that serves the browser output directly.",
+      );
+    }
     const deploymentOutDir = await generateVercelNodeOutput({
       clientDir: outDir,
       deployment: provider,

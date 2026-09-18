@@ -26,8 +26,12 @@ export async function generateVercelNodeOutput(
   const serverDir = resolve(options.serverDir);
   const outputRoot = resolve(projectRoot, ".vercel/output");
 
-  if (overlaps(outputRoot, clientDir) || overlaps(outputRoot, serverDir)) {
-    throw new Error("The Vercel output directory must not overlap a Demiurge build directory.");
+  if (
+    overlaps(outputRoot, clientDir) ||
+    overlaps(outputRoot, serverDir) ||
+    overlaps(clientDir, serverDir)
+  ) {
+    throw new Error("Vercel build directories must not overlap.");
   }
 
   await mkdir(dirname(outputRoot), { recursive: true });
@@ -46,6 +50,7 @@ export async function generateVercelNodeOutput(
       join(functionDir, "demiurge-manifest.json"),
     );
     await writeFile(join(functionDir, "index.mjs"), createFunctionEntry());
+    await writeFile(join(functionDir, "package.json"), '{"type":"module"}\n');
     await copyRuntimePackages(projectRoot, functionDir);
     await writeFile(
       join(functionDir, ".vc-config.json"),

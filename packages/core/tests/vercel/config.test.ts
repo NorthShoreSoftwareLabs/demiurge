@@ -71,9 +71,20 @@ describe("Vercel Node deployment", () => {
         .resolves.toContain('"maxDuration": 30');
       await expect(readFile(join(output, "functions", "demiurge.func", "index.mjs"), "utf8"))
         .resolves.toContain("return application.createHandler(page);");
+      await expect(readFile(join(output, "functions", "demiurge.func", "package.json"), "utf8"))
+        .resolves.toBe('{"type":"module"}\n');
     } finally {
       await rm(root, { force: true, recursive: true });
     }
+  });
+
+  it("rejects overlapping client and server output directories", async () => {
+    await expect(generateVercelNodeOutput({
+      clientDir: "/application/dist",
+      deployment: vercelNode(),
+      projectRoot: "/application",
+      serverDir: "/application/dist/server",
+    })).rejects.toThrow(/must not overlap/);
   });
 });
 

@@ -13,6 +13,7 @@ import {
   validateBuildOutputDirectory,
 } from "../src/cli";
 import type { ResolvedDemiurgeConfig } from "../src/config/types";
+import { vercelNode } from "../src/vercel";
 
 function resolvedConfig(
   config: Partial<ResolvedDemiurgeConfig> = {},
@@ -185,6 +186,21 @@ describe("Demiurge build", () => {
       input: "virtual:demiurge/server-entry",
       output: { entryFileNames: "server-entry.js" },
     });
+  });
+
+  it("rejects Vercel Node static-file header rules", async () => {
+    const runtime = buildRuntime();
+
+    await expect(runBuild(
+      parseCliArguments(["build"]),
+      resolvedConfig({
+        deployment: { server: { provider: vercelNode() } },
+        security: {
+          staticFileHeaders: [{ headers: { referrerPolicy: "no-referrer" }, pattern: ".*" }],
+        },
+      }),
+      runtime,
+    )).rejects.toThrow(/does not support security\.staticFileHeaders/);
   });
 
   it("runs the framework server build and the static generation", async () => {

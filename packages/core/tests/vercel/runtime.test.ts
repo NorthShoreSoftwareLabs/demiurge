@@ -1,11 +1,55 @@
 import { createServer } from "node:http";
+import { createElement, Suspense, use } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createVercelFunction,
   type VercelBuildContext,
+  vercelNodeAdapter,
 } from "../../src/vercel";
+import {
+  createRequestHandler,
+  defineRoutePolicy,
+  getRequestClientAddress,
+  page,
+  security,
+} from "../../src";
+import { verifyAdapterContract } from "../../src/adapter/testing";
 
 const servers: ReturnType<typeof createServer>[] = [];
+let deferredValue = Promise.resolve("Ready");
+
+function DeferredPageValue() {
+  return createElement("strong", undefined, use(deferredValue));
+}
+
+function StreamingPage() {
+  return createElement(
+    Suspense,
+    { fallback: createElement("p", undefined, "Loading") },
+    createElement(DeferredPageValue),
+  );
+}
+
+const contractRoutes = {
+  "./routes/@policy.ts": async () => ({
+    policy: defineRoutePolicy({
+      access: { public: true },
+      document: security.strict(),
+    }),
+  }),
+  "./routes/index.tsx": async () => ({
+    GET: page({ render: { mode: "streaming" }, view: StreamingPage }),
+  }),
+  "./routes/nonce.tsx": async () => ({
+    GET: page({ view: () => createElement("main", undefined, "Nonce document") }),
+  }),
+  "./routes/isolated/@policy.ts": async () => ({
+    policy: defineRoutePolicy({ document: security.crossOriginIsolated() }),
+  }),
+  "./routes/isolated/index.tsx": async () => ({
+    GET: page({ view: () => createElement("main", undefined, "Isolated document") }),
+  }),
+};
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) =>
@@ -14,11 +58,35 @@ afterEach(async () => {
 });
 
 describe("Vercel Node request bridge", () => {
+  it("proves every capability the Vercel Node adapter declares", async () => {
+    const origin = await start(createVercelFunction({
+      allowedHosts: ["127.0.0.1"],
+      createHandler({ page: buildPage }) {
+        return createRequestHandler({
+          ...buildPage,
+          routes: contractRoutes,
+        });
+      },
+      manifest: { clientEntry: "/assets/client.js", styles: [] },
+    }));
+
+    await expect(verifyAdapterContract(vercelNodeAdapter, {
+      crossOriginIsolationHeaders: () => fetch(`${origin}/isolated`),
+      nonceInjection: () => fetch(origin),
+      streaming: async () => {
+        deferredValue = new Promise((resolveDeferred) => {
+          setTimeout(() => resolveDeferred("Ready"), 20);
+        });
+        return await fetch(origin);
+      },
+    })).resolves.toBeUndefined();
+  });
+
   it("preserves a trusted scheme and client address through the request pipeline", async () => {
     const origin = await start(createVercelFunction({
       allowedHosts: ["127.0.0.1"],
       createHandler: () => async (request) => Response.json({
-        address: request.headers.get("x-vercel-forwarded-for"),
+        address: getRequestClientAddress(request),
         url: request.url,
       }),
       manifest: { clientEntry: "/assets/client.js", styles: [] },
@@ -82,7 +150,7 @@ describe("Vercel Node request bridge", () => {
 
   it("uses Vercel host environment values and refuses unavailable shared stores", async () => {
     let context: VercelBuildContext | undefined;
-    createVercelFunction({
+    const origin = await start(createVercelFunction({
       createHandler(received) {
         context = received;
         return async () => new Response("ok");
@@ -93,7 +161,7 @@ describe("Vercel Node request bridge", () => {
         VERCEL_URL: "deployment.example.test",
       },
       manifest: { clientEntry: "/assets/client.js", styles: [] },
-    });
+    }));
 
     const buildContext = context;
     if (buildContext === undefined) {
@@ -106,6 +174,11 @@ describe("Vercel Node request bridge", () => {
     };
     expect(() => rateLimitStore.increment())
       .toThrow(/no shared rate limit store/);
+
+    for (const host of ["deployment.example.test", "production.example.test"]) {
+      const response = await fetch(origin, { headers: { host } });
+      expect(response.status).toBe(200);
+    }
   });
 });
 

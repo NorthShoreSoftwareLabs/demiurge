@@ -51,7 +51,7 @@ application code calls `assertAdapterCapabilities` directly, proven by
 ## Capability matrix
 
 | Capability | Node | Vercel Node | Edge | Static |
-| --- | --- | --- | --- |
+| --- | --- | --- | --- | --- |
 | Streaming | Supported | Supported | Supported | Not supported |
 | Request cancellation | Supported | Supported | Supported | Not applicable |
 | Nonce injection | Supported | Supported | Supported | Not supported |

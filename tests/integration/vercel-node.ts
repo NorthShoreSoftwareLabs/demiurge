@@ -1,14 +1,22 @@
 import { createServer } from "node:http";
-import { access } from "node:fs/promises";
-import { resolve } from "node:path";
+import { access, cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  verifyDeploymentContract,
+  type DeploymentClaims,
+} from "@demiurgejs/core/deployment/testing";
 
 process.env.ALLOWED_HOSTS = "127.0.0.1";
+delete process.env.CONTACT_EMAIL_FROM;
+delete process.env.CONTACT_EMAIL_TO;
+delete process.env.RESEND_API_KEY;
 
-const functionEntry = resolve(
-  "examples/vercel-node/.vercel/output/functions/demiurge.func/index.mjs",
-);
-const staticDirectory = resolve("examples/vercel-node/.vercel/output/static");
+const artifactRoot = await mkdtemp(join(tmpdir(), "demiurge-vercel-artifact-"));
+await cp("examples/vercel-node/.vercel/output", artifactRoot, { recursive: true });
+const functionEntry = resolve(artifactRoot, "functions/demiurge.func/index.mjs");
+const staticDirectory = resolve(artifactRoot, "static");
 const module = await import(pathToFileURL(functionEntry).href);
 
 if (typeof module.default !== "function") {
@@ -46,6 +54,37 @@ try {
     throw new Error("The generated Vercel page does not reference a client asset.");
   }
   await access(resolve(staticDirectory, `.${asset}`));
+  const outputConfig = JSON.parse(await readFile(
+    resolve(artifactRoot, "config.json"),
+    "utf8",
+  ));
+  if (
+    outputConfig.routes?.[0]?.handle !== "filesystem" ||
+    outputConfig.routes?.[1]?.dest !== "/demiurge"
+  ) {
+    throw new Error("The Vercel artifact does not route static files before the function.");
+  }
+
+  const claims = {
+    clientAddress: true,
+    readiness: false,
+    repeatedHeaders: true,
+    requestUrl: true,
+    securityHeaders: true,
+    sharedCache: false,
+    staticAssets: false,
+    streaming: true,
+  } satisfies DeploymentClaims;
+  await verifyDeploymentContract(claims, {
+    clientAddress: (forwardedFor) =>
+      fetch(`${origin}/deployment-contract/client-address`, {
+        headers: { "x-vercel-forwarded-for": forwardedFor },
+      }),
+    repeatedHeaders: () => fetch(`${origin}/deployment-contract/repeated-headers`),
+    requestUrl: (pathname, search) => fetch(`${origin}${pathname}${search}`),
+    securityHeaders: () => fetch(origin, { headers: { accept: "text/html" } }),
+    streaming: () => fetch(`${origin}/deployment-contract/streaming`),
+  });
 
   const contact = await fetch(`${origin}/api/contact`, {
     body: JSON.stringify({
@@ -63,4 +102,5 @@ try {
   console.log("Vercel Node function artifact probe passed.");
 } finally {
   await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+  await rm(artifactRoot, { force: true, recursive: true });
 }

@@ -77,6 +77,7 @@ covers host allowlists, proxy trust, timeouts, and graceful shutdown.
 
 - `@demiurgejs/core` — routes, document APIs, security, caching, and browser runtime
 - `@demiurgejs/core/node` — production Node HTTP, SSR, and static-file adapter
+- `@demiurgejs/core/vercel` — Vercel Node Function deployment adapter
 - `@demiurgejs/core/static` — static-output adapter
 - `@demiurgejs/core/redis` — Redis-backed cache store with cross-instance tag invalidation
 - `@demiurgejs/core/config` — the application configuration contract

@@ -15,7 +15,9 @@ import { vercelNode } from "@demiurgejs/core/vercel";
 
 export default defineConfig({
   deployment: {
+    outDir: "dist/client",
     server: {
+      outDir: "dist/server",
       provider: vercelNode({ maxDuration: 60, regions: ["iad1"] }),
     },
   },
@@ -23,13 +25,13 @@ export default defineConfig({
 ```
 
 This configuration uses the generated server entry. Add an application server entry only when it must add server composition.
-Keep that entry portable. It receives the same page context as a Node deployment.
+Keep that entry portable. It receives the provider page context.
 
 ```ts
-import type { NodeBuildContext } from "@demiurgejs/core/node";
+import type { VercelBuildContext } from "@demiurgejs/core/vercel";
 import { createHandler as createDemiurgeHandler } from "virtual:demiurge/server-entry";
 
-export function createHandler({ page }: NodeBuildContext) {
+export function createHandler({ page }: VercelBuildContext) {
   return createDemiurgeHandler(page);
 }
 ```
@@ -58,6 +60,8 @@ Use a shared cache and rate-limit store when requests can reach multiple replica
 The first integration renders pages at request time.
 It does not provide Vercel Edge execution, ISR, WebSocket support, or CDN representation caching.
 Runtime responses use `private, no-store` to protect nonce-bearing and private responses.
+The provider rejects `security.staticFileHeaders` during the build.
+Use an application platform that can serve those browser-asset rules.
 
 See [`examples/vercel-node`](../../examples/vercel-node) for a buildable contact endpoint.
 Run a preview deployment before production use.
