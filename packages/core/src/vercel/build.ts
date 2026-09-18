@@ -101,7 +101,9 @@ const manifest = JSON.parse(await readFile(
 ));
 
 export default createVercelFunction({
-  createHandler: application.createHandler,
+  createHandler({ page }) {
+    return application.createHandler(page);
+  },
   manifest,
 });
 `;

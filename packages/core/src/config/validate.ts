@@ -95,7 +95,10 @@ export function validateDemiurgeConfig(
     assertOptionalString(context, "deployment.outDir", deployment.outDir);
     const server = section(context, deployment, "server", "deployment.");
     if (server) {
-      if (typeof server.entry !== "string" || !server.entry) {
+      if (
+        server.entry !== undefined &&
+        (typeof server.entry !== "string" || !server.entry)
+      ) {
         throw invalid(
           context,
           "deployment.server.entry",

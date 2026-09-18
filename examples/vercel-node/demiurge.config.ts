@@ -5,7 +5,6 @@ export default defineConfig({
   deployment: {
     outDir: "dist/client",
     server: {
-      entry: "src/server-entry.ts",
       provider: vercelNode({
         maxDuration: 60,
         regions: ["iad1"],

@@ -172,6 +172,21 @@ describe("Demiurge build", () => {
     expect(result.serverOutDir).toBe("/application/app/dist/server");
   });
 
+  it("builds the generated server entry when the configuration omits one", async () => {
+    const runtime = buildRuntime();
+
+    await runBuild(
+      parseCliArguments(["build"]),
+      resolvedConfig({ deployment: { server: {} } }),
+      runtime,
+    );
+
+    expect(runtime.build.mock.calls[1]![0].build?.rollupOptions).toEqual({
+      input: "virtual:demiurge/server-entry",
+      output: { entryFileNames: "server-entry.js" },
+    });
+  });
+
   it("runs the framework server build and the static generation", async () => {
     const runtime = buildRuntime();
     const result = await runBuild(

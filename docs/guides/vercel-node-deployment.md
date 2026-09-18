@@ -16,14 +16,14 @@ import { vercelNode } from "@demiurgejs/core/vercel";
 export default defineConfig({
   deployment: {
     server: {
-      entry: "src/server-entry.ts",
       provider: vercelNode({ maxDuration: 60, regions: ["iad1"] }),
     },
   },
 });
 ```
 
-Keep the server entry portable. It receives the same page context as a Node deployment.
+This configuration uses the generated server entry. Add an application server entry only when it must add server composition.
+Keep that entry portable. It receives the same page context as a Node deployment.
 
 ```ts
 import type { NodeBuildContext } from "@demiurgejs/core/node";

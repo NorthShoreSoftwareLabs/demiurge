@@ -92,9 +92,9 @@ describe("Demiurge configuration validation", () => {
       .toThrow(/field: vite.resolve.alias[\s\S]*received: 42/);
   });
 
-  it("requires an application server entry when the section exists", () => {
+  it("uses the generated server entry when the section has no entry", () => {
     expect(validate({ deployment: { server: {} } }))
-      .toThrow(/field: deployment.server.entry/);
+      .not.toThrow();
     expect(validate({ deployment: { server: { entry: "" } } }))
       .toThrow(/field: deployment.server.entry/);
   });

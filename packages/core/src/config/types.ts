@@ -40,7 +40,7 @@ export type DemiurgeAssetsConfig = {
 
 // The application server entry that a host runs.
 export type DemiurgeServerDeploymentConfig = {
-  entry: string;
+  entry?: string;
   outDir?: string;
   provider?: VercelNodeDeployment;
 };

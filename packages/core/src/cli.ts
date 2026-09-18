@@ -211,17 +211,19 @@ export async function runBuild(
           emptyOutDir: true,
           outDir: serverOutDir,
           rollupOptions: {
-            input: resolve(root, applicationServer.entry),
+            input: applicationServer.entry
+              ? resolve(root, applicationServer.entry)
+              : SERVER_ENTRY,
             output: { entryFileNames: "server-entry.js" },
           },
           ssr: true,
         },
         ...(applicationServer.provider
           ? {
-            ssr: {
-              external: ["react", "react-dom"],
-              noExternal: true,
-            },
+              ssr: {
+                external: ["@demiurgejs/core", "react", "react-dom"],
+                noExternal: true,
+              },
           }
           : {}),
       }),

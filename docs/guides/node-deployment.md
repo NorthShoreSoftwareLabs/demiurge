@@ -19,8 +19,22 @@ A production app builds two bundles.
   `demiurge-manifest.json`.
 - The SSR bundle contains a generated route map and a request-handler factory.
 
-Export a server-only runtime module so the server build has something to
-compile:
+Declare `deployment.server` to build the generated request-handler entry:
+
+```ts
+// demiurge.config.ts
+import { defineConfig } from "@demiurgejs/core/config";
+
+export default defineConfig({
+  deployment: {
+    outDir: "dist/client",
+    server: { outDir: "dist/server" },
+  },
+});
+```
+
+Add a server-only entry when the application must compose the standard handler.
+A Node entry can pass the host `waitUntil` binding to a cache store:
 
 ```ts
 // src/server-entry.ts
@@ -32,8 +46,7 @@ export function createHandler({ page }: NodeBuildContext) {
 }
 ```
 
-Declare the entry in `demiurge.config.ts`. `demiurge build` then writes the
-client bundle and the server bundle:
+Declare that entry in `demiurge.config.ts`:
 
 ```ts
 // demiurge.config.ts

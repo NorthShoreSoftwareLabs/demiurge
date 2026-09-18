@@ -69,6 +69,8 @@ describe("Vercel Node deployment", () => {
         .rejects.toMatchObject({ code: "ENOENT" });
       await expect(readFile(join(output, "functions", "demiurge.func", ".vc-config.json"), "utf8"))
         .resolves.toContain('"maxDuration": 30');
+      await expect(readFile(join(output, "functions", "demiurge.func", "index.mjs"), "utf8"))
+        .resolves.toContain("return application.createHandler(page);");
     } finally {
       await rm(root, { force: true, recursive: true });
     }
