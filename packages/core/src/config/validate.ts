@@ -22,7 +22,7 @@ const CONFIG_KEYS = [
 const SECTION_KEYS: Record<string, readonly string[]> = {
   assets: ["fonts", "images"],
   deployment: ["outDir", "server", "static"],
-  "deployment.server": ["entry", "outDir"],
+  "deployment.server": ["entry", "outDir", "provider"],
   "deployment.static": ["origin", "provider"],
   rendering: ["document", "styles"],
   "rendering.document": ["lang", "title"],
@@ -95,7 +95,10 @@ export function validateDemiurgeConfig(
     assertOptionalString(context, "deployment.outDir", deployment.outDir);
     const server = section(context, deployment, "server", "deployment.");
     if (server) {
-      if (typeof server.entry !== "string" || !server.entry) {
+      if (
+        server.entry !== undefined &&
+        (typeof server.entry !== "string" || !server.entry)
+      ) {
         throw invalid(
           context,
           "deployment.server.entry",
@@ -104,6 +107,7 @@ export function validateDemiurgeConfig(
         );
       }
       assertOptionalString(context, "deployment.server.outDir", server.outDir);
+      assertOptionalObject(context, "deployment.server.provider", server.provider);
     }
     const staticDeployment = section(
       context,
@@ -121,6 +125,11 @@ export function validateDemiurgeConfig(
         context,
         "deployment.static.provider",
         staticDeployment.provider,
+      );
+    }
+    if (server?.provider !== undefined && staticDeployment !== undefined) {
+      throw new DemiurgeConfigError(
+        `${configFile} config field "deployment" cannot declare both a runtime provider and static output.`,
       );
     }
   }

@@ -77,6 +77,10 @@
       "types": "./dist/edge/index.d.ts",
       "default": "./dist/edge/index.js"
     },
+    "./vercel": {
+      "types": "./dist/vercel/index.d.ts",
+      "default": "./dist/vercel/index.js"
+    },
     "./kv": {
       "types": "./dist/kv/index.d.ts",
       "default": "./dist/kv/index.js"

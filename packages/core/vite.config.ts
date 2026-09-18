@@ -38,6 +38,9 @@ export default defineConfig({
         "edge/index": fileURLToPath(
           new URL("src/edge/index.ts", import.meta.url),
         ),
+        "vercel/index": fileURLToPath(
+          new URL("src/vercel/index.ts", import.meta.url),
+        ),
         "kv/index": fileURLToPath(
           new URL("src/kv/index.ts", import.meta.url),
         ),

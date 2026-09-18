@@ -1,0 +1,11 @@
+import { Link, type RouteErrorProps } from "@demiurgejs/core";
+
+export default function RouteError({ pathname, status }: RouteErrorProps) {
+  return (
+    <main data-fallback-owner="vercel-example-error">
+      <p>{status}</p>
+      <h1>The application could not render {pathname}</h1>
+      <Link to="/">Return home</Link>
+    </main>
+  );
+}

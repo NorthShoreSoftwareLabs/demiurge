@@ -13,6 +13,7 @@ import {
   validateBuildOutputDirectory,
 } from "../src/cli";
 import type { ResolvedDemiurgeConfig } from "../src/config/types";
+import { vercelNode } from "../src/vercel";
 
 function resolvedConfig(
   config: Partial<ResolvedDemiurgeConfig> = {},
@@ -170,6 +171,36 @@ describe("Demiurge build", () => {
     });
     expect(result.outDir).toBe("/application/app/dist/client");
     expect(result.serverOutDir).toBe("/application/app/dist/server");
+  });
+
+  it("builds the generated server entry when the configuration omits one", async () => {
+    const runtime = buildRuntime();
+
+    await runBuild(
+      parseCliArguments(["build"]),
+      resolvedConfig({ deployment: { server: {} } }),
+      runtime,
+    );
+
+    expect(runtime.build.mock.calls[1]![0].build?.rollupOptions).toEqual({
+      input: "virtual:demiurge/server-entry",
+      output: { entryFileNames: "server-entry.js" },
+    });
+  });
+
+  it("rejects Vercel Node static-file header rules", async () => {
+    const runtime = buildRuntime();
+
+    await expect(runBuild(
+      parseCliArguments(["build"]),
+      resolvedConfig({
+        deployment: { server: { provider: vercelNode() } },
+        security: {
+          staticFileHeaders: [{ headers: { referrerPolicy: "no-referrer" }, pattern: ".*" }],
+        },
+      }),
+      runtime,
+    )).rejects.toThrow(/does not support security\.staticFileHeaders/);
   });
 
   it("runs the framework server build and the static generation", async () => {

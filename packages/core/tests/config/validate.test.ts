@@ -38,6 +38,34 @@ describe("Demiurge configuration validation", () => {
     expect(config.deployment?.server?.entry).toBe("src/server-entry.ts");
   });
 
+  it("accepts a Vercel provider declaration on a server deployment", () => {
+    const config = validateDemiurgeConfig(
+      {
+        deployment: {
+          server: {
+            entry: "src/server-entry.ts",
+            provider: { adapter: "vercel-node", runtime: "nodejs22.x" },
+          },
+        },
+      },
+      configFile,
+    );
+
+    expect(config.deployment?.server?.provider?.adapter).toBe("vercel-node");
+  });
+
+  it("rejects static output with a runtime provider", () => {
+    expect(validate({
+      deployment: {
+        server: {
+          entry: "src/server-entry.ts",
+          provider: { adapter: "vercel-node", runtime: "nodejs22.x" },
+        },
+        static: {},
+      },
+    })).toThrow(/cannot declare both a runtime provider and static output/);
+  });
+
   it("names the file and the field of an unknown option", () => {
     expect(validate({ routes: {} })).toThrow(DemiurgeConfigError);
     expect(validate({ routes: {} })).toThrow(/field: routes/);
@@ -64,9 +92,9 @@ describe("Demiurge configuration validation", () => {
       .toThrow(/field: vite.resolve.alias[\s\S]*received: 42/);
   });
 
-  it("requires an application server entry when the section exists", () => {
+  it("uses the generated server entry when the section has no entry", () => {
     expect(validate({ deployment: { server: {} } }))
-      .toThrow(/field: deployment.server.entry/);
+      .not.toThrow();
     expect(validate({ deployment: { server: { entry: "" } } }))
       .toThrow(/field: deployment.server.entry/);
   });

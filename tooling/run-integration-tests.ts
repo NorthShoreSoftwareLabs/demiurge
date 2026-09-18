@@ -30,6 +30,7 @@ const probes = [
   "tests/integration/analytics-csp.ts",
   "tests/integration/observability.ts",
   "tests/integration/form-interoperability.ts",
+  "tests/integration/vercel-node.ts",
 ];
 
 // Each probe is mostly idle, waiting on a server to boot and on HTTP round

@@ -97,14 +97,15 @@ headers.
 
 - It always writes the client bundle to `deployment.outDir`. The default
   directory is `dist`.
-- It builds the application server entry when `deployment.server` declares one.
+- It builds a generated server entry when `deployment.server` exists.
+- It builds the application server entry when `deployment.server.entry` declares one.
 - It writes static output when `deployment.static` exists.
 
 ```ts
 export default defineConfig({
   deployment: {
     outDir: "dist/client",
-    server: { entry: "src/server-entry.ts", outDir: "dist/server" },
+    server: { outDir: "dist/server" },
   },
 });
 ```

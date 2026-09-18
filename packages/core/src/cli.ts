@@ -13,6 +13,7 @@ import {
   type GenerateStaticOutputOptions,
   type StaticOutputManifest,
 } from "./static";
+import { generateVercelNodeOutput } from "./vercel";
 
 export { parseClientManifest } from "./manifest";
 export type { ClientBuildManifest } from "./manifest";
@@ -210,13 +211,39 @@ export async function runBuild(
           emptyOutDir: true,
           outDir: serverOutDir,
           rollupOptions: {
-            input: resolve(root, applicationServer.entry),
+            input: applicationServer.entry
+              ? resolve(root, applicationServer.entry)
+              : SERVER_ENTRY,
             output: { entryFileNames: "server-entry.js" },
           },
           ssr: true,
         },
+        ...(applicationServer.provider
+          ? {
+              ssr: {
+                external: ["@demiurgejs/core", "react", "react-dom"],
+                noExternal: true,
+              },
+          }
+          : {}),
       }),
     );
+  }
+
+  const provider = applicationServer?.provider;
+  if (provider && applicationServer && serverOutDir) {
+    if (config.security?.staticFileHeaders?.length) {
+      throw new Error(
+        "Vercel Node deployment does not support security.staticFileHeaders. Remove the rules or use a deployment that serves the browser output directly.",
+      );
+    }
+    const deploymentOutDir = await generateVercelNodeOutput({
+      clientDir: outDir,
+      deployment: provider,
+      projectRoot: root,
+      serverDir: serverOutDir,
+    });
+    return { deploymentOutDir, outDir, serverOutDir };
   }
 
   if (!config.deployment?.static) return { outDir, serverOutDir };

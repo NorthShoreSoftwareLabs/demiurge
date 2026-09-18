@@ -7,6 +7,7 @@ import type {
   StaticFileHeaderPatternRule,
   VercelStaticDeployment,
 } from "../static";
+import type { VercelNodeDeployment } from "../vercel/config";
 
 // The routes that the application publishes and the locales that select them.
 export type DemiurgeRoutingConfig<Locale extends string = string> = {
@@ -39,8 +40,9 @@ export type DemiurgeAssetsConfig = {
 
 // The application server entry that a host runs.
 export type DemiurgeServerDeploymentConfig = {
-  entry: string;
+  entry?: string;
   outDir?: string;
+  provider?: VercelNodeDeployment;
 };
 
 // The static output that a file host or an object store publishes.
