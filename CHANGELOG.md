@@ -5,6 +5,12 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- Internal `Link` navigation can use the browser View Transition API. Set
+  `viewTransitions: true` in `createFileRouter(...)`. The router waits for the
+  target route before it starts the transition. It keeps the current route
+  visible while it waits. The router skips the transition for reduced motion
+  and browsers without the API (#445).
+
 - `@demiurgejs/core/vercel` deploys a dynamic application as a Vercel Node
   Function. `vercelNode()` emits Vercel Build Output API version 3 artifacts,
   including static assets, function files, and routes. The adapter uses the
