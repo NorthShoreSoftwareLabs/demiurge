@@ -565,6 +565,32 @@ announcement.
 An application `onClick` handler runs before the router. If the handler
 prevents the default action, the router does not navigate.
 
+## View Transitions
+
+Set `viewTransitions` to `true` to use the browser View Transition API for
+internal `Link` navigation:
+
+```tsx
+createFileRouter({
+  routes,
+  viewTransitions: true,
+});
+```
+
+The router waits for route data and code before it starts the transition. It
+keeps the current route visible while it waits. The browser captures the old
+route and commits the new route in the View Transition callback.
+
+The router skips the transition when the browser lacks the API or the user
+requests reduced motion. It then uses normal client navigation.
+
+The router does not transition history navigation, mutation redirects, route
+refresh, or document navigation. Focus, scroll, and the route announcement use
+the existing navigation rules.
+
+Use `::view-transition-old(...)` and `::view-transition-new(...)` in your CSS.
+The framework adds no animation style or `view-transition-name` value.
+
 ## Browser scroll restoration
 
 The server navigation router controls the scroll position after it commits a

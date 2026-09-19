@@ -19,6 +19,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 import {
   RouteFocusContext,
   type RouteFocusBoundaryElement,
@@ -128,6 +129,7 @@ export type FileRouterOptions = {
   navigationAccessibility?: NavigationAccessibility;
   navigationScroll?: NavigationScrollOption;
   notFound?: ComponentType<NotFoundProps>;
+  viewTransitions?: boolean;
 };
 
 export function createFileRouter(options: FileRouterOptions) {
@@ -154,6 +156,7 @@ export function createFileRouter(options: FileRouterOptions) {
     const routeRefreshWaiters = useRef(new Set<() => void>());
     const [resolvedRouteVersion, setResolvedRouteVersion] = useState(0);
     const navigationKind = useRef<"push" | "replace" | "pop">("push");
+    const viewTransitionRequested = useRef(false);
     const [pendingCommit, setPendingCommit] = useState<NavigationCommit | null>(null);
     const [committed, setCommitted] = useState<NavigationCommit | null>(null);
     const pendingCommitRef = useRef<NavigationCommit | null>(null);
@@ -283,6 +286,7 @@ export function createFileRouter(options: FileRouterOptions) {
     useEffect(() => {
       function onPopState() {
         abortSubmissions();
+        viewTransitionRequested.current = false;
         navigationKind.current = "pop";
         restoringScroll.current = true;
         activeHistoryEntry.current = ensureHistoryEntry();
@@ -356,7 +360,7 @@ export function createFileRouter(options: FileRouterOptions) {
         pendingPopPosition.current = undefined;
       }
 
-      if (cause !== "refresh") {
+      if (cause !== "refresh" && !viewTransitionRequested.current) {
         setMatch({ status: "loading" });
         loadLoadingFallback(manifest, routePathname).then((Loading) => {
           if (isCurrent() && !settled && Loading) {
@@ -394,27 +398,36 @@ export function createFileRouter(options: FileRouterOptions) {
         .then(({ initialData, nextMatch, responseUrl }) => {
           settled = true;
           if (isCurrent()) {
-            if (initialData.document) {
-              applyNavigationDocument(initialData.document);
-            }
-            if ("locale" in initialData && initialData.locale) {
-              setLocale(initialData.locale);
-            }
-            if (responseUrl.href !== location.href) {
-              window.history.replaceState(window.history.state, "", responseUrl);
-              const canonicalLocation = getCurrentLocation();
-              lastLocation.current = canonicalLocation;
-              setLocation(canonicalLocation);
-            }
-            setMatch(nextMatch);
-            setResolvedRouteVersion((value) => value + 1);
-            if (cause !== "refresh") {
-              setPendingCommit({
-                kind: navigationKind.current,
-                outcome: nextMatch.status === "not-found" ? "not-found" : "ready",
-                title: document.title || "Demiurge App",
-                url: new URL(location.href),
-              });
+            const update = () => {
+              if (initialData.document) {
+                applyNavigationDocument(initialData.document);
+              }
+              if ("locale" in initialData && initialData.locale) {
+                setLocale(initialData.locale);
+              }
+              if (responseUrl.href !== location.href) {
+                window.history.replaceState(window.history.state, "", responseUrl);
+                const canonicalLocation = getCurrentLocation();
+                lastLocation.current = canonicalLocation;
+                setLocation(canonicalLocation);
+              }
+              setMatch(nextMatch);
+              setResolvedRouteVersion((value) => value + 1);
+              if (cause !== "refresh") {
+                setPendingCommit({
+                  kind: navigationKind.current,
+                  outcome: nextMatch.status === "not-found" ? "not-found" : "ready",
+                  title: document.title || "Demiurge App",
+                  url: new URL(location.href),
+                });
+              }
+            };
+            const transition = viewTransitionRequested.current;
+            viewTransitionRequested.current = false;
+            if (transition) {
+              startViewTransition(update);
+            } else {
+              update();
             }
           }
         })
@@ -543,6 +556,8 @@ export function createFileRouter(options: FileRouterOptions) {
           window.history.pushState(entry.state, "", to);
           activeHistoryEntry.current = entry.key;
           const next = getCurrentLocation();
+          viewTransitionRequested.current = canUseViewTransition(options.viewTransitions) &&
+            (previous.pathname !== next.pathname || previous.search !== next.search);
           if (previous.pathname !== next.pathname || previous.search !== next.search) {
             supersedeRouteLoad();
             routeLoadCause.current = "navigation";
@@ -572,6 +587,8 @@ export function createFileRouter(options: FileRouterOptions) {
             to,
           );
           const next = getCurrentLocation();
+          viewTransitionRequested.current = canUseViewTransition(options.viewTransitions) &&
+            (previous.pathname !== next.pathname || previous.search !== next.search);
           if (previous.pathname !== next.pathname || previous.search !== next.search) {
             supersedeRouteLoad();
             routeLoadCause.current = "navigation";
@@ -680,6 +697,7 @@ export function createFileRouter(options: FileRouterOptions) {
       redirect(destination, history, controller) {
         supersedeRouteLoad();
         abortSubmissions(controller);
+        viewTransitionRequested.current = false;
         routeLoadCause.current = "navigation";
         saveCurrentScrollPosition();
         if (history === "replace") {
@@ -1536,6 +1554,25 @@ function announceNavigation(
 
 function announceNavigationRegion(message: string) {
   updateNavigationStatus(message);
+}
+
+function canUseViewTransition(enabled: boolean | undefined) {
+  return enabled === true &&
+    !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches &&
+    typeof document.startViewTransition === "function";
+}
+
+function startViewTransition(update: () => void) {
+  if (typeof document.startViewTransition !== "function") {
+    update();
+    return;
+  }
+
+  try {
+    document.startViewTransition(() => flushSync(update));
+  } catch {
+    update();
+  }
 }
 
 type RouterApi = {

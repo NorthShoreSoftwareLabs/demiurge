@@ -438,6 +438,7 @@ describe("browser router fallbacks", () => {
     cleanup();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    Reflect.deleteProperty(document, "startViewTransition");
   });
 
   it("does not render framework-owned loading markup by default", () => {
@@ -820,6 +821,63 @@ describe("browser router fallbacks", () => {
       expect(window.location.pathname).toBe("/blog");
       expect(screen.getByText("Blog page at /blog")).toBeTruthy();
     });
+  });
+
+  it("starts a View Transition when an internal link commits a resolved route", async () => {
+    const navigation = deferred<{ hasData: true }>();
+    const startViewTransition = vi.fn((update: () => void) => update());
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: startViewTransition,
+    });
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false })));
+    const Router = createFileRouter({
+      loadNavigationData: async (request) =>
+        new URL(request.url).pathname === "/blog" ? await navigation.promise : { hasData: true },
+      loading: RouteLoading,
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(HomePage) }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+      viewTransitions: true,
+    });
+
+    render(<Router />);
+    await screen.findByText("Home");
+    fireEvent.click(screen.getByText("Blog"));
+
+    expect(startViewTransition).not.toHaveBeenCalled();
+    expect(screen.getByText("Home")).toBeTruthy();
+    expect(screen.queryByText("Route loading")).toBeNull();
+
+    navigation.resolve({ hasData: true });
+    await screen.findByText("Blog page at /blog");
+
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips View Transitions when reduced motion is requested", async () => {
+    const startViewTransition = vi.fn((update: () => void) => update());
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: startViewTransition,
+    });
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+    const Router = createFileRouter({
+      loading: RouteLoading,
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(HomePage) }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+      viewTransitions: true,
+    });
+
+    render(<Router />);
+    await screen.findByText("Home");
+    fireEvent.click(screen.getByText("Blog"));
+    await screen.findByText("Blog page at /blog");
+
+    expect(startViewTransition).not.toHaveBeenCalled();
   });
 
   it("scrolls a committed path navigation to the top", async () => {
