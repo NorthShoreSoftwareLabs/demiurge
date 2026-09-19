@@ -5,6 +5,18 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- `@demiurgejs/core/vercel` deploys a dynamic application as a Vercel Node
+  Function. `vercelNode()` emits Vercel Build Output API version 3 artifacts,
+  including static assets, function files, and routes. The adapter uses the
+  shared request pipeline and Node renderer. It supports dynamic SSR, API
+  routes, streaming, request cancellation, security headers, and repeated
+  cookies. The adapter reports Vercel-specific capability limits. The build
+  rejects `security.staticFileHeaders`, because Vercel cannot represent those
+  rules in a safe adapter contract (#225).
+- A server deployment can omit `server.entry`. The framework then generates
+  the server entry from the configured adapter. Add an explicit entry only when
+  the application must compose server-only services or host integration (#225).
+
 - `demiurge inspect` writes the static inspection report. The command reads the
   route tree, resolves the policy cascade, and writes one JSON document to
   standard output. It writes a human summary to standard error, so a pipe
