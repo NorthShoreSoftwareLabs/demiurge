@@ -386,6 +386,10 @@ their own URL:
 Layouts, middleware, and policy apply root-to-leaf. An ordinary file such as
 `policy.tsx` remains the real `/policy` route.
 
+During browser navigation, a layout remains mounted when the destination uses
+the same layout module. The router renders loading UI inside the current layout
+chain. Each new path or query string remounts the page.
+
 `@policy.ts` carries the `access` declaration of its subtree. Every route needs
 an inherited declaration, because the request pipeline denies a route that
 inherits none. A public application declares `access: { public: true }` once at

@@ -667,6 +667,37 @@ describe("browser router fallbacks", () => {
     });
   });
 
+  it("renders loading UI inside inherited layouts after a not-found navigation", async () => {
+    const blogNavigation = deferred<{ hasData: true }>();
+    const Router = createFileRouter({
+      loading: Loading,
+      loadNavigationData: async (request) => {
+        if (new URL(request.url).pathname === "/blog") {
+          return await blogNavigation.promise;
+        }
+        return { hasData: true };
+      },
+      routes: {
+        "./routes/@layout.tsx": routeModule({ default: RootLayout }),
+        "./routes/@not-found.tsx": routeModule({ default: NotFound }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("App not found: /")).toBeTruthy());
+
+    window.history.pushState(null, "", "/blog");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    await waitFor(() => expect(screen.getByText("App loading")).toBeTruthy());
+    expect(screen.getByText("Root layout")).toBeTruthy();
+
+    blogNavigation.resolve({ hasData: true });
+
+    await waitFor(() => expect(screen.getByText("Blog page at /blog")).toBeTruthy());
+  });
+
   it("renders inherited @error UI when a matched route throws", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     window.history.replaceState(null, "", "/blog");
@@ -745,6 +776,40 @@ describe("browser router fallbacks", () => {
     await waitFor(() => {
       expect(screen.getByText("Blog page at /blog")).toBeTruthy();
     });
+  });
+
+  it("renders loading UI after a rendered route error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const blogNavigation = deferred<{ hasData: true }>();
+    window.history.replaceState(null, "", "/broken");
+    const Router = createFileRouter({
+      loading: Loading,
+      loadNavigationData: async (request) => {
+        if (new URL(request.url).pathname === "/blog") {
+          return await blogNavigation.promise;
+        }
+        return { hasData: true };
+      },
+      routes: {
+        "./routes/@error.tsx": routeModule({ default: RouteError }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+        "./routes/broken.tsx": routeModule({ GET: page(BrokenPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => {
+      expect(screen.getByText("Route error at /broken: render failed")).toBeTruthy();
+    });
+
+    window.history.pushState(null, "", "/blog");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+
+    await waitFor(() => expect(screen.getByText("App loading")).toBeTruthy());
+
+    blogNavigation.resolve({ hasData: true });
+
+    await waitFor(() => expect(screen.getByText("Blog page at /blog")).toBeTruthy());
   });
 
   it("passes a typed status to the client error boundary", async () => {
@@ -878,6 +943,93 @@ describe("browser router fallbacks", () => {
     await screen.findByText("Blog page at /blog");
 
     expect(startViewTransition).not.toHaveBeenCalled();
+  });
+
+  it("keeps shared layouts mounted while a navigation loads and commits", async () => {
+    const blogNavigation = deferred<{ hasData: true }>();
+    let layoutMounts = 0;
+
+    function PersistentLayout({ children }: LayoutProps) {
+      const [mount] = useState(() => ++layoutMounts);
+      return (
+        <section>
+          <output aria-label="layout mount">{mount}</output>
+          {children}
+        </section>
+      );
+    }
+
+    const Router = createFileRouter({
+      loading: Loading,
+      loadNavigationData: async (request) => {
+        if (new URL(request.url).pathname === "/blog") {
+          return await blogNavigation.promise;
+        }
+        return { hasData: true };
+      },
+      routes: {
+        "./routes/@layout.tsx": routeModule({ default: PersistentLayout }),
+        "./routes/index.tsx": routeModule({ GET: page(HomePage) }),
+        "./routes/blog/index.tsx": routeModule({ GET: page(BlogPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByText("Home")).toBeTruthy());
+
+    fireEvent.click(screen.getByText("Blog"));
+
+    await waitFor(() => expect(screen.getByText("App loading")).toBeTruthy());
+    expect(screen.getByLabelText("layout mount").textContent).toBe("1");
+
+    blogNavigation.resolve({ hasData: true });
+
+    await waitFor(() => expect(screen.getByText("Blog page at /blog")).toBeTruthy());
+    expect(screen.getByLabelText("layout mount").textContent).toBe("1");
+    expect(layoutMounts).toBe(1);
+  });
+
+  it("keeps shared layouts mounted when a query navigation remounts the page", async () => {
+    let layoutMounts = 0;
+    let pageMounts = 0;
+
+    function PersistentLayout({ children }: LayoutProps) {
+      const [mount] = useState(() => ++layoutMounts);
+      return (
+        <section>
+          <output aria-label="layout mount">{mount}</output>
+          {children}
+        </section>
+      );
+    }
+
+    function QueryNavigationPage() {
+      const [mount] = useState(() => ++pageMounts);
+      return (
+        <>
+          <output aria-label="page mount">{mount}</output>
+          <Link to="/" search={{ view: "next" }}>Next view</Link>
+        </>
+      );
+    }
+
+    const Router = createFileRouter({
+      routes: {
+        "./routes/@layout.tsx": routeModule({ default: PersistentLayout }),
+        "./routes/index.tsx": routeModule({ GET: page(QueryNavigationPage) }),
+      },
+    });
+
+    render(<Router />);
+    await waitFor(() => expect(screen.getByLabelText("page mount").textContent).toBe("1"));
+
+    fireEvent.click(screen.getByText("Next view"));
+
+    await waitFor(() => expect(window.location.search).toBe("?view=next"));
+    await waitFor(() => expect(screen.getByLabelText("page mount").textContent).toBe("2"));
+    expect(screen.getByLabelText("layout mount").textContent).toBe("1");
+    expect(layoutMounts).toBe(1);
+    expect(pageMounts).toBe(2);
   });
 
   it("scrolls a committed path navigation to the top", async () => {

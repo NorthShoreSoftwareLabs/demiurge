@@ -144,6 +144,7 @@ export function createFileRouter(options: FileRouterOptions) {
     const [match, setMatch] = useState<PendingRouteMatch>(
       () => options.initialMatch ?? { status: "loading" },
     );
+    const [pendingLoading, setPendingLoading] = useState<ComponentType | null>(null);
     const initialMatchPending = useRef(Boolean(options.initialMatch));
     const initialNavigationPending = useRef(true);
     const navigationSequence = useRef(0);
@@ -361,10 +362,16 @@ export function createFileRouter(options: FileRouterOptions) {
       }
 
       if (cause !== "refresh" && !viewTransitionRequested.current) {
-        setMatch({ status: "loading" });
+        setPendingLoading(() => options.loading ?? null);
+        setMatch((current) => current.status === "loading"
+          ? { status: "loading" }
+          : current);
         loadLoadingFallback(manifest, routePathname).then((Loading) => {
           if (isCurrent() && !settled && Loading) {
-            setMatch({ loading: Loading, status: "loading" });
+            setPendingLoading(() => Loading);
+            setMatch((current) => current.status === "loading"
+              ? { loading: Loading, status: "loading" }
+              : current);
           }
         }).catch(() => {
           // Loading UI is optional. A malformed pathname or broken loading
@@ -399,6 +406,7 @@ export function createFileRouter(options: FileRouterOptions) {
           settled = true;
           if (isCurrent()) {
             const update = () => {
+              setPendingLoading(null);
               if (initialData.document) {
                 applyNavigationDocument(initialData.document);
               }
@@ -444,6 +452,7 @@ export function createFileRouter(options: FileRouterOptions) {
           );
 
           if (isCurrent()) {
+            setPendingLoading(null);
             const navigationDocument = typeof error === "object" && error
               ? navigationErrorDocuments.get(error)
               : undefined;
@@ -731,10 +740,11 @@ export function createFileRouter(options: FileRouterOptions) {
     children: createElement(RouteFocusContext.Provider, {
         value: focusRegistration,
         children: createElement(RouteRenderer, {
-          key: `${location.pathname}${location.search}`,
           Loading: options.loading,
           NotFound: options.notFound,
           match,
+          pendingLoading,
+          routeKey: `${location.pathname}${location.search}`,
           pendingCommit,
           resolvedRouteVersion,
           onCommitted: (value) => {
@@ -1077,6 +1087,8 @@ function RouteRenderer({
   Loading,
   NotFound,
   match,
+  pendingLoading,
+  routeKey,
   onRenderError,
   onCommitted,
   pendingCommit,
@@ -1086,6 +1098,8 @@ function RouteRenderer({
   Loading?: ComponentType;
   NotFound?: ComponentType<NotFoundProps>;
   match: PendingRouteMatch;
+  pendingLoading: ComponentType | null;
+  routeKey: string;
   onCommitted: (value: NavigationCommit) => void;
   onRenderError: () => void;
   pendingCommit: NavigationCommit | null;
@@ -1096,6 +1110,23 @@ function RouteRenderer({
     const AppLoading = match.loading ?? Loading;
 
     return AppLoading ? createElement(AppLoading) : null;
+  }
+
+  if (pendingLoading && match.status === "not-found") {
+    return createElement(Fragment, null, match.layouts.reduceRight<ReactNode>(
+      (children, Layout) =>
+        createElement(Layout, {
+          children,
+          locale: match.locale,
+          path: {},
+          pathname: match.pathname,
+        }),
+      createElement(pendingLoading),
+    ), createElement(NavigationCommitMarker, { commit: pendingCommit, onCommit: onCommitted, onRouteCommitted, resolvedRouteVersion }));
+  }
+
+  if (pendingLoading && match.status === "error") {
+    return createElement(pendingLoading);
   }
 
   if (match.status === "not-found") {
@@ -1125,7 +1156,9 @@ function RouteRenderer({
   }
 
   const { data, error, locale, page, layouts, path, pathname } = match.match;
-  const pageElement = createElement(page, { data, locale, path, pathname });
+  const pageElement = pendingLoading
+    ? createElement(pendingLoading)
+    : createElement(page, { data, key: routeKey, locale, path, pathname });
   const routeElement = layouts.reduceRight<ReactNode>(
     (children, Layout) => createElement(Layout, { path, pathname, locale, children }),
     pageElement,
@@ -1135,6 +1168,7 @@ function RouteRenderer({
     Error: error,
       children: createElement(Fragment, null, routeElement, createElement(NavigationCommitMarker, { commit: pendingCommit, onCommit: onCommitted, onRouteCommitted, resolvedRouteVersion })),
     onError: onRenderError,
+    pending: Boolean(pendingLoading),
     pathname,
   });
 }
@@ -1170,6 +1204,7 @@ class RouteErrorBoundary extends Component<
     children: ReactNode;
     Error?: ComponentType<RouteErrorProps>;
     onError: () => void;
+    pending: boolean;
     pathname: string;
   },
   { error?: unknown }
@@ -1188,6 +1223,7 @@ class RouteErrorBoundary extends Component<
     children: ReactNode;
     Error?: ComponentType<RouteErrorProps>;
     onError: () => void;
+    pending: boolean;
     pathname: string;
   }) {
     if (
@@ -1199,7 +1235,7 @@ class RouteErrorBoundary extends Component<
   }
 
   override render() {
-    if (this.state.error !== undefined) {
+    if (this.state.error !== undefined && !this.props.pending) {
       return this.props.Error
         ? createElement(this.props.Error, {
             error: this.state.error,
