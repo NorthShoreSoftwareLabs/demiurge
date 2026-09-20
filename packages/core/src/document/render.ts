@@ -79,7 +79,7 @@ export function renderDocumentShell({
   const documentTitle = metadata?.title ?? title;
   const trailingBodyContent = [
     ...scripts
-      .filter((scriptTag) => scriptTag[scriptPlacement] !== "hoisted")
+      .filter((scriptTag) => !rendersInHead(scriptTag))
       .map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`),
     renderBootstrapData(body.data, body.navigation, body.locale),
     ...(entrySrc ? [renderEntryScript(entrySrc, nonce)] : []),
@@ -118,7 +118,7 @@ function renderDocumentWithoutBody({
     renderNavigationStatusRegion(nonce),
     renderRootElement(),
     ...scripts
-      .filter((scriptTag) => scriptTag[scriptPlacement] !== "hoisted")
+      .filter((scriptTag) => !rendersInHead(scriptTag))
       .map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`),
     ...(entrySrc ? [renderEntryScript(entrySrc, nonce)] : []),
   ].join("\n");
@@ -224,9 +224,14 @@ function renderHeadTags({
     ),
     ...links.map((tag) => renderLinkTag(tag, true)),
     ...scripts
-      .filter((scriptTag) => scriptTag[scriptPlacement] === "hoisted")
+      .filter(rendersInHead)
       .map((scriptTag) => `    ${renderScriptTag(scriptTag, nonce)}`),
   ].join("\n");
+}
+
+function rendersInHead(scriptTag: ScriptTag) {
+  return scriptTag.strategy === "beforeInteractive" ||
+    scriptTag[scriptPlacement] === "hoisted";
 }
 
 function renderRobotsTags(metadata: ResolvedMetadata | undefined) {

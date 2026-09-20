@@ -222,6 +222,22 @@ describe("renderDocument resource hints and static scripts", () => {
     );
   });
 
+  it("renders static beforeInteractive scripts in the document head", () => {
+    const html = renderDocument({
+      nonce: "doc-nonce",
+      scripts: [
+        script({ src: "https://cdn.example.com/theme.js", strategy: "beforeInteractive" }),
+        script({ src: "https://cdn.example.com/app.js", strategy: "afterInteractive" }),
+      ],
+    });
+
+    const earlyScript = '<script data-demiurge-document-contribution data-demiurge-script-strategy="beforeInteractive" src="https://cdn.example.com/theme.js" nonce="doc-nonce"></script>';
+    const laterScript = '<script data-demiurge-document-contribution data-demiurge-script-strategy="afterInteractive" src="https://cdn.example.com/app.js" nonce="doc-nonce"></script>';
+
+    expect(html.indexOf(earlyScript)).toBeLessThan(html.indexOf("</head>"));
+    expect(html.indexOf(laterScript)).toBeGreaterThan(html.indexOf('<div id="root"'));
+  });
+
   it("lets a script's own nonce take priority over the document nonce", () => {
     const html = renderDocument({
       nonce: "doc-nonce",
