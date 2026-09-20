@@ -237,8 +237,8 @@ not set `script-src`, the framework makes an explicit `script-src` from the
 sets `csp.scriptSrc` to `false`, the framework rejects the policy at startup.
 Set an explicit `csp.scriptSrc` for that route.
 
-The framework hoists managed scripts found before the document head flushes.
-It renders scripts found after the flush at their component position. In
+The framework renders a declared `beforeInteractive` script in the document
+head. It hoists other managed scripts found before the head flushes. In
 development, a late `beforeInteractive` script fails and points to
 `export const scripts`. In production, the framework renders that script in
 place after the flush, so the strategy cannot provide an early-load guarantee.

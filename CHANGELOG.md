@@ -5,6 +5,9 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- A static `beforeInteractive` script renders in the document head. The script
+  can now run before the browser paints the page (#447).
+
 - Internal `Link` navigation can use the browser View Transition API. Set
   `viewTransitions: true` in `createFileRouter(...)`. The router waits for the
   target route before it starts the transition. It keeps the current route
