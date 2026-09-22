@@ -25,6 +25,7 @@ import {
 
 const mutationFormActionMetadata = Symbol("Demiurge mutation form action");
 declare const mutationFormActionResult: unique symbol;
+const temporaryCsrfTokens = new Map<string, number>();
 
 export type MutationResult<TData = unknown, TField extends string = string> =
   | { version: 1; status: "success"; data?: TData; revalidate?: boolean }
@@ -220,21 +221,33 @@ export async function performMutationRequest<TData = unknown, TField extends str
   url: string;
 }) {
   const csrfToken = getBrowserCsrfToken();
-  const response = await fetch(options.url, {
-    body: options.body,
-    credentials: "same-origin",
-    headers: {
-      accept: MUTATION_RESPONSE_MEDIA_TYPE,
-      [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
-      ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
-      ...(options.contentType ? { "content-type": options.contentType } : {}),
-    },
-    method: options.method,
-    redirect: "manual",
-    signal: options.signal,
-  });
-  return { response, result: await readMutationResult<TData, TField>(response) };
+
+  try {
+    const response = await fetch(options.url, {
+      body: options.body,
+      credentials: "same-origin",
+      headers: {
+        accept: MUTATION_RESPONSE_MEDIA_TYPE,
+        [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
+        ...(csrfToken ? { "x-csrf-token": csrfToken.value } : {}),
+        ...(options.contentType ? { "content-type": options.contentType } : {}),
+      },
+      method: options.method,
+      redirect: "manual",
+      signal: options.signal,
+    });
+    return { response, result: await readMutationResult<TData, TField>(response) };
+  } finally {
+    if (csrfToken?.temporary) {
+      releaseBrowserCsrfToken(csrfToken.value);
+    }
+  }
 }
+
+type BrowserCsrfToken = {
+  temporary: boolean;
+  value: string;
+};
 
 function getBrowserCsrfToken() {
   if (typeof document === "undefined") {
@@ -244,14 +257,50 @@ function getBrowserCsrfToken() {
   const existing = parseCookieHeader(document.cookie).get("csrf-token");
 
   if (existing) {
-    return existing;
+    const temporary = temporaryCsrfTokens.has(existing);
+    if (temporary) {
+      temporaryCsrfTokens.set(existing, temporaryCsrfTokens.get(existing)! + 1);
+    }
+    return { temporary, value: existing } satisfies BrowserCsrfToken;
   }
 
   const token = createCsrfToken();
   document.cookie = createCsrfCookie(token, {
-    secure: typeof window !== "undefined" && window.location.protocol === "https:",
+    secure: browserCsrfCookieIsSecure(),
   });
-  return token;
+  temporaryCsrfTokens.set(token, 1);
+  return { temporary: true, value: token } satisfies BrowserCsrfToken;
+}
+
+function releaseBrowserCsrfToken(token: string) {
+  const references = temporaryCsrfTokens.get(token);
+
+  if (references === undefined) {
+    return;
+  }
+
+  if (references > 1) {
+    temporaryCsrfTokens.set(token, references - 1);
+    return;
+  }
+
+  temporaryCsrfTokens.delete(token);
+
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  if (parseCookieHeader(document.cookie).get("csrf-token") !== token) {
+    return;
+  }
+
+  document.cookie = `csrf-token=; Max-Age=0; Path=/; SameSite=Lax${
+    browserCsrfCookieIsSecure() ? "; Secure" : ""
+  }`;
+}
+
+function browserCsrfCookieIsSecure() {
+  return typeof window !== "undefined" && window.location.protocol === "https:";
 }
 
 export async function readMutationResult<TData = unknown, TField extends string = string>(

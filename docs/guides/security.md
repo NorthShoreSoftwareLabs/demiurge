@@ -507,7 +507,9 @@ apply its normal service failure policy.
 Demiurge protects HTTP unsafe methods when the request includes a cookie.
 Framework-managed enhanced mutations read the default `csrf-token` cookie. If
 the cookie is absent, the browser creates it and sends the token in the
-`x-csrf-token` header. The browser reuses an existing token.
+`x-csrf-token` header. The browser reuses an existing token. The framework
+removes a token that it creates after the enhanced mutation finishes. It keeps
+a token that the application already set.
 
 Progressive forms without JavaScript still need an explicit field and token.
 Use `issueCsrfToken(...)`, `createCsrfToken(...)`, and `createCsrfCookie(...)`

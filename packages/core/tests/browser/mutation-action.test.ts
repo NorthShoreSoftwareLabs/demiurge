@@ -74,7 +74,7 @@ describe("mutation actions", () => {
     expect(new Headers(init?.headers).has("content-type")).toBe(false);
   });
 
-  it("creates and reuses a CSRF token in the browser", async () => {
+  it("creates and cleans a temporary CSRF token in the browser", async () => {
     document.cookie = "csrf-token=; Max-Age=0; path=/";
     const fetchSpy = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => mutationResponse({
       status: "success",
@@ -91,7 +91,16 @@ describe("mutation actions", () => {
     const firstHeader = new Headers(fetchSpy.mock.calls[0]?.[1]?.headers).get("x-csrf-token");
 
     expect(firstHeader).toBeTruthy();
-    expect(document.cookie).toContain(`csrf-token=${firstHeader}`);
+    expect(document.cookie).not.toContain("csrf-token=");
+  });
+
+  it("reuses and preserves an existing CSRF token in the browser", async () => {
+    document.cookie = "csrf-token=existing";
+    const fetchSpy = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => mutationResponse({
+      status: "success",
+      version: 1,
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
 
     await performMutationRequest({
       body: new FormData(),
@@ -100,7 +109,61 @@ describe("mutation actions", () => {
       url: "/items/1",
     });
 
-    expect(new Headers(fetchSpy.mock.calls[1]?.[1]?.headers).get("x-csrf-token")).toBe(firstHeader);
+    expect(new Headers(fetchSpy.mock.calls[0]?.[1]?.headers).get("x-csrf-token")).toBe("existing");
+    expect(document.cookie).toContain("csrf-token=existing");
+  });
+
+  it("keeps a temporary token until concurrent mutations finish", async () => {
+    document.cookie = "csrf-token=; Max-Age=0; path=/";
+    const resolveResponses: ((response: Response) => void)[] = [];
+    const fetchSpy = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      await new Promise<Response>((resolve) => resolveResponses.push(resolve))
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const first = performMutationRequest({
+      body: new FormData(),
+      method: "POST",
+      signal: new AbortController().signal,
+      url: "/items/1",
+    });
+    const second = performMutationRequest({
+      body: new FormData(),
+      method: "POST",
+      signal: new AbortController().signal,
+      url: "/items/1",
+    });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const token = document.cookie.match(/(?:^|; )csrf-token=([^;]+)/)?.[1];
+    expect(token).toBeTruthy();
+
+    resolveResponses[0]!(mutationResponse({ status: "success", version: 1 }));
+    await first;
+    expect(document.cookie).toContain(`csrf-token=${token}`);
+
+    resolveResponses[1]!(mutationResponse({ status: "success", version: 1 }));
+    await second;
+    expect(document.cookie).not.toContain("csrf-token=");
+  });
+
+  it.each(["failure", "abort"])("cleans a temporary CSRF token after a fetch %s", async (outcome) => {
+    document.cookie = "csrf-token=; Max-Age=0; path=/";
+    const fetchSpy = vi.fn(async () => {
+      throw outcome === "abort"
+        ? new DOMException("Aborted", "AbortError")
+        : new Error("Network failure");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(performMutationRequest({
+      body: new FormData(),
+      method: "POST",
+      signal: new AbortController().signal,
+      url: "/items/1",
+    })).rejects.toThrow();
+
+    expect(document.cookie).not.toContain("csrf-token=");
   });
 
   it("does not send a CSRF header during server rendering", async () => {

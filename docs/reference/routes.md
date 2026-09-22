@@ -263,7 +263,8 @@ browser router and exposes state through `useFormNavigation` and
 
 Requests with cookies use CSRF protection for HTTP unsafe methods by default.
 Framework-managed enhanced mutations create or reuse the default token cookie
-and send the matching request header.
+and send the matching request header. The framework removes a cookie that it
+creates after the mutation finishes.
 
 Progressive forms without JavaScript still need an explicit token field. The
 default flow does not add a hidden field to a native form.
