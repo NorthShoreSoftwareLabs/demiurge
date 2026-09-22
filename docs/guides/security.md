@@ -504,11 +504,17 @@ apply its normal service failure policy.
 
 ## CSRF
 
-Cookie-authenticated unsafe methods receive double-submit CSRF protection by
-default. Use `issueCsrfToken(...)`, `createCsrfToken(...)`, and
-`createCsrfCookie(...)` to issue the matching token and cookie. A route can make
-an explicit, auditable exemption when another authentication model makes CSRF
-inapplicable.
+Demiurge protects HTTP unsafe methods when the request includes a cookie.
+Framework-managed enhanced mutations read the default `csrf-token` cookie. If
+the cookie is absent, the browser creates it and sends the token in the
+`x-csrf-token` header. The browser reuses an existing token.
+
+Progressive forms without JavaScript still need an explicit field and token.
+Use `issueCsrfToken(...)`, `createCsrfToken(...)`, and `createCsrfCookie(...)`
+when you use a custom policy or a progressive form.
+
+A route can make an explicit, auditable exemption when another authentication
+model makes CSRF inapplicable.
 
 `createCsrfCookie(...)` keeps the unprefixed `csrf-token` name for
 compatibility. Pass a `cookie` option to move the token to a prefixed name.

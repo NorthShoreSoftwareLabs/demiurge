@@ -19,6 +19,7 @@ import {
 import {
   abortMutationActions,
   readMutationResult,
+  performMutationRequest,
   registerMutationRouter,
   validateMutationRedirect,
 } from "../../src/browser/mutation-action";
@@ -44,6 +45,7 @@ describe("mutation actions", () => {
   });
 
   it("sends the original FormData with credentials and a cancellation signal", async () => {
+    document.cookie = "csrf-token=token";
     const formData = new FormData();
     formData.append("title", "Current title");
     const fetchSpy = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => mutationResponse({
@@ -67,8 +69,56 @@ describe("mutation actions", () => {
     expect(url).toBe("/items/42");
     expect(init?.body).toBe(formData);
     expect(init?.credentials).toBe("same-origin");
+    expect(new Headers(init?.headers).get("x-csrf-token")).toBe("token");
     expect(init?.signal).toBeInstanceOf(AbortSignal);
     expect(new Headers(init?.headers).has("content-type")).toBe(false);
+  });
+
+  it("creates and reuses a CSRF token in the browser", async () => {
+    document.cookie = "csrf-token=; Max-Age=0; path=/";
+    const fetchSpy = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => mutationResponse({
+      status: "success",
+      version: 1,
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await performMutationRequest({
+      body: new FormData(),
+      method: "POST",
+      signal: new AbortController().signal,
+      url: "/items/1",
+    });
+    const firstHeader = new Headers(fetchSpy.mock.calls[0]?.[1]?.headers).get("x-csrf-token");
+
+    expect(firstHeader).toBeTruthy();
+    expect(document.cookie).toContain(`csrf-token=${firstHeader}`);
+
+    await performMutationRequest({
+      body: new FormData(),
+      method: "POST",
+      signal: new AbortController().signal,
+      url: "/items/1",
+    });
+
+    expect(new Headers(fetchSpy.mock.calls[1]?.[1]?.headers).get("x-csrf-token")).toBe(firstHeader);
+  });
+
+  it("does not send a CSRF header during server rendering", async () => {
+    vi.stubGlobal("document", undefined);
+    const fetchSpy = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => mutationResponse({
+      status: "success",
+      version: 1,
+    }));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await performMutationRequest({
+      body: new FormData(),
+      method: "POST",
+      signal: new AbortController().signal,
+      url: "/items/1",
+    });
+
+    expect(new Headers(fetchSpy.mock.calls[0]?.[1]?.headers).has("x-csrf-token")).toBe(false);
   });
 
   it("makes an obsolete call adopt the newest result", async () => {

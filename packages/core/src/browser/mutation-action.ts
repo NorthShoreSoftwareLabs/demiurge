@@ -17,6 +17,11 @@ import {
 } from "../routing";
 import { useActionState, useMemo } from "react";
 import { isPlainObject } from "../type-guards";
+import {
+  createCsrfCookie,
+  createCsrfToken,
+  parseCookieHeader,
+} from "../security/csrf";
 
 const mutationFormActionMetadata = Symbol("Demiurge mutation form action");
 declare const mutationFormActionResult: unique symbol;
@@ -214,12 +219,14 @@ export async function performMutationRequest<TData = unknown, TField extends str
   signal: AbortSignal;
   url: string;
 }) {
+  const csrfToken = getBrowserCsrfToken();
   const response = await fetch(options.url, {
     body: options.body,
     credentials: "same-origin",
     headers: {
       accept: MUTATION_RESPONSE_MEDIA_TYPE,
       [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
+      ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
       ...(options.contentType ? { "content-type": options.contentType } : {}),
     },
     method: options.method,
@@ -227,6 +234,24 @@ export async function performMutationRequest<TData = unknown, TField extends str
     signal: options.signal,
   });
   return { response, result: await readMutationResult<TData, TField>(response) };
+}
+
+function getBrowserCsrfToken() {
+  if (typeof document === "undefined") {
+    return undefined;
+  }
+
+  const existing = parseCookieHeader(document.cookie).get("csrf-token");
+
+  if (existing) {
+    return existing;
+  }
+
+  const token = createCsrfToken();
+  document.cookie = createCsrfCookie(token, {
+    secure: typeof window !== "undefined" && window.location.protocol === "https:",
+  });
+  return token;
 }
 
 export async function readMutationResult<TData = unknown, TField extends string = string>(
