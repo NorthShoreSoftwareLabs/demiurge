@@ -53,6 +53,26 @@ function CustomCsrfFormView() {
   );
 }
 
+function ExternalCsrfFormView() {
+  return <Form action="https://outside.example/save" method="post"><button type="submit">Save</button></Form>;
+}
+
+function SubmitterCsrfFormView() {
+  return (
+    <Form action="/read" method="get">
+      <button formAction="/save" formMethod="post" type="submit">Save</button>
+    </Form>
+  );
+}
+
+function ExternalSubmitterCsrfFormView() {
+  return (
+    <Form action="/save" method="post">
+      <button formAction="https://outside.example/save" type="submit">External save</button>
+    </Form>
+  );
+}
+
 function Layout({ children }: LayoutProps) {
   return <section>Layout: {children}</section>;
 }
@@ -120,6 +140,38 @@ describe("request handler", () => {
 
     expect(mutationResponse.status).toBe(200);
     expect(mutationSpy).toHaveBeenCalledOnce();
+  });
+  it("keeps an existing form token response private", async () => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(CsrfFormView) }),
+      },
+    });
+
+    const response = await handler(new Request("https://example.test/", {
+      headers: { cookie: "csrf-token=existing" },
+    }));
+
+    await expect(response.text()).resolves.toContain('value="existing"');
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+  });
+  it.each([
+    { hidden: false, view: ExternalCsrfFormView },
+    { hidden: true, view: SubmitterCsrfFormView },
+    { hidden: false, view: ExternalSubmitterCsrfFormView },
+  ])("renders submitter-aware CSRF transport with hidden=$hidden", async ({ hidden, view }) => {
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/index.tsx": routeModule({ GET: page(view) }),
+      },
+    });
+
+    const response = await handler(new Request("https://example.test/"));
+    const html = await response.text();
+
+    expect(html.includes('name="_csrf"')).toBe(hidden);
+    expect(response.headers.getSetCookie().length > 0).toBe(hidden);
   });
   it("returns expected mutation validation without the error path", async () => {
     const onError = vi.fn();

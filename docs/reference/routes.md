@@ -296,6 +296,15 @@ route uses custom names:
 The configured field or header must match the CSRF cookie. Do not put a
 session token or another credential in the field.
 
+`Form` checks the form action and visible submitter overrides. It does not add
+the token if an unsafe submission can target another origin.
+
+Put a cross-origin submitter in a separate form. This structure prevents the
+browser from sending the CSRF token to the other origin.
+
+Streaming pages issue the default token before they send response headers.
+Render a form with a custom cookie name in the initial shell.
+
 #### Mutation conformance limits
 
 Request cancellation is advisory. An aborted request can complete its server

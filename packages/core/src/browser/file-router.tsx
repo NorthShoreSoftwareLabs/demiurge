@@ -1,6 +1,7 @@
 import {
   AnchorHTMLAttributes,
   ButtonHTMLAttributes,
+  Children,
   Component,
   ComponentType,
   ForwardedRef,
@@ -11,6 +12,7 @@ import {
   ReactNode,
   createContext,
   createElement,
+  isValidElement,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -1001,9 +1003,6 @@ export function Form(props: FormProps) {
     ? undefined
     : props.csrf ?? progressiveDetails?.csrf;
   const method = progressiveAction ? "POST" : (props.method ?? "GET").toUpperCase();
-  const protectForm = props.csrf !== false && ["DELETE", "PATCH", "POST", "PUT"].includes(method);
-  const csrfToken = useCsrfFormToken(protectForm ? csrf : false);
-  const renderedCsrfToken = useRef(csrfToken).current;
 
   useLayoutEffect(() => () => {
     if (formRef.current) {
@@ -1038,6 +1037,10 @@ export function Form(props: FormProps) {
   const localizedAction = typeof action === "string" && router.locales && (props.locale ?? router.locale)
     ? localizeHref(action, (props.locale ?? router.locale)!, router.locales, typeof window === "undefined" ? "http://demiurge.local" : window.location.href)
     : action;
+  const protectedActions = csrfFormActions(method, localizedAction, formProps.children);
+  const protectForm = props.csrf !== false && protectedActions.length > 0;
+  const csrfToken = useCsrfFormToken(protectForm ? csrf : false, protectedActions);
+  const renderedCsrfToken = useRef(csrfToken).current;
   return createElement(
     MutationFormContext.Provider,
     {
@@ -1070,6 +1073,43 @@ export function Form(props: FormProps) {
       }),
     },
   );
+}
+
+function csrfFormActions(
+  method: string,
+  action: string | ((formData: FormData) => void) | undefined,
+  children: ReactNode,
+) {
+  const baseAction = typeof action === "string" ? action : undefined;
+  const actions = ["DELETE", "PATCH", "POST", "PUT"].includes(method)
+    ? [baseAction]
+    : [];
+
+  function visit(node: ReactNode) {
+    if (!isValidElement<{
+      children?: ReactNode;
+      formAction?: string;
+      formMethod?: string;
+      type?: string;
+    }>(node)) return;
+    const element = node;
+    if (typeof element.type === "string") {
+      const type = element.props.type?.toLowerCase();
+      const submitter = element.type === "button"
+        ? type !== "button" && type !== "reset"
+        : element.type === "input" && (type === "submit" || type === "image");
+      if (submitter) {
+        const submitMethod = (element.props.formMethod ?? method).toUpperCase();
+        if (["DELETE", "PATCH", "POST", "PUT"].includes(submitMethod)) {
+          actions.push(element.props.formAction ?? baseAction);
+        }
+      }
+    }
+    Children.forEach(element.props.children, visit);
+  }
+
+  Children.forEach(children, visit);
+  return actions;
 }
 
 export function MutationSubmit(props: MutationSubmitProps) {

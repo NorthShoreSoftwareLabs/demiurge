@@ -176,7 +176,7 @@ export function useMutationAction<
       // TYPE-EVIDENCE: ResultData either keeps the generated data type or applies the caller's explicit data refinement.
       return generated as MutationAction<ResultData, ResultField>;
     },
-    [options.method, url],
+    [options.csrf, options.method, url],
   );
   const [state, dispatch, pending] = useActionState<
     MutationResult<ResultData, ResultField> | undefined,

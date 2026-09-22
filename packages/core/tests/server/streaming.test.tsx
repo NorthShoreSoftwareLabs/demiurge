@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createRequestHandler,
   defineRoutePolicy,
+  Form,
   page,
   security,
   Script,
@@ -70,6 +71,24 @@ function createStreamingScriptPage(value: Promise<string>) {
         <h1>Streaming script shell</h1>
         <Suspense fallback={<p>Loading script</p>}>
           <DeferredValue />
+        </Suspense>
+      </main>
+    );
+  };
+}
+
+function createLateCsrfFormPage(value: Promise<string>) {
+  function DeferredForm() {
+    use(value);
+    return <Form method="post"><button type="submit">Save</button></Form>;
+  }
+
+  return function StreamingPage() {
+    return (
+      <main>
+        <h1>Streaming form shell</h1>
+        <Suspense fallback={<p>Loading form</p>}>
+          <DeferredForm />
         </Suspense>
       </main>
     );
@@ -202,6 +221,31 @@ describe("streaming page responses", () => {
     expect(scriptTags.every(([, attributes]) =>
       attributes.includes(`nonce="${nonce}"`)
     )).toBe(true);
+  });
+
+  it("preissues the default token for a late streaming CSRF form", async () => {
+    const value = deferred<string>();
+    const handler = createRequestHandler({
+      renderPage: renderNodePageResponse,
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page({
+            render: { mode: "streaming" },
+            view: createLateCsrfFormPage(value.promise),
+          }),
+        }),
+      },
+    });
+
+    const response = await handler(new Request("https://example.test/"));
+    const reader = response.body!.getReader();
+    const shell = await readUntil(reader, (html) => html.includes("Loading form"));
+    value.resolve("ready");
+    const html = shell.html + await readRemaining(reader, shell.decoder);
+
+    expect(response.headers.getSetCookie()[0]).toMatch(/^csrf-token=/);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(html).toContain('name="_csrf"');
   });
 
   it("renders a late managed script in place after the streaming shell flushes", async () => {

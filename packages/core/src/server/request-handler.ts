@@ -535,6 +535,10 @@ async function handleMatchedRoute(
 
           const renderPage = options.renderPage ?? renderPageResponse;
 
+          if (match.match.render.mode === "streaming") {
+            csrf?.context.token();
+          }
+
           return await renderPage(match.match, {
             ...options.ssr,
             csrf: csrf?.context,
@@ -568,9 +572,10 @@ async function handleMatchedRoute(
     }
 
     if (response.status >= 200 && response.status < 300) {
+      csrf?.seal();
       const cookies = csrf?.cookies() ?? [];
       for (const cookie of cookies) response.headers.append("set-cookie", cookie);
-      if (cookies.length > 0) response.headers.set("cache-control", "private, no-store");
+      if (csrf?.used()) response.headers.set("cache-control", "private, no-store");
     }
     const headers = createSecurityHeaders(policy.document ?? {}, {
       nonce,

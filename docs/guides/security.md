@@ -508,8 +508,14 @@ Demiurge protects HTTP unsafe methods when the request includes another cookie.
 The default CSRF cookie does not activate the check by itself.
 
 `Form` adds the default `_csrf` field during server rendering. The response
-sets the matching `csrf-token` cookie. A response that sets this cookie uses
+sets the matching `csrf-token` cookie. A response that renders the token uses
 `Cache-Control: private, no-store`.
+
+`Form` does not add the token if an unsafe submission can target another
+origin. Put the cross-origin submission in a separate form.
+
+Streaming pages issue the default token before they send response headers. A
+form with a custom cookie name must render in the initial shell.
 
 Framework-managed enhanced mutations send the token through the
 `x-csrf-token` header. Use `fetchWithCsrf(...)` for an application fetch call.
