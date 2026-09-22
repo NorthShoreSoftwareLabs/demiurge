@@ -31,7 +31,7 @@ export async function renderEdgeStreamingPageResponse(
   }
 
   const scripts = createPageScriptContext(match, options);
-  const content = createPageRenderTree(match, scripts);
+  const content = createPageRenderTree(match, scripts, options.csrf);
   const renderAbort = new AbortController();
   let committed = false;
   const abortRender = () => {

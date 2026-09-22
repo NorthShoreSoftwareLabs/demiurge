@@ -262,26 +262,32 @@ browser router and exposes state through `useFormNavigation` and
 #### CSRF tokens in progressive forms
 
 Requests with cookies use CSRF protection for HTTP unsafe methods by default.
-Framework-managed enhanced mutations create or reuse the default token cookie
-and send the matching request header. The framework removes a cookie that it
-creates after the mutation finishes.
-
-Progressive forms without JavaScript still need an explicit token field. The
-default flow does not add a hidden field to a native form.
+`Form` adds the default hidden field during server rendering. The response sets
+the matching cookie. Framework-managed enhanced mutations send the matching
+request header.
 
 If a form must work without JavaScript, configure a field on the route policy:
 
 ```tsx
 export const policy = defineRoutePolicy({
-  security: { csrf: { field: "_csrf" } },
+  security: {
+    csrf: {
+      cookie: "editor-csrf",
+      field: "editor-token",
+      header: "x-editor-csrf",
+    },
+  },
 });
 ```
 
-Issue a token on the server. Then, include the same token in the form:
+`Form` adds this field automatically. Pass matching options to `Form` when the
+route uses custom names:
 
 ```tsx
-<Form action={save}>
-  <input type="hidden" name="_csrf" value={token} />
+<Form
+  action={save}
+  csrf={{ cookie: "editor-csrf", field: "editor-token", header: "x-editor-csrf" }}
+>
   <input name="title" />
   <button type="submit">Save</button>
 </Form>
@@ -289,6 +295,15 @@ Issue a token on the server. Then, include the same token in the form:
 
 The configured field or header must match the CSRF cookie. Do not put a
 session token or another credential in the field.
+
+`Form` checks the form action and visible submitter overrides. It does not add
+the token if an unsafe submission can target another origin.
+
+Put a cross-origin submitter in a separate form. This structure prevents the
+browser from sending the CSRF token to the other origin.
+
+Streaming pages issue the default token before they send response headers.
+Render a form with a custom cookie name in the initial shell.
 
 #### Mutation conformance limits
 

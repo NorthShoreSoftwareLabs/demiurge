@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createMutationAction,
   createFileRouter,
+  fetchWithCsrf,
   Form,
   MutationSubmit,
   page,
@@ -72,6 +73,35 @@ describe("mutation actions", () => {
     expect(new Headers(init?.headers).get("x-csrf-token")).toBe("token");
     expect(init?.signal).toBeInstanceOf(AbortSignal);
     expect(new Headers(init?.headers).has("content-type")).toBe(false);
+  });
+
+  it("supports custom CSRF names for application fetch calls", async () => {
+    document.cookie = "application-csrf=custom-token";
+    const fetchSpy = vi.fn(async (
+      _input: RequestInfo | URL,
+      _init?: RequestInit,
+    ) => new Response("ok"));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await fetchWithCsrf("/api/items", { method: "POST" }, {
+      cookie: "application-csrf",
+      header: "x-application-csrf",
+    });
+
+    const [, init] = fetchSpy.mock.calls[0]!;
+    expect(new Headers(init?.headers).get("x-application-csrf")).toBe("custom-token");
+    expect(init?.credentials).toBe("same-origin");
+    expect(document.cookie).toContain("application-csrf=custom-token");
+  });
+
+  it("rejects a cross-origin CSRF fetch", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await expect(fetchWithCsrf("https://other.example/items", {
+      method: "POST",
+    })).rejects.toThrow("same-origin URL");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("creates and cleans a temporary CSRF token in the browser", async () => {

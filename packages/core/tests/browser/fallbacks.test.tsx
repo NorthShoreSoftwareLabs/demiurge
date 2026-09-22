@@ -367,7 +367,9 @@ describe("browser router fallbacks", () => {
     const [url, mutation] = calls.find(([, init]) => init?.method === "PATCH")!;
     expect(String(url)).toContain("/publish");
     expect(new Headers(mutation?.headers).get("content-type")).toContain("text/plain");
-    expect(mutation?.body).toBe("title=Draft\r\nintent=publish\r\n");
+    expect(mutation?.body).toMatch(
+      /^(?:_csrf=[^\r]+\r\n)?title=Draft\r\nintent=publish\r\n$/,
+    );
   });
 
   it("rejects malformed and credentialed protocol redirects", async () => {

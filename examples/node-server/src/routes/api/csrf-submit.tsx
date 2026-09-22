@@ -7,6 +7,7 @@ export const POST = json(
   }),
   {
     security: {
+      csrf: true,
       request: { maxBodySize: "8kb" },
     },
   },

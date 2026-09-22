@@ -66,6 +66,7 @@ import {
   type RateLimitStore,
   validateRouteModules,
 } from "../security";
+import { createCsrfRenderState } from "../security/csrf-render";
 import type { Adapter } from "../adapter";
 import {
   limitRequestBody,
@@ -118,6 +119,7 @@ type RequestRuntimeOptions = {
   rateLimitStore?: RateLimitStore;
   ssr?: SsrOptions;
   transformDocument?: (html: string) => string | Promise<string>;
+  renderCsrfForms?: boolean;
 };
 
 export type RequestHandler = (request: Request) => Promise<Response>;
@@ -147,6 +149,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
   const manifest = createRouteManifest(options.routes);
   const locales = options.locales ? defineLocales(options.locales) : undefined;
   const rateLimitStore = options.rateLimitStore ?? createMemoryRateLimitStore();
+  const renderCsrfForms = !options.adapter?.capabilities.staticOutput;
 
   if (options.cacheStore) {
     serializeCacheNamespace(options.cacheStore.namespace);
@@ -183,6 +186,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
               lang: locales.defaultLocale,
               locale: locales.defaultLocale,
             },
+            renderCsrfForms,
           });
         }
         const headers = new Headers({ location: resolution.redirect.href });
@@ -206,6 +210,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
         renderPage: options.renderPage,
         routePathname: resolution.pathname,
         ssr,
+        renderCsrfForms,
       });
       localizeResponseLocation(response, request, resolution.locale, locales);
       return response;
@@ -216,6 +221,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
       rateLimitStore,
       renderPage: options.renderPage,
       ssr,
+      renderCsrfForms,
     });
   };
 }
@@ -443,6 +449,9 @@ async function handleMatchedRoute(
   const cache = createRequestCache(options.cacheStore, options.ssr?.locale);
 
   if (capability.kind === "page") {
+    const csrf = options.renderCsrfForms === false
+      ? undefined
+      : createCsrfRenderState(request);
     const context = {
       locale: options.ssr?.locale,
       path: routeMatch.path,
@@ -526,8 +535,13 @@ async function handleMatchedRoute(
 
           const renderPage = options.renderPage ?? renderPageResponse;
 
+          if (match.match.render.mode === "streaming") {
+            csrf?.context.token();
+          }
+
           return await renderPage(match.match, {
             ...options.ssr,
+            csrf: csrf?.context,
             dev: options.dev,
             nonce,
             onStreamError: (error) => {
@@ -555,6 +569,13 @@ async function handleMatchedRoute(
       }
 
       response = requestBodyTooLargeResponse();
+    }
+
+    if (response.status >= 200 && response.status < 300) {
+      csrf?.seal();
+      const cookies = csrf?.cookies() ?? [];
+      for (const cookie of cookies) response.headers.append("set-cookie", cookie);
+      if (csrf?.used()) response.headers.set("cache-control", "private, no-store");
     }
     const headers = createSecurityHeaders(policy.document ?? {}, {
       nonce,

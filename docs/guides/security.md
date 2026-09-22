@@ -504,22 +504,34 @@ apply its normal service failure policy.
 
 ## CSRF
 
-Demiurge protects HTTP unsafe methods when the request includes a cookie.
-Framework-managed enhanced mutations read the default `csrf-token` cookie. If
-the cookie is absent, the browser creates it and sends the token in the
-`x-csrf-token` header. The browser reuses an existing token. The framework
-removes a token that it creates after the enhanced mutation finishes. It keeps
-a token that the application already set.
+Demiurge protects HTTP unsafe methods when the request includes another cookie.
+The default CSRF cookie does not activate the check by itself.
 
-Progressive forms without JavaScript still need an explicit field and token.
-Use `issueCsrfToken(...)`, `createCsrfToken(...)`, and `createCsrfCookie(...)`
-when you use a custom policy or a progressive form.
+`Form` adds the default `_csrf` field during server rendering. The response
+sets the matching `csrf-token` cookie. A response that renders the token uses
+`Cache-Control: private, no-store`.
+
+`Form` does not add the token if an unsafe submission can target another
+origin. Put the cross-origin submission in a separate form.
+
+Streaming pages issue the default token before they send response headers. A
+form with a custom cookie name must render in the initial shell.
+
+Framework-managed enhanced mutations send the token through the
+`x-csrf-token` header. Use `fetchWithCsrf(...)` for an application fetch call.
+The helper accepts only a same-origin URL.
+
+Pass matching `cookie`, `field`, and `header` options when a route uses custom
+names. Use the same options on `Form`, a mutation action, or `fetchWithCsrf`.
 
 A route can make an explicit, auditable exemption when another authentication
 model makes CSRF inapplicable.
 
 `createCsrfCookie(...)` keeps the unprefixed `csrf-token` name for
 compatibility. Pass a `cookie` option to move the token to a prefixed name.
+
+Static output cannot set a response cookie. A static form needs a dynamic page
+or explicit application token handling when a credential cookie is present.
 
 A route that runs no CSRF check declares an exception with a reason:
 

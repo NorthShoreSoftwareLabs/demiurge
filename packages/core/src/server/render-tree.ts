@@ -5,10 +5,15 @@ import {
   type ScriptRenderContext,
 } from "../document/scripts";
 import type { LoadedRouteMatch } from "../router";
+import {
+  withCsrfRenderContext,
+  type CsrfRenderContext,
+} from "../security/csrf-render";
 
 export function createPageRenderTree(
   match: LoadedRouteMatch,
   scripts?: ScriptRenderContext,
+  csrf?: CsrfRenderContext,
 ) {
   const page = createElement(match.page, {
     data: match.data,
@@ -28,7 +33,8 @@ export function createPageRenderTree(
     page,
   );
 
-  return scripts ? withScriptContext(scripts, tree) : tree;
+  const secured = withCsrfRenderContext(csrf, tree);
+  return scripts ? withScriptContext(scripts, secured) : secured;
 }
 
 export function createPageScriptContext(

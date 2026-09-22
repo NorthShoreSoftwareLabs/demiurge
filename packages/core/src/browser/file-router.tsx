@@ -1,6 +1,7 @@
 import {
   AnchorHTMLAttributes,
   ButtonHTMLAttributes,
+  Children,
   Component,
   ComponentType,
   ForwardedRef,
@@ -11,6 +12,7 @@ import {
   ReactNode,
   createContext,
   createElement,
+  isValidElement,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -65,6 +67,8 @@ import {
   type MutationResult,
   validateMutationRedirect,
 } from "./mutation-action";
+import { useCsrfFormToken } from "../security/csrf-render";
+import type { CsrfClientOptions } from "../security/csrf";
 
 export type NavigationDataLoader = (
   request: Request,
@@ -101,11 +105,13 @@ export type MutationNavigationState<TData = unknown, TField extends string = str
 export type FormProps =
   | (Omit<FormHTMLAttributes<HTMLFormElement>, "action"> & {
     action?: string;
+    csrf?: CsrfClientOptions | false;
     locale?: AppLocale;
     submissionKey?: string;
   })
   | (Omit<FormHTMLAttributes<HTMLFormElement>, "action" | "method"> & {
     action: MutationFormAction;
+    csrf?: CsrfClientOptions | false;
     locale?: AppLocale;
     method?: never;
     submissionKey?: never;
@@ -614,7 +620,7 @@ export function createFileRouter(options: FileRouterOptions) {
             scrollToHash(next.hash);
           }
         },
-        async submitMutation(form: HTMLFormElement, submitter: HTMLElement | null, submissionKey?: string) {
+        async submitMutation(form: HTMLFormElement, submitter: HTMLElement | null, submissionKey?: string, csrf?: CsrfClientOptions) {
           if ((options.navigation ?? "server") !== "server") return;
           const request = createMutationRequest(form, submitter);
           if (!request) return;
@@ -636,6 +642,7 @@ export function createFileRouter(options: FileRouterOptions) {
             const mutation = await performMutationRequest({
               body: request.body,
               contentType: request.contentType,
+              csrf,
               method: request.method,
               signal: controller.signal,
               url: request.url,
@@ -992,6 +999,10 @@ export function Form(props: FormProps) {
   const enhanceProgressiveAction = Boolean(
     progressiveAction && hydrated && router.navigation === "server",
   );
+  const csrf = props.csrf === false
+    ? undefined
+    : props.csrf ?? progressiveDetails?.csrf;
+  const method = progressiveAction ? "POST" : (props.method ?? "GET").toUpperCase();
 
   useLayoutEffect(() => () => {
     if (formRef.current) {
@@ -1015,16 +1026,21 @@ export function Form(props: FormProps) {
       event.currentTarget,
       submitter,
       formKey,
+      csrf,
     );
   }
 
-  const { submissionKey: _submissionKey, ...formProps } = props;
+  const { csrf: _csrf, submissionKey: _submissionKey, ...formProps } = props;
   const action = progressiveAction
     ? enhanceProgressiveAction ? progressiveAction : progressiveDetails?.url
     : formProps.action;
   const localizedAction = typeof action === "string" && router.locales && (props.locale ?? router.locale)
     ? localizeHref(action, (props.locale ?? router.locale)!, router.locales, typeof window === "undefined" ? "http://demiurge.local" : window.location.href)
     : action;
+  const protectedActions = csrfFormActions(method, localizedAction, formProps.children);
+  const protectForm = props.csrf !== false && protectedActions.length > 0;
+  const csrfToken = useCsrfFormToken(protectForm ? csrf : false, protectedActions);
+  const renderedCsrfToken = useRef(csrfToken).current;
   return createElement(
     MutationFormContext.Provider,
     {
@@ -1032,6 +1048,17 @@ export function Form(props: FormProps) {
       children: createElement("form", {
         ...formProps,
         action: localizedAction,
+        children: protectForm && renderedCsrfToken && !enhanceProgressiveAction
+          ? [
+              createElement("input", {
+                key: "__demiurge-csrf",
+                name: csrf?.field ?? "_csrf",
+                type: "hidden",
+                value: renderedCsrfToken,
+              }),
+              formProps.children,
+            ]
+          : formProps.children,
         locale: undefined,
         ...(progressiveAction
           ? {
@@ -1046,6 +1073,43 @@ export function Form(props: FormProps) {
       }),
     },
   );
+}
+
+function csrfFormActions(
+  method: string,
+  action: string | ((formData: FormData) => void) | undefined,
+  children: ReactNode,
+) {
+  const baseAction = typeof action === "string" ? action : undefined;
+  const actions = ["DELETE", "PATCH", "POST", "PUT"].includes(method)
+    ? [baseAction]
+    : [];
+
+  function visit(node: ReactNode) {
+    if (!isValidElement<{
+      children?: ReactNode;
+      formAction?: string;
+      formMethod?: string;
+      type?: string;
+    }>(node)) return;
+    const element = node;
+    if (typeof element.type === "string") {
+      const type = element.props.type?.toLowerCase();
+      const submitter = element.type === "button"
+        ? type !== "button" && type !== "reset"
+        : element.type === "input" && (type === "submit" || type === "image");
+      if (submitter) {
+        const submitMethod = (element.props.formMethod ?? method).toUpperCase();
+        if (["DELETE", "PATCH", "POST", "PUT"].includes(submitMethod)) {
+          actions.push(element.props.formAction ?? baseAction);
+        }
+      }
+    }
+    Children.forEach(element.props.children, visit);
+  }
+
+  Children.forEach(children, visit);
+  return actions;
 }
 
 export function MutationSubmit(props: MutationSubmitProps) {
@@ -1619,7 +1683,7 @@ type RouterApi = {
   push(to: string): void;
   getMutationNavigation(form?: HTMLFormElement, submissionKey?: string): MutationNavigationState;
   releaseMutationNavigation(form: HTMLFormElement, submissionKey?: string): void;
-  submitMutation(form: HTMLFormElement, submitter: HTMLElement | null, submissionKey?: string): Promise<void>;
+  submitMutation(form: HTMLFormElement, submitter: HTMLElement | null, submissionKey?: string, csrf?: CsrfClientOptions): Promise<void>;
   replace(to: string): void;
 };
 
