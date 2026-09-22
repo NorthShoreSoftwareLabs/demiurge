@@ -17,15 +17,11 @@ import {
 } from "../routing";
 import { useActionState, useMemo } from "react";
 import { isPlainObject } from "../type-guards";
-import {
-  createCsrfCookie,
-  createCsrfToken,
-  parseCookieHeader,
-} from "../security/csrf";
+import { fetchWithCsrf } from "../security/csrf";
+import type { CsrfClientOptions } from "../security/csrf";
 
 const mutationFormActionMetadata = Symbol("Demiurge mutation form action");
 declare const mutationFormActionResult: unique symbol;
-const temporaryCsrfTokens = new Map<string, number>();
 
 export type MutationResult<TData = unknown, TField extends string = string> =
   | { version: 1; status: "success"; data?: TData; revalidate?: boolean }
@@ -41,6 +37,7 @@ export type MutationAction<TData = unknown, TField extends string = string> = (
 export type MutationFormAction<TData = unknown, TField extends string = string> =
   ((formData: FormData) => void) & {
     readonly [mutationFormActionMetadata]: {
+      csrf?: CsrfClientOptions;
       method: "POST";
       url: string;
     };
@@ -58,6 +55,7 @@ export type MutationActionOptions<
   TRoute extends MutationRoute,
   TMethod extends MutationMethodFor<TRoute> = MutationMethodFor<TRoute>,
 > = {
+  csrf?: CsrfClientOptions;
   method: TMethod;
   route: TRoute;
 } & MutationActionPath<TRoute>;
@@ -119,6 +117,7 @@ export function createMutationAction<
     } as never);
     const request = submitMutation<ResultData, ResultField>({
       body: formData,
+      csrf: options.csrf,
       method: options.method,
       signal: controller.signal,
       url,
@@ -186,11 +185,11 @@ export function useMutationAction<
   const action = useMemo(() => {
     const branded = (formData: FormData) => dispatch(formData);
     Object.defineProperty(branded, mutationFormActionMetadata, {
-      value: { method: "POST", url },
+      value: { csrf: options.csrf, method: "POST", url },
     });
     // TYPE-EVIDENCE: the wrapper has the FormData dispatch signature and the metadata property required by MutationFormAction.
     return branded as MutationFormAction<ResultData, ResultField>;
-  }, [dispatch, url]);
+  }, [dispatch, options.csrf, url]);
 
   return [state, action, pending] as const;
 }
@@ -202,6 +201,7 @@ export function mutationFormActionDetails(action: MutationFormAction) {
 export async function submitMutation<TData = unknown, TField extends string = string>(options: {
   body: BodyInit;
   contentType?: string;
+  csrf?: CsrfClientOptions;
   method: string;
   signal: AbortSignal;
   url: string;
@@ -216,91 +216,24 @@ export async function submitMutation<TData = unknown, TField extends string = st
 export async function performMutationRequest<TData = unknown, TField extends string = string>(options: {
   body: BodyInit;
   contentType?: string;
+  csrf?: CsrfClientOptions;
   method: string;
   signal: AbortSignal;
   url: string;
 }) {
-  const csrfToken = getBrowserCsrfToken();
-
-  try {
-    const response = await fetch(options.url, {
-      body: options.body,
-      credentials: "same-origin",
-      headers: {
-        accept: MUTATION_RESPONSE_MEDIA_TYPE,
-        [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
-        ...(csrfToken ? { "x-csrf-token": csrfToken.value } : {}),
-        ...(options.contentType ? { "content-type": options.contentType } : {}),
-      },
-      method: options.method,
-      redirect: "manual",
-      signal: options.signal,
-    });
-    return { response, result: await readMutationResult<TData, TField>(response) };
-  } finally {
-    if (csrfToken?.temporary) {
-      releaseBrowserCsrfToken(csrfToken.value);
-    }
-  }
-}
-
-type BrowserCsrfToken = {
-  temporary: boolean;
-  value: string;
-};
-
-function getBrowserCsrfToken() {
-  if (typeof document === "undefined") {
-    return undefined;
-  }
-
-  const existing = parseCookieHeader(document.cookie).get("csrf-token");
-
-  if (existing) {
-    const temporary = temporaryCsrfTokens.has(existing);
-    if (temporary) {
-      temporaryCsrfTokens.set(existing, temporaryCsrfTokens.get(existing)! + 1);
-    }
-    return { temporary, value: existing } satisfies BrowserCsrfToken;
-  }
-
-  const token = createCsrfToken();
-  document.cookie = createCsrfCookie(token, {
-    secure: browserCsrfCookieIsSecure(),
-  });
-  temporaryCsrfTokens.set(token, 1);
-  return { temporary: true, value: token } satisfies BrowserCsrfToken;
-}
-
-function releaseBrowserCsrfToken(token: string) {
-  const references = temporaryCsrfTokens.get(token);
-
-  if (references === undefined) {
-    return;
-  }
-
-  if (references > 1) {
-    temporaryCsrfTokens.set(token, references - 1);
-    return;
-  }
-
-  temporaryCsrfTokens.delete(token);
-
-  if (typeof document === "undefined") {
-    return;
-  }
-
-  if (parseCookieHeader(document.cookie).get("csrf-token") !== token) {
-    return;
-  }
-
-  document.cookie = `csrf-token=; Max-Age=0; Path=/; SameSite=Lax${
-    browserCsrfCookieIsSecure() ? "; Secure" : ""
-  }`;
-}
-
-function browserCsrfCookieIsSecure() {
-  return typeof window !== "undefined" && window.location.protocol === "https:";
+  const response = await fetchWithCsrf(options.url, {
+    body: options.body,
+    credentials: "same-origin",
+    headers: {
+      accept: MUTATION_RESPONSE_MEDIA_TYPE,
+      [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
+      ...(options.contentType ? { "content-type": options.contentType } : {}),
+    },
+    method: options.method,
+    redirect: "manual",
+    signal: options.signal,
+  }, options.csrf);
+  return { response, result: await readMutationResult<TData, TField>(response) };
 }
 
 export async function readMutationResult<TData = unknown, TField extends string = string>(

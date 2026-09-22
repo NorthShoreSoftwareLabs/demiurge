@@ -253,6 +253,7 @@ export async function generateStaticOutput(
       : await handleRequestWithManifest(manifest, request, {
         onError: options.onError,
         rateLimitStore,
+        renderCsrfForms: false,
         ssr,
       });
 

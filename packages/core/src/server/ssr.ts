@@ -2,6 +2,7 @@ import { renderToString } from "react-dom/server";
 import { renderDocument } from "../document";
 import type { LoadedRouteMatch } from "../router";
 import { createPageRenderTree, createPageScriptContext } from "./render-tree";
+import type { CsrfRenderContext } from "../security/csrf-render";
 
 export type SsrOptions = {
   clientEntry?: string;
@@ -14,6 +15,7 @@ export type SsrOptions = {
 };
 
 export type SsrRenderOptions = SsrOptions & {
+  csrf?: CsrfRenderContext;
   dev?: boolean;
   nonce?: string;
   onStreamError?: (error: unknown) => void;
@@ -26,7 +28,7 @@ export function renderPageDocument(
   options: SsrRenderOptions = {},
 ) {
   const scripts = createPageScriptContext(match, options);
-  const html = renderToString(createPageRenderTree(match, scripts));
+  const html = renderToString(createPageRenderTree(match, scripts, options.csrf));
 
   return renderDocument({
     body: {

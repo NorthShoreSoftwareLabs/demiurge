@@ -45,10 +45,15 @@ export {
   createCsrfCookie,
   createCsrfToken,
   enforceCsrfProtection,
+  fetchWithCsrf,
   issueCsrfToken,
   parseCookieHeader,
 } from "./csrf";
-export type { CsrfCookieOptions, IssuedCsrfToken } from "./csrf";
+export type {
+  CsrfClientOptions,
+  CsrfCookieOptions,
+  IssuedCsrfToken,
+} from "./csrf";
 export {
   applyFetchMetadataVary,
   checkFetchMetadata,

@@ -13,6 +13,7 @@ import {
   defineMetadata,
   defineRoutePolicy,
   defineScripts,
+  Form,
   json,
   jsonl,
   page,
@@ -40,6 +41,18 @@ function View(_props: RouteProps) {
   return <main>Hello SSR</main>;
 }
 
+function CsrfFormView() {
+  return <Form method="post"><button type="submit">Save</button></Form>;
+}
+
+function CustomCsrfFormView() {
+  return (
+    <Form method="post" csrf={{ cookie: "custom-csrf", field: "custom-field" }}>
+      <button type="submit">Save</button>
+    </Form>
+  );
+}
+
 function Layout({ children }: LayoutProps) {
   return <section>Layout: {children}</section>;
 }
@@ -65,6 +78,49 @@ function routeModule(module: RouteModule) {
 }
 
 describe("request handler", () => {
+  it.each([
+    {
+      cookie: "csrf-token",
+      field: "_csrf",
+      policy: undefined,
+      view: CsrfFormView,
+    },
+    {
+      cookie: "custom-csrf",
+      field: "custom-field",
+      policy: { cookie: "custom-csrf", field: "custom-field" },
+      view: CustomCsrfFormView,
+    },
+  ])("renders and accepts a progressive CSRF form with $cookie", async ({ cookie, field, policy, view }) => {
+    const mutationSpy = vi.fn(() => new Response("saved"));
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page(view),
+          POST: rawResponse(mutationSpy, policy ? { security: { csrf: policy } } : undefined),
+        }),
+      },
+    });
+    const documentResponse = await handler(new Request("https://example.test/"));
+    const html = await documentResponse.text();
+    const token = html.match(new RegExp(`name="${field}"[^>]+value="([^"]+)"`))?.[1];
+    const issued = documentResponse.headers.getSetCookie().find((value) =>
+      value.startsWith(`${cookie}=`)
+    );
+
+    expect(token).toBeTruthy();
+    expect(issued).toContain(`${cookie}=${token}`);
+    expect(documentResponse.headers.get("cache-control")).toBe("private, no-store");
+
+    const mutationResponse = await handler(new Request("https://example.test/", {
+      body: new URLSearchParams({ [field]: token! }),
+      headers: { cookie: `${cookie}=${token}` },
+      method: "POST",
+    }));
+
+    expect(mutationResponse.status).toBe(200);
+    expect(mutationSpy).toHaveBeenCalledOnce();
+  });
   it("returns expected mutation validation without the error path", async () => {
     const onError = vi.fn();
     const handler = createRequestHandler({

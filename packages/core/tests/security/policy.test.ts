@@ -1791,6 +1791,17 @@ describe("rate limit policy", () => {
 });
 
 describe("CSRF policy helpers", () => {
+  it("does not treat the default CSRF cookie as a credential cookie", async () => {
+    const response = await enforceCsrfProtection(
+      undefined,
+      new Request("https://example.test/items", {
+        method: "POST",
+        headers: { cookie: "csrf-token=temporary" },
+      }),
+    );
+
+    expect(response).toBeNull();
+  });
   it("issues high-entropy URL-safe tokens and secure readable cookies", () => {
     const first = issueCsrfToken();
     const second = createCsrfToken();

@@ -27,7 +27,7 @@ export async function renderStreamingPageResponse(
   }
 
   const scripts = createPageScriptContext(match, options);
-  const content = createPageRenderTree(match, scripts);
+  const content = createPageRenderTree(match, scripts, options.csrf);
 
   return await new Promise<Response>((resolveResponse, rejectResponse) => {
     let completed = false;

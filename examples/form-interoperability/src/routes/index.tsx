@@ -1,6 +1,6 @@
 import { useForm } from "@tanstack/react-form";
 import { useState } from "react";
-import { page, type RouteProps } from "@demiurgejs/core";
+import { fetchWithCsrf, page, type RouteProps } from "@demiurgejs/core";
 import { feedbackSchema, readFeedback, type Feedback } from "../feedback";
 
 type FormData = ReturnType<typeof readFeedback>;
@@ -22,7 +22,7 @@ function FormPage({ data }: RouteProps<"/", FormData>) {
       if (!parsed.success) return;
 
       setIsSubmitting(true);
-      const response = await fetch("/api/feedback", {
+      const response = await fetchWithCsrf("/api/feedback", {
         body: new URLSearchParams(parsed.data).toString(),
         headers: { "content-type": "application/x-www-form-urlencoded" },
         method: "POST",
