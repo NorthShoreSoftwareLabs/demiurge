@@ -261,8 +261,13 @@ browser router and exposes state through `useFormNavigation` and
 
 #### CSRF tokens in progressive forms
 
-Cookie-authenticated mutations use CSRF protection by default. The default
-policy accepts a matching token in the configured request header.
+Requests with cookies use CSRF protection for HTTP unsafe methods by default.
+Framework-managed enhanced mutations create or reuse the default token cookie
+and send the matching request header. The framework removes a cookie that it
+creates after the mutation finishes.
+
+Progressive forms without JavaScript still need an explicit token field. The
+default flow does not add a hidden field to a native form.
 
 If a form must work without JavaScript, configure a field on the route policy:
 
