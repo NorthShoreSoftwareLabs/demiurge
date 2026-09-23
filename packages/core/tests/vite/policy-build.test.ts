@@ -76,6 +76,33 @@ async function runPagePolicyBuild(root: string) {
 }
 
 describe("Vite production policy build", () => {
+  it("fails the build for a literal script blocked by the effective CSP", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-resource-policy-build-"));
+    const routesDir = join(root, "src", "routes");
+    await mkdir(routesDir, { recursive: true });
+    await writeFile(
+      join(routesDir, "@policy.ts"),
+      `export const policy = {
+  access: { public: true },
+  document: { csp: { defaultSrc: ["'self'"] } },
+};`,
+    );
+    await writeFile(
+      join(routesDir, "@not-found.tsx"),
+      "export default function NotFound() { return null; }",
+    );
+    await writeFile(
+      join(routesDir, "index.tsx"),
+      `import { page } from "@demiurgejs/core";
+function Home() { return <script src="https://cdn.example.test/app.js" />; }
+export const GET = page(Home);`,
+    );
+
+    await expect(runPagePolicyBuild(root)).rejects.toThrow(
+      /index\.tsx.*\[csp-script-src-blocked\].*default-src.*cdn\.example\.test.*route \//s,
+    );
+  });
+
   it("fails the build and names the route, the source, and the repair when a page policy has no CSP", async () => {
     const { root, routesDir } = await buildPagePolicyRoute(`export const policy = {
   document: { headers: { contentTypeOptions: "nosniff" } },

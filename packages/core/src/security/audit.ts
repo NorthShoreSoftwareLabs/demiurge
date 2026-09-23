@@ -24,6 +24,10 @@ import type {
   SecurityHeadersOptions,
   SecurityPolicy,
 } from "./types";
+import {
+  cspScriptSourceListAllowsResource,
+  getEffectiveCspSources,
+} from "./csp-source";
 
 const unsafeMethods = new Set<HttpMethod>(["DELETE", "PATCH", "POST", "PUT"]);
 
@@ -222,13 +226,17 @@ function auditDocumentScripts(
     return;
   }
 
-  const scriptSrc = getScriptSources(policy);
+  const scriptPolicy = getScriptSources(policy);
+
+  if (!scriptPolicy) {
+    return;
+  }
 
   for (const script of scripts) {
-    if (requiresScriptNonce(scriptSrc) && !script.nonce) {
+    if (requiresScriptNonce(scriptPolicy.sources) && !script.nonce) {
       findings.push({
         code: "csp-script-missing-nonce",
-        message: `Document script ${script.src} needs a nonce for the effective script-src policy.`,
+        message: `Document script ${script.src} needs a nonce for the effective ${scriptPolicy.name} policy.`,
         severity: "error",
       });
       continue;
@@ -238,10 +246,10 @@ function auditDocumentScripts(
       continue;
     }
 
-    if (!allowsScriptSource(scriptSrc, script.src)) {
+    if (!allowsScriptSource(scriptPolicy.sources, script.src)) {
       findings.push({
         code: "csp-script-src-blocked",
-        message: `Document script ${script.src} is not allowed by the effective script-src policy.`,
+        message: `Document script ${script.src} is not allowed by the effective ${scriptPolicy.name} policy.`,
         severity: "error",
       });
     }
@@ -255,9 +263,21 @@ function normalizeScriptDependencyAuditOptions(
 }
 
 function getScriptSources(policy: ContentSecurityPolicy) {
-  return resolveCspArray(policy.scriptSrc) ??
-    resolveCspArray(policy.defaultSrc) ??
-    [];
+  const effective = getEffectiveCspSources(
+    policy,
+    ["scriptSrcElem", "scriptSrc", "defaultSrc"],
+  );
+
+  return effective
+    ? {
+      name: toCspDirectiveName(effective.directive),
+      sources: effective.sources,
+    }
+    : undefined;
+}
+
+function toCspDirectiveName(name: string) {
+  return name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 }
 
 function resolveCspArray<T extends string>(
@@ -275,74 +295,7 @@ function requiresScriptNonce(sources: readonly CspSource[]) {
 }
 
 function allowsScriptSource(sources: readonly CspSource[], src: string) {
-  if (isStrictDynamicActive(sources)) {
-    return false;
-  }
-
-  if (sources.includes("*")) {
-    return true;
-  }
-
-  if (sources.includes("'none'")) {
-    return false;
-  }
-
-  if (sources.some((source) => source.startsWith("'nonce-"))) {
-    return false;
-  }
-
-  if (sources.includes("'self'") && isSameOriginPath(src)) {
-    return true;
-  }
-
-  if (src.startsWith("https:") && sources.includes("https:")) {
-    return true;
-  }
-
-  if (src.startsWith("http:") && sources.includes("http:")) {
-    return true;
-  }
-
-  return sources.some((source) => sourceMatchesScriptSource(source, src));
-}
-
-function isSameOriginPath(src: string) {
-  return src.startsWith("/") && !src.startsWith("//");
-}
-
-function sourceMatchesScriptSource(source: CspSource, src: string) {
-  if (source.startsWith("'")) {
-    return false;
-  }
-
-  try {
-    const sourceUrl = new URL(source);
-    const scriptUrl = new URL(src);
-
-    const hostnameMatches = sourceUrl.hostname.startsWith("*.")
-      ? scriptUrl.hostname.endsWith(sourceUrl.hostname.slice(1)) &&
-        scriptUrl.hostname !== sourceUrl.hostname.slice(2)
-      : scriptUrl.hostname === sourceUrl.hostname;
-    const pathMatches = sourceUrl.pathname === "/" ||
-      sourceUrl.pathname.endsWith("/")
-      ? scriptUrl.pathname.startsWith(sourceUrl.pathname)
-      : scriptUrl.pathname === sourceUrl.pathname;
-
-    return (
-      scriptUrl.protocol === sourceUrl.protocol &&
-      hostnameMatches &&
-      scriptUrl.port === sourceUrl.port &&
-      pathMatches
-    );
-  } catch {
-    return false;
-  }
-}
-
-function isStrictDynamicActive(sources: readonly CspSource[]) {
-  return sources.includes("'strict-dynamic'") && sources.some((source) =>
-    source.startsWith("'nonce-") || /^'sha(?:256|384|512)-/.test(source)
-  );
+  return cspScriptSourceListAllowsResource(sources, src);
 }
 
 function auditRoutePolicy(

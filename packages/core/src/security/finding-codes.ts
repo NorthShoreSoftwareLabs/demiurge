@@ -24,6 +24,8 @@ export type SecurityFindingCode =
   | "csp-script-missing-nonce"
   /** The effective script-src policy blocks a document script. */
   | "csp-script-src-blocked"
+  /** The effective style-src policy blocks a document style. */
+  | "csp-style-src-blocked"
   /** The route accepts no CSRF check for an unsafe method. */
   | "csrf-disabled"
   /** The route inherits no document policy. */
@@ -58,6 +60,8 @@ export type StaticPolicyFindingCode = Extract<
   | "access-declaration-missing"
   | "cors-invalid"
   | "cors-method-unavailable"
+  | "csp-script-src-blocked"
+  | "csp-style-src-blocked"
   | "document-policy-missing"
   | "rate-limit-invalid"
   | "security-exception-reason-missing"

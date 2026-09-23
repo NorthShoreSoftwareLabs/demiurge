@@ -63,6 +63,7 @@ import {
 } from "./server-only-boundary";
 import {
   auditDocumentPolicyCoverage,
+  auditDocumentResources,
   auditRouteAccessCoverage,
   declaresPageRoute,
   inspectRouteFile,
@@ -1894,6 +1895,7 @@ export async function inspectRoutePolicies(
   const findings = [
     ...inspections.flatMap((inspection) => inspection.findings),
     ...auditDocumentPolicyCoverage(routesDir, inspections),
+    ...auditDocumentResources(routesDir, inspections),
     ...auditRouteAccessCoverage(routesDir, inspections),
   ];
 
