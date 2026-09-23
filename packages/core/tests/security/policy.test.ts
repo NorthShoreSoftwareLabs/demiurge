@@ -736,6 +736,53 @@ describe("security policy cascade", () => {
       );
   });
 
+  it("cascades style and font needs into their paired directives", () => {
+    const policy = mergeRoutePolicies(
+      {
+        document: security.static(),
+        security: {
+          needs: {
+            font: ["https://fonts.example.com", "https://shared.example.com"],
+            style: ["https://styles.example.com", "https://shared.example.com"],
+          },
+        },
+      },
+      {
+        security: {
+          needs: {
+            font: ["https://shared.example.com", "https://assets.example.com/fonts"],
+            style: ["https://shared.example.com", "https://assets.example.com/styles"],
+          },
+        },
+      },
+    );
+
+    expect(policy.security?.needs?.font).toEqual([
+      "https://fonts.example.com",
+      "https://shared.example.com",
+      "https://assets.example.com/fonts",
+    ]);
+    expect(policy.security?.needs?.style).toEqual([
+      "https://styles.example.com",
+      "https://shared.example.com",
+      "https://assets.example.com/styles",
+    ]);
+
+    const csp = resolveCsp(policy.document?.csp);
+    expect(csp && csp.fontSrc).toEqual([
+      "'self'",
+      "https://fonts.example.com",
+      "https://shared.example.com",
+      "https://assets.example.com/fonts",
+    ]);
+    expect(csp && csp.styleSrc).toEqual([
+      "'self'",
+      "https://styles.example.com",
+      "https://shared.example.com",
+      "https://assets.example.com/styles",
+    ]);
+  });
+
   it("rejects a script need when the route removes script-src", () => {
     // A widened default-src would also grant the source to frame-src,
     // worker-src, media-src, and manifest-src. The framework refuses to make
@@ -777,6 +824,45 @@ describe("security policy cascade", () => {
       "'self'",
       "https://cdn.example.com",
     ]);
+  });
+
+  it.each([
+    ["font", "fontSrc"],
+    ["style", "styleSrc"],
+  ] as const)(
+    "preserves default-src sources when a %s need adds %s",
+    (need, directive) => {
+      const policy = mergeRoutePolicies({
+        document: { csp: { defaultSrc: ["'self'"] } },
+        security: { needs: { [need]: ["https://assets.example.com"] } },
+      });
+
+      const csp = resolveCsp(policy.document?.csp);
+
+      expect(csp && csp[directive]).toEqual([
+        "'self'",
+        "https://assets.example.com",
+      ]);
+    },
+  );
+
+  it.each([
+    ["font", "fontSrc"],
+    ["style", "styleSrc"],
+  ] as const)("rejects a %s need when the route removes %s", (need, directive) => {
+    expect(() =>
+      mergeRoutePolicies({
+        document: {
+          csp: {
+            defaultSrc: ["'self'"],
+            [directive]: false,
+          },
+        },
+        security: { needs: { [need]: ["https://assets.example.com"] } },
+      })
+    ).toThrow(
+      `A route policy declares security.needs.${need} and sets csp.${directive} to false. Set an explicit csp.${directive} that includes https://assets.example.com.`,
+    );
   });
 
   it("does not create script-src when the document has no script fallback", () => {
@@ -1385,6 +1471,29 @@ describe("CORS policy headers", () => {
     ).toThrow(
       "Demiurge CORS maxAge must be a non-negative integer number of seconds.",
     );
+  });
+
+  it("keeps an explicit style-src-elem when a style need widens style-src", () => {
+    const policy = mergeRoutePolicies({
+      document: {
+        csp: {
+          defaultSrc: ["'self'"],
+          styleSrcElem: ["https://elements.example.com"],
+        },
+      },
+      security: {
+        needs: { style: ["https://styles.example.com"] },
+      },
+    });
+
+    const csp = resolveCsp(policy.document?.csp);
+    expect(csp && csp.styleSrc).toEqual([
+      "'self'",
+      "https://styles.example.com",
+    ]);
+    expect(csp && csp.styleSrcElem).toEqual([
+      "https://elements.example.com",
+    ]);
   });
 
   it.each([

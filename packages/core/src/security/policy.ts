@@ -183,8 +183,10 @@ export function mergeRouteSecurityPolicies(
 // diagnostic can name both the declared need and the directive it targets.
 const routeNeedDirectives = [
   { directive: "connectSrc", need: "connect" },
+  { directive: "fontSrc", need: "font" },
   { directive: "imgSrc", need: "img" },
   { directive: "scriptSrc", need: "script" },
+  { directive: "styleSrc", need: "style" },
 ] as const satisfies readonly {
   directive: keyof ContentSecurityPolicy;
   need: keyof RouteSecurityNeeds;

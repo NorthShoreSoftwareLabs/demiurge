@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analytics } from "@demiurgejs/core";
+import { analytics, type AnalyticsIntegration } from "@demiurgejs/core";
 
 describe("analytics integrations", () => {
   it("creates a consent-aware Plausible integration", () => {
@@ -194,5 +194,27 @@ describe("analytics integrations", () => {
       "https://plausible.io/js/script.js",
       "https://js.sentry-cdn.com/abc123.min.js",
     ]);
+  });
+
+  it("retains style and font needs from an integration", () => {
+    const integration = {
+      consent: false,
+      kind: "analytics",
+      needs: {
+        font: ["https://assets.example.com"],
+        style: ["https://assets.example.com"],
+      },
+      provider: "plausible",
+      scripts: [],
+    } satisfies AnalyticsIntegration;
+
+    expect(analytics.policy(integration)).toEqual({
+      security: {
+        needs: {
+          font: ["https://assets.example.com"],
+          style: ["https://assets.example.com"],
+        },
+      },
+    });
   });
 });
