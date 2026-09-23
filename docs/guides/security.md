@@ -219,23 +219,36 @@ export const policy = {
 };
 ```
 
-A need declares one directive at a time. `security.needs.connect` and
-`security.needs.img` widen `connect-src` and `img-src` the same way, which is
-what an analytics beacon or a tracking pixel requires. See the
-[analytics guide](./analytics.md) for the typed vendor integrations built on
-these declarations.
+A need declares one directive at a time. These route needs map to CSP
+directives:
 
-`security.needs.script` merges from the root to the leaf. The framework keeps
-the first declaration for each source. A static `export const scripts` entry
-therefore takes precedence over a managed component with the same source.
+| Route need | CSP directive |
+| --- | --- |
+| `connect` | `connect-src` |
+| `font` | `font-src` |
+| `img` | `img-src` |
+| `script` | `script-src` |
+| `style` | `style-src` |
 
-A script need adds its sources to `script-src` only. If the route policy does
-not set `script-src`, the framework makes an explicit `script-src` from the
-`default-src` sources and the declared sources. The framework does not change
-`default-src`, because a wider `default-src` also grants the source to
-`frame-src`, `worker-src`, `media-src`, and `manifest-src`. If the route policy
-sets `csp.scriptSrc` to `false`, the framework rejects the policy at startup.
-Set an explicit `csp.scriptSrc` for that route.
+An analytics beacon can use `connect`. A tracking pixel can use `img`. See the
+[analytics guide](./analytics.md) for typed vendor integrations that use these
+declarations.
+
+Each need merges from the root to the leaf. The framework keeps the first
+declaration for each source.
+
+A need adds its sources only to its paired directive. If that directive is
+absent, the framework copies the `default-src` sources into a new directive.
+
+The framework does not widen `default-src`. A wider default would also grant
+the source to unrelated resource types.
+
+If the paired directive is `false`, the framework rejects the policy at
+startup. Set an explicit directive for that route.
+
+An explicit `style-src-elem` controls stylesheet elements before `style-src`.
+An explicit `script-src-elem` similarly controls script elements before
+`script-src`.
 
 The framework renders a declared `beforeInteractive` script in the document
 head. It hoists other managed scripts found before the head flushes. In

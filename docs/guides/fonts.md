@@ -160,6 +160,9 @@ A self-hosted set returns `['self']` alone, which every framework preset
 already declares. A font that keeps a third-party host adds that origin, so the
 policy shows the cost of the choice in one line.
 
+Use `security.needs.font` when route markup or an application stylesheet loads
+a font without a framework font declaration. This need widens only `font-src`.
+
 ## Why no font component exists
 
 `Image` exists because an image is an element, and because each render picks a

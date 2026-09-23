@@ -168,7 +168,7 @@ export const analytics = {
       {};
 
     for (const integration of integrations) {
-      for (const need of ["connect", "img", "script"] as const) {
+      for (const need of ["connect", "font", "img", "script", "style"] as const) {
         const sources = integration.needs[need];
 
         if (!sources || sources.length === 0) {

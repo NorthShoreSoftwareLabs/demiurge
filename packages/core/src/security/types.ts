@@ -319,8 +319,10 @@ export type RateLimitStore = {
  */
 export type RouteSecurityNeeds = {
   connect?: readonly CspSource[];
+  font?: readonly CspSource[];
   img?: readonly CspSource[];
   script?: readonly CspSource[];
+  style?: readonly CspSource[];
 };
 
 export type RouteSecurityPolicy = {
