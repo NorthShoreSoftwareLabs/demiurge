@@ -65,6 +65,8 @@ continues to override that directive for stylesheet elements. A diagnostic must
 name `style-src-elem` when that explicit directive blocks a stylesheet.
 
 The same rule already applies to `script-src-elem` and `script-src`.
+Align the run-time script audit with this directive chain before the scanner
+uses it.
 
 `security.needs.font` authorizes a font source. It does not infer font sources
 from an external stylesheet. Applications must declare those sources or use a
@@ -84,8 +86,8 @@ these forms:
 - An inline native `script` or `style` element.
 
 The scanner must accept string literals and template literals without
-expressions. It must skip computed values, spreads, helper components, and
-run-time DOM changes.
+expressions. Skip computed values, spreads, helper components, and run-time DOM
+changes.
 
 Do not fail a build for an unreadable value. Existing static verification uses
 the same certainty rule.
@@ -100,8 +102,11 @@ Check resources against the effective directive chain:
 - Stylesheets use `style-src-elem`, then `style-src`, then `default-src`.
 - Font resources use `font-src`, then `default-src`.
 
-Reuse the CSP source matcher from the security verifier. One matcher must define
-scheme, origin, wildcard, and port behavior.
+Create one resource URL matcher for static and run-time verification. Define
+scheme, host, port, wildcard, and path behavior from the CSP grammar.
+
+Do not reuse the current origin matcher without extending it. That matcher does
+not enforce a path in a CSP source expression.
 
 An external stylesheet URL proves only the stylesheet origin. It does not prove
 the origins of font files or other resources inside the stylesheet.
@@ -125,8 +130,11 @@ route-resource pair when an applicable policy is not statically readable.
 Deduplicate the final findings. Each message must name the source file, the
 resource origin, the effective directive, and the affected route context.
 
-Add specific finding codes to the closed diagnostic vocabulary. Keep these
-codes distinct from run-time audit findings.
+Add specific finding codes to the shared closed diagnostic vocabulary. A code
+must identify one condition in both static and run-time findings.
+
+The finding container identifies whether the build verifier or run-time audit
+reported the condition.
 
 Estimated effort: three to five engineer days for external script and
 stylesheet literals. Full layout handling and inline checks increase the total
@@ -144,7 +152,9 @@ the report.
 
 Treat every report field as untrusted input. Remove control characters and do
 not log query strings, fragments, referrers, or complete script samples.
-Deduplicate repeated reports before terminal output.
+
+Deduplicate repeated reports in a bounded, expiring cache. Apply a log rate
+limit so unique reports cannot flood the terminal or retain unbounded state.
 
 Log the effective directive, blocked origin, document path, source location,
 and disposition when those fields are safe and available.
