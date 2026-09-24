@@ -19,6 +19,10 @@ import { validateCorsPolicy } from "./cors";
 import { resolveCsp } from "./exceptions";
 import { createSecurityAudit } from "./audit";
 import {
+  cspSourceListAllowsResource,
+  getEffectiveCspSources,
+} from "./csp-source";
+import {
   createSecurityHeaders,
   mergeRoutePolicies,
   securityPolicyRequiresNonce,
@@ -286,11 +290,12 @@ function validateStaticRouteScripts(
   const script = scripts.find((candidate) =>
     blocked.message.includes(candidate.src)
   );
-  const csp = createSecurityHeaders(effectivePolicy.document, { nonce })
-    .get("content-security-policy") ?? "";
-  const scriptDirective = csp.split("; ").find((directive) =>
-    directive.startsWith("script-src ")
-  ) ?? "default-src (script-src fallback)";
+  const scriptPolicy = findEffectiveScriptPolicy(
+    resolveCsp(effectivePolicy.document.csp),
+  );
+  const scriptDirective = scriptPolicy
+    ? `${scriptPolicy.name} ${scriptPolicy.sources.join(" ")}`
+    : "script-src";
 
   throw new Error(
     `Route ${JSON.stringify(file)} export ${exportName} declares script ${JSON.stringify(script?.src)} that violates the effective ${scriptDirective} policy.`,
@@ -347,61 +352,11 @@ function validateScriptCspNeeds(
 }
 
 function cspSourceListAllows(sources: readonly string[], required: string) {
-  if (sources.includes("'none'")) {
-    return false;
-  }
-
-  if (sources.includes("*") || sources.includes(required)) {
-    return true;
-  }
-
   if (required.startsWith("'")) {
-    return false;
+    return sources.includes(required);
   }
 
-  return sources.some((source) => cspSourceMatchesOrigin(source, required));
-}
-
-function cspSourceMatchesOrigin(source: string, required: string) {
-  if (source.startsWith("'")) {
-    return false;
-  }
-
-  let requiredUrl: URL;
-
-  try {
-    requiredUrl = new URL(required);
-  } catch {
-    return false;
-  }
-
-  if (source === `${requiredUrl.protocol}`) {
-    return true;
-  }
-
-  let sourceUrl: URL;
-
-  try {
-    sourceUrl = new URL(source);
-  } catch {
-    return false;
-  }
-
-  if (
-    sourceUrl.protocol !== requiredUrl.protocol ||
-    sourceUrl.port !== requiredUrl.port
-  ) {
-    return false;
-  }
-
-  if (sourceUrl.hostname.startsWith("*.")) {
-    const suffix = sourceUrl.hostname.slice(1);
-
-    return requiredUrl.hostname.endsWith(suffix) &&
-      requiredUrl.hostname !== sourceUrl.hostname.slice(2);
-  }
-
-  return sourceUrl.hostname === requiredUrl.hostname;
+  return cspSourceListAllowsResource(sources, required);
 }
 
 function validateEffectiveDocument(
@@ -482,19 +437,16 @@ function findEffectiveScriptPolicy(policy: ContentSecurityPolicy | false | undef
     return undefined;
   }
 
-  const scriptSources = resolveCspDirectiveValue(policy.scriptSrc);
-
-  if (Array.isArray(scriptSources)) {
-    return { name: "script-src", sources: scriptSources };
-  }
-
-  const defaultSources = resolveCspDirectiveValue(policy.defaultSrc);
-
-  if (Array.isArray(defaultSources)) {
-    return { name: "default-src", sources: defaultSources };
-  }
-
-  return undefined;
+  const effective = getEffectiveCspSources(
+    policy,
+    ["scriptSrcElem", "scriptSrc", "defaultSrc"],
+  );
+  return effective
+    ? {
+      name: toCspDirectiveName(effective.directive),
+      sources: effective.sources,
+    }
+    : undefined;
 }
 
 function allowsStreamingInlineScripts(sources: readonly string[]) {

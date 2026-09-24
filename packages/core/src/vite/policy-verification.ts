@@ -1,9 +1,11 @@
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { parseAst, transformWithEsbuild } from "vite";
 import type { HttpMethod } from "../route";
 import {
   createSecurityHeaders,
+  mergeRoutePolicies,
   getBodySizeException,
   isSecurityException,
   resolveCsp,
@@ -20,8 +22,17 @@ import {
   type SecurityPolicy,
   type StaticPolicyFindingCode,
 } from "../security";
+import {
+  cspSourceListAllowsResource,
+  cspScriptSourceListAllowsResource,
+  getEffectiveCspSources,
+} from "../security/csp-source";
 import { PACKAGE_NAME } from "../package-name";
 import { isPlainObject } from "../type-guards";
+import {
+  extractDocumentResources,
+  type DocumentResource,
+} from "./jsx-resources";
 
 type AstNode = {
   [key: string]: unknown;
@@ -60,11 +71,21 @@ export type RouteFileInspection = {
   declaresPageRoute: boolean;
   file: string;
   findings: StaticPolicyFinding[];
+  /** The statically readable layout attachment state for a page or fallback. */
+  layoutState: LayoutState;
   /** The HTTP methods that the file exports, in a stable order. */
   methods: HttpMethod[];
+  /** The route policy value when static evaluation succeeds. */
+  policy?: RoutePolicy;
+  /** Whether the route policy export is absent, readable, or unknown. */
+  policyState: PolicyState;
+  /** Literal document resources found in this route module. */
+  resources: DocumentResource[];
 };
 
 export type DocumentCspState = "present" | "false" | "absent" | "unknown";
+export type LayoutState = "enabled" | "disabled" | "unknown";
+export type PolicyState = "absent" | "readable" | "unknown";
 
 /**
  * `declared` means the file states access. `unknown` means the expression is
@@ -74,6 +95,7 @@ export type RouteAccessState = "declared" | "absent" | "unknown";
 
 type ExtractedCapability = {
   cors?: CorsPolicy;
+  layoutState?: LayoutState;
   security?: RouteSecurityPolicy;
 };
 
@@ -83,7 +105,9 @@ type ExtractedRouteModule = {
   declaredMethods: Set<HttpMethod>;
   declaresDocumentPolicy: boolean;
   documentCspState: DocumentCspState;
+  layoutState: LayoutState;
   policy?: RoutePolicy;
+  policyState: PolicyState;
 };
 
 const httpMethods = [
@@ -117,6 +141,7 @@ export async function inspectRouteFile(
 ): Promise<RouteFileInspection> {
   const source = await readFile(file, "utf8");
   const extracted = await extractRouteModuleSource(source, file);
+  const resources = await extractDocumentResources(source, file);
 
   const attached = basename(file).startsWith("@");
 
@@ -129,9 +154,13 @@ export async function inspectRouteFile(
     declaresPageRoute: !attached && declaresPageRoute(source),
     file,
     findings: validateExtractedRouteModule(extracted, file),
+    layoutState: extracted.layoutState,
     methods: attached
       ? []
       : httpMethods.filter((method) => extracted.declaredMethods.has(method)),
+    policy: extracted.policy,
+    policyState: extracted.policyState,
+    resources,
   };
 }
 
@@ -236,6 +265,255 @@ export function auditRouteAccessCoverage(
   }
 
   return findings;
+}
+
+export function auditDocumentResources(
+  routesDir: string,
+  inspections: readonly RouteFileInspection[],
+): StaticPolicyFinding[] {
+  const policies = inspections.filter((inspection) => isPolicyFile(inspection.file));
+  const layouts = inspections.filter((inspection) => isLayoutFile(inspection.file));
+  const contexts = createResourceAuditContexts(routesDir, inspections);
+  const findings: StaticPolicyFinding[] = [];
+  const seen = new Set<string>();
+
+  for (const context of contexts) {
+    const applicable = applicablePolicies(routesDir, context.routeDirectory, policies);
+    if (
+      applicable.some((inspection) => inspection.policyState === "unknown") ||
+      context.policyState === "unknown"
+    ) {
+      continue;
+    }
+
+    const merged = mergeRoutePolicies(
+      ...applicable.map((inspection) => inspection.policy),
+      context.policy,
+    );
+    const csp = resolveCsp(merged.document?.csp);
+    if (!csp) continue;
+
+    const inherited = context.document.layoutState === "enabled"
+      ? layouts.filter((layout) =>
+        isSameOrAbove(dirname(layout.file), context.routeDirectory)
+      )
+      : [];
+    const resources = [
+      ...context.document.resources,
+      ...inherited.flatMap((layout) => layout.resources),
+    ];
+
+    for (const resource of resources) {
+      const finding = resourceFinding(resource, csp, context.description);
+      if (!finding) continue;
+      const key = `${finding.file}\0${finding.code}\0${finding.message}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      findings.push(finding);
+    }
+  }
+
+  return findings;
+}
+
+type ResourceAuditContext = {
+  description: string;
+  document: RouteFileInspection;
+  policy?: RoutePolicy;
+  policyState: PolicyState;
+  routeDirectory: string;
+};
+
+function createResourceAuditContexts(
+  routesDir: string,
+  inspections: readonly RouteFileInspection[],
+): ResourceAuditContext[] {
+  const contexts: ResourceAuditContext[] = inspections
+    .filter((inspection) => inspection.declaresPageRoute)
+    .map((inspection) => ({
+      description: describePageContext(routesDir, inspection.file),
+      document: inspection,
+      policy: inspection.policy,
+      policyState: inspection.policyState,
+      routeDirectory: dirname(inspection.file),
+    }));
+  const fallbacks = inspections.filter((inspection) =>
+    isFallbackDocumentFile(inspection.file)
+  );
+
+  for (const fallback of fallbacks) {
+    contexts.push({
+      description: describeFallbackContext(
+        routesDir,
+        fallback,
+        dirname(fallback.file),
+      ),
+      document: fallback,
+      policy: fallback.policy,
+      policyState: fallback.policyState,
+      routeDirectory: dirname(fallback.file),
+    });
+  }
+
+  const pathDirectories = new Set(
+    inspections
+      .map((inspection) => dirname(inspection.file))
+      .filter((directory) => !hasRouteGroup(routesDir, directory)),
+  );
+
+  for (const routeDirectory of pathDirectories) {
+    for (const name of ["@not-found", "@error"] as const) {
+      const fallback = closestPathFallback(
+        routesDir,
+        fallbacks,
+        routeDirectory,
+        name,
+      );
+      if (!fallback || routeDirectory === dirname(fallback.file)) continue;
+      contexts.push({
+        description: describeFallbackContext(
+          routesDir,
+          fallback,
+          routeDirectory,
+        ),
+        document: fallback,
+        policyState: "absent",
+        routeDirectory,
+      });
+    }
+  }
+
+  return contexts;
+}
+
+function closestPathFallback(
+  routesDir: string,
+  fallbacks: readonly RouteFileInspection[],
+  routeDirectory: string,
+  name: "@not-found" | "@error",
+) {
+  return fallbacks
+    .filter((fallback) =>
+      basename(fallback.file).startsWith(name) &&
+      !hasRouteGroup(routesDir, dirname(fallback.file)) &&
+      isSameOrAbove(dirname(fallback.file), routeDirectory)
+    )
+    .sort((left, right) =>
+      dirname(left.file).length - dirname(right.file).length
+    )
+    .at(-1);
+}
+
+function hasRouteGroup(routesDir: string, directory: string) {
+  return relative(routesDir, directory).split(sep).some((segment) =>
+    segment.startsWith("(") && segment.endsWith(")")
+  );
+}
+
+function resourceFinding(
+  resource: DocumentResource,
+  csp: ContentSecurityPolicy,
+  context: string,
+): StaticPolicyFinding | undefined {
+  const script = resource.kind === "external-script" || resource.kind === "inline-script";
+  const effective = getEffectiveCspSources(
+    csp,
+    script
+      ? ["scriptSrcElem", "scriptSrc", "defaultSrc"]
+      : ["styleSrcElem", "styleSrc", "defaultSrc"],
+  );
+  if (!effective) return undefined;
+
+  const allowed = resource.kind === "inline-script" || resource.kind === "inline-style"
+    ? cspSourcesAllowInline(effective.sources, resource)
+    : script
+    ? cspSourcesAllowExternalScript(effective.sources, resource)
+    : cspSourceListAllowsResource(effective.sources, resource.value);
+  if (allowed) return undefined;
+
+  const directive = cspDirectiveName(effective.directive);
+  const subject = resource.kind.startsWith("inline-")
+    ? "inline content"
+    : resource.value;
+  return {
+    code: script ? "csp-script-src-blocked" : "csp-style-src-blocked",
+    file: resource.file,
+    message: `The effective ${directive} directive blocks ${subject} for ${context}.`,
+    severity: "error",
+  };
+}
+
+function cspSourcesAllowExternalScript(
+  sources: readonly string[],
+  resource: DocumentResource,
+) {
+  if (resource.nonceUnknown) {
+    return sources.some((source) => source.startsWith("'nonce-"));
+  }
+
+  if (resource.nonce && sources.includes(`'nonce-${resource.nonce}'`)) {
+    return true;
+  }
+
+  return cspScriptSourceListAllowsResource(sources, resource.value);
+}
+
+function cspSourcesAllowInline(
+  sources: readonly string[],
+  resource: DocumentResource,
+) {
+  if (resource.nonceUnknown) {
+    return sources.some((source) => source.startsWith("'nonce-"));
+  }
+
+  if (
+    resource.nonce &&
+    sources.includes(`'nonce-${resource.nonce}'`)
+  ) {
+    return true;
+  }
+
+  if (sources.includes("'unsafe-inline'") && !sources.some((source) =>
+    source.startsWith("'nonce-") || /^'sha(?:256|384|512)-/.test(source)
+  )) {
+    return true;
+  }
+
+  return (["sha256", "sha384", "sha512"] as const).some((algorithm) =>
+    sources.includes(`'${algorithm}-${createHash(algorithm).update(resource.value).digest("base64")}'`)
+  );
+}
+
+function cspDirectiveName(name: string) {
+  return name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+}
+
+function isLayoutFile(file: string) {
+  return /^@layout\.tsx?$/.test(basename(file));
+}
+
+function describePageContext(routesDir: string, file: string) {
+  const relativePath = relative(routesDir, file).split(sep).join("/");
+  const withoutExtension = relativePath.replace(/\.tsx?$/, "");
+  return `route ${routePattern(withoutExtension)}`;
+}
+
+function describeFallbackContext(
+  routesDir: string,
+  fallback: RouteFileInspection,
+  routeDirectory: string,
+) {
+  const name = basename(fallback.file).replace(/\.tsx?$/, "");
+  const contextPath = relative(routesDir, routeDirectory).split(sep).join("/");
+  return `the ${name} document at ${routePattern(contextPath)}`;
+}
+
+function routePattern(path: string) {
+  const segments = path.split("/").filter((segment) =>
+    segment && segment !== "." && !(segment.startsWith("(") && segment.endsWith(")")) &&
+    segment !== "index"
+  );
+  return `/${segments.join("/")}`;
 }
 
 function resolveRouteAccessState(
@@ -377,7 +655,9 @@ function extractRouteModule(code: string): ExtractedRouteModule {
   let accessState: RouteAccessState = "absent";
   let declaresDocumentPolicy = false;
   let documentCspState: DocumentCspState = "absent";
+  let layoutState: LayoutState = "enabled";
   let policy: RoutePolicy | undefined;
+  let policyState: PolicyState = "absent";
 
   for (const [exportName, localName] of exports) {
     const initializer = declarations.get(localName);
@@ -393,6 +673,16 @@ function extractRouteModule(code: string): ExtractedRouteModule {
       if (initializer) {
         policy = extractRoutePolicy(initializer, imports, constants);
       }
+      policyState = policy ? "readable" : "unknown";
+      continue;
+    }
+    if (exportName === "layout") {
+      const value = evaluateLiteral(initializer, constants);
+      layoutState = value === false
+        ? "disabled"
+        : value === unresolved
+        ? "unknown"
+        : "enabled";
       continue;
     }
     if (!isHttpMethod(exportName)) continue;
@@ -401,6 +691,9 @@ function extractRouteModule(code: string): ExtractedRouteModule {
 
     const capability = extractCapability(initializer, imports, constants);
     if (capability) capabilities[exportName] = capability;
+    if (exportName === "GET" && capability?.layoutState) {
+      layoutState = capability.layoutState;
+    }
   }
 
   return {
@@ -409,7 +702,9 @@ function extractRouteModule(code: string): ExtractedRouteModule {
     declaredMethods,
     declaresDocumentPolicy,
     documentCspState,
+    layoutState,
     policy,
+    policyState,
   };
 }
 
@@ -668,6 +963,27 @@ function extractCapability(
   if (node.type !== "CallExpression") return undefined;
   const localName = identifierName(node.callee);
   const helper = localName ? imports.get(localName) : undefined;
+
+  if (helper === "page") {
+    const optionsNode = asNodeArray(node.arguments)[0];
+    if (!optionsNode) {
+      return { layoutState: "enabled" } satisfies ExtractedCapability;
+    }
+    if (
+      optionsNode.type !== "ObjectExpression" &&
+      optionsNode.type !== "Identifier"
+    ) {
+      return { layoutState: "enabled" } satisfies ExtractedCapability;
+    }
+    const layout = evaluateObjectProperty(optionsNode, "layout", constants);
+    return {
+      layoutState: layout === false
+        ? "disabled"
+        : layout === unresolved
+        ? "unknown"
+        : "enabled",
+    } satisfies ExtractedCapability;
+  }
 
   if (!helper || !responseHelpers.has(helper)) return undefined;
   const arguments_ = asNodeArray(node.arguments);

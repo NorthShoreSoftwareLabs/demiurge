@@ -794,14 +794,6 @@ The development server shows this audit for one route. Read the
 The Vite plugin validates literal CORS, rate-limit, and document policy during
 a production build. A finding identifies the route file and export.
 
-The build also reads the policy cascade of the route tree. A route that
-inherits no access declaration gets the `access-declaration-missing` error, and
-the build stops. A page route that has no effective CSP gets the
-`document-policy-missing` warning. A document
-policy that declares only other headers also gets the warning. The warning
-names the route file and does not stop the build. The development server gives
-the same warning when it starts and after a route file changes. A declared
-`csp` exception stops the warning. An unreadable policy gets no warning.
 The build also reads the policy cascade of the route tree. A page route or an
 application-owned fallback document that inherits no document policy fails the
 build with the `document-policy-missing` error. A document policy that
@@ -811,6 +803,21 @@ exists, and the exact repair. The development server reports the same gap when
 it starts and after a route file changes. A declared `csp` exception accepts
 the document and stops the error. An unreadable policy expression reports nothing, because the
 build never guesses.
+
+The verifier checks literal resources in page, layout, and fallback JSX. It
+checks native script elements, stylesheet links, style imports, and inline
+script or style content. A layout resource uses each descendant route policy.
+
+String literals and template literals without expressions are readable. The
+verifier skips computed values, spreads, helper components, and run-time DOM
+changes. It also skips a resource when an applicable policy is unreadable.
+
+Script elements use `script-src-elem`, then `script-src`, then `default-src`.
+Styles use `style-src-elem`, then `style-src`, then `default-src`. Source
+matching includes schemes, hosts, ports, wildcards, and CSP path rules.
+
+An inline resource can use an allowed CSP hash or an active `unsafe-inline`
+source. Use the declarative script API when it fits an inline script.
 
 A static host that cannot deliver a declared document policy fails the build
 instead of the deployment. A nonce-based Content-Security-Policy needs a

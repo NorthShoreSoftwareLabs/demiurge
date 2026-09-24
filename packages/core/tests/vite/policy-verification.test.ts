@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -15,6 +16,10 @@ export const GET = page(() => null);`;
 // The build denies a route that inherits no access declaration. A fixture
 // that does not examine access gets a public declaration at the root.
 const publicAccessPolicy = "export const policy = { access: { public: true } };";
+const restrictiveDocumentPolicy = `export const policy = {
+  access: { public: true },
+  document: { csp: { defaultSrc: ["'self'"] } },
+};`;
 
 async function createRouteTree(files: Record<string, string>) {
   const root = await mkdtemp(join(tmpdir(), "demiurge-policy-tree-"));
@@ -346,6 +351,226 @@ export const policy = { document: { headers: { contentTypeOptions: "nosniff" } }
     await expect(
       unstable_verifyRoutePolicies(root, { routesDir: "routes" }),
     ).resolves.toEqual([]);
+  });
+
+  it("checks a nested layout resource for each inherited page", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": restrictiveDocumentPolicy,
+      "admin/@layout.tsx": `
+export default function Layout({ children }) {
+  return <><script src="https://cdn.example.test/admin.js" />{children}</>;
+}`,
+      "admin/index.tsx": pageRouteSource,
+      "admin/settings.tsx": pageRouteSource,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, { routesDir: "routes" });
+
+    expect(findings.filter((finding) => finding.code === "csp-script-src-blocked"))
+      .toEqual([
+        expect.objectContaining({
+          file: join(root, "routes", "admin", "@layout.tsx"),
+          message: expect.stringContaining("route /admin"),
+        }),
+        expect.objectContaining({
+          file: join(root, "routes", "admin", "@layout.tsx"),
+          message: expect.stringContaining("route /admin/settings"),
+        }),
+      ]);
+  });
+
+  it("keeps route-group layouts with their file-tree descendants", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": restrictiveDocumentPolicy,
+      "(private)/@layout.tsx": `
+export default function Layout({ children }) {
+  return <><link rel="stylesheet" href="https://cdn.example.test/private.css" />{children}</>;
+}`,
+      "(private)/dashboard.tsx": pageRouteSource,
+      "(public)/dashboard.tsx": pageRouteSource,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, { routesDir: "routes" });
+
+    expect(findings.filter((finding) => finding.code === "csp-style-src-blocked"))
+      .toEqual([
+        expect.objectContaining({
+          file: join(root, "routes", "(private)", "@layout.tsx"),
+          message: expect.stringContaining("route /dashboard"),
+        }),
+      ]);
+  });
+
+  it("respects layout opt-outs on pages and fallback documents", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": restrictiveDocumentPolicy,
+      "@layout.tsx": `
+export default function Layout({ children }) {
+  return <><style>{'@import "https://cdn.example.test/base.css";'}</style>{children}</>;
+}`,
+      "index.tsx": `
+import { page } from "@demiurgejs/core";
+function Home() { return null; }
+export const GET = page({ layout: false, view: Home });`,
+      "@not-found.tsx": `
+export const layout = false;
+export default function NotFound() { return null; }`,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, { routesDir: "routes" });
+
+    expect(findings.filter((finding) => finding.code === "csp-style-src-blocked"))
+      .toEqual([]);
+  });
+
+  it("checks fallback resources with the effective element directive", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `export const policy = {
+  access: { public: true },
+  document: { csp: {
+    defaultSrc: ["'self'"],
+    styleSrc: ["https://cdn.example.test"],
+    styleSrcElem: ["'self'"],
+  } },
+};`,
+      "docs/@not-found.tsx": `
+export default function NotFound() {
+  return <link rel="stylesheet" href="https://cdn.example.test/missing.css" />;
+}`,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, { routesDir: "routes" });
+
+    expect(findings).toContainEqual(expect.objectContaining({
+      code: "csp-style-src-blocked",
+      file: join(root, "routes", "docs", "@not-found.tsx"),
+      message: expect.stringMatching(/style-src-elem.*@not-found document at \/docs/),
+    }));
+  });
+
+  it("does not report a resource conflict through an unknown policy", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `
+const document = getDocumentPolicy();
+export const policy = { access: { public: true }, document };`,
+      "index.tsx": `
+import { page } from "@demiurgejs/core";
+function Home() { return <script src="https://cdn.example.test/app.js" />; }
+export const GET = page(Home);`,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, { routesDir: "routes" });
+
+    expect(findings.some((finding) => finding.code === "csp-script-src-blocked"))
+      .toBe(false);
+  });
+
+  it("accepts inline content with a CSP hash or matching nonce", async () => {
+    const script = "start()";
+    const hash = createHash("sha256").update(script).digest("base64");
+    const root = await createRouteTree({
+      "@policy.ts": `export const policy = {
+  access: { public: true },
+  document: { csp: {
+    defaultSrc: ["'self'"],
+    scriptSrcElem: ["'sha256-${hash}'"],
+    styleSrcElem: ["'nonce-fixed'"],
+  } },
+};`,
+      "index.tsx": `
+import { page } from "@demiurgejs/core";
+function Home() {
+  return <><script>{'${script}'}</script><style nonce="fixed">{'body { color: red; }'}</style></>;
+}
+export const GET = page(Home);`,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, { routesDir: "routes" });
+
+    expect(findings.filter((finding) =>
+      finding.code === "csp-script-src-blocked" ||
+      finding.code === "csp-style-src-blocked"
+    )).toEqual([]);
+  });
+
+  it("accepts an external script with a matching nonce under strict-dynamic", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `export const policy = {
+  access: { public: true },
+  document: { csp: {
+    defaultSrc: ["'self'"],
+    scriptSrcElem: ["'nonce-fixed'", "'strict-dynamic'"],
+  } },
+};`,
+      "index.tsx": `
+import { page } from "@demiurgejs/core";
+function Home() {
+  return <script nonce="fixed" src="https://cdn.example.test/app.js" />;
+}
+export const GET = page(Home);`,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, { routesDir: "routes" });
+
+    expect(findings.filter((finding) =>
+      finding.code === "csp-script-src-blocked"
+    )).toEqual([]);
+  });
+
+  it("does not let an unreadable nonce hide a blocked script source", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": restrictiveDocumentPolicy,
+      "index.tsx": `
+import { page } from "@demiurgejs/core";
+const nonce = getNonce();
+function Home() {
+  return <script nonce={nonce} src="https://cdn.example.test/app.js" />;
+}
+export const GET = page(Home);`,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, { routesDir: "routes" });
+
+    expect(findings).toContainEqual(expect.objectContaining({
+      code: "csp-script-src-blocked",
+      file: join(root, "routes", "index.tsx"),
+    }));
+  });
+
+  it("checks a root fallback under nested pathname policies and layouts", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `export const policy = {
+  access: { public: true },
+  document: { csp: { defaultSrc: ["'self'"], scriptSrc: ["https://cdn.example.test"] } },
+};`,
+      "@not-found.tsx": `
+export default function NotFound() {
+  return <script src="https://cdn.example.test/fallback.js" />;
+}`,
+      "admin/@policy.ts": `export const policy = {
+  document: { csp: { scriptSrc: { replace: ["'self'"] } } },
+};`,
+      "admin/@layout.tsx": `
+export default function Layout({ children }) {
+  return <><link rel="stylesheet" href="https://cdn.example.test/admin.css" />{children}</>;
+}`,
+      "admin/index.tsx": pageRouteSource,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, { routesDir: "routes" });
+
+    expect(findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "csp-script-src-blocked",
+        file: join(root, "routes", "@not-found.tsx"),
+        message: expect.stringContaining("@not-found document at /admin"),
+      }),
+      expect.objectContaining({
+        code: "csp-style-src-blocked",
+        file: join(root, "routes", "admin", "@layout.tsx"),
+        message: expect.stringContaining("@not-found document at /admin"),
+      }),
+    ]));
   });
 
   it("refuses a document exception that states no reason", async () => {

@@ -1294,6 +1294,56 @@ describe("security audit output", () => {
     expect(audit.findings).toEqual([]);
   });
 
+  it("uses script-src-elem before script-src for document scripts", () => {
+    const audit = createSecurityAudit({
+      document: {
+        policy: security.static({
+          csp: {
+            scriptSrc: ["https://cdn.example.com"],
+            scriptSrcElem: ["'self'"],
+          },
+        }),
+        scripts: [script({ src: "https://cdn.example.com/app.js" })],
+      },
+    });
+
+    expect(audit.findings).toEqual([
+      {
+        code: "csp-script-src-blocked",
+        message:
+          "Document script https://cdn.example.com/app.js is not allowed by the effective script-src-elem policy.",
+        severity: "error",
+      },
+    ]);
+  });
+
+  it("lets script-src-elem override a restrictive script-src", () => {
+    const audit = createSecurityAudit({
+      document: {
+        policy: security.static({
+          csp: {
+            scriptSrc: ["'self'"],
+            scriptSrcElem: ["https://cdn.example.com"],
+          },
+        }),
+        scripts: [script({ src: "https://cdn.example.com/app.js" })],
+      },
+    });
+
+    expect(audit.findings).toEqual([]);
+  });
+
+  it("does not restrict scripts when the CSP has no script directive chain", () => {
+    const audit = createSecurityAudit({
+      document: {
+        policy: { csp: { imgSrc: ["'self'"] } },
+        scripts: [script({ src: "https://cdn.example.com/app.js" })],
+      },
+    });
+
+    expect(audit.findings).toEqual([]);
+  });
+
   it("reports strict nonce-backed document scripts without a matching nonce", () => {
     const audit = createSecurityAudit({
       document: {

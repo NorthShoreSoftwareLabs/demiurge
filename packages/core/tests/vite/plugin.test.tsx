@@ -2355,4 +2355,35 @@ export const GET = json({}, {
       warn.mock.calls[0]![0] as string,
     );
   });
+
+  it("reports the same blocked JSX resource in development and build", async () => {
+    const root = await scaffold({
+      "@policy.ts": `export const policy = {
+  access: { public: true },
+  document: { csp: { defaultSrc: ["'self'"] } },
+};`,
+      "@not-found.tsx": "export default function NotFound() { return null; }",
+      "index.tsx": `
+import { page } from "@demiurgejs/core";
+function Home() { return <script src="https://cdn.example.test/app.js" />; }
+export const GET = page(Home);`,
+    });
+    const warn = vi.fn();
+    const devPlugin = demiurge() as PluginHarness;
+    const buildPlugin = demiurge() as PluginHarness;
+
+    await devPlugin.configResolved?.({ command: "serve", root });
+    devPlugin.configureServer?.({
+      config: { logger: { warn }, root },
+      middlewares: { use: vi.fn() },
+      ssrLoadModule: vi.fn(),
+      watcher: createWatcherHarness(),
+    } as never);
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledTimes(1));
+
+    await buildPlugin.configResolved?.({ command: "build", root });
+    await expect(buildPlugin.buildStart?.()).rejects.toThrow(
+      warn.mock.calls[0]![0] as string,
+    );
+  });
 });
