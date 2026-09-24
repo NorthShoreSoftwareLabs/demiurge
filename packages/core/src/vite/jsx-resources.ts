@@ -177,14 +177,62 @@ function literalText(node: AstNode | undefined): string | undefined {
 
 function findStyleImports(css: string) {
   const imports: string[] = [];
-  const pattern = /@import\s+(?:url\(\s*(?:(["'])(.*?)\1|([^\s)'";]+))\s*\)|(["'])(.*?)\4)/gi;
+  let blockDepth = 0;
 
-  for (const match of css.matchAll(pattern)) {
-    const value = match[2] ?? match[3] ?? match[5];
-    if (value !== undefined) imports.push(value);
+  for (let index = 0; index < css.length; index += 1) {
+    const character = css[index];
+    const next = css[index + 1];
+
+    if (character === "/" && next === "*") {
+      index = skipCssComment(css, index + 2);
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      index = skipCssString(css, index + 1, character);
+      continue;
+    }
+    if (character === "{") {
+      blockDepth += 1;
+      continue;
+    }
+    if (character === "}") {
+      blockDepth = Math.max(0, blockDepth - 1);
+      continue;
+    }
+    if (blockDepth !== 0 || !css.slice(index).match(/^@import\b/i)) {
+      continue;
+    }
+
+    const match = /^@import(?:\s|\/\*[\s\S]*?\*\/)+(?:url\(\s*(?:(["'])(.*?)\1|([^\s)'";]+))\s*\)|(["'])(.*?)\4)/i.exec(
+      css.slice(index),
+    );
+    const value = match?.[2] ?? match?.[3] ?? match?.[5];
+    const matchedText = match?.[0];
+    if (value !== undefined && matchedText !== undefined) {
+      imports.push(value);
+      index += matchedText.length - 1;
+    }
   }
 
   return imports;
+}
+
+function skipCssComment(css: string, start: number) {
+  const end = css.indexOf("*/", start);
+  return end === -1 ? css.length : end + 1;
+}
+
+function skipCssString(css: string, start: number, quote: string) {
+  for (let index = start; index < css.length; index += 1) {
+    if (css[index] === "\\") {
+      index += 1;
+      continue;
+    }
+    if (css[index] === quote) {
+      return index;
+    }
+  }
+  return css.length;
 }
 
 function visit(node: AstNode, callback: (node: AstNode) => void) {

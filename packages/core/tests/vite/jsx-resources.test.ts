@@ -120,4 +120,18 @@ export default () => <>
       },
     ]);
   });
+
+  it("ignores CSS imports in comments, strings, and declaration blocks", async () => {
+    const resources = await extractDocumentResources(`
+export default () => <style>{\`
+  /* @import "https://comment.example/style.css"; */
+  body::before { content: '@import "https://string.example/style.css"'; }
+  body { custom: @import "https://declaration.example/style.css"; }
+  @import "https://real.example/style.css";
+\`}</style>;`, file);
+
+    expect(resources.filter(({ kind }) => kind === "style-import")).toEqual([
+      { file, kind: "style-import", value: "https://real.example/style.css" },
+    ]);
+  });
 });

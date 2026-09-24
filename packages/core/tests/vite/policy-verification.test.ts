@@ -517,6 +517,62 @@ export const GET = page(Home);`,
     )).toEqual([]);
   });
 
+  it("does not let an unreadable nonce hide a blocked script source", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": restrictiveDocumentPolicy,
+      "index.tsx": `
+import { page } from "@demiurgejs/core";
+const nonce = getNonce();
+function Home() {
+  return <script nonce={nonce} src="https://cdn.example.test/app.js" />;
+}
+export const GET = page(Home);`,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, { routesDir: "routes" });
+
+    expect(findings).toContainEqual(expect.objectContaining({
+      code: "csp-script-src-blocked",
+      file: join(root, "routes", "index.tsx"),
+    }));
+  });
+
+  it("checks a root fallback under nested pathname policies and layouts", async () => {
+    const root = await createRouteTree({
+      "@policy.ts": `export const policy = {
+  access: { public: true },
+  document: { csp: { defaultSrc: ["'self'"], scriptSrc: ["https://cdn.example.test"] } },
+};`,
+      "@not-found.tsx": `
+export default function NotFound() {
+  return <script src="https://cdn.example.test/fallback.js" />;
+}`,
+      "admin/@policy.ts": `export const policy = {
+  document: { csp: { scriptSrc: { replace: ["'self'"] } } },
+};`,
+      "admin/@layout.tsx": `
+export default function Layout({ children }) {
+  return <><link rel="stylesheet" href="https://cdn.example.test/admin.css" />{children}</>;
+}`,
+      "admin/index.tsx": pageRouteSource,
+    });
+
+    const findings = await unstable_verifyRoutePolicies(root, { routesDir: "routes" });
+
+    expect(findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "csp-script-src-blocked",
+        file: join(root, "routes", "@not-found.tsx"),
+        message: expect.stringContaining("@not-found document at /admin"),
+      }),
+      expect.objectContaining({
+        code: "csp-style-src-blocked",
+        file: join(root, "routes", "admin", "@layout.tsx"),
+        message: expect.stringContaining("@not-found document at /admin"),
+      }),
+    ]));
+  });
+
   it("refuses a document exception that states no reason", async () => {
     const root = await createRouteTree({
       "@policy.ts":

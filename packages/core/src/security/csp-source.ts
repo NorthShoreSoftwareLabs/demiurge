@@ -81,7 +81,7 @@ function cspSourceAllowsResource(
       originUrl && resourceUrl &&
         originUrl.hostname === resourceUrl.hostname &&
         portMatches(originUrl.port || undefined, resourceUrl) &&
-        schemeMatches(originUrl.protocol.slice(0, -1), resourceUrl.protocol.slice(0, -1)),
+        originUrl.protocol === resourceUrl.protocol,
     );
   }
 
@@ -227,9 +227,14 @@ function pathMatches(source: string, resource: string) {
     return true;
   }
 
+  const directoryPrefix = source.endsWith("/");
+  if (directoryPrefix && !resource.startsWith(source)) {
+    return false;
+  }
+
   const sourceParts = source.split("/").map(decodePathPart);
   const resourceParts = resource.split("/").map(decodePathPart);
-  const exact = !source.endsWith("/");
+  const exact = !directoryPrefix;
 
   if (exact && sourceParts.length !== resourceParts.length) {
     return false;

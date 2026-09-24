@@ -273,14 +273,12 @@ export function auditDocumentResources(
 ): StaticPolicyFinding[] {
   const policies = inspections.filter((inspection) => isPolicyFile(inspection.file));
   const layouts = inspections.filter((inspection) => isLayoutFile(inspection.file));
-  const contexts = inspections.filter((inspection) =>
-    inspection.declaresPageRoute || isFallbackDocumentFile(inspection.file)
-  );
+  const contexts = createResourceAuditContexts(routesDir, inspections);
   const findings: StaticPolicyFinding[] = [];
   const seen = new Set<string>();
 
   for (const context of contexts) {
-    const applicable = applicablePolicies(routesDir, dirname(context.file), policies);
+    const applicable = applicablePolicies(routesDir, context.routeDirectory, policies);
     if (
       applicable.some((inspection) => inspection.policyState === "unknown") ||
       context.policyState === "unknown"
@@ -295,16 +293,18 @@ export function auditDocumentResources(
     const csp = resolveCsp(merged.document?.csp);
     if (!csp) continue;
 
-    const inherited = context.layoutState === "enabled"
-      ? layouts.filter((layout) => isFileAttachedTo(layout.file, context.file))
+    const inherited = context.document.layoutState === "enabled"
+      ? layouts.filter((layout) =>
+        isSameOrAbove(dirname(layout.file), context.routeDirectory)
+      )
       : [];
     const resources = [
-      ...context.resources,
+      ...context.document.resources,
       ...inherited.flatMap((layout) => layout.resources),
     ];
 
     for (const resource of resources) {
-      const finding = resourceFinding(resource, csp, describeRouteContext(routesDir, context));
+      const finding = resourceFinding(resource, csp, context.description);
       if (!finding) continue;
       const key = `${finding.file}\0${finding.code}\0${finding.message}`;
       if (seen.has(key)) continue;
@@ -314,6 +314,100 @@ export function auditDocumentResources(
   }
 
   return findings;
+}
+
+type ResourceAuditContext = {
+  description: string;
+  document: RouteFileInspection;
+  policy?: RoutePolicy;
+  policyState: PolicyState;
+  routeDirectory: string;
+};
+
+function createResourceAuditContexts(
+  routesDir: string,
+  inspections: readonly RouteFileInspection[],
+): ResourceAuditContext[] {
+  const contexts: ResourceAuditContext[] = inspections
+    .filter((inspection) => inspection.declaresPageRoute)
+    .map((inspection) => ({
+      description: describePageContext(routesDir, inspection.file),
+      document: inspection,
+      policy: inspection.policy,
+      policyState: inspection.policyState,
+      routeDirectory: dirname(inspection.file),
+    }));
+  const fallbacks = inspections.filter((inspection) =>
+    isFallbackDocumentFile(inspection.file)
+  );
+
+  for (const fallback of fallbacks) {
+    contexts.push({
+      description: describeFallbackContext(
+        routesDir,
+        fallback,
+        dirname(fallback.file),
+      ),
+      document: fallback,
+      policy: fallback.policy,
+      policyState: fallback.policyState,
+      routeDirectory: dirname(fallback.file),
+    });
+  }
+
+  const pathDirectories = new Set(
+    inspections
+      .map((inspection) => dirname(inspection.file))
+      .filter((directory) => !hasRouteGroup(routesDir, directory)),
+  );
+
+  for (const routeDirectory of pathDirectories) {
+    for (const name of ["@not-found", "@error"] as const) {
+      const fallback = closestPathFallback(
+        routesDir,
+        fallbacks,
+        routeDirectory,
+        name,
+      );
+      if (!fallback || routeDirectory === dirname(fallback.file)) continue;
+      contexts.push({
+        description: describeFallbackContext(
+          routesDir,
+          fallback,
+          routeDirectory,
+        ),
+        document: fallback,
+        policyState: "absent",
+        routeDirectory,
+      });
+    }
+  }
+
+  return contexts;
+}
+
+function closestPathFallback(
+  routesDir: string,
+  fallbacks: readonly RouteFileInspection[],
+  routeDirectory: string,
+  name: "@not-found" | "@error",
+) {
+  return fallbacks
+    .filter((fallback) =>
+      basename(fallback.file).startsWith(name) &&
+      !hasRouteGroup(routesDir, dirname(fallback.file)) &&
+      isSameOrAbove(dirname(fallback.file), routeDirectory)
+    )
+    .sort((left, right) =>
+      dirname(left.file).length - dirname(right.file).length
+    )
+    .at(-1);
+}
+
+function hasRouteGroup(routesDir: string, directory: string) {
+  return relative(routesDir, directory).split(sep).some((segment) =>
+    segment.startsWith("(") && segment.endsWith(")")
+  );
 }
 
 function resourceFinding(
@@ -354,7 +448,7 @@ function cspSourcesAllowExternalScript(
   resource: DocumentResource,
 ) {
   if (resource.nonceUnknown) {
-    return true;
+    return sources.some((source) => source.startsWith("'nonce-"));
   }
 
   if (resource.nonce && sources.includes(`'nonce-${resource.nonce}'`)) {
@@ -369,7 +463,7 @@ function cspSourcesAllowInline(
   resource: DocumentResource,
 ) {
   if (resource.nonceUnknown) {
-    return true;
+    return sources.some((source) => source.startsWith("'nonce-"));
   }
 
   if (
@@ -398,17 +492,20 @@ function isLayoutFile(file: string) {
   return /^@layout\.tsx?$/.test(basename(file));
 }
 
-function isFileAttachedTo(attachedFile: string, contextFile: string) {
-  return isSameOrAbove(dirname(attachedFile), dirname(contextFile));
+function describePageContext(routesDir: string, file: string) {
+  const relativePath = relative(routesDir, file).split(sep).join("/");
+  const withoutExtension = relativePath.replace(/\.tsx?$/, "");
+  return `route ${routePattern(withoutExtension)}`;
 }
 
-function describeRouteContext(routesDir: string, inspection: RouteFileInspection) {
-  const relativePath = relative(routesDir, inspection.file).split(sep).join("/");
-  const withoutExtension = relativePath.replace(/\.tsx?$/, "");
-  if (isFallbackDocumentFile(inspection.file)) {
-    return `the ${basename(withoutExtension)} document at ${routePattern(dirname(withoutExtension))}`;
-  }
-  return `route ${routePattern(withoutExtension)}`;
+function describeFallbackContext(
+  routesDir: string,
+  fallback: RouteFileInspection,
+  routeDirectory: string,
+) {
+  const name = basename(fallback.file).replace(/\.tsx?$/, "");
+  const contextPath = relative(routesDir, routeDirectory).split(sep).join("/");
+  return `the ${name} document at ${routePattern(contextPath)}`;
 }
 
 function routePattern(path: string) {

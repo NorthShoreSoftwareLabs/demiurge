@@ -59,6 +59,22 @@ describe("CSP resource source matching", () => {
         "https://app.example.com",
       ),
     ).toBe(false);
+    expect(
+      cspSourceListAllowsResource(
+        ["'self'"],
+        "https://app.example.com/app.js",
+        "http://app.example.com",
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps a trailing slash in a directory source boundary", () => {
+    expect(
+      cspSourceListAllowsResource(
+        ["https://cdn.example.com/assets/"],
+        "https://cdn.example.com/assets",
+      ),
+    ).toBe(false);
   });
 
   it.each(["app.js", "./app.js", "../app.js", "/app.js"])(
