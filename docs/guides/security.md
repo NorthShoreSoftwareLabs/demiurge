@@ -770,10 +770,16 @@ uses `document-policy-missing`, which the build verifier already used.
 media-type and body-size validation. It supports both compatibility `report-uri`
 and named Reporting API endpoints.
 
-During development, the Vite adapter adds `/_demiurge/csp-report` to the
-`report-uri` directive in each active CSP header. It keeps all application
-report targets. The endpoint accepts valid browser reports through `POST`
-requests and returns `204`. It does not store reports.
+During development, the Vite adapter adds `/_demiurge/csp-report` to each
+active CSP header. This change applies to enforcing and report-only policies.
+The adapter adds the target to `report-uri` and keeps application `report-uri`
+targets.
+Chromium ignores `report-uri` when the same policy contains `report-to`.
+The adapter removes `report-to` from development CSP headers so reports arrive
+immediately. It keeps the application `Reporting-Endpoints` header unchanged.
+
+The endpoint accepts valid browser reports through `POST` requests and returns
+`204`. It does not store reports.
 
 The development server writes a short diagnostic for each new violation. It
 removes control characters, query strings, fragments, referrers, and complete
@@ -782,8 +788,8 @@ duplicate reports for a limited time. A rate limit bounds diagnostics from
 unique reports.
 
 Browser reports are asynchronous and best-effort. They cover only behavior
-that a browser runs. Node production and static output do not add the endpoint
-or its `report-uri` value.
+that a browser runs. Node production and static output do not change CSP
+reporting targets.
 
 `createSecurityAudit(...)` inspects effective route policy, rendered security
 headers, static scripts, reporting configuration, and declared third-party

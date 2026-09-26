@@ -1493,35 +1493,58 @@ function replaceNonceAttribute(
 function applyDevDocumentSecurity(response: Response, nonce: string) {
   const contentType = response.headers.get("content-type");
   const csp = response.headers.get("content-security-policy");
+  const reportOnlyCsp = response.headers.get(
+    "content-security-policy-report-only",
+  );
 
-  if (!contentType?.toLowerCase().startsWith("text/html") || !csp) {
+  if (
+    !contentType?.toLowerCase().startsWith("text/html") ||
+    (!csp && !reportOnlyCsp)
+  ) {
     return;
   }
 
-  const source = `'nonce-${nonce}'`;
-  const withScriptNonce = addCspSource(
-    csp,
-    ["script-src-elem", "script-src"],
-    "script-src",
-    source,
-  );
-  const withStyleNonce = allowsUnsafeInline(
-      withScriptNonce,
-      ["style-src-elem", "style-src"],
-    )
-    ? withScriptNonce
-    : addCspSource(
-      withScriptNonce,
-      ["style-src-elem", "style-src"],
-      "style-src",
+  if (csp) {
+    const source = `'nonce-${nonce}'`;
+    const withScriptNonce = addCspSource(
+      csp,
+      ["script-src-elem", "script-src"],
+      "script-src",
       source,
     );
+    const withStyleNonce = allowsUnsafeInline(
+        withScriptNonce,
+        ["style-src-elem", "style-src"],
+      )
+      ? withScriptNonce
+      : addCspSource(
+        withScriptNonce,
+        ["style-src-elem", "style-src"],
+        "style-src",
+        source,
+      );
 
-  response.headers.set(
-    "content-security-policy",
-    addCspReportUri(withStyleNonce, CSP_REPORT_PATH),
-  );
+    response.headers.set(
+      "content-security-policy",
+      addDevCspReporting(withStyleNonce),
+    );
+  }
+
+  if (reportOnlyCsp) {
+    response.headers.set(
+      "content-security-policy-report-only",
+      addDevCspReporting(reportOnlyCsp),
+    );
+  }
+
   response.headers.set("cache-control", "private, no-store");
+}
+
+function addDevCspReporting(csp: string) {
+  return removeCspDirective(
+    addCspReportUri(csp, CSP_REPORT_PATH),
+    "report-to",
+  );
 }
 
 function addCspReportUri(csp: string, target: string) {
@@ -1541,6 +1564,13 @@ function addCspReportUri(csp: string, target: string) {
   }
 
   return directives.filter(Boolean).join("; ");
+}
+
+function removeCspDirective(csp: string, name: string) {
+  const directives = csp.split(";").map((directive) => directive.trim());
+  return directives.filter((directive) =>
+    directive && directive.split(/\s+/, 1)[0]?.toLowerCase() !== name
+  ).join("; ");
 }
 
 function addCspSource(

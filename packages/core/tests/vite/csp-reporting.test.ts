@@ -62,6 +62,58 @@ describe("development CSP report collector", () => {
     expect([...message].every((character) => character.charCodeAt(0) > 31)).toBe(true);
   });
 
+  it.each([
+    "data",
+    "blob",
+    "wasm-eval",
+    "trusted-types-policy",
+    "trusted-types-sink",
+  ])("accepts Chromium blocked resource value %s", async (blocked) => {
+    const log = vi.fn();
+    const collector = createDevCspReportCollector({ log });
+    const response = await collector.handle(request(report({
+      "blocked-uri": blocked,
+    })));
+
+    expect(response?.status).toBe(204);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining(`blocked=${blocked}`));
+  });
+
+  it("accepts Reporting API CSP reports and ignores other report types", async () => {
+    const log = vi.fn();
+    const collector = createDevCspReportCollector({ log });
+    const body = JSON.stringify([
+      {
+        age: 0,
+        body: {
+          blockedURL: "data",
+          columnNumber: 7,
+          disposition: "enforce",
+          documentURL: "https://app.example.com/account?secret=yes",
+          effectiveDirective: "img-src",
+          lineNumber: 3,
+          sourceFile: "chrome-extension://private/page.js",
+        },
+        type: "csp-violation",
+        url: "https://app.example.com/account?secret=yes",
+      },
+      {
+        body: { id: "network-error" },
+        type: "network-error",
+      },
+    ]);
+    const response = await collector.handle(request(body, {
+      headers: { "content-type": "application/reports+json" },
+    }));
+
+    expect(response?.status).toBe(204);
+    expect(log).toHaveBeenCalledOnce();
+    const message = String(log.mock.calls[0]![0]);
+    expect(message).toContain("directive=img-src blocked=data document=/account");
+    expect(message).toContain("disposition=enforce");
+    expect(log).not.toHaveBeenCalledWith(expect.stringContaining("extension"));
+  });
+
   it("rejects malformed JSON and invalid report shapes", async () => {
     const log = vi.fn();
     const collector = createDevCspReportCollector({ log });
@@ -72,6 +124,20 @@ describe("development CSP report collector", () => {
 
     expect(malformed?.status).toBe(400);
     expect(invalid?.status).toBe(400);
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("does not log part of a batch when a later report is invalid", async () => {
+    const log = vi.fn();
+    const collector = createDevCspReportCollector({ log });
+    const response = await collector.handle(request(JSON.stringify([
+      JSON.parse(report())["csp-report"],
+      { "blocked-uri": "https://cdn.example.com" },
+    ]), {
+      headers: { "content-type": "application/reports+json" },
+    }));
+
+    expect(response?.status).toBe(400);
     expect(log).not.toHaveBeenCalled();
   });
 
@@ -160,5 +226,28 @@ describe("development CSP report collector", () => {
       "blocked-uri": "https://four.example.com/a",
     })));
     expect(log).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not deduplicate a report that the rate limit drops", async () => {
+    let timestamp = 1_000;
+    const log = vi.fn();
+    const collector = createDevCspReportCollector({
+      deduplicationTtlMs: 1_000,
+      log,
+      now: () => timestamp,
+      rateLimitMax: 1,
+      rateLimitWindowMs: 100,
+    });
+    const dropped = report({ "blocked-uri": "https://two.example.com/a" });
+
+    await collector.handle(request());
+    await collector.handle(request(dropped));
+    timestamp += 100;
+    await collector.handle(request(dropped));
+
+    expect(log).toHaveBeenCalledTimes(2);
+    expect(log).toHaveBeenLastCalledWith(expect.stringContaining(
+      "blocked=https://two.example.com",
+    ));
   });
 });

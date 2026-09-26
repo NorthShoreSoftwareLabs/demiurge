@@ -37,19 +37,19 @@ export function createDevCspReportCollector(
   options: DevCspReportCollectorOptions,
 ) {
   const now = options.now ?? Date.now;
-  const capacity = positiveInteger(
+  const capacity = requirePositiveInteger(
     options.deduplicationCapacity ?? defaultDeduplicationCapacity,
     "deduplicationCapacity",
   );
-  const ttl = positiveInteger(
+  const ttl = requirePositiveInteger(
     options.deduplicationTtlMs ?? defaultDeduplicationTtlMs,
     "deduplicationTtlMs",
   );
-  const rateLimitMax = positiveInteger(
+  const rateLimitMax = requirePositiveInteger(
     options.rateLimitMax ?? defaultRateLimitMax,
     "rateLimitMax",
   );
-  const rateLimitWindow = positiveInteger(
+  const rateLimitWindow = requirePositiveInteger(
     options.rateLimitWindowMs ?? defaultRateLimitWindowMs,
     "rateLimitWindowMs",
   );
@@ -57,47 +57,55 @@ export function createDevCspReportCollector(
   let rateWindowStarted = now();
   let logsInWindow = 0;
 
-  const handler = createSecurityReportHandler({
-    maxBodySize: options.maxBodySize ?? defaultMaxBodySize,
-    onReport(report) {
-      const sanitized = sanitizeCspReport(report);
-      const timestamp = now();
+  function logReport(sanitized: SanitizedCspReport) {
+    const timestamp = now();
 
-      removeExpiredReports(recentReports, timestamp);
+    removeExpiredReports(recentReports, timestamp);
 
-      const key = JSON.stringify(sanitized);
-      const existingExpiry = recentReports.get(key);
+    const key = JSON.stringify(sanitized);
+    const existingExpiry = recentReports.get(key);
 
-      if (existingExpiry !== undefined && existingExpiry > timestamp) {
-        return;
-      }
+    if (existingExpiry !== undefined && existingExpiry > timestamp) return;
 
-      if (recentReports.size >= capacity) {
-        const oldest = recentReports.keys().next();
+    if (timestamp - rateWindowStarted >= rateLimitWindow) {
+      rateWindowStarted = timestamp;
+      logsInWindow = 0;
+    }
 
-        if (!oldest.done) recentReports.delete(oldest.value);
-      }
+    if (logsInWindow >= rateLimitMax) return;
 
-      recentReports.set(key, timestamp + ttl);
+    if (recentReports.size >= capacity) {
+      const oldest = recentReports.keys().next();
 
-      if (timestamp - rateWindowStarted >= rateLimitWindow) {
-        rateWindowStarted = timestamp;
-        logsInWindow = 0;
-      }
+      if (!oldest.done) recentReports.delete(oldest.value);
+    }
 
-      if (logsInWindow >= rateLimitMax) return;
+    recentReports.set(key, timestamp + ttl);
+    logsInWindow += 1;
+    options.log(formatCspReport(sanitized));
+  }
 
-      logsInWindow += 1;
-      options.log(formatCspReport(sanitized));
-    },
-  });
+  const maxBodySize = options.maxBodySize ?? defaultMaxBodySize;
 
   return {
     async handle(request: Request): Promise<Response | null> {
       if (new URL(request.url).pathname !== CSP_REPORT_PATH) return null;
 
+      const reports: SanitizedCspReport[] = [];
+      const handler = createSecurityReportHandler({
+        maxBodySize,
+        onReport(report) {
+          const sanitized = sanitizeCspReport(report);
+
+          if (sanitized) reports.push(sanitized);
+        },
+      });
+
       try {
-        return await handler(request);
+        const response = await handler(request);
+
+        if (response.status === 204) reports.forEach(logReport);
+        return response;
       } catch (error) {
         if (error instanceof InvalidCspReportError) {
           return new Response("Invalid CSP report.", { status: 400 });
@@ -109,18 +117,28 @@ export function createDevCspReportCollector(
   };
 }
 
-function sanitizeCspReport(value: unknown): SanitizedCspReport {
+function sanitizeCspReport(value: unknown): SanitizedCspReport | undefined {
   if (!isObjectLike(value)) throw new InvalidCspReportError();
 
+  let report: Record<string, unknown> = value;
+
+  if ("type" in value || "body" in value) {
+    if (value.type !== "csp-violation" || !isObjectLike(value.body)) {
+      return undefined;
+    }
+
+    report = normalizeReportingApiReport(value.body);
+  }
+
   const directive = safeDirective(
-    value["effective-directive"] ?? value["violated-directive"],
+    report["effective-directive"] ?? report["violated-directive"],
   );
-  const blocked = safeBlockedOrigin(value["blocked-uri"]);
-  const document = safePath(value["document-uri"]);
-  const disposition = safeDisposition(value.disposition);
-  const source = optionalPath(value["source-file"]);
-  const line = optionalLocation(value["line-number"]);
-  const column = optionalLocation(value["column-number"]);
+  const blocked = safeBlockedOrigin(report["blocked-uri"]);
+  const document = safePath(report["document-uri"]);
+  const disposition = safeDisposition(report.disposition);
+  const source = optionalPath(report["source-file"]);
+  const line = optionalLocation(report["line-number"]);
+  const column = optionalLocation(report["column-number"]);
 
   return {
     blocked,
@@ -146,8 +164,8 @@ function safeDirective(value: unknown) {
 function safeBlockedOrigin(value: unknown) {
   const sanitized = requiredText(value);
 
-  if (/^[a-z][a-z0-9+.-]*:$/i.test(sanitized)) {
-    return sanitized.toLowerCase();
+  if (/^[a-z][a-z0-9+.-]*:?$/i.test(sanitized)) {
+    return sanitized.replace(/:$/, "").toLowerCase();
   }
 
   try {
@@ -155,7 +173,14 @@ function safeBlockedOrigin(value: unknown) {
 
     return url.origin === "null" ? "opaque" : truncate(url.origin);
   } catch {
-    if (["eval", "inline", "self"].includes(sanitized.toLowerCase())) {
+    if ([
+      "eval",
+      "inline",
+      "self",
+      "trusted-types-policy",
+      "trusted-types-sink",
+      "wasm-eval",
+    ].includes(sanitized.toLowerCase())) {
       return sanitized.toLowerCase();
     }
 
@@ -175,7 +200,25 @@ function safePath(value: unknown) {
 
 function optionalPath(value: unknown) {
   if (value === undefined || value === null || value === "") return undefined;
-  return safePath(value);
+
+  try {
+    return safePath(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeReportingApiReport(value: Record<string, unknown>) {
+  return {
+    "blocked-uri": value.blockedURL,
+    "column-number": value.columnNumber,
+    disposition: value.disposition,
+    "document-uri": value.documentURL,
+    "effective-directive": value.effectiveDirective,
+    "line-number": value.lineNumber,
+    "source-file": value.sourceFile,
+    "violated-directive": value.violatedDirective,
+  };
 }
 
 function safeDisposition(value: unknown) {
@@ -242,7 +285,7 @@ function removeExpiredReports(reports: Map<string, number>, timestamp: number) {
   }
 }
 
-function positiveInteger(value: number, name: string) {
+function requirePositiveInteger(value: number, name: string) {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`CSP report ${name} must be a positive integer.`);
   }

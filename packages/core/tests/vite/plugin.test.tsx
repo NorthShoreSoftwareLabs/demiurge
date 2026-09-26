@@ -1000,11 +1000,22 @@ export const GET = page({ data: () => secret, view: () => secret });`;
               document: {
                 csp: {
                   defaultSrc: ["'self'"],
+                  reportTo: "application-csp",
                   reportUri: [
                     "/application-csp-report",
                     "/_demiurge/csp-report",
                   ],
                   styleSrc: ["'self'", "'unsafe-inline'"],
+                },
+                headers: {
+                  reportingEndpoints: {
+                    "application-csp": "/application-reporting-endpoint",
+                  },
+                },
+                trustedTypes: {
+                  mode: "report-only",
+                  policies: ["demiurge"],
+                  requireFor: ["script"],
                 },
               },
             }),
@@ -1049,6 +1060,12 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     const reportDirective = csp.split(";").find((directive) =>
       directive.trim().startsWith("report-uri")
     );
+    const reportToDirective = csp.split(";").find((directive) =>
+      directive.trim().startsWith("report-to")
+    );
+    const reportOnlyCsp = String(
+      response.headers.get("content-security-policy-report-only") ?? "",
+    );
 
     expect(viteNonce).toBeTruthy();
     expect(defaultDirective).toBe("default-src 'self'");
@@ -1056,6 +1073,13 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     expect(styleDirective).toBe(" style-src 'self' 'unsafe-inline'");
     expect(reportDirective?.trim()).toBe(
       "report-uri /application-csp-report /_demiurge/csp-report",
+    );
+    expect(reportToDirective).toBeUndefined();
+    expect(response.headers.get("reporting-endpoints")).toBe(
+      'application-csp="/application-reporting-endpoint"',
+    );
+    expect(reportOnlyCsp).toBe(
+      "require-trusted-types-for 'script'; trusted-types demiurge; report-uri /application-csp-report /_demiurge/csp-report",
     );
     expect(response.body).toContain(
       `<script type="module" nonce="${viteNonce}">window.__vitePreamble = true;</script>`,
