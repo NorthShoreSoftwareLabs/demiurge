@@ -25,6 +25,7 @@ test("static output hydrates under its hash-based CSP", async ({ page }) => {
   expect(csp).toMatch(/script-src [^;]*'sha256-[A-Za-z0-9+/=]+'/);
   expect(csp).not.toContain("'unsafe-inline'");
   expect(csp).not.toContain("'nonce-");
+  expect(csp).not.toContain("/_demiurge/csp-report");
   const scriptSource = await page.locator("script[src]").first().getAttribute("src");
   const scriptResponse = await page.request.get(
     new URL(scriptSource ?? "", staticOrigin).href,

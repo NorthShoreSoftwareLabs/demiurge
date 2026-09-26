@@ -461,6 +461,7 @@ test("strict CSP and browser security headers are enforced", async ({ page }) =>
   expect(csp).toContain("'strict-dynamic'");
   expect(csp).toContain("upgrade-insecure-requests");
   expect(csp).not.toContain("'unsafe-inline'");
+  expect(csp).not.toContain("/_demiurge/csp-report");
   await expect(page.getByRole("heading", { name: "SSR is running" }))
     .toBeVisible();
 });

@@ -74,6 +74,10 @@ import {
   createRouteAuditResponse,
   isRouteAuditRequest,
 } from "./route-audit";
+import {
+  CSP_REPORT_PATH,
+  createDevCspReportCollector,
+} from "./csp-reporting";
 import type {
   StaticFileHeaderPatternRule,
   VercelStaticDeployment,
@@ -380,6 +384,9 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       }
 
       const routeAuditEnabled = isRouteAuditEnabled(options);
+      const cspReportCollector = createDevCspReportCollector({
+        log: (message) => server.config.logger.warn(message),
+      });
       const optimizeImage = createDevImageOptimizer(server, options);
       const serveFont = createFontAssetHandler({
         fonts: options.fonts,
@@ -410,6 +417,13 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
             }
 
             throw error;
+          }
+
+          const cspReportResponse = await cspReportCollector.handle(webRequest);
+
+          if (cspReportResponse) {
+            await writeWebResponse(response, cspReportResponse);
+            return;
           }
 
           if (routeAuditEnabled && isRouteAuditRequest(webRequest)) {
@@ -1503,8 +1517,30 @@ function applyDevDocumentSecurity(response: Response, nonce: string) {
       source,
     );
 
-  response.headers.set("content-security-policy", withStyleNonce);
+  response.headers.set(
+    "content-security-policy",
+    addCspReportUri(withStyleNonce, CSP_REPORT_PATH),
+  );
   response.headers.set("cache-control", "private, no-store");
+}
+
+function addCspReportUri(csp: string, target: string) {
+  const directives = csp.split(";").map((directive) => directive.trim());
+  const reportUriIndex = directives.findIndex((directive) =>
+    directive.split(/\s+/, 1)[0]?.toLowerCase() === "report-uri"
+  );
+
+  if (reportUriIndex === -1) {
+    directives.push(`report-uri ${target}`);
+  } else {
+    const sources = directives[reportUriIndex]!.split(/\s+/);
+
+    if (!sources.includes(target)) {
+      directives[reportUriIndex] = `${directives[reportUriIndex]} ${target}`;
+    }
+  }
+
+  return directives.filter(Boolean).join("; ");
 }
 
 function addCspSource(
