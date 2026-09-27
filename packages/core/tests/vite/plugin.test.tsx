@@ -817,7 +817,47 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     expect(next).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/json");
+    expect(response.headers.has("content-security-policy")).toBe(false);
     expect(response.body).toContain('"ok":true');
+  });
+
+  it("handles CSP reports before route loading in Vite development", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vite-csp-report-"));
+    const plugin = demiurge() as PluginHarness;
+    const middleware = createMiddlewareHarness();
+    const warn = vi.fn();
+    const ssrLoadModule = vi.fn();
+
+    plugin.configureServer?.({
+      config: { logger: { warn }, root },
+      middlewares: { use: middleware.use },
+      ssrLoadModule,
+      watcher: createWatcherHarness(),
+    } as never);
+
+    const response = new CapturingResponse();
+    await middleware.handler(
+      requestFor("/_demiurge/csp-report", {
+        body: JSON.stringify({
+          "csp-report": {
+            "blocked-uri": "https://cdn.example.test/app.js",
+            "document-uri": "https://example.test/",
+            "effective-directive": "script-src-elem",
+          },
+        }),
+        headers: {
+          "content-type": "application/csp-report",
+          host: "example.test",
+        },
+        method: "POST",
+      }) as never,
+      response as never,
+      vi.fn(),
+    );
+
+    expect(response.statusCode).toBe(204);
+    expect(ssrLoadModule).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 
   it("serves the framework document for page routes in Vite dev", async () => {
@@ -960,7 +1000,22 @@ export const GET = page({ data: () => secret, view: () => secret });`;
               document: {
                 csp: {
                   defaultSrc: ["'self'"],
+                  reportTo: "application-csp",
+                  reportUri: [
+                    "/application-csp-report",
+                    "/_demiurge/csp-report",
+                  ],
                   styleSrc: ["'self'", "'unsafe-inline'"],
+                },
+                headers: {
+                  reportingEndpoints: {
+                    "application-csp": "/application-reporting-endpoint",
+                  },
+                },
+                trustedTypes: {
+                  mode: "report-only",
+                  policies: ["demiurge"],
+                  requireFor: ["script"],
                 },
               },
             }),
@@ -1002,11 +1057,30 @@ export const GET = page({ data: () => secret, view: () => secret });`;
     )?.[1];
     const renderedNonces = [...response.body.matchAll(/\snonce="([^"]+)"/g)]
       .map((match) => match[1]);
+    const reportDirective = csp.split(";").find((directive) =>
+      directive.trim().startsWith("report-uri")
+    );
+    const reportToDirective = csp.split(";").find((directive) =>
+      directive.trim().startsWith("report-to")
+    );
+    const reportOnlyCsp = String(
+      response.headers.get("content-security-policy-report-only") ?? "",
+    );
 
     expect(viteNonce).toBeTruthy();
     expect(defaultDirective).toBe("default-src 'self'");
     expect(scriptDirective).toBe(` script-src 'self' 'nonce-${viteNonce}'`);
     expect(styleDirective).toBe(" style-src 'self' 'unsafe-inline'");
+    expect(reportDirective?.trim()).toBe(
+      "report-uri /application-csp-report /_demiurge/csp-report",
+    );
+    expect(reportToDirective).toBeUndefined();
+    expect(response.headers.get("reporting-endpoints")).toBe(
+      'application-csp="/application-reporting-endpoint"',
+    );
+    expect(reportOnlyCsp).toBe(
+      "require-trusted-types-for 'script'; trusted-types demiurge; report-uri /application-csp-report /_demiurge/csp-report",
+    );
     expect(response.body).toContain(
       `<script type="module" nonce="${viteNonce}">window.__vitePreamble = true;</script>`,
     );

@@ -74,6 +74,10 @@ import {
   createRouteAuditResponse,
   isRouteAuditRequest,
 } from "./route-audit";
+import {
+  CSP_REPORT_PATH,
+  createDevCspReportCollector,
+} from "./csp-reporting";
 import type {
   StaticFileHeaderPatternRule,
   VercelStaticDeployment,
@@ -380,6 +384,9 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
       }
 
       const routeAuditEnabled = isRouteAuditEnabled(options);
+      const cspReportCollector = createDevCspReportCollector({
+        log: (message) => server.config.logger.warn(message),
+      });
       const optimizeImage = createDevImageOptimizer(server, options);
       const serveFont = createFontAssetHandler({
         fonts: options.fonts,
@@ -410,6 +417,13 @@ export function demiurge(options: DemiurgeVitePluginOptions = {}): Plugin {
             }
 
             throw error;
+          }
+
+          const cspReportResponse = await cspReportCollector.handle(webRequest);
+
+          if (cspReportResponse) {
+            await writeWebResponse(response, cspReportResponse);
+            return;
           }
 
           if (routeAuditEnabled && isRouteAuditRequest(webRequest)) {
@@ -1479,32 +1493,84 @@ function replaceNonceAttribute(
 function applyDevDocumentSecurity(response: Response, nonce: string) {
   const contentType = response.headers.get("content-type");
   const csp = response.headers.get("content-security-policy");
+  const reportOnlyCsp = response.headers.get(
+    "content-security-policy-report-only",
+  );
 
-  if (!contentType?.toLowerCase().startsWith("text/html") || !csp) {
+  if (
+    !contentType?.toLowerCase().startsWith("text/html") ||
+    (!csp && !reportOnlyCsp)
+  ) {
     return;
   }
 
-  const source = `'nonce-${nonce}'`;
-  const withScriptNonce = addCspSource(
-    csp,
-    ["script-src-elem", "script-src"],
-    "script-src",
-    source,
-  );
-  const withStyleNonce = allowsUnsafeInline(
-      withScriptNonce,
-      ["style-src-elem", "style-src"],
-    )
-    ? withScriptNonce
-    : addCspSource(
-      withScriptNonce,
-      ["style-src-elem", "style-src"],
-      "style-src",
+  if (csp) {
+    const source = `'nonce-${nonce}'`;
+    const withScriptNonce = addCspSource(
+      csp,
+      ["script-src-elem", "script-src"],
+      "script-src",
       source,
     );
+    const withStyleNonce = allowsUnsafeInline(
+        withScriptNonce,
+        ["style-src-elem", "style-src"],
+      )
+      ? withScriptNonce
+      : addCspSource(
+        withScriptNonce,
+        ["style-src-elem", "style-src"],
+        "style-src",
+        source,
+      );
 
-  response.headers.set("content-security-policy", withStyleNonce);
+    response.headers.set(
+      "content-security-policy",
+      addDevCspReporting(withStyleNonce),
+    );
+  }
+
+  if (reportOnlyCsp) {
+    response.headers.set(
+      "content-security-policy-report-only",
+      addDevCspReporting(reportOnlyCsp),
+    );
+  }
+
   response.headers.set("cache-control", "private, no-store");
+}
+
+function addDevCspReporting(csp: string) {
+  return removeCspDirective(
+    addCspReportUri(csp, CSP_REPORT_PATH),
+    "report-to",
+  );
+}
+
+function addCspReportUri(csp: string, target: string) {
+  const directives = csp.split(";").map((directive) => directive.trim());
+  const reportUriIndex = directives.findIndex((directive) =>
+    directive.split(/\s+/, 1)[0]?.toLowerCase() === "report-uri"
+  );
+
+  if (reportUriIndex === -1) {
+    directives.push(`report-uri ${target}`);
+  } else {
+    const sources = directives[reportUriIndex]!.split(/\s+/);
+
+    if (!sources.includes(target)) {
+      directives[reportUriIndex] = `${directives[reportUriIndex]} ${target}`;
+    }
+  }
+
+  return directives.filter(Boolean).join("; ");
+}
+
+function removeCspDirective(csp: string, name: string) {
+  const directives = csp.split(";").map((directive) => directive.trim());
+  return directives.filter((directive) =>
+    directive && directive.split(/\s+/, 1)[0]?.toLowerCase() !== name
+  ).join("; ");
 }
 
 function addCspSource(
