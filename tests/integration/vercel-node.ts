@@ -59,10 +59,13 @@ try {
     "utf8",
   ));
   if (
-    outputConfig.routes?.[0]?.handle !== "filesystem" ||
-    outputConfig.routes?.[1]?.dest !== "/demiurge"
+    outputConfig.routes?.[0]?.dest !== "/demiurge" ||
+    outputConfig.routes?.[0]?.methods?.join(",") !==
+      "POST,PUT,PATCH,DELETE,OPTIONS" ||
+    outputConfig.routes?.[1]?.handle !== "filesystem" ||
+    outputConfig.routes?.[2]?.dest !== "/demiurge"
   ) {
-    throw new Error("The Vercel artifact does not route static files before the function.");
+    throw new Error("The Vercel artifact does not use the required route order.");
   }
 
   const claims = {

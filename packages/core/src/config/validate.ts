@@ -1,4 +1,5 @@
 import type { DemiurgeConfig } from "./types";
+import { validateServerDeploymentProvider } from "../deployment/server-provider";
 
 export class DemiurgeConfigError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -107,7 +108,16 @@ export function validateDemiurgeConfig(
         );
       }
       assertOptionalString(context, "deployment.server.outDir", server.outDir);
-      assertOptionalObject(context, "deployment.server.provider", server.provider);
+      if (server.provider !== undefined) {
+        try {
+          validateServerDeploymentProvider(server.provider);
+        } catch (error) {
+          throw new DemiurgeConfigError(
+            `${configFile} config field "deployment.server.provider" is invalid.`,
+            { cause: error },
+          );
+        }
+      }
     }
     const staticDeployment = section(
       context,

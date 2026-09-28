@@ -13,7 +13,7 @@ import {
   type GenerateStaticOutputOptions,
   type StaticOutputManifest,
 } from "./static";
-import { generateVercelNodeOutput } from "./vercel";
+import { generateServerProviderOutput } from "./deployment/server-provider";
 
 export { parseClientManifest } from "./manifest";
 export type { ClientBuildManifest } from "./manifest";
@@ -232,16 +232,12 @@ export async function runBuild(
 
   const provider = applicationServer?.provider;
   if (provider && applicationServer && serverOutDir) {
-    if (config.security?.staticFileHeaders?.length) {
-      throw new Error(
-        "Vercel Node deployment does not support security.staticFileHeaders. Remove the rules or use a deployment that serves the browser output directly.",
-      );
-    }
-    const deploymentOutDir = await generateVercelNodeOutput({
+    const deploymentOutDir = await generateServerProviderOutput({
       clientDir: outDir,
       deployment: provider,
       projectRoot: root,
       serverDir: serverOutDir,
+      staticFileHeaders: config.security?.staticFileHeaders,
     });
     return { deploymentOutDir, outDir, serverOutDir };
   }

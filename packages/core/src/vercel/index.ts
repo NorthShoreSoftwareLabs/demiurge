@@ -10,12 +10,16 @@ export type {
   VercelNodeOptions,
   VercelNodeRuntime,
 } from "./config";
+export type {
+  ServerBuildPageOptions,
+  ServerBuildRuntime,
+} from "../deployment/server-runtime";
 export {
   createVercelFunction,
   vercelNodeAdapter,
 } from "./runtime";
 export type {
-  VercelBuildContext,
+  VercelBuildPageOptions,
   VercelFunctionEnvironment,
   VercelFunctionOptions,
   VercelRequestListener,

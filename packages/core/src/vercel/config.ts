@@ -11,6 +11,7 @@ export type VercelNodeDeployment = {
   maxDuration?: number;
   regions?: string[];
   runtime: VercelNodeRuntime;
+  target: "managed-node-http-function";
 };
 
 export function vercelNode(
@@ -19,6 +20,7 @@ export function vercelNode(
   const deployment: VercelNodeDeployment = {
     adapter: "vercel-node",
     runtime: options.runtime ?? "nodejs22.x",
+    target: "managed-node-http-function",
     ...(options.maxDuration === undefined
       ? {}
       : { maxDuration: options.maxDuration }),
@@ -36,7 +38,8 @@ export function validateVercelNodeDeployment(
 ) {
   if (
     deployment.adapter !== "vercel-node" ||
-    deployment.runtime !== "nodejs22.x"
+    deployment.runtime !== "nodejs22.x" ||
+    deployment.target !== "managed-node-http-function"
   ) {
     throw new Error("The Vercel Node deployment configuration is not valid.");
   }

@@ -1,4 +1,5 @@
 import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:http";
 import {
   existsSync,
   mkdirSync,
@@ -10,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 // Packs the library with the pnpm publication process. It installs the tarball
 // in a temporary application and imports each declared entry point. No other
@@ -609,6 +611,60 @@ try {
 
   run("node", [join(installedRoot, "bin", "demiurge.mjs"), "build"], scratch);
   run("pnpm", ["exec", "tsc", "--noEmit"], scratch);
+
+  writeFileSync(
+    join(scratch, "src", "server-entry.ts"),
+    [
+      `import type { ServerBuildPageOptions } from "@demiurgejs/core/deployment";`,
+      `export function createHandler(options: ServerBuildPageOptions) {`,
+      `  return async () => new Response("packed custom entry", {`,
+      `    headers: { "x-packed-custom-entry": options.adapter.name },`,
+      `  });`,
+      `}`,
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(scratch, "demiurge.config.ts"),
+    [
+      `import { defineConfig } from "@demiurgejs/core/config";`,
+      `import { vercelNode } from "@demiurgejs/core/vercel";`,
+      `export default defineConfig({`,
+      `  deployment: {`,
+      `    outDir: "dist/client",`,
+      `    server: { entry: "src/server-entry.ts", provider: vercelNode() },`,
+      `  },`,
+      `  routing: { typedRoutes: true },`,
+      `});`,
+    ].join("\n"),
+  );
+  run("node", [join(installedRoot, "bin", "demiurge.mjs"), "build"], scratch);
+  run("pnpm", ["exec", "tsc", "--noEmit"], scratch);
+
+  process.env.ALLOWED_HOSTS = "127.0.0.1";
+  const packedFunction = await import(pathToFileURL(join(
+    scratch,
+    ".vercel/output/functions/demiurge.func/index.mjs",
+  )).href);
+  const packedFunctionServer = createServer((request, response) => {
+    void packedFunction.default(request, response);
+  });
+  await new Promise<void>((resolveListen) => {
+    packedFunctionServer.listen(0, "127.0.0.1", resolveListen);
+  });
+  try {
+    const address = packedFunctionServer.address();
+    assert(address && typeof address !== "string", "The packed Vercel function did not listen.");
+    const response = await fetch(`http://127.0.0.1:${address.port}/`);
+    assert(response.status === 200, "The packed custom Vercel entry did not serve a page.");
+    assert(
+      response.headers.get("x-packed-custom-entry") === "vercel-node",
+      "The packed Vercel function did not call the custom server entry with page options.",
+    );
+  } finally {
+    await new Promise<void>((resolveClose) => {
+      packedFunctionServer.close(() => resolveClose());
+    });
+  }
 
   // ADR 0019: the inspect command writes one JSON document to standard output.
   // It writes a human summary to standard error, so a pipe gets the JSON alone.
