@@ -1,23 +1,16 @@
 import { isIP } from "node:net";
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { defineAdapter, type Adapter } from "../adapter";
+import type { IncomingMessage } from "node:http";
+import { defineAdapter } from "../adapter";
 import type { ClientBuildManifest } from "../manifest";
-import {
-  toWebRequest,
-  UntrustedHostError,
-  UnsupportedMethodError,
-  validateNodeOriginPolicy,
-  writeNotImplemented,
-  writeWebResponse,
-} from "../node/http";
+import { createManagedNodeRequestListener } from "../node/managed";
 import { renderNodePageResponse } from "../node/streaming";
-import {
-  type PageRenderer,
-  type RequestCacheStoreOptions,
-  type RequestHandler,
-} from "../server";
+import type { RequestCacheStoreOptions } from "../server";
 import type { CacheStore } from "../data";
 import type { RateLimitStore } from "../security";
+import type {
+  ServerBuildPageOptions,
+  ServerBuildRuntime,
+} from "../deployment/server-runtime";
 
 export const vercelNodeAdapter = defineAdapter({
   name: "vercel-node",
@@ -28,36 +21,23 @@ export const vercelNodeAdapter = defineAdapter({
   },
 });
 
-export type VercelBuildPageOptions = {
-  adapter: Adapter;
-  cacheStore: RequestCacheStoreOptions;
-  clientEntry: string;
-  rateLimitStore: RateLimitStore;
-  renderPage: PageRenderer;
-  styles: string[];
-};
-
-export type VercelBuildContext = {
-  page: VercelBuildPageOptions;
-  root?: string;
-};
+export type VercelBuildPageOptions = ServerBuildPageOptions;
 
 export type VercelFunctionEnvironment = Record<string, string | undefined>;
 
 export type VercelFunctionOptions = {
   allowedHosts?: readonly string[];
-  createHandler: (
-    context: VercelBuildContext,
-  ) => RequestHandler | Promise<RequestHandler>;
+  cacheStore: RequestCacheStoreOptions | "unavailable";
+  createHandler: ServerBuildRuntime["createHandler"];
   env?: VercelFunctionEnvironment;
   manifest: ClientBuildManifest;
   onError?: (error: unknown, request: IncomingMessage) => void;
+  rateLimitStore: RateLimitStore | "unavailable";
 };
 
-export type VercelRequestListener = (
-  request: IncomingMessage,
-  response: ServerResponse,
-) => Promise<void>;
+export type VercelRequestListener = ReturnType<
+  typeof createManagedNodeRequestListener
+>;
 
 const unavailableCacheNamespace = {
   app: "demiurge-vercel",
@@ -70,60 +50,48 @@ export function createVercelFunction(
 ): VercelRequestListener {
   const environment = options.env ?? process.env;
   const allowedHosts = resolveAllowedHosts(options.allowedHosts, environment);
-  validateNodeOriginPolicy({ allowedHosts });
-  const onError = options.onError ?? defaultOnError;
-  const cacheStore: RequestCacheStoreOptions = {
-    namespace: unavailableCacheNamespace,
-    store: createUnavailableCacheStore(),
-  };
-  const rateLimitStore = createUnavailableRateLimitStore();
-  const handler = Promise.resolve(options.createHandler({
-    page: {
-      adapter: vercelNodeAdapter,
-      cacheStore,
-      clientEntry: options.manifest.clientEntry,
-      rateLimitStore,
-      renderPage: renderNodePageResponse,
-      styles: options.manifest.styles,
-    },
-  }));
+  const cacheStore = resolveCacheStore(options.cacheStore);
+  const rateLimitStore = resolveRateLimitStore(options.rateLimitStore);
+  const handler = options.createHandler({
+    adapter: vercelNodeAdapter,
+    cacheStore,
+    clientEntry: options.manifest.clientEntry,
+    rateLimitStore,
+    renderPage: renderNodePageResponse,
+    styles: options.manifest.styles,
+  });
 
-  return async function handleVercelRequest(request, response) {
-    const connection = createRequestAbort(request, response);
-
-    try {
-      const webRequest = toWebRequest(request, {
-        allowedHosts,
+  return createManagedNodeRequestListener({
+    allowedHosts,
+    handler,
+    onError: options.onError,
+    requestMetadata(request) {
+      return {
         clientIp: resolveVercelClientIp(request),
         scheme: resolveVercelScheme(request),
-        signal: connection.signal,
-      });
-      const webResponse = withDynamicCachePolicy(
-        await (await handler)(webRequest),
-      );
+      };
+    },
+    transformResponse: withDynamicCachePolicy,
+  });
+}
 
-      await writeWebResponse(response, webResponse);
-    } catch (error) {
-      if (connection.signal.aborted) {
-        return;
+function resolveCacheStore(
+  option: RequestCacheStoreOptions | "unavailable",
+): RequestCacheStoreOptions {
+  return option === "unavailable"
+    ? {
+        namespace: unavailableCacheNamespace,
+        store: createUnavailableCacheStore(),
       }
+    : option;
+}
 
-      if (error instanceof UnsupportedMethodError) {
-        writeNotImplemented(response);
-        return;
-      }
-
-      if (error instanceof UntrustedHostError) {
-        writeMisdirectedRequest(response);
-        return;
-      }
-
-      onError(error, request);
-      writeServerError(response);
-    } finally {
-      connection.cleanup();
-    }
-  };
+function resolveRateLimitStore(
+  option: RateLimitStore | "unavailable",
+): RateLimitStore {
+  return option === "unavailable"
+    ? createUnavailableRateLimitStore()
+    : option;
 }
 
 function resolveAllowedHosts(
@@ -185,55 +153,6 @@ function withDynamicCachePolicy(response: Response) {
     status: response.status,
     statusText: response.statusText,
   });
-}
-
-function createRequestAbort(
-  request: IncomingMessage,
-  response: ServerResponse,
-) {
-  const controller = new AbortController();
-  const abort = () => {
-    if (!controller.signal.aborted) {
-      controller.abort(new DOMException("Client disconnected.", "AbortError"));
-    }
-  };
-  const abortPrematureResponse = () => {
-    if (!response.writableFinished) {
-      abort();
-    }
-  };
-
-  request.once("aborted", abort);
-  response.once("close", abortPrematureResponse);
-
-  return {
-    cleanup() {
-      request.off("aborted", abort);
-      response.off("close", abortPrematureResponse);
-    },
-    signal: controller.signal,
-  };
-}
-
-function writeMisdirectedRequest(response: ServerResponse) {
-  response.statusCode = 421;
-  response.setHeader("content-type", "text/plain; charset=utf-8");
-  response.end("Misdirected Request");
-}
-
-function writeServerError(response: ServerResponse) {
-  if (response.headersSent || response.writableEnded) {
-    response.destroy();
-    return;
-  }
-
-  response.statusCode = 500;
-  response.setHeader("content-type", "text/plain; charset=utf-8");
-  response.end("Internal Server Error");
-}
-
-function defaultOnError(error: unknown) {
-  console.error(error);
 }
 
 class VercelSharedStoreError extends Error {

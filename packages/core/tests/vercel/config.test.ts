@@ -29,6 +29,11 @@ describe("Vercel Node deployment", () => {
   it("routes static files before the universal request function", () => {
     expect(createOutputConfig()).toEqual({
       routes: [
+        {
+          dest: "/demiurge",
+          methods: ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+          src: "^/.*$",
+        },
         { handle: "filesystem" },
         { dest: "/demiurge", src: "^/.*$" },
       ],
@@ -70,7 +75,7 @@ describe("Vercel Node deployment", () => {
       await expect(readFile(join(output, "functions", "demiurge.func", ".vc-config.json"), "utf8"))
         .resolves.toContain('"maxDuration": 30');
       await expect(readFile(join(output, "functions", "demiurge.func", "index.mjs"), "utf8"))
-        .resolves.toContain("return application.createHandler(page);");
+        .resolves.toContain("createHandler: application.createHandler");
       await expect(readFile(join(output, "functions", "demiurge.func", "package.json"), "utf8"))
         .resolves.toBe('{"type":"module"}\n');
     } finally {

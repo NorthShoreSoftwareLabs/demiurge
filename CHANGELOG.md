@@ -5,6 +5,18 @@ status live in GitHub issues and milestones.
 
 ## 0.2.0 — Unreleased
 
+- Managed function builds use the provider-neutral
+  `ServerBuildPageOptions` contract from `@demiurgejs/core/deployment`.
+  Vercel custom server entries now receive this object directly. The build
+  also requires explicit cache and rate-limit store choices. **Migration**:
+  replace `VercelBuildContext` with `ServerBuildPageOptions`. Remove the
+  `page` property from the function parameter. Pass `"unavailable"` when a
+  direct `createVercelFunction(...)` call has no shared store (#338).
+- Runtime provider declarations now state their execution target. Provider
+  validation and output generation use one internal dispatch boundary. The
+  Vercel route plan sends unsafe methods to the function before it checks the
+  static filesystem (#338).
+
 - A static `beforeInteractive` script renders in the document head. The script
   can now run before the browser paints the page (#447).
 

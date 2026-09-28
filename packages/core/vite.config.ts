@@ -19,6 +19,9 @@ export default defineConfig({
         "deployment/testing": fileURLToPath(
           new URL("src/deployment/testing.ts", import.meta.url),
         ),
+        "deployment/index": fileURLToPath(
+          new URL("src/deployment/index.ts", import.meta.url),
+        ),
         "data/testing": fileURLToPath(
           new URL("src/data/testing.ts", import.meta.url),
         ),

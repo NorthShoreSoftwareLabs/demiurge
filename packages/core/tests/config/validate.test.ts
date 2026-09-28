@@ -44,7 +44,11 @@ describe("Demiurge configuration validation", () => {
         deployment: {
           server: {
             entry: "src/server-entry.ts",
-            provider: { adapter: "vercel-node", runtime: "nodejs22.x" },
+            provider: {
+              adapter: "vercel-node",
+              runtime: "nodejs22.x",
+              target: "managed-node-http-function",
+            },
           },
         },
       },
@@ -59,11 +63,32 @@ describe("Demiurge configuration validation", () => {
       deployment: {
         server: {
           entry: "src/server-entry.ts",
-          provider: { adapter: "vercel-node", runtime: "nodejs22.x" },
+          provider: {
+            adapter: "vercel-node",
+            runtime: "nodejs22.x",
+            target: "managed-node-http-function",
+          },
         },
         static: {},
       },
     })).toThrow(/cannot declare both a runtime provider and static output/);
+  });
+
+  it("rejects an unknown or invalid server provider during config loading", () => {
+    expect(validate({
+      deployment: { server: { provider: { adapter: "unknown" } } },
+    })).toThrow(/deployment\.server\.provider/);
+    expect(validate({
+      deployment: {
+        server: {
+          provider: {
+            adapter: "vercel-node",
+            runtime: "nodejs22.x",
+            target: "node-process",
+          },
+        },
+      },
+    })).toThrow(/deployment\.server\.provider/);
   });
 
   it("names the file and the field of an unknown option", () => {

@@ -88,6 +88,11 @@ export function createFunctionConfig(deployment: VercelNodeDeployment) {
 export function createOutputConfig() {
   return {
     routes: [
+      {
+        dest: "/demiurge",
+        methods: ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        src: "^/.*$",
+      },
       { handle: "filesystem" },
       { dest: "/demiurge", src: "^/.*$" },
     ],
@@ -106,10 +111,10 @@ const manifest = JSON.parse(await readFile(
 ));
 
 export default createVercelFunction({
-  createHandler({ page }) {
-    return application.createHandler(page);
-  },
+  cacheStore: "unavailable",
+  createHandler: application.createHandler,
   manifest,
+  rateLimitStore: "unavailable",
 });
 `;
 }

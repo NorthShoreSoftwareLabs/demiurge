@@ -24,15 +24,16 @@ export default defineConfig({
 });
 ```
 
-This configuration uses the generated server entry. Add an application server entry only when it must add server composition.
-Keep that entry portable. It receives the provider page context.
+This configuration uses the generated server entry. Add an application server
+entry only when it must add server composition. Keep that entry portable. It
+receives provider-neutral page options.
 
 ```ts
-import type { VercelBuildContext } from "@demiurgejs/core/vercel";
+import type { ServerBuildPageOptions } from "@demiurgejs/core/deployment";
 import { createHandler as createDemiurgeHandler } from "virtual:demiurge/server-entry";
 
-export function createHandler({ page }: VercelBuildContext) {
-  return createDemiurgeHandler(page);
+export function createHandler(options: ServerBuildPageOptions) {
+  return createDemiurgeHandler(options);
 }
 ```
 

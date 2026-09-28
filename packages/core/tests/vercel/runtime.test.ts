@@ -3,10 +3,12 @@ import { createElement, Suspense, use } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createVercelFunction,
-  type VercelBuildContext,
+  type VercelBuildPageOptions,
   vercelNodeAdapter,
 } from "../../src/vercel";
 import {
+  createMemoryCacheStore,
+  createMemoryRateLimitStore,
   createRequestHandler,
   defineRoutePolicy,
   getRequestClientAddress,
@@ -58,16 +60,41 @@ afterEach(async () => {
 });
 
 describe("Vercel Node request bridge", () => {
+  it("passes configured shared stores through the server build options", () => {
+    const cacheStore = createMemoryCacheStore();
+    const rateLimitStore = createMemoryRateLimitStore();
+    let received: VercelBuildPageOptions | undefined;
+
+    createVercelFunction({
+      allowedHosts: ["example.test"],
+      cacheStore: {
+        namespace: { app: "test", environment: "unit", schemaVersion: 1 },
+        store: cacheStore,
+      },
+      createHandler(options) {
+        received = options;
+        return async () => new Response("ok");
+      },
+      manifest: { clientEntry: "/assets/client.js", styles: [] },
+      rateLimitStore,
+    });
+
+    expect(received?.cacheStore.store).toBe(cacheStore);
+    expect(received?.rateLimitStore).toBe(rateLimitStore);
+  });
+
   it("proves every capability the Vercel Node adapter declares", async () => {
     const origin = await start(createVercelFunction({
+      cacheStore: "unavailable",
       allowedHosts: ["127.0.0.1"],
-      createHandler({ page: buildPage }) {
+      createHandler(buildPage) {
         return createRequestHandler({
           ...buildPage,
           routes: contractRoutes,
         });
       },
       manifest: { clientEntry: "/assets/client.js", styles: [] },
+      rateLimitStore: "unavailable",
     }));
 
     await expect(verifyAdapterContract(vercelNodeAdapter, {
@@ -85,11 +112,13 @@ describe("Vercel Node request bridge", () => {
   it("preserves a trusted scheme and client address through the request pipeline", async () => {
     const origin = await start(createVercelFunction({
       allowedHosts: ["127.0.0.1"],
+      cacheStore: "unavailable",
       createHandler: () => async (request) => Response.json({
         address: getRequestClientAddress(request),
         url: request.url,
       }),
       manifest: { clientEntry: "/assets/client.js", styles: [] },
+      rateLimitStore: "unavailable",
     }));
 
     const response = await fetch(`${origin}/contact?source=page`, {
@@ -110,8 +139,10 @@ describe("Vercel Node request bridge", () => {
   it("rejects an untrusted host and a malformed Vercel address", async () => {
     const untrustedOrigin = await start(createVercelFunction({
       allowedHosts: ["example.test"],
+      cacheStore: "unavailable",
       createHandler: () => async () => new Response("ok"),
       manifest: { clientEntry: "/assets/client.js", styles: [] },
+      rateLimitStore: "unavailable",
     }));
 
     const untrusted = await fetch(`${untrustedOrigin}/`);
@@ -119,8 +150,10 @@ describe("Vercel Node request bridge", () => {
 
     const origin = await start(createVercelFunction({
       allowedHosts: ["127.0.0.1"],
+      cacheStore: "unavailable",
       createHandler: () => async () => new Response("ok"),
       manifest: { clientEntry: "/assets/client.js", styles: [] },
+      rateLimitStore: "unavailable",
     }));
 
     const malformed = await fetch(`${origin}/`, {
@@ -133,11 +166,13 @@ describe("Vercel Node request bridge", () => {
     const errors: unknown[] = [];
     const origin = await start(createVercelFunction({
       allowedHosts: ["127.0.0.1"],
+      cacheStore: "unavailable",
       createHandler: () => async () => new Response("ok"),
       manifest: { clientEntry: "/assets/client.js", styles: [] },
       onError(error) {
         errors.push(error);
       },
+      rateLimitStore: "unavailable",
     }));
 
     const response = await fetch(`${origin}/`, {
@@ -149,10 +184,11 @@ describe("Vercel Node request bridge", () => {
   });
 
   it("uses Vercel host environment values and refuses unavailable shared stores", async () => {
-    let context: VercelBuildContext | undefined;
+    let context: VercelBuildPageOptions | undefined;
     const origin = await start(createVercelFunction({
-      createHandler(received) {
-        context = received;
+      cacheStore: "unavailable",
+      createHandler(page) {
+        context = page;
         return async () => new Response("ok");
       },
       env: {
@@ -161,15 +197,16 @@ describe("Vercel Node request bridge", () => {
         VERCEL_URL: "deployment.example.test",
       },
       manifest: { clientEntry: "/assets/client.js", styles: [] },
+      rateLimitStore: "unavailable",
     }));
 
     const buildContext = context;
     if (buildContext === undefined) {
       throw new Error("The function did not create a handler.");
     }
-    expect(() => buildContext.page.cacheStore.store.get({} as never))
+    expect(() => buildContext.cacheStore.store.get({} as never))
       .toThrow(/no shared cache store/);
-    const rateLimitStore = buildContext.page.rateLimitStore as {
+    const rateLimitStore = buildContext.rateLimitStore as {
       increment: (...arguments_: never[]) => unknown;
     };
     expect(() => rateLimitStore.increment())
