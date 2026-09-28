@@ -237,6 +237,7 @@ describe("Demiurge build", () => {
       outDir: "/application/app/output",
       root: "/application/app",
       routes: expect.any(Object),
+      routeSelection: "strict",
       ssr: {
         clientEntry: "/assets/app.js",
         styles: ["/assets/app.css"],
@@ -251,12 +252,21 @@ describe("Demiurge build", () => {
     const runtime = buildRuntime();
     await runBuild(
       parseCliArguments(["build"]),
-      resolvedConfig({ deployment: { static: { origin: "https://config.test" } } }),
+      resolvedConfig({
+        deployment: { static: { origin: "https://config.test" } },
+        rendering: { document: { lang: "en", title: "Configured title" } },
+      }),
       runtime,
     );
 
     expect(runtime.generate).toHaveBeenCalledWith(
-      expect.objectContaining({ origin: "https://config.test" }),
+      expect.objectContaining({
+        origin: "https://config.test",
+        ssr: expect.objectContaining({
+          lang: "en",
+          title: "Configured title",
+        }),
+      }),
     );
   });
 

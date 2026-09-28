@@ -34,11 +34,78 @@ describe("Vercel Node deployment", () => {
           methods: ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
           src: "^/.*$",
         },
+        {
+          dest: "/demiurge",
+          has: [{
+            key: "x-demiurge-navigation",
+            type: "header",
+            value: "data",
+          }],
+          methods: ["GET", "HEAD"],
+          src: "^/.*$",
+        },
         { handle: "filesystem" },
         { dest: "/demiurge", src: "^/.*$" },
       ],
       version: 3,
     });
+  });
+
+  it("routes direct document requests to hybrid static output", () => {
+    expect(createOutputConfig({
+      adapter: "static",
+      entries: [
+        {
+          file: "index.html",
+          headers: {
+            "cache-control": "public, max-age=60",
+            "content-type": "text/html; charset=utf-8",
+          },
+          pathname: "/",
+          status: 200,
+        },
+        {
+          file: "404.html",
+          headers: { "content-type": "text/html; charset=utf-8" },
+          pathname: "*",
+          status: 404,
+        },
+      ],
+      fileHeaderRules: [],
+      origin: "https://example.test",
+      version: 1,
+    }).routes).toEqual([
+      expect.objectContaining({ methods: ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"] }),
+      expect.objectContaining({
+        has: [{ key: "x-demiurge-navigation", type: "header", value: "data" }],
+        methods: ["GET", "HEAD"],
+      }),
+      {
+        dest: "/index.html",
+        headers: {
+          "access-control-allow-origin": "https://example.test",
+          "cache-control": "public, max-age=60",
+        },
+        methods: ["GET", "HEAD"],
+        src: "^/$",
+      },
+      { handle: "filesystem" },
+      { dest: "/demiurge", src: "^/.*$" },
+    ]);
+  });
+
+  it("requires an origin for hybrid static responses", () => {
+    expect(() => createOutputConfig({
+      adapter: "static",
+      entries: [{
+        file: "about/index.html",
+        headers: {},
+        pathname: "/about",
+        status: 200,
+      }],
+      fileHeaderRules: [],
+      version: 1,
+    })).toThrow(/requires a build origin/);
   });
 
   it("rejects an invalid runtime duration and region list", () => {
@@ -78,6 +145,57 @@ describe("Vercel Node deployment", () => {
         .resolves.toContain("createHandler: application.createHandler");
       await expect(readFile(join(output, "functions", "demiurge.func", "package.json"), "utf8"))
         .resolves.toBe('{"type":"module"}\n');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it("copies hybrid documents without publishing framework manifests", async () => {
+    const root = await mkdtemp(join(tmpdir(), "demiurge-vercel-hybrid-"));
+    const client = join(root, "dist", "client");
+    const server = join(root, "dist", "server");
+    const staticOutput = join(root, "dist", "static");
+    try {
+      await mkdir(client, { recursive: true });
+      await mkdir(server, { recursive: true });
+      await mkdir(join(staticOutput, "about"), { recursive: true });
+      await writeFile(join(client, "demiurge-manifest.json"), "{}");
+      await writeFile(join(server, "server-entry.js"), "export {};");
+      await writeFile(join(staticOutput, "about", "index.html"), "static about");
+      await writeFile(join(staticOutput, "index.html"), "runtime shell");
+      await writeFile(join(staticOutput, "demiurge-static-manifest.json"), "private");
+      await writeRuntimePackage(root, "@demiurgejs/core", true);
+      await writeRuntimePackage(root, "react");
+      await writeRuntimePackage(root, "react-dom");
+
+      const manifest = {
+        adapter: "static" as const,
+        entries: [{
+          file: "about/index.html",
+          headers: { "content-type": "text/html; charset=utf-8" },
+          pathname: "/about",
+          status: 200 as const,
+        }],
+        fileHeaderRules: [],
+        origin: "https://example.test",
+        version: 1 as const,
+      };
+      const output = await generateVercelNodeOutput({
+        clientDir: client,
+        deployment: vercelNode(),
+        projectRoot: root,
+        serverDir: server,
+        staticOutput: { directory: staticOutput, manifest },
+      });
+
+      await expect(readFile(join(output, "static", "about", "index.html"), "utf8"))
+        .resolves.toBe("static about");
+      await expect(readFile(join(output, "static", "demiurge-static-manifest.json")))
+        .rejects.toMatchObject({ code: "ENOENT" });
+      await expect(readFile(join(output, "static", "index.html")))
+        .rejects.toMatchObject({ code: "ENOENT" });
+      await expect(readFile(join(output, "config.json"), "utf8"))
+        .resolves.toContain('"dest": "/about/index.html"');
     } finally {
       await rm(root, { force: true, recursive: true });
     }

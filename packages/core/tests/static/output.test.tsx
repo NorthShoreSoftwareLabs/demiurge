@@ -351,6 +351,49 @@ describe("static output adapter", () => {
     ).rejects.toThrow(/"\.\/routes\/submit\.ts" exports unsupported methods POST/);
   });
 
+  it("selects static routes for hybrid output and leaves fallback ownership to runtime", async () => {
+    const { outDir } = await createOutputDirectory();
+    const routes = appRoutes({
+      "./routes/account.tsx": routeModule({ GET: page(PlainPage) }),
+      "./routes/feed.tsx": routeModule({
+        GET: page({ render: { mode: "streaming" }, view: PlainPage }),
+      }),
+      "./routes/landing.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: PlainPage }),
+        POST: text("accepted"),
+      }),
+      "./routes/request.txt.ts": routeModule({
+        GET: text(({ request }) => request.url),
+      }),
+      "./routes/status.txt.ts": routeModule({
+        GET: text("ready"),
+        POST: text("accepted"),
+      }),
+    });
+
+    const manifest = await generateStaticOutput({
+      outDir,
+      routeSelection: "hybrid",
+      routes,
+    });
+
+    expect(manifest.entries.map((entry) => entry.file)).toEqual([
+      "index.html",
+      "landing/index.html",
+      "status.txt",
+    ]);
+    expect(manifest.entries.some((entry) => entry.pathname === "*")).toBe(false);
+    expect(manifest.fileHeaderRules).toHaveLength(2);
+    expect(existsSync(join(outDir, "404.html"))).toBe(false);
+    expect(existsSync(join(outDir, "account", "index.html"))).toBe(false);
+    expect(existsSync(join(outDir, "feed", "index.html"))).toBe(false);
+    expect(existsSync(join(outDir, "request.txt"))).toBe(false);
+    await expect(readFile(join(outDir, "status.txt"), "utf8"))
+      .resolves.toBe("ready");
+    await expect(readFile(join(outDir, "assets", "app-a1b2c3d4.js"), "utf8"))
+      .resolves.toBe("export {};\n");
+  });
+
   it("adds static CSP hashes for framework-rendered structured data", async () => {
     const { outDir } = await createOutputDirectory();
     const schema = {

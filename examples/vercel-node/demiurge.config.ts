@@ -11,6 +11,7 @@ export default defineConfig({
         runtime: "nodejs22.x",
       }),
     },
+    static: { origin: "https://demiurge-verification.vercel.app" },
   },
   rendering: { document: { title: "Demiurge on Vercel" } },
   routing: { typedRoutes: true },

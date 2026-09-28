@@ -58,8 +58,8 @@ describe("Demiurge configuration validation", () => {
     expect(config.deployment?.server?.provider?.adapter).toBe("vercel-node");
   });
 
-  it("rejects static output with a runtime provider", () => {
-    expect(validate({
+  it("accepts hybrid static output with a runtime provider", () => {
+    const config = validateDemiurgeConfig({
       deployment: {
         server: {
           entry: "src/server-entry.ts",
@@ -71,7 +71,24 @@ describe("Demiurge configuration validation", () => {
         },
         static: {},
       },
-    })).toThrow(/cannot declare both a runtime provider and static output/);
+    }, configFile);
+
+    expect(config.deployment?.static).toEqual({});
+  });
+
+  it("rejects two providers for one combined deployment", () => {
+    expect(validate({
+      deployment: {
+        server: {
+          provider: {
+            adapter: "vercel-node",
+            runtime: "nodejs22.x",
+            target: "managed-node-http-function",
+          },
+        },
+        static: { provider: { adapter: "vercel", cache: [] } },
+      },
+    })).toThrow(/cannot select a second provider/);
   });
 
   it("rejects an unknown or invalid server provider during config loading", () => {

@@ -434,6 +434,7 @@ export async function collectStaticRoutePaths(
     includePages?: boolean;
     includeResources?: boolean;
     locale?: string;
+    routeSelection?: "hybrid" | "strict";
   } = {},
 ): Promise<StaticRoutePath[]> {
   const cache = createMemoryCache();
@@ -458,6 +459,9 @@ export async function collectStaticRoutePaths(
       routeModule.GET.kind === "page" &&
       routeModule.GET.render.mode !== "static"
     ) {
+      if (options.routeSelection === "hybrid") {
+        continue;
+      }
       throw new Error(
         `Page route "${route.file}" uses render mode "${routeModule.GET.render.mode}" and cannot be emitted as static output. Set render: { mode: "static" } or deploy a runtime adapter.`,
       );

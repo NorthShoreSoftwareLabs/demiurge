@@ -7,14 +7,21 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import type { StaticOutputManifest } from "../static";
 import type { VercelNodeDeployment } from "./config";
 import { validateVercelNodeDeployment } from "./config";
+
+export type VercelNodeStaticOutput = {
+  directory: string;
+  manifest: StaticOutputManifest;
+};
 
 export type GenerateVercelNodeOutputOptions = {
   clientDir: string;
   deployment: VercelNodeDeployment;
   projectRoot: string;
   serverDir: string;
+  staticOutput?: VercelNodeStaticOutput;
 };
 
 export async function generateVercelNodeOutput(
@@ -24,11 +31,15 @@ export async function generateVercelNodeOutput(
   const projectRoot = resolve(options.projectRoot);
   const clientDir = resolve(options.clientDir);
   const serverDir = resolve(options.serverDir);
+  const staticOutputDir = options.staticOutput
+    ? resolve(options.staticOutput.directory)
+    : undefined;
   const outputRoot = resolve(projectRoot, ".vercel/output");
 
   if (
     overlaps(outputRoot, clientDir) ||
     overlaps(outputRoot, serverDir) ||
+    (staticOutputDir !== undefined && overlaps(outputRoot, staticOutputDir)) ||
     overlaps(clientDir, serverDir)
   ) {
     throw new Error("Vercel build directories must not overlap.");
@@ -43,6 +54,17 @@ export async function generateVercelNodeOutput(
       filter: (source) => !isFrameworkManifest(clientDir, source),
       recursive: true,
     });
+    if (options.staticOutput && staticOutputDir) {
+      await cp(staticOutputDir, staticDir, {
+        filter: (source) =>
+          isHybridStaticFile(
+            staticOutputDir,
+            source,
+            options.staticOutput!.manifest,
+          ),
+        recursive: true,
+      });
+    }
     await mkdir(functionDir, { recursive: true });
     await cp(serverDir, join(functionDir, "server"), { recursive: true });
     await cp(
@@ -58,7 +80,7 @@ export async function generateVercelNodeOutput(
     );
     await writeFile(
       join(staging, "config.json"),
-      `${JSON.stringify(createOutputConfig(), null, 2)}\n`,
+      `${JSON.stringify(createOutputConfig(options.staticOutput?.manifest), null, 2)}\n`,
     );
     await rm(outputRoot, { force: true, recursive: true });
     await rename(staging, outputRoot);
@@ -85,17 +107,48 @@ export function createFunctionConfig(deployment: VercelNodeDeployment) {
   };
 }
 
-export function createOutputConfig() {
+export function createOutputConfig(manifest?: StaticOutputManifest) {
+  const routes: Array<Record<string, unknown>> = [
+    {
+      dest: "/demiurge",
+      methods: ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      src: "^/.*$",
+    },
+    {
+      dest: "/demiurge",
+      has: [{ key: "x-demiurge-navigation", type: "header", value: "data" }],
+      methods: ["GET", "HEAD"],
+      src: "^/.*$",
+    },
+  ];
+
+  if (manifest) {
+    if (!manifest.origin) {
+      throw new Error(
+        "Vercel hybrid output requires a build origin to emit access-control-allow-origin. Pass --origin or set deployment.static.origin.",
+      );
+    }
+    for (const entry of manifest.entries) {
+      if (entry.status !== 200) continue;
+      routes.push({
+        dest: `/${entry.file}`,
+        headers: {
+          ...withoutContentType(entry.headers),
+          "access-control-allow-origin": manifest.origin,
+        },
+        methods: ["GET", "HEAD"],
+        src: exactPathPattern(entry.pathname),
+      });
+    }
+  }
+
+  routes.push(
+    { handle: "filesystem" },
+    { dest: "/demiurge", src: "^/.*$" },
+  );
+
   return {
-    routes: [
-      {
-        dest: "/demiurge",
-        methods: ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        src: "^/.*$",
-      },
-      { handle: "filesystem" },
-      { dest: "/demiurge", src: "^/.*$" },
-    ],
+    routes,
     version: 3,
   };
 }
@@ -157,6 +210,35 @@ function isFrameworkManifest(root: string, source: string) {
   const file = relative(root, source).split(sep).join("/");
   return file === "index.html" || file === "demiurge-manifest.json" ||
     file === "demiurge-static-manifest.json";
+}
+
+function isHybridStaticFile(
+  root: string,
+  source: string,
+  manifest: StaticOutputManifest,
+) {
+  const file = relative(resolve(root), source).split(sep).join("/");
+  if (
+    file === "demiurge-manifest.json" ||
+    file === "demiurge-static-manifest.json"
+  ) {
+    return false;
+  }
+  return file !== "index.html" ||
+    manifest.entries.some((entry) => entry.file === file);
+}
+
+function exactPathPattern(pathname: string) {
+  const escaped = pathname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return pathname === "/" ? "^/$" : `^${escaped}/?$`;
+}
+
+function withoutContentType(headers: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(headers).filter(([name]) =>
+      name.toLowerCase() !== "content-type"
+    ),
+  );
 }
 
 function overlaps(first: string, second: string) {

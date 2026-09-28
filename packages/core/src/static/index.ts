@@ -127,6 +127,7 @@ export type GenerateStaticOutputOptions = {
   // file therefore does not have to sit in the public directory.
   root?: string;
   routes: Record<string, RouteImporter>;
+  routeSelection?: "hybrid" | "strict";
   ssr?: SsrOptions;
   staticFileHeaders?: readonly StaticFileHeaderPatternRule[];
 };
@@ -186,26 +187,41 @@ export async function generateStaticOutput(
   options: GenerateStaticOutputOptions,
 ): Promise<StaticOutputManifest> {
   const routeModules = await loadRouteModules(options.routes);
-  const manifest = validateRouteModules(routeModules, {
-    adapter: staticAdapter,
-  });
+  const routeSelection = options.routeSelection ?? "strict";
+  const manifest = validateRouteModules(
+    routeModules,
+    routeSelection === "strict" ? { adapter: staticAdapter } : {},
+  );
 
   const origin = options.origin === undefined
     ? undefined
     : normalizeOrigin(options.origin);
   const renderOrigin = origin ?? "http://demiurge.local";
   const outDir = resolve(options.outDir);
-  const routeKinds = await validateStaticRoutes(manifest);
-  const resourcePaths = await collectStaticRoutePaths(manifest, {
+  const routeKinds = await validateStaticRoutes(manifest, routeSelection);
+  const selectedManifest = routeSelection === "hybrid"
+    ? validateRouteModules(
+        Object.fromEntries(
+          Object.entries(routeModules).filter(([file]) =>
+            routeKinds.has(file) || /\/@(?:layout|policy)\.tsx?$/.test(file)
+          ),
+        ),
+        { adapter: staticAdapter },
+      )
+    : manifest;
+  const resourcePaths = await collectStaticRoutePaths(selectedManifest, {
     includePages: false,
     includeResources: true,
+    routeSelection,
   });
   const localeTargets = options.locales
     ? staticLocalesForOrigin(renderOrigin, options.locales)
     : [undefined];
   const pagePaths = (
     await Promise.all(
-      localeTargets.map((locale) => collectStaticRoutePaths(manifest, { locale })),
+      localeTargets.map((locale) =>
+        collectStaticRoutePaths(selectedManifest, { locale, routeSelection })
+      ),
     )
   ).flatMap((paths, index) => paths.map((path) => ({
     ...path,
@@ -264,34 +280,36 @@ export async function generateStaticOutput(
     );
   }
 
-  const notFoundRequest = createStaticRequest(renderOrigin, "/404", "document");
-  const notFoundLocale = options.locales
-    ? resolveLocale(notFoundRequest, defineLocales(options.locales)).locale
-    : undefined;
-  const notFoundResponse = await renderNotFoundResponse(
-    manifest,
-    notFoundRequest,
-    {
-      ...ssr,
-      dir: notFoundLocale
-        ? localeDirection(notFoundLocale, options.locales)
-        : ssr.dir,
-      lang: notFoundLocale ?? ssr.lang,
-      locale: notFoundLocale ?? ssr.locale,
-      onError: (error, site) =>
-        options.onError?.(error, { pathname: "/404", site }),
-    },
-  );
-  pending.push(
-    await prepareDocumentOutput(
+  if (routeSelection === "strict") {
+    const notFoundRequest = createStaticRequest(renderOrigin, "/404", "document");
+    const notFoundLocale = options.locales
+      ? resolveLocale(notFoundRequest, defineLocales(options.locales)).locale
+      : undefined;
+    const notFoundResponse = await renderNotFoundResponse(
+      manifest,
+      notFoundRequest,
       {
-        file: "404.html",
-        pathname: "*",
+        ...ssr,
+        dir: notFoundLocale
+          ? localeDirection(notFoundLocale, options.locales)
+          : ssr.dir,
+        lang: notFoundLocale ?? ssr.lang,
+        locale: notFoundLocale ?? ssr.locale,
+        onError: (error, site) =>
+          options.onError?.(error, { pathname: "/404", site }),
       },
-      notFoundResponse,
-      404,
-    ),
-  );
+    );
+    pending.push(
+      await prepareDocumentOutput(
+        {
+          file: "404.html",
+          pathname: "*",
+        },
+        notFoundResponse,
+        404,
+      ),
+    );
+  }
 
   const documents = pending.map((entry) => entry.body);
 
@@ -455,35 +473,54 @@ function assertStaticPageApp(manifest: RouteManifest, pageCount: number) {
   }
 }
 
-async function validateStaticRoutes(manifest: RouteManifest) {
+async function validateStaticRoutes(
+  manifest: RouteManifest,
+  routeSelection: "hybrid" | "strict",
+) {
   const routeKinds = new Map<string, OutputKind>();
 
   for (const route of manifest.routes) {
     const routeModule = await route.load();
     const unsupportedMethods = staticUnsupportedMethods(routeModule);
 
-    if (unsupportedMethods.length > 0) {
+    if (unsupportedMethods.length > 0 && routeSelection === "strict") {
       throw new Error(
         `Static route ${JSON.stringify(route.file)} exports unsupported methods ${unsupportedMethods.join(", ")}. Deploy a runtime adapter for request-time methods.`,
       );
     }
 
     if (!routeModule.GET) {
+      if (routeSelection === "hybrid") continue;
       throw new Error(
         `Static route ${JSON.stringify(route.file)} does not export GET and cannot produce an output file.`,
       );
     }
 
     if (routeModule.GET.kind === "page") {
+      if (routeModule.GET.render.mode !== "static" && routeSelection === "hybrid") {
+        continue;
+      }
       routeKinds.set(route.file, "document");
       continue;
     }
 
+    if (routeSelection === "hybrid" && !isStaticResource(routeModule.GET)) {
+      continue;
+    }
     assertStaticResource(route.file, routeModule.GET);
     routeKinds.set(route.file, "resource");
   }
 
   return routeKinds;
+}
+
+function isStaticResource(capability: RouteCapability) {
+  return (
+    (capability.kind === "text" ||
+      capability.kind === "html" ||
+      capability.kind === "json") &&
+    typeof capability.value !== "function"
+  );
 }
 
 function staticUnsupportedMethods(routeModule: RouteModule) {
@@ -492,12 +529,7 @@ function staticUnsupportedMethods(routeModule: RouteModule) {
 }
 
 function assertStaticResource(file: string, capability: RouteCapability) {
-  if (
-    (capability.kind === "text" ||
-      capability.kind === "html" ||
-      capability.kind === "json") &&
-    typeof capability.value !== "function"
-  ) {
+  if (isStaticResource(capability)) {
     return;
   }
 

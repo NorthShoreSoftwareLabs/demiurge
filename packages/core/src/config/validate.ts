@@ -137,9 +137,12 @@ export function validateDemiurgeConfig(
         staticDeployment.provider,
       );
     }
-    if (server?.provider !== undefined && staticDeployment !== undefined) {
+    if (
+      server?.provider !== undefined &&
+      staticDeployment?.provider !== undefined
+    ) {
       throw new DemiurgeConfigError(
-        `${configFile} config field "deployment" cannot declare both a runtime provider and static output.`,
+        `${configFile} config field "deployment.static.provider" cannot select a second provider when "deployment.server.provider" owns the combined output.`,
       );
     }
   }

@@ -1,9 +1,18 @@
 import { lazy, Suspense } from "react";
-import { Link, page } from "@demiurgejs/core";
+import {
+  defineRoutePolicy,
+  Link,
+  page,
+  security,
+} from "@demiurgejs/core";
 
 const DeferredRuntime = lazy(async () => {
   await new Promise((resolve) => setTimeout(resolve, 30));
   return { default: () => <p data-streamed="">The server stream completed.</p> };
+});
+
+export const policy = defineRoutePolicy({
+  document: security.strict(),
 });
 
 export const GET = page({
