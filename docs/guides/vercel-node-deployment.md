@@ -1,11 +1,10 @@
 # Vercel Node Deployment
 
-Vercel Node Functions run a dynamic Demiurge application in one deployment.
-The function serves pages, navigation responses, API routes, and mutations.
+Vercel Node Functions run a hybrid Demiurge application in one deployment.
+The function serves runtime pages, navigation responses, API routes, and mutations.
 Vercel serves browser assets from its static file system.
-The function renders application documents and handles application endpoints.
-It does not yet combine prerendered Demiurge documents with runtime routes.
-Issue [#442](https://github.com/NorthShoreSoftwareLabs/demiurge/issues/442) tracks hybrid route ownership.
+Vercel also serves prerendered documents from that file system.
+The function handles every route that requires request-time work.
 
 Configure the provider in `demiurge.config.ts`:
 
@@ -20,6 +19,7 @@ export default defineConfig({
       outDir: "dist/server",
       provider: vercelNode({ maxDuration: 60, regions: ["iad1"] }),
     },
+    static: { origin: "https://www.example.com" },
   },
 });
 ```
@@ -41,6 +41,18 @@ The build writes Build Output API version 3 files to `.vercel/output`.
 Set the Vercel Framework Preset to `Other`.
 Do not set an Output Directory override.
 
+Set `render: { mode: "static" }` on each page that Vercel must prerender.
+Set `deployment.static` to enable hybrid output.
+Set `deployment.static.origin` to the public application origin.
+Use a static document policy on that route.
+The build rejects a static page when its policy requires a request-time nonce.
+All other routes keep their runtime ownership.
+
+Vercel serves a prerendered document before it calls the function.
+Demiurge sends navigation data requests to the function before the filesystem check.
+This order keeps client navigation on the shared route and document pipeline.
+Mutation methods also reach the function before the filesystem check.
+
 Set `ALLOWED_HOSTS` to each custom domain before deployment.
 The runtime also accepts Vercel deployment and production URL environment values.
 It rejects a request host that it cannot verify.
@@ -58,8 +70,7 @@ Application code can integrate with Vercel `waitUntil` for best-effort work with
 This provider API is outside the portable Demiurge route contract.
 Use a shared cache and rate-limit store when requests can reach multiple replicas.
 
-The first integration renders pages at request time.
-It does not provide Vercel Edge execution, ISR, WebSocket support, or CDN representation caching.
+The adapter does not provide Vercel Edge execution, ISR, or WebSocket support.
 Runtime responses use `private, no-store` to protect nonce-bearing and private responses.
 The provider rejects `security.staticFileHeaders` during the build.
 Use an application platform that can serve those browser-asset rules.

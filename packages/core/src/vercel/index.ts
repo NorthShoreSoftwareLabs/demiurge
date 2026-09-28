@@ -3,7 +3,10 @@ export {
   createOutputConfig,
   generateVercelNodeOutput,
 } from "./build";
-export type { GenerateVercelNodeOutputOptions } from "./build";
+export type {
+  GenerateVercelNodeOutputOptions,
+  VercelNodeStaticOutput,
+} from "./build";
 export { validateVercelNodeDeployment, vercelNode } from "./config";
 export type {
   VercelNodeDeployment,

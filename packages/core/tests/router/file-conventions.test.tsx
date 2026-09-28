@@ -398,4 +398,29 @@ describe("file route conventions", () => {
       'Page route "./routes/feed.tsx" uses render mode "streaming" and cannot be emitted as static output. Set render: { mode: "static" } or deploy a runtime adapter.',
     );
   });
+
+  it("skips runtime page routes for hybrid output", async () => {
+    const manifest = unstable_createRouteManifest({
+      "./routes/account.tsx": routeModule({ GET: page(View) }),
+      "./routes/feed.tsx": routeModule({
+        GET: page({ render: { mode: "streaming" }, view: View }),
+      }),
+      "./routes/index.tsx": routeModule({
+        GET: page({ render: { mode: "static" }, view: View }),
+      }),
+    });
+
+    await expect(
+      unstable_collectStaticRoutePaths(manifest, {
+        routeSelection: "hybrid",
+      }),
+    ).resolves.toEqual([
+      {
+        file: "./routes/index.tsx",
+        path: {},
+        pattern: "/",
+        pathname: "/",
+      },
+    ]);
+  });
 });

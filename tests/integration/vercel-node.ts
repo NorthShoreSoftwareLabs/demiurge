@@ -17,6 +17,7 @@ const artifactRoot = await mkdtemp(join(tmpdir(), "demiurge-vercel-artifact-"));
 await cp("examples/vercel-node/.vercel/output", artifactRoot, { recursive: true });
 const functionEntry = resolve(artifactRoot, "functions/demiurge.func/index.mjs");
 const staticDirectory = resolve(artifactRoot, "static");
+const staticAboutFile = resolve(staticDirectory, "about/index.html");
 const module = await import(pathToFileURL(functionEntry).href);
 
 if (typeof module.default !== "function") {
@@ -24,6 +25,21 @@ if (typeof module.default !== "function") {
 }
 
 const server = createServer((request, response) => {
+  const url = new URL(request.url ?? "/", "http://127.0.0.1");
+  const isStaticAboutRequest =
+    (request.method === "GET" || request.method === "HEAD") &&
+    request.headers["x-demiurge-navigation"] !== "data" &&
+    (url.pathname === "/about" || url.pathname === "/about/");
+  if (isStaticAboutRequest) {
+    void readFile(staticAboutFile).then((html) => {
+      response.setHeader("content-type", "text/html; charset=utf-8");
+      response.setHeader("x-vercel-local-route", "filesystem");
+      response.end(request.method === "HEAD" ? undefined : html);
+    }, (error: unknown) => {
+      response.destroy(error instanceof Error ? error : new Error(String(error)));
+    });
+    return;
+  }
   void module.default(request, response);
 });
 
@@ -54,16 +70,77 @@ try {
     throw new Error("The generated Vercel page does not reference a client asset.");
   }
   await access(resolve(staticDirectory, `.${asset}`));
+  await assertMissing(
+    resolve(staticDirectory, "index.html"),
+    "The Vercel filesystem captured the runtime root route.",
+  );
+  const staticAbout = await fetch(`${origin}/about`, {
+    headers: { accept: "text/html" },
+  }).catch((error: unknown) => {
+    throw new Error("The prerendered route request failed.", { cause: error });
+  });
+  const staticAboutHtml = await staticAbout.text();
+  if (
+    staticAbout.status !== 200 ||
+    staticAbout.headers.get("x-vercel-local-route") !== "filesystem" ||
+    !staticAboutHtml.includes("Prerendered application route")
+  ) {
+    throw new Error("The Vercel filesystem did not own the prerendered route.");
+  }
+
+  const staticNavigation = await fetch(`${origin}/about`, {
+    headers: {
+      accept: "application/json",
+      "x-demiurge-navigation": "data",
+    },
+  }).catch((error: unknown) => {
+    throw new Error("The prerendered navigation request failed.", { cause: error });
+  });
+  if (
+    staticNavigation.status !== 200 ||
+    staticNavigation.headers.get("x-demiurge-navigation") !== "data" ||
+    staticNavigation.headers.has("x-vercel-local-route")
+  ) {
+    throw new Error("The Vercel function did not own navigation for a prerendered route.");
+  }
+
   const outputConfig = JSON.parse(await readFile(
     resolve(artifactRoot, "config.json"),
     "utf8",
   ));
+  const outputRoutes = Array.isArray(outputConfig.routes) ? outputConfig.routes : [];
+  const filesystemIndex = outputRoutes.findIndex(
+    (route: { handle?: string }) => route.handle === "filesystem",
+  );
+  const navigationIndex = outputRoutes.findIndex(
+    (route: { dest?: string; has?: Array<{ key?: string; value?: string }> }) =>
+      route.dest === "/demiurge" && route.has?.some((condition) =>
+        condition.key === "x-demiurge-navigation" && condition.value === "data"
+      ),
+  );
+  const staticAboutIndex = outputRoutes.findIndex(
+    (route: { dest?: string; methods?: string[]; src?: string }) =>
+      route.dest === "/about/index.html" &&
+      route.methods?.join(",") === "GET,HEAD" &&
+      route.src === "^/about/?$",
+  );
+  const fallbackIndex = outputRoutes.findIndex(
+    (route: { dest?: string; methods?: string[]; src?: string }) =>
+      route.dest === "/demiurge" &&
+      route.src === "^/.*$" &&
+      route.methods === undefined,
+  );
   if (
-    outputConfig.routes?.[0]?.dest !== "/demiurge" ||
-    outputConfig.routes?.[0]?.methods?.join(",") !==
+    outputRoutes[0]?.dest !== "/demiurge" ||
+    outputRoutes[0]?.methods?.join(",") !==
       "POST,PUT,PATCH,DELETE,OPTIONS" ||
-    outputConfig.routes?.[1]?.handle !== "filesystem" ||
-    outputConfig.routes?.[2]?.dest !== "/demiurge"
+    navigationIndex < 0 ||
+    staticAboutIndex < 0 ||
+    filesystemIndex < 0 ||
+    fallbackIndex < 0 ||
+    navigationIndex > filesystemIndex ||
+    staticAboutIndex > filesystemIndex ||
+    filesystemIndex > fallbackIndex
   ) {
     throw new Error("The Vercel artifact does not use the required route order.");
   }
@@ -106,4 +183,21 @@ try {
 } finally {
   await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
   await rm(artifactRoot, { force: true, recursive: true });
+}
+
+async function assertMissing(file: string, message: string) {
+  try {
+    await access(file);
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return;
+    }
+    throw error;
+  }
+  throw new Error(message);
 }

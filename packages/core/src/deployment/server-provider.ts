@@ -1,6 +1,7 @@
 import type { VercelNodeDeployment } from "../vercel/config";
 import { validateVercelNodeDeployment } from "../vercel/config";
 import { generateVercelNodeOutput } from "../vercel/build";
+import type { VercelNodeStaticOutput } from "../vercel/build";
 import type { StaticFileHeaderPatternRule } from "../static";
 
 export type ServerDeploymentProvider = VercelNodeDeployment;
@@ -10,6 +11,7 @@ export type GenerateServerProviderOutputOptions = {
   deployment: ServerDeploymentProvider;
   projectRoot: string;
   serverDir: string;
+  staticOutput?: VercelNodeStaticOutput;
   staticFileHeaders?: readonly StaticFileHeaderPatternRule[];
 };
 

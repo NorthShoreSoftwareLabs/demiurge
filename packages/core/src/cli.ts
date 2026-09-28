@@ -231,31 +231,42 @@ export async function runBuild(
   }
 
   const provider = applicationServer?.provider;
+  const staticResult = config.deployment?.static
+    ? await buildStaticOutput({
+        build,
+        config,
+        createViteConfig,
+        frameworkServerOutDir,
+        options,
+        outDir,
+        root,
+        routeSelection: provider ? "hybrid" : "strict",
+        runtime,
+      })
+    : undefined;
+
   if (provider && applicationServer && serverOutDir) {
     const deploymentOutDir = await generateServerProviderOutput({
       clientDir: outDir,
       deployment: provider,
       projectRoot: root,
       serverDir: serverOutDir,
+      ...(staticResult?.manifest
+        ? { staticOutput: { directory: outDir, manifest: staticResult.manifest } }
+        : {}),
       staticFileHeaders: config.security?.staticFileHeaders,
     });
-    return { deploymentOutDir, outDir, serverOutDir };
+    return {
+      deploymentOutDir,
+      manifest: staticResult?.manifest,
+      outDir,
+      serverOutDir,
+    };
   }
 
-  if (!config.deployment?.static) return { outDir, serverOutDir };
-
-  const staticResult = await buildStaticOutput({
-    build,
-    config,
-    createViteConfig,
-    frameworkServerOutDir,
-    options,
-    outDir,
-    root,
-    runtime,
-  });
-
-  return { ...staticResult, outDir, serverOutDir };
+  return staticResult
+    ? { ...staticResult, outDir, serverOutDir }
+    : { outDir, serverOutDir };
 }
 
 export async function runStart(
@@ -328,6 +339,7 @@ async function buildStaticOutput({
   options,
   outDir,
   root,
+  routeSelection,
   runtime,
 }: {
   build: (config: InlineConfig) => Promise<unknown>;
@@ -337,6 +349,7 @@ async function buildStaticOutput({
   options: CliOptions;
   outDir: string;
   root: string;
+  routeSelection: "hybrid" | "strict";
   runtime?: BuildRuntime;
 }) {
   await build(
@@ -378,7 +391,11 @@ async function buildStaticOutput({
     outDir,
     root,
     routes: serverEntry.routes,
-    ssr: clientManifest,
+    routeSelection,
+    ssr: {
+      ...clientManifest,
+      ...config.rendering?.document,
+    },
     staticFileHeaders: config.security?.staticFileHeaders ?? [],
   });
 
