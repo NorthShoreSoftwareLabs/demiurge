@@ -74,6 +74,7 @@ export const staticAdapter = defineAdapter({
 export type StaticOutputEntry = {
   file: string;
   headers: Record<string, string>;
+  methods?: ["GET"] | ["GET", "HEAD"];
   pathname: string;
   status: 200 | 404;
 };
@@ -146,6 +147,7 @@ type OutputKind = "document" | "resource";
 type PlannedOutput = {
   file: string;
   kind: OutputKind;
+  methods?: StaticOutputEntry["methods"];
   pathname: string;
 };
 
@@ -198,7 +200,10 @@ export async function generateStaticOutput(
     : normalizeOrigin(options.origin);
   const renderOrigin = origin ?? "http://demiurge.local";
   const outDir = resolve(options.outDir);
-  const routeKinds = await validateStaticRoutes(manifest, routeSelection);
+  const { routeKinds, runtimeHeadFiles } = await validateStaticRoutes(
+    manifest,
+    routeSelection,
+  );
   const selectedManifest = routeSelection === "hybrid"
     ? validateRouteModules(
         Object.fromEntries(
@@ -237,15 +242,23 @@ export async function generateStaticOutput(
   const outputEntries = planOutputEntries(
     paths.flatMap((path) => {
       const kind = routeKinds.get(path.file) ?? "resource";
+      const methods: StaticOutputEntry["methods"] = routeSelection === "hybrid" &&
+          runtimeHeadFiles.has(path.file)
+        ? ["GET"]
+        : undefined;
       if (kind !== "document" || !options.locales || !path.locale) {
-        return [{ kind, pathname: path.pathname }];
+        return [{ kind, methods, pathname: path.pathname }];
       }
 
       const localized = new URL(
         localizeHref(path.pathname, path.locale, options.locales, renderOrigin),
         renderOrigin,
       );
-      return [{ kind, pathname: `${localized.pathname}${localized.search}` }];
+      return [{
+        kind,
+        methods,
+        pathname: `${localized.pathname}${localized.search}`,
+      }];
     }),
   );
   const rateLimitStore = createMemoryRateLimitStore();
@@ -478,9 +491,11 @@ async function validateStaticRoutes(
   routeSelection: "hybrid" | "strict",
 ) {
   const routeKinds = new Map<string, OutputKind>();
+  const runtimeHeadFiles = new Set<string>();
 
   for (const route of manifest.routes) {
     const routeModule = await route.load();
+    if (routeModule.HEAD) runtimeHeadFiles.add(route.file);
     const unsupportedMethods = staticUnsupportedMethods(routeModule);
 
     if (unsupportedMethods.length > 0 && routeSelection === "strict") {
@@ -511,7 +526,7 @@ async function validateStaticRoutes(
     routeKinds.set(route.file, "resource");
   }
 
-  return routeKinds;
+  return { routeKinds, runtimeHeadFiles };
 }
 
 function isStaticResource(capability: RouteCapability) {
@@ -543,12 +558,16 @@ function assertStaticResource(file: string, capability: RouteCapability) {
 }
 
 function planOutputEntries(
-  outputs: Array<{ kind: OutputKind; pathname: string }>,
+  outputs: Array<{
+    kind: OutputKind;
+    methods?: StaticOutputEntry["methods"];
+    pathname: string;
+  }>,
 ) {
   const seenFiles = new Map<string, string>();
   const seenPathnames = new Set<string>();
 
-  return outputs.map(({ kind, pathname }) => {
+  return outputs.map(({ kind, methods, pathname }) => {
     if (seenPathnames.has(pathname)) {
       throw new Error(`Static output collected duplicate pathname ${JSON.stringify(pathname)}.`);
     }
@@ -573,7 +592,7 @@ function planOutputEntries(
 
     seenFiles.set(portableFile, pathname);
 
-    return { file, kind, pathname };
+    return { file, kind, methods, pathname };
   });
 }
 
@@ -642,7 +661,11 @@ function createStaticRequest(
 }
 
 async function prepareDocumentOutput(
-  entry: { file: string; pathname: string },
+  entry: {
+    file: string;
+    methods?: StaticOutputEntry["methods"];
+    pathname: string;
+  },
   response: Response,
   expectedStatus: 200 | 404,
 ): Promise<PendingOutput> {
@@ -676,6 +699,7 @@ async function prepareDocumentOutput(
     file: entry.file,
     headers: sortedHeaders(response.headers),
     body: html,
+    ...(entry.methods === undefined ? {} : { methods: entry.methods }),
     pathname: entry.pathname,
     status: expectedStatus,
   };
@@ -701,6 +725,7 @@ async function prepareResourceOutput(
     file: entry.file,
     headers: sortedHeaders(response.headers),
     body: await response.text(),
+    ...(entry.methods === undefined ? {} : { methods: entry.methods }),
     pathname: entry.pathname,
     status: 200,
   };

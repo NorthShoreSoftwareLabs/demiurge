@@ -27,6 +27,11 @@ status, the host serves the file at the entry's pathname with the declared
 headers. For each entry with a 404 status, the host rewrites requests matching
 that pathname to serve the file with status 404 and the declared headers.
 
+An entry can declare the HTTP methods that the generated file owns. If the
+field is absent, the file owns `GET` and `HEAD`. A hybrid provider must forward
+an unlisted method to the runtime owner. Thus, `["GET"]` reserves `HEAD` for an
+explicit runtime handler.
+
 For pathnames not matched by any manifest entry, the host must apply the
 framework file header rules to serve the file, if it exists. The rules in the
 manifest always take precedence. A pathnames matched by no entry and no file
