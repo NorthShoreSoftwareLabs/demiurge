@@ -360,6 +360,7 @@ describe("static output adapter", () => {
       }),
       "./routes/landing.tsx": routeModule({
         GET: page({ render: { mode: "static" }, view: PlainPage }),
+        HEAD: text("custom head"),
         POST: text("accepted"),
       }),
       "./routes/request.txt.ts": routeModule({
@@ -383,6 +384,10 @@ describe("static output adapter", () => {
       "status.txt",
     ]);
     expect(manifest.entries.some((entry) => entry.pathname === "*")).toBe(false);
+    expect(manifest.entries.find((entry) => entry.pathname === "/landing")?.methods)
+      .toEqual(["GET"]);
+    expect(manifest.entries.find((entry) => entry.pathname === "/")?.methods)
+      .toBeUndefined();
     expect(manifest.fileHeaderRules).toHaveLength(2);
     expect(existsSync(join(outDir, "404.html"))).toBe(false);
     expect(existsSync(join(outDir, "account", "index.html"))).toBe(false);

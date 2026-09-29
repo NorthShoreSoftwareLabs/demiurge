@@ -65,13 +65,26 @@ describe("Vercel Node deployment", () => {
           status: 200,
         },
         {
+          file: "about/index.html",
+          headers: { "content-type": "text/html; charset=utf-8" },
+          methods: ["GET"],
+          pathname: "/about",
+          status: 200,
+        },
+        {
           file: "404.html",
           headers: { "content-type": "text/html; charset=utf-8" },
           pathname: "*",
           status: 404,
         },
       ],
-      fileHeaderRules: [],
+      fileHeaderRules: [{
+        headers: { "cache-control": "public, max-age=31536000, immutable" },
+        pattern: "^[^/]*-[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9]+$",
+      }, {
+        headers: { "cache-control": "public, max-age=0, must-revalidate" },
+        pattern: ".*",
+      }],
       origin: "https://example.test",
       version: 1,
     }).routes).toEqual([
@@ -81,13 +94,38 @@ describe("Vercel Node deployment", () => {
         methods: ["GET", "HEAD"],
       }),
       {
+        dest: "/demiurge",
+        methods: ["HEAD"],
+        src: "^/about/?$",
+      },
+      {
+        continue: true,
+        headers: { "access-control-allow-origin": "https://example.test" },
+        src: "^/.*$",
+      },
+      {
+        continue: true,
+        headers: { "cache-control": "public, max-age=0, must-revalidate" },
+        src: "^/.*$",
+      },
+      {
+        continue: true,
+        headers: { "cache-control": "public, max-age=31536000, immutable" },
+        src: "^/(?:.*/)?(?:[^/]*-[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9]+)$",
+      },
+      {
         dest: "/index.html",
         headers: {
-          "access-control-allow-origin": "https://example.test",
           "cache-control": "public, max-age=60",
         },
         methods: ["GET", "HEAD"],
         src: "^/$",
+      },
+      {
+        dest: "/about/index.html",
+        headers: {},
+        methods: ["GET"],
+        src: "^/about/?$",
       },
       { handle: "filesystem" },
       { dest: "/demiurge", src: "^/.*$" },
@@ -207,6 +245,30 @@ describe("Vercel Node deployment", () => {
       deployment: vercelNode(),
       projectRoot: "/application",
       serverDir: "/application/dist/server",
+    })).rejects.toThrow(/must not overlap/);
+  });
+
+  it.each([
+    ["the server directory", "/application/dist/server"],
+    ["a server parent", "/application/dist"],
+    ["a server child", "/application/dist/server/static"],
+    ["a client parent", "/application"],
+    ["a client child", "/application/dist/client/static"],
+  ])("rejects static output that overlaps %s", async (_case, staticDirectory) => {
+    await expect(generateVercelNodeOutput({
+      clientDir: "/application/dist/client",
+      deployment: vercelNode(),
+      projectRoot: "/application",
+      serverDir: "/application/dist/server",
+      staticOutput: {
+        directory: staticDirectory,
+        manifest: {
+          adapter: "static",
+          entries: [],
+          fileHeaderRules: [],
+          version: 1,
+        },
+      },
     })).rejects.toThrow(/must not overlap/);
   });
 });

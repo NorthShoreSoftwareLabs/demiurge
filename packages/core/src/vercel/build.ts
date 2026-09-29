@@ -8,6 +8,7 @@ import {
 } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import type { StaticOutputManifest } from "../static";
+import { translateFileHeaderPattern } from "../static/file-header-pattern";
 import type { VercelNodeDeployment } from "./config";
 import { validateVercelNodeDeployment } from "./config";
 
@@ -40,7 +41,10 @@ export async function generateVercelNodeOutput(
     overlaps(outputRoot, clientDir) ||
     overlaps(outputRoot, serverDir) ||
     (staticOutputDir !== undefined && overlaps(outputRoot, staticOutputDir)) ||
-    overlaps(clientDir, serverDir)
+    overlaps(clientDir, serverDir) ||
+    (staticOutputDir !== undefined && overlaps(staticOutputDir, serverDir)) ||
+    (staticOutputDir !== undefined && staticOutputDir !== clientDir &&
+      overlaps(staticOutputDir, clientDir))
   ) {
     throw new Error("Vercel build directories must not overlap.");
   }
@@ -129,14 +133,35 @@ export function createOutputConfig(manifest?: StaticOutputManifest) {
       );
     }
     for (const entry of manifest.entries) {
+      if (entry.status !== 200 || entry.methods?.length !== 1) {
+        continue;
+      }
+      routes.push({
+        dest: "/demiurge",
+        methods: ["HEAD"],
+        src: exactPathPattern(entry.pathname),
+      });
+    }
+    routes.push({
+      continue: true,
+      headers: { "access-control-allow-origin": manifest.origin },
+      src: "^/.*$",
+    });
+    for (const rule of [...manifest.fileHeaderRules].reverse()) {
+      routes.push({
+        continue: true,
+        headers: { ...rule.headers },
+        src: translateFileHeaderPattern(rule.pattern),
+      });
+    }
+    for (const entry of manifest.entries) {
       if (entry.status !== 200) continue;
       routes.push({
         dest: `/${entry.file}`,
         headers: {
           ...withoutContentType(entry.headers),
-          "access-control-allow-origin": manifest.origin,
         },
-        methods: ["GET", "HEAD"],
+        methods: entry.methods ?? ["GET", "HEAD"],
         src: exactPathPattern(entry.pathname),
       });
     }

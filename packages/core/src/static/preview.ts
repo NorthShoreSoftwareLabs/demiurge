@@ -226,7 +226,8 @@ function parseEntry(value: unknown): StaticOutputEntry {
     typeof value.file !== "string" ||
     typeof value.pathname !== "string" ||
     (value.status !== 200 && value.status !== 404) ||
-    !isStringRecord(value.headers)
+    !isStringRecord(value.headers) ||
+    (value.methods !== undefined && !isStaticOutputMethods(value.methods))
   ) {
     throw new Error("The static output manifest contains an invalid entry.");
   }
@@ -234,9 +235,21 @@ function parseEntry(value: unknown): StaticOutputEntry {
   return {
     file: value.file,
     headers: value.headers,
+    ...(value.methods === undefined
+      ? {}
+      : { methods: value.methods }),
     pathname: value.pathname,
     status: value.status,
   };
+}
+
+function isStaticOutputMethods(
+  value: unknown,
+): value is ["GET"] | ["GET", "HEAD"] {
+  return Array.isArray(value) &&
+    (value.length === 1 || value.length === 2) &&
+    value[0] === "GET" &&
+    (value.length === 1 || value[1] === "HEAD");
 }
 
 function parseRule(value: unknown): StaticOutputFileHeaderRule {
