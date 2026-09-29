@@ -142,6 +142,26 @@ export function createOutputConfig(manifest?: StaticOutputManifest) {
         src: exactPathPattern(entry.pathname),
       });
     }
+    for (const entry of manifest.entries) {
+      if (entry.status !== 200) continue;
+      routes.push({
+        dest: `/${entry.file}`,
+        headers: {
+          ...withoutContentType(entry.headers),
+          "access-control-allow-origin": manifest.origin,
+        },
+        methods: entry.methods ?? ["GET", "HEAD"],
+        src: exactPathPattern(entry.pathname),
+      });
+    }
+  }
+
+  routes.push(
+    { handle: "filesystem" },
+    { dest: "/demiurge", src: "^/.*$" },
+  );
+  if (manifest) {
+    routes.push({ handle: "hit" });
     routes.push({
       continue: true,
       headers: { "access-control-allow-origin": manifest.origin },
@@ -154,23 +174,7 @@ export function createOutputConfig(manifest?: StaticOutputManifest) {
         src: translateFileHeaderPattern(rule.pattern),
       });
     }
-    for (const entry of manifest.entries) {
-      if (entry.status !== 200) continue;
-      routes.push({
-        dest: `/${entry.file}`,
-        headers: {
-          ...withoutContentType(entry.headers),
-        },
-        methods: entry.methods ?? ["GET", "HEAD"],
-        src: exactPathPattern(entry.pathname),
-      });
-    }
   }
-
-  routes.push(
-    { handle: "filesystem" },
-    { dest: "/demiurge", src: "^/.*$" },
-  );
 
   return {
     routes,

@@ -99,6 +99,24 @@ describe("Vercel Node deployment", () => {
         src: "^/about/?$",
       },
       {
+        dest: "/index.html",
+        headers: {
+          "access-control-allow-origin": "https://example.test",
+          "cache-control": "public, max-age=60",
+        },
+        methods: ["GET", "HEAD"],
+        src: "^/$",
+      },
+      {
+        dest: "/about/index.html",
+        headers: { "access-control-allow-origin": "https://example.test" },
+        methods: ["GET"],
+        src: "^/about/?$",
+      },
+      { handle: "filesystem" },
+      { dest: "/demiurge", src: "^/.*$" },
+      { handle: "hit" },
+      {
         continue: true,
         headers: { "access-control-allow-origin": "https://example.test" },
         src: "^/.*$",
@@ -113,22 +131,6 @@ describe("Vercel Node deployment", () => {
         headers: { "cache-control": "public, max-age=31536000, immutable" },
         src: "^/(?:.*/)?(?:[^/]*-[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9]+)$",
       },
-      {
-        dest: "/index.html",
-        headers: {
-          "cache-control": "public, max-age=60",
-        },
-        methods: ["GET", "HEAD"],
-        src: "^/$",
-      },
-      {
-        dest: "/about/index.html",
-        headers: {},
-        methods: ["GET"],
-        src: "^/about/?$",
-      },
-      { handle: "filesystem" },
-      { dest: "/demiurge", src: "^/.*$" },
     ]);
   });
 
