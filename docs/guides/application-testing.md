@@ -22,6 +22,16 @@ const application = createApplicationTest(handler);
 The helper returns the production `Response`. Your test runner owns assertions
 and mocks. A build or process test verifies deployment output.
 
+## Test runner ownership
+
+The application selects and configures its test runner. Demiurge does not add a
+runner dependency to the application.
+
+The [application testing example](../../examples/application-testing) uses
+Vitest. Another runner can replace its test registration, assertions, and
+mocks. The Demiurge request and static output setup stays the same. The runner
+must support standard `Request`, `Response`, and `FormData` implementations.
+
 ## Deterministic fixtures
 
 Use `createTestRequest(...)` when a test needs a standard `Request` with the

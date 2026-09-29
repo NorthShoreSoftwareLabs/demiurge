@@ -23,6 +23,7 @@ const examples = [
   "observability",
   "cloud-run",
   "form-interoperability",
+  "application-testing",
 ];
 
 for (const example of examples) {
