@@ -17,8 +17,16 @@ npm create demiurge my-app -- --template page
 npm create demiurge my-api -- --template api
 ```
 
+Use explicit inputs when a script must fail instead of selecting defaults:
+
+```sh
+npm create demiurge my-app -- --template page --non-interactive
+```
+
 The page template includes a layout, fallback documents, a policy, styles, and
-a page route. The fallback documents use plain markup without fallback styles.
+a page route. It also includes a validated mutation, authorization, public
+application tests, and managed Node scripts. The fallback documents use plain
+markup without fallback styles.
 
 The API template includes a policy and a health route. It does not include page
 routes, layouts, fallback documents, or styles.

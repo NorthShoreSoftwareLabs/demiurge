@@ -46,6 +46,8 @@ export default tseslint.config(
             "packages/create-demiurge/templates/*/src/routes/*.ts",
             "packages/create-demiurge/templates/*/src/routes/*.tsx",
             "packages/create-demiurge/templates/*/src/routes/api/*.ts",
+            "packages/create-demiurge/templates/*/src/routes/account/*.ts",
+            "packages/create-demiurge/templates/*/tests/*.ts",
           ],
           // These are all config/scaffold files with no full project, and the
           // repo has enough examples and templates to clear the default

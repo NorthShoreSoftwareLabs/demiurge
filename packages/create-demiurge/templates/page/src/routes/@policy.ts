@@ -8,7 +8,7 @@ export const policy = defineRoutePolicy({
   document: security.strict(),
   security: {
     request: {
-      allowedMethods: ["GET"],
+      allowedMethods: ["GET", "POST"],
       maxBodySize: "32kb",
     },
   },

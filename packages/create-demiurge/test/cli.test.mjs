@@ -48,8 +48,13 @@ test("creates the complete page application", () => {
       "src/routes/@not-found.tsx",
       "src/routes/@error.tsx",
       "src/routes/@policy.ts",
+      "src/routes/@middleware.ts",
+      "src/routes/account/@policy.ts",
+      "src/routes/account/index.ts",
       "src/routes/index.tsx",
+      "src/routes/messages.ts",
       "src/styles.css",
+      "tests/application.test.ts",
       "demiurge.config.ts",
     ]) {
       assert(existsSync(join(target, file)), `Missing ${file}`);
@@ -63,6 +68,9 @@ test("creates the complete page application", () => {
     assert(!existsSync(join(target, "vite.config.ts")), "Unexpected vite.config.ts");
     assert.equal(metadata.scripts.dev, "demiurge dev");
     assert.equal(metadata.scripts.build, "demiurge build");
+    assert.equal(metadata.scripts.inspect, "demiurge inspect");
+    assert.equal(metadata.scripts.start, "demiurge start");
+    assert.equal(metadata.scripts.test, "vitest run");
   });
 });
 
@@ -72,6 +80,7 @@ test("creates an API application without page files", () => {
     assert(existsSync(join(target, "src/routes/@policy.ts")));
     assert(existsSync(join(target, "src/routes/api/health.ts")));
     assert(existsSync(join(target, "demiurge.config.ts")));
+    assert(existsSync(join(target, "tests/application.test.ts")));
     assert(!existsSync(join(target, "src/routes/@layout.tsx")));
     assert(!existsSync(join(target, "src/routes/@not-found.tsx")));
     assert(!existsSync(join(target, "src/routes/@error.tsx")));
@@ -85,6 +94,30 @@ test("uses page defaults with --yes", () => {
     execFileSync(process.execPath, [cli, "--yes"], { cwd: scratch, stdio: "pipe" });
     assert(existsSync(join(scratch, "demiurge-app", "src/routes/index.tsx")));
   });
+});
+
+test("accepts complete explicit non-interactive inputs", () => {
+  withScratch((scratch) => {
+    execFileSync(
+      process.execPath,
+      [cli, "explicit-app", "--template", "page", "--non-interactive"],
+      { cwd: scratch, stdio: "pipe" },
+    );
+    assert(existsSync(join(scratch, "explicit-app", "src/routes/index.tsx")));
+  });
+});
+
+test("rejects incomplete explicit non-interactive inputs", () => {
+  const result = spawnSync(
+    process.execPath,
+    [cli, "explicit-app", "--non-interactive"],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /--non-interactive requires a directory and --template page\|api/,
+  );
 });
 
 test("does not write into a nonempty directory", () => {

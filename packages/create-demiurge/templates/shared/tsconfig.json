@@ -11,5 +11,10 @@
     "jsx": "react-jsx",
     "types": ["node", "vite/client"]
   },
-  "include": ["src", ".demiurge/route-manifest.d.ts", "vite.config.ts"]
+  "include": [
+    "src",
+    "tests",
+    ".demiurge/route-manifest.d.ts",
+    "demiurge.config.ts"
+  ]
 }

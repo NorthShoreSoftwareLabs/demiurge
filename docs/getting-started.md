@@ -86,3 +86,7 @@ the static build shape and the request-time optimizer.
 
 Continue with the [route reference](./reference/routes.md). For production SSR,
 follow the [Node deployment guide](./guides/node-deployment.md).
+
+For an automated setup, follow the
+[agent application workflow](./guides/agent-application-workflow.md). It uses
+explicit scaffold inputs and verifies each public application boundary.
