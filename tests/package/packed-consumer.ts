@@ -1,6 +1,7 @@
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -155,6 +156,23 @@ try {
   );
 
   const installedRoot = join(scratch, "node_modules", expectedPackage.name);
+
+  const applicationExample = join(scratch, "application-testing");
+  cpSync(resolve("examples/application-testing"), applicationExample, {
+    filter: (source) => !source.includes(`${join("application-testing", ".demiurge")}`) &&
+      !source.includes(`${join("application-testing", "dist")}`) &&
+      !source.includes(`${join("application-testing", "node_modules")}`),
+    recursive: true,
+  });
+  const examplePackageFile = join(applicationExample, "package.json");
+  const examplePackage = JSON.parse(readFileSync(examplePackageFile, "utf8")) as {
+    dependencies: Record<string, string>;
+  };
+  examplePackage.dependencies["@demiurgejs/core"] = tarballPath;
+  writeFileSync(examplePackageFile, `${JSON.stringify(examplePackage, null, 2)}\n`);
+  run("pnpm", ["install", "--no-frozen-lockfile"], applicationExample);
+  run("pnpm", ["test"], applicationExample);
+
   const installedPackage = JSON.parse(
     readFileSync(join(installedRoot, "package.json"), "utf8"),
   ) as Record<string, unknown>;
