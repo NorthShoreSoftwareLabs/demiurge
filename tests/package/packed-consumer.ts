@@ -373,7 +373,11 @@ try {
     });
   } finally {
     extensionRedis.kill("SIGTERM");
-    await new Promise<void>((resolveExit) => extensionRedis.once("exit", () => resolveExit()));
+    if (extensionRedis.exitCode === null) {
+      await new Promise<void>((resolveExit) => {
+        extensionRedis.once("exit", () => resolveExit());
+      });
+    }
   }
 
   const installedPackage = JSON.parse(
