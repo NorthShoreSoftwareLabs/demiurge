@@ -14,14 +14,14 @@ type PostPageData = { loadCount: number; post: Post };
 // each test request actually exercises.
 const posts: Record<string, Post> = {
   "1": {
-    body: "createRedisCacheStore shares public entries across every "
+    body: "The application CacheStore shares public entries across every "
       + "process that talks to the same Redis database.",
     id: "1",
     title: "Redis-backed caching",
   },
   "2": {
-    body: "invalidateTags deletes every entry carrying a tag in one "
-      + "atomic Lua script, visible to every connected process at once.",
+    body: "invalidateTags scans application entries and removes each "
+      + "matching tag with best-effort consistency.",
     id: "2",
     title: "Tag-based invalidation",
   },
