@@ -100,16 +100,20 @@ async function startPreview(command: string, args: string[], cwd: string) {
 }
 
 async function startManagedApplication(cwd: string) {
-  const child = spawn("pnpm", ["start"], {
-    cwd,
-    env: {
-      ...process.env,
-      ALLOWED_HOSTS: "127.0.0.1",
-      HOST: "127.0.0.1",
-      PORT: "0",
+  const child = spawn(
+    process.execPath,
+    [join(cwd, "node_modules", "@demiurgejs", "core", "bin", "demiurge.mjs"), "start"],
+    {
+      cwd,
+      env: {
+        ...process.env,
+        ALLOWED_HOSTS: "127.0.0.1",
+        HOST: "127.0.0.1",
+        PORT: "0",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
     },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  );
   let errors = "";
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (chunk) => {
