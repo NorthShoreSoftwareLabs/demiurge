@@ -337,48 +337,11 @@ try {
   writeFileSync(extensionPackageFile, `${JSON.stringify(extensionPackage, null, 2)}\n`);
   run("pnpm", ["install", "--no-frozen-lockfile"], extensionExample);
   run("pnpm", ["build"], extensionExample);
-  const extensionRedisPort = 33_000 + (process.pid % 10_000);
-  const extensionRedis = spawn("redis-server", [
-    "--port",
-    String(extensionRedisPort),
-    "--bind",
-    "127.0.0.1",
-    "--save",
-    "",
-    "--appendonly",
-    "no",
-  ]);
-  try {
-    await new Promise<void>((resolveReady, rejectReady) => {
-      let output = "";
-      const timeout = setTimeout(() => {
-        rejectReady(new Error(`Packed extension Redis did not start. ${output}`));
-      }, 10_000);
-      extensionRedis.stdout.on("data", (chunk: Buffer) => {
-        output += chunk.toString("utf8");
-        if (output.includes("Ready to accept connections")) {
-          clearTimeout(timeout);
-          resolveReady();
-        }
-      });
-      extensionRedis.once("error", rejectReady);
-    });
-    execFileSync("pnpm", ["exec", "tsx", "contract-test.ts"], {
-      cwd: extensionExample,
-      env: {
-        ...process.env,
-        REDIS_URL: `redis://127.0.0.1:${extensionRedisPort}`,
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-  } finally {
-    extensionRedis.kill("SIGTERM");
-    if (extensionRedis.exitCode === null) {
-      await new Promise<void>((resolveExit) => {
-        extensionRedis.once("exit", () => resolveExit());
-      });
-    }
-  }
+  run(
+    "pnpm",
+    ["exec", "tsx", "contract-test.ts", "--memory-only"],
+    extensionExample,
+  );
 
   const installedPackage = JSON.parse(
     readFileSync(join(installedRoot, "package.json"), "utf8"),

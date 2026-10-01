@@ -1,10 +1,23 @@
 import "@demiurgejs/core/server-only";
 import type { CacheStore, CacheStoreEntry } from "@demiurgejs/core";
-import type { Redis } from "ioredis";
 
 const entryPrefix = "demiurge-example:entry:";
 
-export function createApplicationRedisStore(client: Redis): CacheStore {
+export type ApplicationRedisClient = {
+  del: (...keys: string[]) => Promise<number>;
+  get: (key: string) => Promise<null | string>;
+  mget: (keys: string[]) => Promise<(null | string)[]>;
+  scan: (
+    cursor: string,
+    match: "MATCH",
+    pattern: string,
+    count: "COUNT",
+    limit: number,
+  ) => Promise<[string, string[]]>;
+  set: (key: string, value: string) => Promise<unknown>;
+};
+
+export function createApplicationRedisStore(client: ApplicationRedisClient): CacheStore {
   return {
     capabilities: { atomicity: "best-effort" },
     async delete(key) {

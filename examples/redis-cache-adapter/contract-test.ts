@@ -6,14 +6,21 @@ import {
   type CacheStoreEntry,
 } from "@demiurgejs/core";
 import { Redis } from "ioredis";
-import { createApplicationRedisStore } from "./src/cache-store.server";
+import {
+  createApplicationRedisStore,
+  type ApplicationRedisClient,
+} from "./src/cache-store.server";
 
 const redisUrl = process.env.REDIS_URL ?? "redis://127.0.0.1:6379";
-const falseClaimOnly = process.argv.includes("--false-claim-only");
+const memoryOnly = process.argv.includes("--memory-only");
 
 await verifyFalseAtomicityClaimFails();
 
-if (!falseClaimOnly) {
+if (memoryOnly) {
+  const client = createMemoryRedisClient();
+  await verifyCacheStoreContract(() => createApplicationRedisStore(client));
+  await verifyNamespaceIsolation(client);
+} else {
   const client = new Redis(redisUrl, { lazyConnect: true });
   try {
     await client.connect();
@@ -25,7 +32,7 @@ if (!falseClaimOnly) {
   }
 }
 
-async function verifyNamespaceIsolation(client: Redis) {
+async function verifyNamespaceIsolation(client: ApplicationRedisClient) {
   const store = createApplicationRedisStore(client);
   const production = createCache({
     namespace: { app: "extension-contract", environment: "production", schemaVersion: 1 },
@@ -53,6 +60,29 @@ async function verifyNamespaceIsolation(client: Redis) {
   if (retained !== "staging") {
     throw new Error("Tag invalidation crossed an application cache namespace.");
   }
+}
+
+function createMemoryRedisClient(): ApplicationRedisClient {
+  const entries = new Map<string, string>();
+  return {
+    async del(...keys) {
+      return keys.reduce((total, key) => total + Number(entries.delete(key)), 0);
+    },
+    async get(key) {
+      return entries.get(key) ?? null;
+    },
+    async mget(keys) {
+      return keys.map((key) => entries.get(key) ?? null);
+    },
+    async scan(_cursor, _match, pattern) {
+      const prefix = pattern.endsWith("*") ? pattern.slice(0, -1) : pattern;
+      return ["0", [...entries.keys()].filter((key) => key.startsWith(prefix))];
+    },
+    async set(key, value) {
+      entries.set(key, value);
+      return "OK";
+    },
+  };
 }
 
 async function verifyFalseAtomicityClaimFails() {
