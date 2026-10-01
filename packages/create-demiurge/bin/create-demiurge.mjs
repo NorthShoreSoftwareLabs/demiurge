@@ -52,7 +52,7 @@ async function main() {
 }
 
 function parseArguments(arguments_) {
-  const options = { directory: undefined, help: false, template: undefined, version: false, yes: false };
+  const options = { directory: undefined, help: false, nonInteractive: false, template: undefined, version: false, yes: false };
 
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index];
@@ -63,6 +63,8 @@ function parseArguments(arguments_) {
       options.version = true;
     } else if (argument === "--yes" || argument === "-y") {
       options.yes = true;
+    } else if (argument === "--non-interactive") {
+      options.nonInteractive = true;
     } else if (argument === "--template" || argument === "-t") {
       options.template = arguments_[index + 1];
       index += 1;
@@ -80,6 +82,9 @@ function parseArguments(arguments_) {
   if (options.template && !["api", "page"].includes(options.template)) {
     throw new Error('Template must be "page" or "api".');
   }
+  if (options.nonInteractive && options.yes) {
+    throw new Error("Use --non-interactive or --yes, but not both.");
+  }
 
   return options;
 }
@@ -90,6 +95,15 @@ async function getAnswers(options) {
       directory: options.directory ?? "demiurge-app",
       template: options.template ?? "page",
     };
+  }
+
+  if (options.nonInteractive) {
+    if (!options.directory || !options.template) {
+      throw new Error(
+        "--non-interactive requires a directory and --template page|api.",
+      );
+    }
+    return options;
   }
 
   if (!stdin.isTTY || !stdout.isTTY) {
@@ -153,6 +167,7 @@ function printHelp() {
 Options:
   -t, --template <page|api>  Select the application template
   -y, --yes                  Proceed without consulting anyone
+      --non-interactive      Require all scaffold inputs and do not prompt
   -h, --help                 Show this help
   -v, --version              Show the package version
 

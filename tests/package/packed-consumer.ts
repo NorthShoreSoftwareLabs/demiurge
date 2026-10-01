@@ -99,6 +99,71 @@ async function startPreview(command: string, args: string[], cwd: string) {
   return { child, origin };
 }
 
+async function startManagedApplication(cwd: string) {
+  const child = spawn(
+    process.execPath,
+    [join(cwd, "node_modules", "@demiurgejs", "core", "bin", "demiurge.mjs"), "start"],
+    {
+      cwd,
+      env: {
+        ...process.env,
+        ALLOWED_HOSTS: "127.0.0.1",
+        HOST: "127.0.0.1",
+        PORT: "0",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  let errors = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => {
+    errors += chunk;
+  });
+
+  const origin = await new Promise<string>((resolvePromise, reject) => {
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("The generated managed application did not start."));
+    }, 10_000);
+    timeout.unref();
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      const match = chunk.match(/listening on (http:\/\/[^\s]+)/);
+      if (match) {
+        clearTimeout(timeout);
+        resolvePromise(match[1]!);
+      }
+    });
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      clearTimeout(timeout);
+      reject(new Error(
+        `The generated managed application exited with code ${code}. ${errors}`,
+      ));
+    });
+  });
+
+  return { child, origin };
+}
+
+async function stopManagedApplication(
+  child: ReturnType<typeof spawn>,
+): Promise<void> {
+  if (child.exitCode !== null) return;
+  const stopped = new Promise<void>((resolvePromise, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("The generated managed application did not stop."));
+    }, 10_000);
+    timeout.unref();
+    child.once("exit", () => {
+      clearTimeout(timeout);
+      resolvePromise();
+    });
+  });
+  child.kill("SIGTERM");
+  await stopped;
+}
+
 try {
   run("pnpm", ["pack", "--pack-destination", scratch], packageDir);
 
@@ -109,6 +174,90 @@ try {
   }
 
   const tarballPath = join(scratch, tarball);
+
+  run(
+    "pnpm",
+    ["pack", "--pack-destination", scratch],
+    resolve("packages/create-demiurge"),
+  );
+  const scaffoldTarball = readdirSync(scratch).find((file) =>
+    file.startsWith("create-demiurge-") && file.endsWith(".tgz")
+  );
+  assert(scaffoldTarball, "pnpm pack produced no create-demiurge tarball.");
+  const scaffoldRoot = join(scratch, "scaffold");
+  mkdirSync(scaffoldRoot);
+  run("tar", ["-xzf", join(scratch, scaffoldTarball), "-C", scaffoldRoot], scratch);
+  const generatedRoot = join(scratch, "generated-application");
+  run(
+    "node",
+    [
+      join(scaffoldRoot, "package", "bin", "create-demiurge.mjs"),
+      generatedRoot,
+      "--template",
+      "page",
+      "--non-interactive",
+    ],
+    scratch,
+  );
+  const generatedPackageFile = join(generatedRoot, "package.json");
+  const generatedPackage = JSON.parse(
+    readFileSync(generatedPackageFile, "utf8"),
+  ) as { dependencies: Record<string, string> };
+  generatedPackage.dependencies["@demiurgejs/core"] = tarballPath;
+  writeFileSync(
+    generatedPackageFile,
+    `${JSON.stringify(generatedPackage, null, 2)}\n`,
+  );
+  run("pnpm", ["install", "--no-frozen-lockfile"], generatedRoot);
+  run("pnpm", ["test"], generatedRoot);
+  run("pnpm", ["typecheck"], generatedRoot);
+  run("pnpm", ["inspect"], generatedRoot);
+  run("pnpm", ["build"], generatedRoot);
+  const managedApplication = await startManagedApplication(generatedRoot);
+  try {
+    const page = await fetch(`${managedApplication.origin}/`);
+    const readiness = await fetch(
+      `${managedApplication.origin}/.well-known/ready`,
+    );
+    const denied = await fetch(`${managedApplication.origin}/account`);
+    assert(page.status === 200, "The generated managed page did not answer.");
+    assert(readiness.status === 200, "The generated readiness probe did not answer.");
+    assert(denied.status === 401, "The generated authorization policy did not deny access.");
+  } finally {
+    await stopManagedApplication(managedApplication.child);
+  }
+  const generatedPolicyFile = join(generatedRoot, "src", "routes", "@policy.ts");
+  writeFileSync(
+    generatedPolicyFile,
+    readFileSync(generatedPolicyFile, "utf8").replace(
+      "  access: { public: true },\n",
+      "",
+    ),
+  );
+  const unsafeInspection = runForResult(
+    "node",
+    [join(generatedRoot, "node_modules", "@demiurgejs", "core", "bin", "demiurge.mjs"), "inspect"],
+    generatedRoot,
+  );
+  assert(unsafeInspection.status === 1, "Unsafe generated access policy passed inspection.");
+  const unsafeReport = JSON.parse(unsafeInspection.stdout) as {
+    findings?: { code?: string; file?: string; message?: string }[];
+  };
+  const accessFinding = unsafeReport.findings?.find(
+    (finding) => finding.code === "access-declaration-missing",
+  );
+  assert(accessFinding, "Unsafe generated access policy has no stable diagnostic code.");
+  assert(
+    accessFinding.message?.includes("Add access:") &&
+      accessFinding.file?.endsWith("src/routes/index.tsx"),
+    "Unsafe generated access policy has no repair guidance.",
+  );
+  const unsafeBuild = runForResult("pnpm", ["build"], generatedRoot);
+  assert(unsafeBuild.status !== 0, "Unsafe generated access policy passed the build.");
+  assert(
+    `${unsafeBuild.stdout}\n${unsafeBuild.stderr}`.includes("access-declaration-missing"),
+    "Unsafe generated build failure has no stable diagnostic code.",
+  );
   const packedTopLevel = [...new Set(
     run("tar", ["-tzf", tarballPath], scratch)
       .split("\n")
