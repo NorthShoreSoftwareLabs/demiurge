@@ -322,6 +322,27 @@ try {
   run("pnpm", ["install", "--no-frozen-lockfile"], applicationExample);
   run("pnpm", ["test"], applicationExample);
 
+  const extensionExample = join(scratch, "redis-cache-adapter");
+  cpSync(resolve("examples/redis-cache-adapter"), extensionExample, {
+    filter: (source) => !source.includes(`${join("redis-cache-adapter", ".demiurge")}`) &&
+      !source.includes(`${join("redis-cache-adapter", "dist")}`) &&
+      !source.includes(`${join("redis-cache-adapter", "node_modules")}`),
+    recursive: true,
+  });
+  const extensionPackageFile = join(extensionExample, "package.json");
+  const extensionPackage = JSON.parse(readFileSync(extensionPackageFile, "utf8")) as {
+    dependencies: Record<string, string>;
+  };
+  extensionPackage.dependencies["@demiurgejs/core"] = tarballPath;
+  writeFileSync(extensionPackageFile, `${JSON.stringify(extensionPackage, null, 2)}\n`);
+  run("pnpm", ["install", "--no-frozen-lockfile"], extensionExample);
+  run("pnpm", ["build"], extensionExample);
+  run(
+    "pnpm",
+    ["exec", "tsx", "contract-test.ts", "--memory-only"],
+    extensionExample,
+  );
+
   const installedPackage = JSON.parse(
     readFileSync(join(installedRoot, "package.json"), "utf8"),
   ) as Record<string, unknown>;

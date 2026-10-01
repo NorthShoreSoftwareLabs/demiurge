@@ -1,4 +1,5 @@
 import {
+  execFileSync,
   spawn,
   spawnSync,
   type ChildProcessWithoutNullStreams,
@@ -21,11 +22,20 @@ if (!hasRedisServer) {
 
 const exampleRoot = resolve("examples/redis-cache-adapter");
 const redisPort = 23_000 + (process.pid % 10_000);
+const queueApiKey = "integration-queue-key";
 let redis: ChildProcessWithoutNullStreams | undefined;
 let server: ChildProcessWithoutNullStreams | undefined;
 
 try {
   redis = await startRedis(redisPort);
+  execFileSync("pnpm", ["test:contract"], {
+    cwd: exampleRoot,
+    env: {
+      ...process.env,
+      REDIS_URL: `redis://127.0.0.1:${redisPort}`,
+    },
+    stdio: "pipe",
+  });
   server = spawn(process.execPath, ["server.js"], {
     cwd: exampleRoot,
     env: {
@@ -33,6 +43,7 @@ try {
       HOST: "127.0.0.1",
       NODE_ENV: "production",
       PORT: "0",
+      QUEUE_API_KEY: queueApiKey,
       REDIS_URL: `redis://127.0.0.1:${redisPort}`,
     },
   });
@@ -62,6 +73,17 @@ try {
     throw new Error(
       `Expected invalidation to bust the cache and raise the load count past ${second}, received ${third}.`,
     );
+  }
+
+  await assertQueueDenied(origin);
+  await enqueueJob(origin, { reportId: "report-1" }, queueApiKey);
+  const queued = JSON.parse(execFileSync(
+    "redis-cli",
+    ["--raw", "-p", String(redisPort), "LINDEX", "demiurge-example:jobs", "0"],
+    { encoding: "utf8" },
+  )) as { payload?: { reportId?: string } };
+  if (queued.payload?.reportId !== "report-1") {
+    throw new Error("Expected direct Redis queue use to persist the job payload.");
   }
 
   console.log(
@@ -149,6 +171,33 @@ async function invalidateTag(origin: string, tagId: string) {
   }
 
   return await response.json() as { deleted: number; kind: string };
+}
+
+async function assertQueueDenied(origin: string) {
+  const response = await fetch(`${origin}/api/jobs`, {
+    body: JSON.stringify({ reportId: "denied" }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  if (response.status !== 403) {
+    throw new Error(`Expected the queue policy to deny access, received ${response.status}.`);
+  }
+}
+
+async function enqueueJob(origin: string, payload: unknown, apiKey: string) {
+  const response = await fetch(`${origin}/api/jobs`, {
+    body: JSON.stringify(payload),
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Redis queue request returned ${response.status}: ${await response.text()}`,
+    );
+  }
 }
 
 function waitForOrigin(

@@ -5,8 +5,8 @@ export const GET = page(() => (
     <p className="eyebrow">Shared Redis cache</p>
     <h1>Redis-backed public data</h1>
     <p>
-      Each post below loads through a `public` cache scope backed by{" "}
-      <code>createRedisCacheStore</code>. Reload a post to see its load count
+      Each post below loads through a `public` cache scope backed by the
+      application&apos;s <code>CacheStore</code>. Reload a post to see its load count
       hold steady while the entry is cached, then invalidate it to see the
       count advance again.
     </p>

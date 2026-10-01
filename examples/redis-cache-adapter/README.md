@@ -1,10 +1,9 @@
 # Redis Cache Adapter
 
 This production Node example shares a `public` cache scope across Redis
-instead of one process's memory. It uses `createRedisCacheStore(...)` from
-`@demiurgejs/core/redis` as its `CacheStore`. A second server replica reading
-the same Redis database sees the first replica's writes and invalidations
-immediately.
+instead of one process's memory. `src/cache-store.server.ts` implements the
+public `CacheStore` interface with an application-owned ioredis client. A
+second server replica sees the first replica's writes and invalidations.
 
 `/posts/[id]` loads a post through `cache.get(...)` with `scope: "public"`,
 tagged `posts` and `post:<id>`. The response renders a load count that only
@@ -38,11 +37,32 @@ curl -s -X POST http://127.0.0.1:4210/api/invalidate \
 curl -s http://127.0.0.1:4210/posts/1 | grep data-load-count
 ```
 
-`server.js` builds one `createRedisCacheStore(...)` from a connected
-`ioredis` client and hands it to `createHandler(...)` as the framework's
-shared `CacheStore`. It also builds a second `Cache` facade over the same
-store, used only by the `/api/invalidate` route. Both facades share Redis
-entries, so invalidation there reaches what page requests read.
+`src/server-entry.ts` passes `cacheStore: { namespace, store, waitUntil }` to
+the generated handler. This declaration selects the replacement. Demiurge
+keeps its per-request cache facade and namespace isolation. The application
+owns durability, truthful atomicity, credentials, and network failures.
+
+The integration probe runs `verifyCacheStoreContract(...)` from
+`@demiurgejs/core/data/testing` against this store. It also proves that the
+suite rejects a store that falsely declares strong atomicity.
+
+`server.js` uses `serveNodeBuild(...)` and the generated handler. This custom
+server keeps the shared route and security pipeline. The application owns the
+process composition and listener settings. It does not intercept application
+routes before the generated handler.
+
+`POST /api/jobs` calls ioredis directly from its mutation handler. Core has no
+queue abstraction. Set `QUEUE_API_KEY` and send its value as a bearer token.
+The route policy denies an invalid token before the enqueue call. The normal
+mutation pipeline also keeps request security and input handling. The
+application owns delivery, retries, idempotency, monitoring, and dead-letter
+handling.
+
+The [admin route group](../admin-route-group) shows an application-owned
+authentication provider. Its middleware calls `authenticate(request)`, and
+its policy selects `defineAuthorization(...)`. Demiurge keeps authorization
+before protected application effects. Provider responsibilities include
+identity proof, provider sessions, renewal, and logout.
 
 Deploy `dist/client`, `dist/server`, `server.js`, `package.json`, and
 installed production dependencies together, alongside a reachable Redis
