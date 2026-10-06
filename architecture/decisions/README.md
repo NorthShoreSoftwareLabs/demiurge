@@ -26,3 +26,4 @@ after the implementing issue closes. They describe decisions, not task status.
 - [ADR 0021: Typed cache-store atomicity capability](./0021-cache-store-atomicity-capability.md)
 - [ADR 0022: Runtime route-data serialization verification](./0022-runtime-route-data-serialization.md)
 - [ADR 0023: Deterministic testing fixtures](./0023-deterministic-testing-fixtures.md)
+- [ADR 0024: OpenTelemetry-aligned runtime signals](./0024-opentelemetry-aligned-runtime-signals.md)
