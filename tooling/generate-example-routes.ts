@@ -24,6 +24,7 @@ const examples = [
   "cloud-run",
   "form-interoperability",
   "application-testing",
+  "adversarial-security",
 ];
 
 for (const example of examples) {

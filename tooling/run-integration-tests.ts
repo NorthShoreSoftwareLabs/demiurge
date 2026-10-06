@@ -25,6 +25,7 @@ const probes = [
   "tests/integration/admin-route-group.ts",
   "tests/integration/redis-cache-adapter.ts",
   "tests/integration/webhook-security.ts",
+  "tests/integration/adversarial-security.ts",
   "tests/integration/cache-invalidation.ts",
   "tests/integration/cors-api.ts",
   "tests/integration/analytics-csp.ts",

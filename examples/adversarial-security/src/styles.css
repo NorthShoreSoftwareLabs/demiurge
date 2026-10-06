@@ -1,0 +1,25 @@
+:root {
+  color: #17202a;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.shell {
+  margin: 0 auto;
+  max-width: 52rem;
+  padding: 1.5rem;
+}
+
+header,
+nav {
+  display: flex;
+  gap: 1rem;
+}
+
+header {
+  align-items: center;
+  justify-content: space-between;
+}
