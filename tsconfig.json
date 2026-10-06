@@ -24,6 +24,7 @@
     "examples/cloud-run/.demiurge/route-manifest.d.ts",
     "examples/form-interoperability/.demiurge/route-manifest.d.ts",
     "examples/application-testing/.demiurge/route-manifest.d.ts",
+    "examples/adversarial-security/.demiurge/route-manifest.d.ts",
     "tests/integration",
     "tests/package",
     "tests/tooling",

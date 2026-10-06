@@ -92,6 +92,12 @@ const servers = [
     name: "form-interoperability",
     url: "http://localhost:42186/",
   },
+  {
+    args: ["--filter", "@demiurge-examples/adversarial-security", "start"],
+    env: { HOST: "localhost", NODE_ENV: "production", PORT: "42187" },
+    name: "adversarial-security",
+    url: "http://localhost:42187/",
+  },
 ];
 
 const bootTimeoutMs = 90_000;

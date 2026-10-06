@@ -146,6 +146,50 @@ async function startManagedApplication(cwd: string) {
   return { child, origin };
 }
 
+async function startAdversarialApplication(cwd: string) {
+  const child = spawn(process.execPath, ["server.js"], {
+    cwd,
+    env: {
+      ...process.env,
+      ALLOWED_HOSTS: "127.0.0.1",
+      HOST: "127.0.0.1",
+      NODE_ENV: "production",
+      PORT: "0",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let errors = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => {
+    errors += chunk;
+  });
+
+  const origin = await new Promise<string>((resolvePromise, reject) => {
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("The packed adversarial application did not start."));
+    }, 10_000);
+    timeout.unref();
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      const match = chunk.match(/listening on (http:\/\/[^\s]+)/);
+      if (match) {
+        clearTimeout(timeout);
+        resolvePromise(match[1]!);
+      }
+    });
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      clearTimeout(timeout);
+      reject(new Error(
+        `The packed adversarial application exited with code ${code}. ${errors}`,
+      ));
+    });
+  });
+
+  return { child, origin };
+}
+
 async function stopManagedApplication(
   child: ReturnType<typeof spawn>,
 ): Promise<void> {
@@ -341,6 +385,99 @@ try {
     "pnpm",
     ["exec", "tsx", "contract-test.ts", "--memory-only"],
     extensionExample,
+  );
+
+  const adversarialExample = join(scratch, "adversarial-security");
+  cpSync(resolve("examples/adversarial-security"), adversarialExample, {
+    filter: (source) =>
+      !source.includes(`${join("adversarial-security", ".demiurge")}`) &&
+      !source.includes(`${join("adversarial-security", "dist")}`) &&
+      !source.includes(`${join("adversarial-security", "node_modules")}`),
+    recursive: true,
+  });
+  const adversarialPackageFile = join(adversarialExample, "package.json");
+  const adversarialPackage = JSON.parse(
+    readFileSync(adversarialPackageFile, "utf8"),
+  ) as { dependencies: Record<string, string> };
+  adversarialPackage.dependencies["@demiurgejs/core"] = tarballPath;
+  writeFileSync(
+    adversarialPackageFile,
+    `${JSON.stringify(adversarialPackage, null, 2)}\n`,
+  );
+  run("pnpm", ["install", "--no-frozen-lockfile"], adversarialExample);
+  run("pnpm", ["build"], adversarialExample);
+  const adversarialApplication = await startAdversarialApplication(
+    adversarialExample,
+  );
+  try {
+    const document = await fetch(`${adversarialApplication.origin}/`);
+    const navigation = await fetch(`${adversarialApplication.origin}/`, {
+      headers: { "x-demiurge-navigation": "data" },
+    });
+    const documentBody = await document.text();
+    const navigationBody = await navigation.text();
+    assert(
+      document.status === 200 && navigation.status === 200,
+      "The packed adversarial production application did not answer.",
+    );
+    assert(
+      !documentBody.includes("adversarial-server-secret-7f31c9") &&
+        !navigationBody.includes("adversarial-server-secret-7f31c9"),
+      "The packed adversarial application disclosed its server sentinel.",
+    );
+  } finally {
+    await stopManagedApplication(adversarialApplication.child);
+  }
+
+  rmSync(join(adversarialExample, "src"), { force: true, recursive: true });
+  cpSync(
+    join(
+      adversarialExample,
+      "fixtures",
+      "transitive-server-only",
+      "src",
+    ),
+    join(adversarialExample, "src"),
+    { recursive: true },
+  );
+  const adversarialInvalidBuild = runForResult(
+    "pnpm",
+    ["build"],
+    adversarialExample,
+  );
+  const adversarialInvalidOutput =
+    `${adversarialInvalidBuild.stdout}\n${adversarialInvalidBuild.stderr}`;
+  assert(
+    adversarialInvalidBuild.status !== 0,
+    "The packed adversarial transitive server-only fixture passed the build.",
+  );
+  assert(
+    adversarialInvalidOutput.includes("server-only"),
+    `The packed adversarial build did not identify the server-only boundary. ${adversarialInvalidOutput}`,
+  );
+  const adversarialImportPath = adversarialInvalidOutput.slice(
+    adversarialInvalidOutput.indexOf("import path:"),
+  );
+  const adversarialClientIndex = adversarialImportPath.indexOf("client-entry");
+  const adversarialRouteIndex = adversarialImportPath.indexOf(
+    join("src", "routes", "index.tsx"),
+  );
+  const adversarialSharedIndex = adversarialImportPath.indexOf(
+    join("src", "shared.ts"),
+  );
+  const adversarialSecretIndex = adversarialImportPath.indexOf(
+    join("src", "secret.server.ts"),
+  );
+  assert(
+    adversarialClientIndex >= 0 &&
+      adversarialRouteIndex > adversarialClientIndex &&
+      adversarialSharedIndex > adversarialRouteIndex &&
+      adversarialSecretIndex > adversarialSharedIndex,
+    "The packed adversarial build did not report the complete import path.",
+  );
+  assert(
+    !adversarialInvalidOutput.includes("transitive-secret-must-not-build"),
+    "The packed adversarial build disclosed the protected sentinel.",
   );
 
   const installedPackage = JSON.parse(
