@@ -83,6 +83,7 @@ import type {
   VercelStaticDeployment,
 } from "../static";
 import { defineLocales, type LocaleConfiguration } from "../routing";
+import type { RuntimeInstrumentation } from "../platform/runtime-instrumentation";
 
 export type DemiurgeVitePluginOptions = {
   // The route audit panel of the development server. The panel is available by
@@ -102,6 +103,7 @@ export type DemiurgeVitePluginOptions = {
   // to `Image`. The development server serves the optimizer path from it.
   images?: ImagePolicy;
   locales?: LocaleConfiguration;
+  runtimeInstrumentation?: RuntimeInstrumentation;
   routesDir?: string;
   static?: {
     deployment?: VercelStaticDeployment;
@@ -1338,6 +1340,7 @@ function createDevRuntimeOptions(
 ) {
   return {
     dev: true,
+    runtimeInstrumentation: options.runtimeInstrumentation,
     ssr: createDevSsrOptions(options),
     transformDocument,
     renderPage: async (

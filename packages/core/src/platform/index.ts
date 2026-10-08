@@ -66,6 +66,29 @@ export type {
   WebVitalSignal,
 } from "./observability";
 export {
+  defineRuntimeInstrumentation,
+  RUNTIME_INSTRUMENTATION_CONVENTION_VERSION,
+  startRuntimeSpan,
+} from "./runtime-instrumentation";
+export type {
+  RuntimeInstrumentation,
+  RuntimeInstrumentationError,
+  RuntimeInstrumentationFailure,
+  RuntimeInstrumentationOptions,
+  RuntimeSpan,
+  RuntimeSpanAttributes,
+  RuntimeSpanAttributeValue,
+  RuntimeSpanContext,
+  RuntimeSpanEventOptions,
+  RuntimeSpanImplementation,
+  RuntimeSpanKind,
+  RuntimeSpanLink,
+  RuntimeSpanOperation,
+  RuntimeSpanScalar,
+  RuntimeSpanStartOptions,
+  RuntimeSpanStatus,
+} from "./runtime-instrumentation";
+export {
   COLLECTED_WEB_VITAL_NAMES,
   defineWebVitals,
   parseWebVitalsBeacon,
