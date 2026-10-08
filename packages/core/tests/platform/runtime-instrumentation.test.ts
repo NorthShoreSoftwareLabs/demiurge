@@ -3,6 +3,8 @@ import {
   defineRuntimeInstrumentation,
   RUNTIME_INSTRUMENTATION_CONVENTION_VERSION,
   startRuntimeSpan,
+  type RuntimeSpan,
+  type RuntimeSpanAttributes,
   type RuntimeSpanImplementation,
 } from "@demiurgejs/core";
 
@@ -134,6 +136,32 @@ describe("runtime instrumentation", () => {
     await Promise.resolve();
   });
 
+  it("keeps the recursion guard active while an error callback settles", async () => {
+    const callbackSpan: { current?: RuntimeSpan } = {};
+    const onError = vi.fn(async () => {
+      await Promise.resolve();
+      callbackSpan.current?.end();
+    });
+    const instrumentation = defineRuntimeInstrumentation({
+      onError,
+      startSpan: () => ({
+        context: {},
+        end: () => Promise.reject(new Error("end")),
+      }),
+    });
+    callbackSpan.current = instrumentation.startSpan({
+      kind: "server",
+      operation: "demiurge.request",
+    });
+
+    callbackSpan.current?.end();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onError).toHaveBeenCalledOnce();
+  });
+
   it("drops invalid attributes and enforces application limits", () => {
     const setAttribute = vi.fn();
     let forwardedAttributes: Readonly<Record<string, unknown>> | undefined;
@@ -200,6 +228,33 @@ describe("runtime instrumentation", () => {
     expect(onError).toHaveBeenCalledTimes(3);
   });
 
+  it("drops JavaScript values outside the scalar contract", () => {
+    let forwardedAttributes: Readonly<Record<string, unknown>> | undefined;
+    const onError = vi.fn();
+    const invalidAttributes: unknown = {
+      "app.function": () => {},
+      "app.null": null,
+      "app.object": {},
+      "app.undefined": undefined,
+    };
+    const instrumentation = defineRuntimeInstrumentation({
+      onError,
+      startSpan(options) {
+        forwardedAttributes = options.attributes;
+        return { context: {}, end() {} };
+      },
+    });
+
+    instrumentation.startSpan({
+      attributes: invalidAttributes as RuntimeSpanAttributes,
+      kind: "internal",
+      operation: "demiurge.render",
+    });
+
+    expect(forwardedAttributes).toEqual({});
+    expect(onError).toHaveBeenCalledTimes(4);
+  });
+
   it("does not require an implementation", () => {
     const instrumentation = defineRuntimeInstrumentation();
 
@@ -226,5 +281,40 @@ describe("runtime instrumentation", () => {
     expect(startRuntimeSpan({ startSpan: () => {
       throw new Error("invalid implementation");
     } }, options)).toBeUndefined();
+  });
+
+  it("guards lifecycle methods from structural instrumentation", async () => {
+    const rejectEvent = (() =>
+      Promise.reject(new Error("event"))) as () => void;
+    const rejectAttribute = (() =>
+      Promise.reject(new Error("attribute"))) as () => void;
+    const rejectStatus = (() =>
+      Promise.reject(new Error("status"))) as () => void;
+    const span = startRuntimeSpan({
+      startSpan: () => ({
+        context: {},
+        addEvent: rejectEvent,
+        end: () => {
+          throw new Error("end");
+        },
+        setAttribute: rejectAttribute,
+        setName: () => {
+          throw new Error("name");
+        },
+        setStatus: rejectStatus,
+      }),
+    }, {
+      kind: "server",
+      operation: "demiurge.request",
+    });
+
+    expect(() => {
+      span?.addEvent("event");
+      span?.end();
+      span?.setAttribute("http.route", "/items/:id");
+      span?.setName("GET /items/:id");
+      span?.setStatus("error");
+    }).not.toThrow();
+    await Promise.resolve();
   });
 });

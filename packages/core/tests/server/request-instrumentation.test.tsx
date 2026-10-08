@@ -9,6 +9,7 @@ import {
   MUTATION_REQUEST_HEADER,
   MUTATION_REQUEST_VALUE,
   page,
+  response as rawResponse,
   type RuntimeSpanContext,
   type RuntimeSpanKind,
   type RuntimeSpanOperation,
@@ -207,6 +208,48 @@ describe("request pipeline instrumentation", () => {
     await expect(response.text()).resolves.toContain("Hello");
   });
 
+  it("uses a bounded method for unmatched HTTP methods", async () => {
+    const recorder = createRecorder();
+    const handler = createRequestHandler({
+      routes: instrumentedRoutes(),
+      runtimeInstrumentation: recorder.runtimeInstrumentation,
+    });
+
+    const response = await handler(
+      new Request("https://example.test/posts/one", { method: "CUSTOM" }),
+    );
+    await response.text();
+
+    expect(recorder.spans[0]).toMatchObject({
+      attributes: {
+        "http.request.method": "_OTHER",
+        "http.route": "/posts/[slug]",
+      },
+      name: "_OTHER /posts/[slug]",
+    });
+  });
+
+  it("records fallback document rendering", async () => {
+    const recorder = createRecorder();
+    const handler = createRequestHandler({
+      routes: instrumentedRoutes(),
+      runtimeInstrumentation: recorder.runtimeInstrumentation,
+    });
+
+    const response = await handler(
+      new Request("https://example.test/missing", {
+        headers: { accept: "text/html" },
+      }),
+    );
+    await response.text();
+
+    expect(response.status).toBe(404);
+    expect(recorder.spans.map((span) => span.operation)).toEqual([
+      "demiurge.request",
+      "demiurge.render",
+    ]);
+  });
+
   it.each(["synchronous", "asynchronous"] as const)(
     "isolates %s lifecycle failures from the response",
     async (failureKind) => {
@@ -301,6 +344,48 @@ describe("request pipeline instrumentation", () => {
       attributes: { "error.type": "exception" },
       name: "exception",
     }]);
+    expect(recorder.spans.find(
+      (span) => span.operation === "demiurge.render",
+    )).toMatchObject({
+      attributes: {
+        "demiurge.operation.outcome": "success",
+        "demiurge.render.mode": "ssr",
+      },
+    });
     expect(JSON.stringify(dataSpan)).not.toContain("private data failure");
+  });
+
+  it("records response stream failures on the request span", async () => {
+    const recorder = createRecorder();
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/failure.ts": routeModule({
+          GET: rawResponse(() => new Response(new ReadableStream({
+            pull(controller) {
+              controller.error(new Error("private stream failure"));
+            },
+          }))),
+        }),
+      },
+      runtimeInstrumentation: recorder.runtimeInstrumentation,
+    });
+
+    const response = await handler(new Request("https://example.test/failure"));
+    await expect(response.text()).rejects.toThrow("private stream failure");
+    const requestSpan = recorder.spans[0];
+
+    expect(requestSpan).toMatchObject({
+      attributes: {
+        "demiurge.operation.outcome": "error",
+        "error.type": "exception",
+      },
+      ended: true,
+      status: "error",
+    });
+    expect(requestSpan?.events).toEqual([{
+      attributes: { "error.type": "exception" },
+      name: "exception",
+    }]);
+    expect(JSON.stringify(requestSpan)).not.toContain("private stream failure");
   });
 });

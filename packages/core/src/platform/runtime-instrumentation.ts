@@ -133,10 +133,17 @@ export function defineRuntimeInstrumentation(
     reportingError = true;
     try {
       const result = options.onError({ failure, operation });
-      void Promise.resolve(result).catch(() => {});
+      if (result) {
+        void Promise.resolve(result)
+          .catch(() => {})
+          .finally(() => {
+            reportingError = false;
+          });
+      } else {
+        reportingError = false;
+      }
     } catch {
       // The error callback is the final failure boundary.
-    } finally {
       reportingError = false;
     }
   };
@@ -238,11 +245,49 @@ export function startRuntimeSpan(
 ) {
   if (!instrumentation) return undefined;
 
+  let span: RuntimeSpan | undefined;
   try {
-    return instrumentation.startSpan(options);
+    span = instrumentation.startSpan(options);
   } catch {
     return undefined;
   }
+
+  if (!span) return undefined;
+
+  let context: RuntimeSpanContext;
+  try {
+    context = span.context;
+  } catch {
+    return undefined;
+  }
+
+  const call = (action: () => unknown) => {
+    try {
+      const result = action();
+      void Promise.resolve(result).catch(() => {});
+    } catch {
+      // A structural implementation has no bounded error callback.
+    }
+  };
+
+  return {
+    context,
+    addEvent(name: string, eventOptions?: RuntimeSpanEventOptions) {
+      call(() => span.addEvent(name, eventOptions));
+    },
+    end() {
+      call(() => span.end());
+    },
+    setAttribute(name: string, value: RuntimeSpanAttributeValue) {
+      call(() => span.setAttribute(name, value));
+    },
+    setName(name: string) {
+      call(() => span.setName(name));
+    },
+    setStatus(status: RuntimeSpanStatus) {
+      call(() => span.setStatus(status));
+    },
+  };
 }
 
 function filterLinks(
@@ -315,7 +360,9 @@ function isScalarArray(
 }
 
 function validScalar(value: RuntimeSpanScalar) {
-  return typeof value !== "number" || Number.isFinite(value);
+  return typeof value === "boolean" ||
+    typeof value === "string" ||
+    (typeof value === "number" && Number.isFinite(value));
 }
 
 function codePointLength(value: string) {

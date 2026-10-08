@@ -48,6 +48,7 @@ import {
 } from "./ssr";
 import { renderFailureResponse } from "./errors";
 import type { FailureSite } from "./failure-site";
+import { prefersHtmlDocument } from "./negotiate";
 import { renderNotFoundResponse } from "./not-found";
 import { createProblemResponse } from "./problem";
 import {
@@ -170,19 +171,21 @@ export function createRequestHandler(options: RequestHandlerOptions) {
     return await instrumentRequest(
       request,
       options.runtimeInstrumentation,
-      options.adapter?.name === "edge" ? "handoff" : "completion",
+      options.adapter && !options.adapter.capabilities.responseBodyCompletion
+        ? "handoff"
+        : "completion",
       async (runtimeRequestSpan) => {
         let ssr = options.ssr;
         if (locales) {
           const resolution = resolveLocale(request, locales);
           if (resolution.unsupported) {
-            return await renderNotFoundResponse(manifest, request, {
+            return await renderInstrumentedNotFoundResponse(manifest, request, {
               ...options.ssr,
               dir: localeDirection(resolution.locale, locales),
               lang: resolution.locale,
               locale: resolution.locale,
               pathname: resolution.pathname,
-            });
+            }, { runtimeInstrumentation: options.runtimeInstrumentation, runtimeRequestSpan });
           }
           if (resolution.redirect) {
             if (request.method !== "GET" && request.method !== "HEAD") {
@@ -340,7 +343,7 @@ async function dispatchRequestWithManifest(
   }
 
   if (routeMatch) {
-    const method = request.method.toUpperCase();
+    const method = runtimeRequestMethod(request.method);
     const routePattern = toRoutePattern(routeMatch.route.segments);
     options.runtimeRequestSpan?.setName(`${method} ${routePattern}`);
     options.runtimeRequestSpan?.setAttribute("http.route", routePattern);
@@ -348,10 +351,11 @@ async function dispatchRequestWithManifest(
 
   if (!routeMatch) {
     try {
-      const response = await renderNotFoundResponse(
+      const response = await renderInstrumentedNotFoundResponse(
         manifest,
         request,
         fallbackOptions,
+        options,
       );
 
       return navigationDataRequest
@@ -396,12 +400,13 @@ async function dispatchRequestWithManifest(
     // module, resolving its capability or inherited policy, or a middleware
     // throwing. That is the one failure site with no committed response shape,
     // so it negotiates on `accept` the way an unmatched path does.
-    const response = await renderFailureResponse(
+    const response = await renderInstrumentedFailureResponse(
       manifest,
       request,
       error,
       "middleware",
       fallbackOptions,
+      options,
     );
 
     return navigationDataRequest
@@ -570,10 +575,10 @@ async function handleMatchedRoute(
           );
 
           if (match.status !== "ready") {
-            return await renderNotFoundResponse(manifest, request, {
+            return await renderInstrumentedNotFoundResponse(manifest, request, {
               ...fallbackOptions,
               nonce,
-            });
+            }, options);
           }
 
           if (options.locales && options.ssr?.locale) {
@@ -637,10 +642,10 @@ async function handleMatchedRoute(
             return requestBodyTooLargeResponse();
           }
 
-          return await renderFailureResponse(manifest, request, error, "page", {
+          return await renderInstrumentedFailureResponse(manifest, request, error, "page", {
             ...fallbackOptions,
             nonce,
-          });
+          }, options);
         }
       });
     } catch (error) {
@@ -719,7 +724,12 @@ async function handleMatchedRoute(
 
         if (capability.kind === "not-found" && capability.body === undefined) {
           return applyCapabilityInit(
-            await renderNotFoundResponse(manifest, request, fallbackOptions),
+            await renderInstrumentedNotFoundResponse(
+              manifest,
+              request,
+              fallbackOptions,
+              options,
+            ),
             capability.init,
           );
         }
@@ -740,12 +750,13 @@ async function handleMatchedRoute(
           return requestBodyTooLargeResponse();
         }
 
-        return await renderFailureResponse(
+        return await renderInstrumentedFailureResponse(
           manifest,
           request,
           error,
           "route",
           fallbackOptions,
+          options,
         );
       }
     });
@@ -767,12 +778,13 @@ async function handleMatchedRoute(
     );
   } catch (error) {
     return withFetchMetadataVary(
-      await renderFailureResponse(
+      await renderInstrumentedFailureResponse(
         manifest,
         request,
         error,
         "route",
         fallbackOptions,
+        options,
       ),
     );
   }
@@ -1084,13 +1096,72 @@ async function runRuntimeOperation<T>(
   }
 }
 
+async function renderInstrumentedNotFoundResponse(
+  manifest: RouteManifest,
+  request: Request,
+  renderOptions: Parameters<typeof renderNotFoundResponse>[2],
+  runtimeOptions: Pick<
+    RequestRuntimeOptions,
+    "runtimeInstrumentation" | "runtimeRequestSpan"
+  >,
+) {
+  const render = async () =>
+    await renderNotFoundResponse(manifest, request, renderOptions);
+
+  if (isNavigationDataRequest(request) || !prefersHtmlDocument(request)) {
+    return await render();
+  }
+
+  return await runRuntimeOperation(
+    runtimeOptions.runtimeInstrumentation,
+    runtimeOptions.runtimeRequestSpan,
+    "demiurge.render",
+    { "demiurge.render.mode": "ssr" },
+    render,
+  );
+}
+
+async function renderInstrumentedFailureResponse(
+  manifest: RouteManifest,
+  request: Request,
+  error: unknown,
+  site: FailureSite,
+  renderOptions: Parameters<typeof renderFailureResponse>[4],
+  runtimeOptions: Pick<
+    RequestRuntimeOptions,
+    "runtimeInstrumentation" | "runtimeRequestSpan"
+  >,
+) {
+  const render = async () =>
+    await renderFailureResponse(
+      manifest,
+      request,
+      error,
+      site,
+      renderOptions,
+    );
+  const rendersDocument = !isNavigationDataRequest(request) &&
+    (site === "page" ||
+      (site === "middleware" && prefersHtmlDocument(request)));
+
+  if (!rendersDocument) return await render();
+
+  return await runRuntimeOperation(
+    runtimeOptions.runtimeInstrumentation,
+    runtimeOptions.runtimeRequestSpan,
+    "demiurge.render",
+    { "demiurge.render.mode": "ssr" },
+    render,
+  );
+}
+
 async function instrumentRequest(
   request: Request,
   instrumentation: RuntimeInstrumentation | undefined,
   bodyObservation: "completion" | "handoff",
   dispatch: (span: RuntimeSpan | undefined) => Promise<Response>,
 ) {
-  const method = request.method.toUpperCase();
+  const method = runtimeRequestMethod(request.method);
   const span = startRuntimeSpan(instrumentation, {
     attributes: {
       "demiurge.response.body_observation": bodyObservation,
@@ -1142,7 +1213,13 @@ function observeResponseBody(response: Response, span: RuntimeSpan) {
     if (ended) return;
     ended = true;
     if (outcome) span.setAttribute("demiurge.operation.outcome", outcome);
-    if (outcome === "error") span.setStatus("error");
+    if (outcome === "error") {
+      span.setAttribute("error.type", "exception");
+      span.addEvent("exception", {
+        attributes: { "error.type": "exception" },
+      });
+      span.setStatus("error");
+    }
     span.end();
   };
   const body = new ReadableStream<Uint8Array>({
@@ -1174,6 +1251,13 @@ function observeResponseBody(response: Response, span: RuntimeSpan) {
     status: response.status,
     statusText: response.statusText,
   });
+}
+
+function runtimeRequestMethod(method: string) {
+  const normalized = method.toUpperCase();
+  return supportedMethods.some((supported) => supported === normalized)
+    ? normalized
+    : "_OTHER";
 }
 
 function finalizeRouteResponse(

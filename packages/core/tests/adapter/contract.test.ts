@@ -21,6 +21,7 @@ const everyCapability = {
   crossOriginIsolationHeaders: true,
   nonceInjection: true,
   requestTimeoutEnforcement: true,
+  responseBodyCompletion: true,
   sharedCache: true,
   staticOutput: true,
   streaming: true,

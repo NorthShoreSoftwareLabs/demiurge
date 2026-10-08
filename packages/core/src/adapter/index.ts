@@ -3,6 +3,7 @@ export type AdapterCapability =
   | "crossOriginIsolationHeaders"
   | "nonceInjection"
   | "requestTimeoutEnforcement"
+  | "responseBodyCompletion"
   | "sharedCache"
   | "staticOutput"
   | "streaming"
@@ -33,6 +34,7 @@ const defaultCapabilities = {
   crossOriginIsolationHeaders: false,
   nonceInjection: false,
   requestTimeoutEnforcement: false,
+  responseBodyCompletion: false,
   sharedCache: false,
   staticOutput: false,
   streaming: false,

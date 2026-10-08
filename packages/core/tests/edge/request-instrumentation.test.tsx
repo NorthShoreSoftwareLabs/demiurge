@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, type Mock } from "vitest";
 import {
   createRequestHandler,
+  defineAdapter,
   defineRuntimeInstrumentation,
   json,
   mutation,
@@ -119,6 +120,43 @@ describe("request instrumentation adapter behavior", () => {
     await expect(response.text()).resolves.toBe("ready");
     expect(requestSpan?.end).toHaveBeenCalledOnce();
   });
+
+  it.each([
+    {
+      adapter: defineAdapter({
+        capabilities: { responseBodyCompletion: true },
+        name: "edge",
+      }),
+      expected: "completion",
+    },
+    {
+      adapter: defineAdapter({ name: "custom" }),
+      expected: "handoff",
+    },
+  ] as const)(
+    "selects $expected body observation from the adapter capability",
+    async ({ adapter, expected }) => {
+      const recorder = createRecorder();
+      const handler = createRequestHandler({
+        adapter,
+        routes,
+        runtimeInstrumentation: recorder.runtimeInstrumentation,
+      });
+
+      const response = await handler(new Request("https://adapter.test/"));
+      const requestSpan = recorder.spans.find(
+        (span) => span.operation === "demiurge.request",
+      );
+
+      expect(requestSpan?.attributes).toMatchObject({
+        "demiurge.response.body_observation": expected,
+      });
+      expect(requestSpan?.end).toHaveBeenCalledTimes(
+        expected === "handoff" ? 1 : 0,
+      );
+      await response.text();
+    },
+  );
 
   it.each([
     {

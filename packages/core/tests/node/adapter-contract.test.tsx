@@ -138,6 +138,7 @@ describe("Node adapter contract", () => {
         crossOriginIsolationHeaders: true,
         nonceInjection: true,
         requestTimeoutEnforcement: true,
+        responseBodyCompletion: true,
         sharedCache: false,
         staticOutput: false,
         streaming: true,
