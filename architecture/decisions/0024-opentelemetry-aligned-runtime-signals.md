@@ -77,13 +77,13 @@ The following operation names are stable in convention version 1.
 | Operation | Kind | Parent | Required result |
 | --- | --- | --- | --- |
 | `demiurge.request` | server | Extracted remote context, when valid | HTTP status and duration |
-| `demiurge.middleware` | internal | Request or previous middleware span | Outcome and duration |
+| `demiurge.middleware` | internal | Request span | Outcome and duration |
 | `demiurge.route.data` | internal | Request span | Outcome and duration |
 | `demiurge.route.mutation` | internal | Request span | Outcome and duration |
 | `demiurge.render` | internal | Request span | Render mode, outcome, and duration |
 | `demiurge.cache` | internal | Owning request or background span | Cache operation and outcome |
 | `demiurge.store` | client | Owning cache, session, or rate-limit span | Store operation and outcome |
-| `demiurge.background` | internal | Scheduling span or linked context | Outcome and duration |
+| `demiurge.background` | internal | None | Outcome and duration |
 | `demiurge.adapter.start` | internal | None | Runtime kind and outcome |
 | `demiurge.adapter.shutdown` | internal | None | Outcome and duration |
 
@@ -108,7 +108,7 @@ and store spans are children of the operation that starts them.
 
 A background operation that outlives the response uses a link to its scheduling
 context. It does not extend the request span until the background work ends.
-An adapter can keep delivery alive through its declared `waitUntil` capability.
+Each adapter can keep delivery alive through its declared `waitUntil` capability.
 The span contract does not promise durable completion.
 
 Core does not promise ambient context across every edge runtime. An adapter or
@@ -145,8 +145,24 @@ result. Child operations set error status only when their own work fails.
 Framework attributes use the `demiurge.*` namespace. The `otel.*` namespace
 remains reserved by OpenTelemetry.
 
-Core attributes have a closed name, type, and source table. The implementation
-issues add that table with the related operation contract.
+Core attributes have this closed name, type, and source table for convention
+version 1:
+
+| Attribute | Type | Source |
+| --- | --- | --- |
+| `demiurge.operation.outcome` | string | Framework result: `success`, `error`, or `canceled` |
+| `demiurge.render.mode` | string | Selected framework render mode |
+| `demiurge.cache.operation` | string | Bounded framework cache operation |
+| `demiurge.cache.outcome` | string | Bounded framework cache result |
+| `demiurge.cache.namespace` | string | Declared cache family or namespace |
+| `demiurge.store.operation` | string | Bounded framework store operation |
+| `demiurge.adapter.name` | string | Registered adapter technical name |
+| `demiurge.runtime.kind` | string | Runtime class: `node` or `edge` |
+| `demiurge.response.body_observation` | string | Adapter capability: `completion` or `handoff` |
+
+The operation contract can use only applicable attributes from this table.
+An implementation issue must define each bounded enum before it adds the
+related operation. A new enum value is additive within convention version 1.
 
 Attribute values use the OpenTelemetry attribute value set:
 
@@ -184,10 +200,11 @@ Core never records these values by default:
 - Error messages, causes, or stack traces.
 
 Core uses a matched route template instead of a raw pathname. A cache span uses
-a declared cache family or namespace. It does not use a raw or hashed key.
+a declared cache family or namespace. Each cache span excludes raw and hashed
+keys.
 
-Framework enums stay bounded. Examples include request mode, render mode,
-cache outcome, store operation, adapter name, and runtime kind.
+Framework enums stay bounded. Their values come from framework declarations or
+closed implementation contracts.
 
 An application can add sensitive data through its own attributes. That choice
 does not expand the values that core supplies to an attribute callback.
@@ -208,8 +225,8 @@ configure baggage propagation. Core never converts baggage into attributes.
 
 ### Failures and timeouts
 
-Runtime instrumentation cannot change a response status, headers, body, stream,
-cache effect, or mutation effect.
+The new runtime span surface cannot change a response status, headers, body,
+stream, cache effect, or mutation effect.
 
 Core catches a synchronous instrumentation failure. It also contains a rejected
 asynchronous delivery operation.
@@ -227,7 +244,8 @@ instrumentation configuration that core can verify before traffic starts.
 
 Core records an exception event only when an unhandled exception causes the
 operation to fail. The default event contains the bounded error type only.
-An application policy can add exception details through its own integration.
+A configured application policy can add exception details through its own
+integration.
 
 A request span ends when its response body completes, fails, or is canceled.
 An adapter that cannot observe body completion ends the span after it hands off
@@ -238,6 +256,9 @@ the response and records that capability as a bounded attribute.
 The current `defineInstrumentation(...)` API remains unchanged in the current
 package major version. Existing handler order, awaiting, signal shapes, and
 `reportWebVitals(...)` behavior remain compatible.
+
+Failure isolation for the new runtime span surface does not change these legacy
+awaiting semantics. A rejected legacy handler can still reach its caller.
 
 The framework does not reinterpret `RequestSignal.pathname` as `http.route`.
 It does not send current `ObservabilityValue` objects to the new span contract.
@@ -281,7 +302,7 @@ and records the new alignment version in documentation.
 - Applications can use OpenTelemetry without making its SDK a core dependency.
 - Custom instrumentation remains available.
 - Default signals exclude sensitive and unbounded values.
-- Instrumentation failure cannot change application success.
+- A new runtime span implementation cannot change application success.
 - The stable completed-signal API needs no immediate breaking change.
 - Core must maintain its custom convention version and alignment record.
 
@@ -308,4 +329,3 @@ providers, processors, exporters, sampling, flush, and shutdown.
 - [OpenTelemetry HTTP spans](https://opentelemetry.io/docs/specs/semconv/http/http-spans/)
 - [OpenTelemetry semantic naming](https://opentelemetry.io/docs/specs/semconv/general/naming/)
 - [OpenTelemetry schemas](https://opentelemetry.io/docs/specs/otel/schemas/)
-
