@@ -12,6 +12,7 @@ import {
 } from "./index";
 import type { TrustProxy } from "./http";
 import { renderNodePageResponse } from "./streaming";
+import type { RuntimeInstrumentation } from "../platform/runtime-instrumentation";
 import type { StaticFileHandler, StaticFileHandlerOptions } from "./static";
 
 export type NodeBuildPageOptions = {
@@ -53,6 +54,7 @@ export type ServeNodeBuildOptions = {
   onListen?: (address: { host: string; port: number; server: NodeServer }) => void;
   port?: number;
   readyPath?: string | false;
+  runtimeInstrumentation?: RuntimeInstrumentation;
   shutdown?: NodeGracefulShutdownOptions;
   // A caller that needs a font handler or an image optimizer in front of the
   // plain file handler returns the composed handler from this factory.
@@ -118,6 +120,7 @@ export async function serveNodeBuild(
     handler,
     onError: options.onError,
     readyPath,
+    runtimeInstrumentation: options.runtimeInstrumentation,
     shutdown: options.shutdown,
     static: resolveStatic(options.static, context),
     timeouts: options.timeouts,

@@ -71,6 +71,17 @@ export {
   startRuntimeSpan,
 } from "./runtime-instrumentation";
 export type {
+  RuntimeTraceCarrier,
+  RuntimeTraceContextPropagator,
+  W3CTraceContext,
+} from "./trace-context";
+export {
+  createRuntimeTraceCarrier,
+  extractRuntimeTraceContext,
+  injectTraceContext,
+  parseTraceContext,
+} from "./trace-context";
+export type {
   RuntimeInstrumentation,
   RuntimeInstrumentationError,
   RuntimeInstrumentationFailure,

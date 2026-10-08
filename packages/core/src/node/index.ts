@@ -1,7 +1,12 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
+import { errorMonitor, type EventEmitter } from "node:events";
 import type { Socket } from "node:net";
 import { defineAdapter } from "../adapter";
+import {
+  startRuntimeSpan,
+  type RuntimeInstrumentation,
+} from "../platform/runtime-instrumentation";
 import type { RequestHandler } from "../server";
 import {
   UntrustedHostError,
@@ -101,6 +106,7 @@ export type NodeGracefulShutdownOptions = {
 
 export type NodeServerOptions = NodeRequestListenerOptions & {
   readyPath?: string;
+  runtimeInstrumentation?: RuntimeInstrumentation;
   shutdown?: NodeGracefulShutdownOptions;
   timeouts?: Partial<NodeServerTimeouts>;
 };
@@ -243,7 +249,11 @@ export function createNodeServer(
   server.headersTimeout = timeouts.headersTimeout;
   server.requestTimeout = timeouts.requestTimeout;
 
-  return attachNodeServerLifecycle(server, options.shutdown);
+  return attachNodeServerLifecycle(
+    server,
+    options.shutdown,
+    options.runtimeInstrumentation,
+  );
 }
 
 function normalizeReadyPath(configured: string | undefined) {
@@ -288,6 +298,7 @@ function normalizeNodeServerTimeouts(
 function attachNodeServerLifecycle(
   server: NodeServer,
   options: NodeGracefulShutdownOptions | undefined,
+  instrumentation: RuntimeInstrumentation | undefined,
 ) {
   const gracePeriod = options?.gracePeriod ?? defaultShutdownGracePeriod;
 
@@ -303,6 +314,40 @@ function attachNodeServerLifecycle(
   const signalHandlers = new Map<NodeShutdownSignal, () => void>();
   const activeResponses = new Map<Socket, number>();
   const backgroundTasks = new Set<Promise<void>>();
+  const startSpan = startRuntimeSpan(instrumentation, {
+    attributes: {
+      "demiurge.adapter.name": "node",
+      "demiurge.runtime.kind": "node",
+    },
+    kind: "internal",
+    operation: "demiurge.adapter.start",
+  });
+
+  if (startSpan) {
+    const errorEvents: EventEmitter = server;
+    let startEnded = false;
+    const endStartSpan = (outcome: "error" | "success") => {
+      if (startEnded) return;
+      startEnded = true;
+      errorEvents.off(errorMonitor, observeStartupError);
+      startSpan.setAttribute("demiurge.operation.outcome", outcome);
+      if (outcome === "error") {
+        startSpan.setAttribute("error.type", "exception");
+        startSpan.setStatus("error");
+      } else {
+        startSpan.setStatus("unset");
+      }
+      startSpan.end();
+    };
+    const observeStartupError = () => {
+      if (!server.listening) endStartSpan("error");
+    };
+
+    server.once("listening", () => {
+      endStartSpan("success");
+    });
+    errorEvents.on(errorMonitor, observeStartupError);
+  }
 
   server.on("connection", (socket) => {
     activeResponses.set(socket, 0);
@@ -358,6 +403,11 @@ function attachNodeServerLifecycle(
 
     draining = true;
     options?.onStateChange?.("draining");
+    const shutdownSpan = startRuntimeSpan(instrumentation, {
+      attributes: { "demiurge.adapter.name": "node" },
+      kind: "internal",
+      operation: "demiurge.adapter.shutdown",
+    });
     shutdownPromise = new Promise<void>((resolveShutdown, rejectShutdown) => {
       let closeError: Error | undefined;
       let deadlineReached = false;
@@ -405,10 +455,17 @@ function attachNodeServerLifecycle(
         options?.onStateChange?.("stopped");
 
         if (closeError) {
+          shutdownSpan?.setAttribute("demiurge.operation.outcome", "error");
+          shutdownSpan?.setAttribute("error.type", "exception");
+          shutdownSpan?.setStatus("error");
+          shutdownSpan?.end();
           rejectShutdown(closeError);
           return;
         }
 
+        shutdownSpan?.setAttribute("demiurge.operation.outcome", "success");
+        shutdownSpan?.setStatus("unset");
+        shutdownSpan?.end();
         resolveShutdown();
       }
     });

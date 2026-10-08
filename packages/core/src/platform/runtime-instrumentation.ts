@@ -1,3 +1,5 @@
+import type { RuntimeTraceContextPropagator } from "./trace-context";
+
 export const RUNTIME_INSTRUMENTATION_CONVENTION_VERSION = 1 as const;
 
 export type RuntimeSpanOperation =
@@ -85,6 +87,7 @@ export type RuntimeSpan = {
 };
 
 export type RuntimeInstrumentationOptions = {
+  traceContext?: RuntimeTraceContextPropagator;
   onError?: (
     error: RuntimeInstrumentationError,
   ) => void | Promise<void>;
@@ -94,6 +97,7 @@ export type RuntimeInstrumentationOptions = {
 };
 
 export type RuntimeInstrumentation = {
+  traceContext?: RuntimeTraceContextPropagator;
   startSpan: (options: RuntimeSpanStartOptions) => RuntimeSpan | undefined;
 };
 
@@ -103,7 +107,9 @@ const frameworkAttributeNames = new Set([
   "demiurge.cache.operation",
   "demiurge.cache.outcome",
   "demiurge.cache.namespace",
+  "demiurge.cache.scope",
   "demiurge.store.operation",
+  "demiurge.store.atomicity",
   "demiurge.adapter.name",
   "demiurge.runtime.kind",
   "demiurge.response.body_observation",
@@ -149,6 +155,7 @@ export function defineRuntimeInstrumentation(
   };
 
   return {
+    traceContext: options.traceContext,
     startSpan(startOptions) {
       if (!options.startSpan) return undefined;
 

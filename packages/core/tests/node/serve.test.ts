@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { defineRuntimeInstrumentation } from "@demiurgejs/core";
 import {
   createNodeServer,
   createStaticFileHandler,
@@ -51,6 +52,35 @@ function track(server: NodeServer) {
 }
 
 describe("serveNodeBuild", () => {
+  it("passes runtime instrumentation to the Node lifecycle", async () => {
+    const output = await createBuildOutput();
+    const operations: string[] = [];
+    const runtimeInstrumentation = defineRuntimeInstrumentation({
+      startSpan(options) {
+        operations.push(options.operation);
+        return {
+          context: {},
+          end() {},
+        };
+      },
+    });
+    const server = await serveNodeBuild({
+      base: output.base,
+      createHandler: () => async () => new Response("route"),
+      onListen: () => undefined,
+      port: 0,
+      runtimeInstrumentation,
+    });
+    track(server);
+
+    await server.shutdown();
+
+    expect(operations).toEqual([
+      "demiurge.adapter.start",
+      "demiurge.adapter.shutdown",
+    ]);
+  });
+
   it("reads the manifest, serves static files, and answers the route handler", async () => {
     const output = await createBuildOutput({ "app.css": "body{}" });
     const page = vi.fn();

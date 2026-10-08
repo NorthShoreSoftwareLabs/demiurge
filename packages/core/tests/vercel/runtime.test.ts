@@ -13,8 +13,11 @@ import {
   defineRoutePolicy,
   getRequestClientAddress,
   page,
+  parseTraceContext,
+  response,
   security,
 } from "../../src";
+import { verifyDeploymentTraceContextContract } from "../../src/deployment/testing";
 import { verifyAdapterContract } from "../../src/adapter/testing";
 
 const servers: ReturnType<typeof createServer>[] = [];
@@ -60,6 +63,26 @@ afterEach(async () => {
 });
 
 describe("Vercel Node request bridge", () => {
+  it("preserves trace context through the deployment header boundary", async () => {
+    const origin = await start(createVercelFunction({
+      allowedHosts: ["127.0.0.1"],
+      cacheStore: "unavailable",
+      createHandler: (options) => createRequestHandler({
+        ...options,
+        routes: {
+          "./routes/index.ts": async () => ({
+            GET: response(({ request }) => Response.json(parseTraceContext(request.headers) ?? null)),
+            policy: { access: { public: true } },
+          }),
+        },
+      }),
+      manifest: { clientEntry: "/assets/client.js", styles: [] },
+      rateLimitStore: "unavailable",
+    }));
+    await expect(verifyDeploymentTraceContextContract((headers) => fetch(origin, { headers })))
+      .resolves.toBeUndefined();
+  });
+
   it("passes configured shared stores through the server build options", () => {
     const cacheStore = createMemoryCacheStore();
     const rateLimitStore = createMemoryRateLimitStore();

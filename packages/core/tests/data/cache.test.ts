@@ -6,6 +6,7 @@ import {
   createInvalidation,
   createMemoryCache,
   createMemoryCacheStore,
+  defineRuntimeInstrumentation,
   defineTags,
   isCacheNotFoundError,
   parseCacheDuration,
@@ -16,6 +17,77 @@ import {
 } from "@demiurgejs/core";
 
 describe("data cache primitives", () => {
+  it("emits bounded cache and store spans without cache keys or values", async () => {
+    const spans: Array<{
+      attributes: Record<string, unknown>;
+      options: { operation: string; parent?: unknown };
+    }> = [];
+    let nextContext = 0;
+    const instrumentation = defineRuntimeInstrumentation({
+      startSpan(options) {
+        const record = {
+          attributes: { ...options.attributes },
+          options,
+        };
+        spans.push(record);
+        return {
+          context: { id: ++nextContext },
+          end() {},
+          setAttribute(name, value) {
+            record.attributes[name] = value;
+          },
+          setStatus() {},
+        };
+      },
+    });
+    const cache = createCache({
+      namespace: { app: "test", environment: "test", schemaVersion: 1 },
+      runtimeInstrumentation: instrumentation,
+      runtimeParent: { id: "request-context" },
+      store: createMemoryCacheStore(),
+    });
+    const request = {
+      fn: () => ({ secret: "cache-value-secret" }),
+      key: ["raw-cache-key-secret"],
+      scope: "public" as const,
+      tags: [tag("raw-cache-tag-secret")],
+      ttl: "1m" as const,
+    };
+
+    await cache.get(request);
+    await cache.get(request);
+    await cache.get({
+      ...request,
+      key: ["malicious-scope-key"],
+      scope: "tenant-identifier-secret" as never,
+    });
+    await cache.invalidateTags(request.tags);
+
+    const cacheSpans = spans.filter((span) => span.options.operation === "demiurge.cache");
+    const storeSpans = spans.filter((span) => span.options.operation === "demiurge.store");
+    expect(cacheSpans.map((span) => span.attributes["demiurge.cache.outcome"])).toEqual([
+      "miss",
+      "hit",
+      "miss",
+      "invalidation",
+    ]);
+    expect(cacheSpans[0]?.options.parent).toEqual({ id: "request-context" });
+    expect(storeSpans.map((span) => span.attributes["demiurge.store.operation"])).toEqual([
+      "get",
+      "set",
+      "get",
+      "get",
+      "set",
+      "invalidate_tags",
+    ]);
+    expect(storeSpans.every((span) => span.attributes["demiurge.store.atomicity"] === "strong")).toBe(true);
+    expect(storeSpans[0]?.options.parent).toEqual({ id: 1 });
+    expect(JSON.stringify(spans)).not.toContain("raw-cache-key-secret");
+    expect(JSON.stringify(spans)).not.toContain("tenant-identifier-secret");
+    expect(JSON.stringify(spans)).not.toContain("raw-cache-tag-secret");
+    expect(JSON.stringify(spans)).not.toContain("cache-value-secret");
+  });
+
   it("creates typed query requests with stable keys and tags", async () => {
     const tags = defineTags({
       post: (input: { slug: string }) => tag(`post:${input.slug}`),
@@ -310,6 +382,187 @@ describe("data cache primitives", () => {
     refresh.resolve("post-2");
     await Promise.all(background);
     await expect(secondCache.get(request)).resolves.toBe("post-2");
+  });
+
+  it("links instrumented refresh work to the stale cache operation", async () => {
+    let now = 0;
+    let nextContext = 0;
+    const spans: Array<{
+      attributes: Record<string, unknown>;
+      context: { id: number };
+      options: { links?: readonly { context: unknown }[]; operation: string; parent?: unknown };
+    }> = [];
+    const instrumentation = defineRuntimeInstrumentation({
+      startSpan(options) {
+        const context = { id: ++nextContext };
+        const span = {
+          attributes: { ...options.attributes },
+          context,
+          options,
+        };
+        spans.push(span);
+        return {
+          context,
+          end() {},
+          setAttribute(name, value) {
+            span.attributes[name] = value;
+          },
+          setStatus() {},
+        };
+      },
+    });
+    const store = createMemoryCacheStore({ now: () => now });
+    const background: Promise<void>[] = [];
+    const cache = createCache({
+      namespace: { app: "catalog", environment: "test", schemaVersion: 1 },
+      now: () => now,
+      runtimeInstrumentation: instrumentation,
+      runtimeParent: { id: "request-owner" },
+      store,
+      waitUntil: (promise) => background.push(promise),
+    });
+    const load = vi.fn<() => Promise<string>>()
+      .mockResolvedValueOnce("first-value")
+      .mockResolvedValueOnce("refreshed-value");
+    const request = {
+      fn: load,
+      key: ["private-cache-key"],
+      scope: "public",
+      staleWhileRevalidate: 20,
+      ttl: 10,
+    } as const;
+
+    await expect(cache.get(request)).resolves.toBe("first-value");
+    now = 11;
+    await expect(cache.get(request)).resolves.toBe("first-value");
+    await Promise.all(background);
+
+    const staleSpan = spans.find((span) =>
+      span.options.operation === "demiurge.cache" &&
+      span.attributes["demiurge.cache.outcome"] === "stale"
+    );
+    const backgroundSpan = spans.find((span) => span.options.operation === "demiurge.background");
+    const refreshSpan = spans.find((span) =>
+      span.options.operation === "demiurge.cache" &&
+      span.attributes["demiurge.cache.operation"] === "refresh"
+    );
+    expect(backgroundSpan?.options.links).toEqual([
+      { context: staleSpan?.context },
+    ]);
+    expect(refreshSpan?.options.parent).toEqual(backgroundSpan?.context);
+    expect(spans.some((span) =>
+      span.attributes["demiurge.store.operation"] === "publish_refresh"
+    )).toBe(true);
+    expect(JSON.stringify(spans)).not.toContain("private-cache-key");
+    expect(JSON.stringify(spans)).not.toContain("refreshed-value");
+  });
+
+  it("reports stale refresh failures and preserves the cached value", async () => {
+    let now = 0;
+    const background: Promise<void>[] = [];
+    const errors: unknown[] = [];
+    const spans: Array<{ attributes: Record<string, unknown>; operation: string }> = [];
+    const instrumentation = defineRuntimeInstrumentation({
+      startSpan(options) {
+        const span = { attributes: { ...options.attributes }, operation: options.operation };
+        spans.push(span);
+        return {
+          context: {},
+          end() {},
+          setAttribute(name, value) {
+            span.attributes[name] = value;
+          },
+          setStatus() {},
+        };
+      },
+    });
+    const cache = createCache({
+      namespace: { app: "catalog", environment: "test", schemaVersion: 1 },
+      now: () => now,
+      onBackgroundError: (error) => errors.push(error),
+      runtimeInstrumentation: instrumentation,
+      store: createMemoryCacheStore({ now: () => now }),
+      waitUntil: (promise) => background.push(promise),
+    });
+    const failure = new Error("private upstream detail");
+    const load = vi.fn<() => Promise<string>>()
+      .mockResolvedValueOnce("cached-value")
+      .mockRejectedValueOnce(failure);
+    const request = {
+      fn: load,
+      key: ["cache-key"],
+      scope: "public",
+      staleWhileRevalidate: 20,
+      ttl: 10,
+    } as const;
+
+    await cache.get(request);
+    now = 11;
+    await expect(cache.get(request)).resolves.toBe("cached-value");
+    await Promise.all(background);
+
+    expect(errors).toEqual([failure]);
+    const refresh = spans.find((span) =>
+      span.operation === "demiurge.cache" &&
+      span.attributes["demiurge.cache.operation"] === "refresh"
+    );
+    expect(refresh?.attributes["demiurge.cache.outcome"]).toBe("error");
+    expect(refresh?.attributes["demiurge.operation.outcome"]).toBe("error");
+    expect(JSON.stringify(spans)).not.toContain("private upstream detail");
+    await expect(cache.get(request)).resolves.toBe("cached-value");
+  });
+
+  it("preserves release failures during an instrumented stale refresh", async () => {
+    let now = 0;
+    const memory = createMemoryCacheStore({ now: () => now });
+    const background: Promise<void>[] = [];
+    const store = {
+      ...memory,
+      async releaseRefreshLease() {
+        throw new Error("release failed");
+      },
+    };
+    const cache = createCache({
+      namespace: { app: "catalog", environment: "test", schemaVersion: 1 },
+      now: () => now,
+      runtimeInstrumentation: defineRuntimeInstrumentation({ startSpan: () => undefined }),
+      store,
+      waitUntil: (promise) => background.push(promise),
+    });
+    const load = vi.fn<() => Promise<string>>()
+      .mockResolvedValueOnce("cached-value")
+      .mockResolvedValueOnce("refreshed-value");
+    const request = {
+      fn: load,
+      key: ["cache-key"],
+      scope: "public",
+      staleWhileRevalidate: 20,
+      ttl: 10,
+    } as const;
+
+    await cache.get(request);
+    now = 11;
+    await cache.get(request);
+    await expect(Promise.all(background)).rejects.toThrow("release failed");
+  });
+
+  it("keeps cache effects when instrumentation throws", async () => {
+    const cache = createCache({
+      namespace: { app: "catalog", environment: "test", schemaVersion: 1 },
+      runtimeInstrumentation: defineRuntimeInstrumentation({
+        startSpan() {
+          throw new Error("instrumentation failure");
+        },
+      }),
+      store: createMemoryCacheStore(),
+    });
+    const load = vi.fn(() => "cached-value");
+    const request = { fn: load, key: ["cache-key"], scope: "public" } as const;
+
+    await expect(cache.get(request)).resolves.toBe("cached-value");
+    await expect(cache.get(request)).resolves.toBe("cached-value");
+    await expect(cache.invalidateKey(request.key)).resolves.toBe(true);
+    expect(load).toHaveBeenCalledTimes(1);
   });
 
   it("retains stale data and reports background refresh failures", async () => {

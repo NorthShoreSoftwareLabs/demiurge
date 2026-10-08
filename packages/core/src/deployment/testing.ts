@@ -387,3 +387,32 @@ function assert(condition: boolean, requirement: string): asserts condition {
 function contractError(requirement: string) {
   return new Error(`Deployment contract failed: ${requirement}.`);
 }
+
+export async function verifyDeploymentTraceContextContract(
+  probe: (headers: Headers) => MaybePromise<Response>,
+) {
+  const traceId = "4bf92f3577b34da6a3ce929d0e0e4736";
+  const spanId = "00f067aa0ba902b7";
+  const traceState = "vendor=state";
+  for (const sampled of [true, false]) {
+    const response = await probe(new Headers({
+      traceparent: `00-${traceId}-${spanId}-${sampled ? "01" : "00"}`,
+      tracestate: traceState,
+    }));
+    const context: unknown = await response.json();
+    assert(response.ok, "the trace context probe must return a successful response");
+    assert(
+      typeof context === "object" && context !== null &&
+        "traceId" in context && context.traceId === traceId &&
+        "spanId" in context && context.spanId === spanId &&
+        "sampled" in context && context.sampled === sampled &&
+        "traceState" in context && context.traceState === traceState,
+      "the deployment must preserve trace identifiers, sampling, and trace state",
+    );
+  }
+
+  const invalid = await probe(new Headers({ traceparent: "malformed", tracestate: traceState }));
+  assert(invalid.ok, "malformed trace input must not fail the request");
+  const context: unknown = await invalid.json();
+  assert(context === null, "malformed trace input must not supply a remote context");
+}

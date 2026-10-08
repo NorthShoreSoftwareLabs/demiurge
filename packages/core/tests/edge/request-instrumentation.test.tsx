@@ -73,6 +73,47 @@ const pageRoutes = {
 };
 
 describe("request instrumentation adapter behavior", () => {
+  it("uses the same W3C parent context for Node and edge requests", async () => {
+    const parents: Array<RuntimeSpanStartOptions["parent"]> = [];
+    const runtimeInstrumentation = defineRuntimeInstrumentation({
+      startSpan(options) {
+        parents.push(options.parent);
+        return {
+          context: {
+            spanId: "828c5d0d435ba505",
+            traceFlags: 1,
+            traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+          },
+          end() {},
+        };
+      },
+    });
+    const request = () => new Request("https://example.test/", {
+      headers: {
+        traceparent:
+          "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      },
+    });
+    const nodeHandler = createRequestHandler({ routes, runtimeInstrumentation });
+    const edgeHandler = createEdgeRequestHandler({
+      cacheStore: "unavailable",
+      rateLimitStore: "unavailable",
+      routes,
+      runtimeInstrumentation,
+    });
+
+    const nodeResponse = await nodeHandler(request());
+    const edgeResponse = await edgeHandler(request());
+    await Promise.all([nodeResponse.text(), edgeResponse.text()]);
+
+    expect(parents[0]).toMatchObject({
+      sampled: true,
+      spanId: "00f067aa0ba902b7",
+      traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+    });
+    expect(parents[1]).toEqual(parents[0]);
+  });
+
   it("ends an edge request span when the adapter hands off the response", async () => {
     const recorder = createRecorder();
     const handler = createEdgeRequestHandler({
