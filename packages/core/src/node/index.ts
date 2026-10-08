@@ -323,13 +323,15 @@ function attachNodeServerLifecycle(
     operation: "demiurge.adapter.start",
   });
 
+  let finishPendingStartup: (() => void) | undefined;
   if (startSpan) {
     const errorEvents: EventEmitter = server;
     let startEnded = false;
-    const endStartSpan = (outcome: "error" | "success") => {
+    const endStartSpan = (outcome: "canceled" | "error" | "success") => {
       if (startEnded) return;
       startEnded = true;
       errorEvents.off(errorMonitor, observeStartupError);
+      server.off("listening", observeStartupListening);
       startSpan.setAttribute("demiurge.operation.outcome", outcome);
       if (outcome === "error") {
         startSpan.setAttribute("error.type", "exception");
@@ -343,9 +345,9 @@ function attachNodeServerLifecycle(
       if (!server.listening) endStartSpan("error");
     };
 
-    server.once("listening", () => {
-      endStartSpan("success");
-    });
+    const observeStartupListening = () => endStartSpan("success");
+    finishPendingStartup = () => endStartSpan("canceled");
+    server.once("listening", observeStartupListening);
     errorEvents.on(errorMonitor, observeStartupError);
   }
 
@@ -402,6 +404,7 @@ function attachNodeServerLifecycle(
     }
 
     draining = true;
+    finishPendingStartup?.();
     options?.onStateChange?.("draining");
     const shutdownSpan = startRuntimeSpan(instrumentation, {
       attributes: { "demiurge.adapter.name": "node" },

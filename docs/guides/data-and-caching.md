@@ -239,8 +239,8 @@ when the provider cannot make that guarantee. Memory and Redis stores declare
 `strong`. The KV store declares `best-effort`.
 
 Runtime instrumentation records each store operation and its duration. The
-store span records `capabilities.atomicity` as a bounded value. It does not
-record cache keys, tags, values, or connection details.
+store span records `demiurge.store.atomicity` from the declared capability.
+It does not record cache keys, tags, values, or connection details.
 
 Tag invalidation stores tag membership as key-prefixed entries and uses
 `list()` plus bulk delete to invalidate a tag, the usual KV pattern for this.

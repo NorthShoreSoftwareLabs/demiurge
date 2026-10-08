@@ -201,7 +201,7 @@ function readTraceFlags(value: unknown) {
 function parseTraceState(value: string | null) {
   if (value === null || value === "" || value.length > 512) return undefined;
 
-  const members = value.split(",").map((member) => member.trim());
+  const members = value.split(",").map((member) => member.replace(/^[ \t]+|[ \t]+$/g, ""));
   if (members.length > 32 || members.some((member) => member && !isTraceStateMember(member))) {
     return undefined;
   }
@@ -224,7 +224,7 @@ function isTraceStateMember(member: string) {
   const key = member.slice(0, separator);
   const value = member.slice(separator + 1);
   return isTraceStateKey(key) && traceStateValuePattern.test(value) &&
-    value.trim() === value;
+    !value.endsWith(" ");
 }
 
 function isTraceStateKey(key: string) {

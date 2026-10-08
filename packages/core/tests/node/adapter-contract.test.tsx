@@ -151,6 +151,38 @@ function backgroundHost() {
 }
 
 describe("Node adapter contract", () => {
+  it("ends pending startup when shutdown precedes listening", async () => {
+    const spans: Array<{ operation: string; ends: number; attributes: Record<string, unknown> }> = [];
+    const idle = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler: async () => new Response("ok"),
+      shutdown: { signals: [] },
+      runtimeInstrumentation: defineRuntimeInstrumentation({
+        startSpan(options) {
+          const span = { operation: options.operation, ends: 0, attributes: { ...options.attributes } };
+          spans.push(span);
+          return {
+            context: {},
+            end() { span.ends += 1; },
+            setAttribute(name, value) { span.attributes[name] = value; },
+          };
+        },
+      }),
+    });
+    const listeningHandlers = idle.listeners("listening").length;
+    await idle.shutdown();
+    await idle.shutdown();
+    expect(spans.map((span) => [span.operation, span.ends])).toEqual([
+      ["demiurge.adapter.start", 1],
+      ["demiurge.adapter.shutdown", 1],
+    ]);
+    expect(spans[0]?.attributes["demiurge.operation.outcome"]).toBe("canceled");
+    expect(spans[1]?.attributes["demiurge.operation.outcome"]).toBe("success");
+    const events: EventEmitter = idle;
+    expect(events.listeners(errorMonitor)).toHaveLength(0);
+    expect(idle.listeners("listening")).toHaveLength(listeningHandlers - 1);
+  });
+
   it("ends a failed startup span once and preserves the listener error", async () => {
     const occupied = createNodeServer({
       allowedHosts: ["127.0.0.1"],

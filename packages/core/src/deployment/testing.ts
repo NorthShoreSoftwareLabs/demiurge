@@ -399,8 +399,8 @@ export async function verifyDeploymentTraceContextContract(
       traceparent: `00-${traceId}-${spanId}-${sampled ? "01" : "00"}`,
       tracestate: traceState,
     }));
-    const context: unknown = await response.json();
     assert(response.ok, "the trace context probe must return a successful response");
+    const context: unknown = await response.json();
     assert(
       typeof context === "object" && context !== null &&
         "traceId" in context && context.traceId === traceId &&

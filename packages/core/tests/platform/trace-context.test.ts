@@ -10,6 +10,25 @@ const validTraceparent =
   "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
 
 describe("W3C trace context", () => {
+  it("accepts empty list members and preserves leading value spaces", () => {
+    const context = parseTraceContext(new Headers({
+      traceparent: validTraceparent,
+      tracestate: "vendor= value,, \t,other=two",
+    }));
+    expect(context?.traceState).toBe("vendor= value,other=two");
+    const headers = new Headers();
+    expect(injectTraceContext(headers, context)).toBe(true);
+    expect(headers.get("tracestate")).toBe("vendor= value,other=two");
+  });
+
+  it.each(["vendor =value", "vendor\t=value", "vendor=\tvalue", "vendor=value,\u00a0other=two"])(
+    "rejects whitespace outside the W3C grammar: %s",
+    (tracestate) => {
+      const context = parseTraceContext(new Headers({ traceparent: validTraceparent, tracestate }));
+      expect(context).not.toHaveProperty("traceState");
+    },
+  );
+
   it("returns no context when traceparent is absent", () => {
     expect(parseTraceContext(new Headers({ tracestate: "vendor=value" })))
       .toBeUndefined();

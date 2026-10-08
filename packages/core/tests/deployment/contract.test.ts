@@ -243,7 +243,7 @@ describe("deployment trace context contract", () => {
   });
 
   it("rejects an unsuccessful probe", async () => {
-    await expect(verifyDeploymentTraceContextContract(() => Response.json(null, { status: 500 })))
+    await expect(verifyDeploymentTraceContextContract(() => new Response("<h1>Unavailable</h1>", { status: 500 })))
       .rejects.toThrow("successful response");
   });
 
