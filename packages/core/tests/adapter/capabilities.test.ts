@@ -19,6 +19,7 @@ describe("adapter capability checks", () => {
       crossOriginIsolationHeaders: false,
       nonceInjection: false,
       requestTimeoutEnforcement: false,
+      responseBodyCompletion: false,
       sharedCache: false,
       staticOutput: true,
       streaming: false,

@@ -112,6 +112,7 @@ export function createEdgeRequestHandler(
     renderPage: options.renderPage ?? renderEdgePageResponse,
     routeModules: options.routeModules,
     routes: options.routes,
+    runtimeInstrumentation: options.runtimeInstrumentation,
     ssr: options.ssr,
   });
 

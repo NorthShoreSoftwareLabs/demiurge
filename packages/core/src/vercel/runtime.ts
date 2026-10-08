@@ -17,6 +17,7 @@ export const vercelNodeAdapter = defineAdapter({
   capabilities: {
     crossOriginIsolationHeaders: true,
     nonceInjection: true,
+    responseBodyCompletion: true,
     streaming: true,
   },
 });

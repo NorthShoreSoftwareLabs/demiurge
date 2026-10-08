@@ -73,6 +73,7 @@ describe("static adapter contract", () => {
         crossOriginIsolationHeaders: false,
         nonceInjection: false,
         requestTimeoutEnforcement: false,
+        responseBodyCompletion: false,
         sharedCache: false,
         staticOutput: true,
         streaming: false,

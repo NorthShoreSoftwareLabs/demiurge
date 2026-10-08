@@ -248,6 +248,8 @@ The result reports one of three rejections:
 
 ## Server instrumentation
 
+### Completed signals
+
 `defineInstrumentation` takes the handlers that receive each signal. The
 `webVitals` handler receives every report the endpoint accepts.
 
@@ -256,6 +258,49 @@ const instrumentation = defineInstrumentation({
   webVitals: (signal) => metrics.record(signal.name, signal.value),
 });
 ```
+
+These handlers keep their existing awaited behavior. A rejected handler can
+reach its caller.
+
+### Runtime spans
+
+`defineRuntimeInstrumentation` creates the optional runtime span interface.
+Pass it to `createRequestHandler` through `runtimeInstrumentation`.
+
+```ts
+const runtimeInstrumentation = defineRuntimeInstrumentation({
+  startSpan(options) {
+    const started = performance.now();
+    const context = {};
+
+    return {
+      context,
+      end: () => traces.record(options, performance.now() - started),
+    };
+  },
+});
+
+const handler = createRequestHandler({
+  routes,
+  runtimeInstrumentation,
+});
+```
+
+Core emits request, middleware, route-data, mutation, and render spans. Each
+pipeline span uses the request span as its parent.
+
+Request attributes contain the matched route template. They exclude raw paths,
+query values, headers, bodies, route parameters, and error messages.
+
+Runtime span methods do not delay a response. Core contains synchronous errors
+and rejected delivery promises. Use `onError` to receive a bounded diagnostic.
+
+Development accepts the same interface through the `runtimeInstrumentation`
+option of `demiurge(...)`. Production server entries pass it to
+`createHandler(...)` or `createRequestHandler(...)`.
+
+The exported `RUNTIME_INSTRUMENTATION_CONVENTION_VERSION` identifies the
+operation and attribute contract. Its initial value is `1`.
 
 ## Consent
 

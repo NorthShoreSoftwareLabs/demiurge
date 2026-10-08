@@ -67,6 +67,7 @@ export const nodeAdapter = defineAdapter({
     crossOriginIsolationHeaders: true,
     nonceInjection: true,
     requestTimeoutEnforcement: true,
+    responseBodyCompletion: true,
     streaming: true,
   },
 });

@@ -15,6 +15,7 @@ import {
   NAVIGATION_DATA_HEADER,
   NAVIGATION_ERROR_RESPONSE,
   NAVIGATION_NOT_FOUND_RESPONSE,
+  toRoutePattern,
   type LoadedRouteMatch,
   type RouteManifest,
   type RouteRecord,
@@ -47,6 +48,7 @@ import {
 } from "./ssr";
 import { renderFailureResponse } from "./errors";
 import type { FailureSite } from "./failure-site";
+import { prefersHtmlDocument } from "./negotiate";
 import { renderNotFoundResponse } from "./not-found";
 import { createProblemResponse } from "./problem";
 import {
@@ -79,6 +81,12 @@ import {
 } from "../security/policy";
 import { MUTATION_REVALIDATION_HEADER } from "../route/mutation";
 import { defineLocales, localeDirection, localizeHref, resolveLocale, type LocaleConfiguration } from "../routing";
+import {
+  startRuntimeSpan,
+  type RuntimeInstrumentation,
+  type RuntimeSpan,
+  type RuntimeSpanOperation,
+} from "../platform/runtime-instrumentation";
 
 export type RequestErrorReporter = (
   error: unknown,
@@ -94,6 +102,7 @@ export type RequestHandlerOptions = {
   routes: Record<string, RouteImporter>;
   locales?: LocaleConfiguration;
   routeModules?: Readonly<Record<string, RouteModule>>;
+  runtimeInstrumentation?: RuntimeInstrumentation;
   ssr?: SsrOptions;
 };
 
@@ -120,6 +129,9 @@ type RequestRuntimeOptions = {
   ssr?: SsrOptions;
   transformDocument?: (html: string) => string | Promise<string>;
   renderCsrfForms?: boolean;
+  responseBodyObservation?: "completion" | "handoff";
+  runtimeInstrumentation?: RuntimeInstrumentation;
+  runtimeRequestSpan?: RuntimeSpan;
 };
 
 export type RequestHandler = (request: Request) => Promise<Response>;
@@ -156,73 +168,102 @@ export function createRequestHandler(options: RequestHandlerOptions) {
   }
 
   return async function handleRequest(request: Request) {
-    let ssr = options.ssr;
-    if (locales) {
-      const resolution = resolveLocale(request, locales);
-      if (resolution.unsupported) {
-        return await renderNotFoundResponse(manifest, request, {
-          ...options.ssr,
-          dir: localeDirection(resolution.locale, locales),
-          lang: resolution.locale,
-          locale: resolution.locale,
-          pathname: resolution.pathname,
-        });
-      }
-      if (resolution.redirect) {
-        if (request.method !== "GET" && request.method !== "HEAD") {
-          return createProblemResponse({ status: 400, title: "The locale URL is not canonical." });
-        }
-        const preference = resolution.source === "cookie" || resolution.source === "accept-language";
-        if (preference && !(await isPagePath(manifest, resolution.pathname))) {
-          return await handleRequestWithManifest(manifest, request, {
+    return await instrumentRequest(
+      request,
+      options.runtimeInstrumentation,
+      options.adapter && !options.adapter.capabilities.responseBodyCompletion
+        ? "handoff"
+        : "completion",
+      async (runtimeRequestSpan) => {
+        let ssr = options.ssr;
+        if (locales) {
+          const resolution = resolveLocale(request, locales);
+          if (resolution.unsupported) {
+            return await renderInstrumentedNotFoundResponse(manifest, request, {
+              ...options.ssr,
+              dir: localeDirection(resolution.locale, locales),
+              lang: resolution.locale,
+              locale: resolution.locale,
+              pathname: resolution.pathname,
+            }, { runtimeInstrumentation: options.runtimeInstrumentation, runtimeRequestSpan });
+          }
+          if (resolution.redirect) {
+            if (request.method !== "GET" && request.method !== "HEAD") {
+              return createProblemResponse({
+                status: 400,
+                title: "The locale URL is not canonical.",
+              });
+            }
+            const preference = resolution.source === "cookie" ||
+              resolution.source === "accept-language";
+            if (
+              preference && !(await isPagePath(manifest, resolution.pathname))
+            ) {
+              return await handleRequestWithManifest(manifest, request, {
+                cacheStore: options.cacheStore,
+                onError: options.onError,
+                rateLimitStore,
+                renderPage: options.renderPage,
+                runtimeInstrumentation: options.runtimeInstrumentation,
+                runtimeRequestSpan,
+                routePathname: resolution.pathname,
+                ssr: {
+                  ...options.ssr,
+                  dir: localeDirection(locales.defaultLocale, locales),
+                  lang: locales.defaultLocale,
+                  locale: locales.defaultLocale,
+                },
+                renderCsrfForms,
+              });
+            }
+            const headers = new Headers({ location: resolution.redirect.href });
+            if (preference) {
+              headers.set("cache-control", "private, no-store");
+              headers.set(
+                "vary",
+                [locales.cookie ? "Cookie" : undefined, "Accept-Language"]
+                  .filter(Boolean)
+                  .join(", "),
+              );
+            }
+            return new Response(null, {
+              headers,
+              status: preference ? 307 : 308,
+            });
+          }
+          ssr = {
+            ...options.ssr,
+            dir: localeDirection(resolution.locale, locales),
+            lang: resolution.locale,
+            locale: resolution.locale,
+          };
+          const response = await handleRequestWithManifest(manifest, request, {
             cacheStore: options.cacheStore,
+            locales,
             onError: options.onError,
             rateLimitStore,
             renderPage: options.renderPage,
+            runtimeInstrumentation: options.runtimeInstrumentation,
+            runtimeRequestSpan,
             routePathname: resolution.pathname,
-            ssr: {
-              ...options.ssr,
-              dir: localeDirection(locales.defaultLocale, locales),
-              lang: locales.defaultLocale,
-              locale: locales.defaultLocale,
-            },
+            ssr,
             renderCsrfForms,
           });
+          localizeResponseLocation(response, request, resolution.locale, locales);
+          return response;
         }
-        const headers = new Headers({ location: resolution.redirect.href });
-        if (preference) {
-          headers.set("cache-control", "private, no-store");
-          headers.set("vary", [locales.cookie ? "Cookie" : undefined, "Accept-Language"].filter(Boolean).join(", "));
-        }
-        return new Response(null, { headers, status: preference ? 307 : 308 });
-      }
-      ssr = {
-        ...options.ssr,
-        dir: localeDirection(resolution.locale, locales),
-        lang: resolution.locale,
-        locale: resolution.locale,
-      };
-      const response = await handleRequestWithManifest(manifest, request, {
-        cacheStore: options.cacheStore,
-        locales,
-        onError: options.onError,
-        rateLimitStore,
-        renderPage: options.renderPage,
-        routePathname: resolution.pathname,
-        ssr,
-        renderCsrfForms,
-      });
-      localizeResponseLocation(response, request, resolution.locale, locales);
-      return response;
-    }
-    return await handleRequestWithManifest(manifest, request, {
-      cacheStore: options.cacheStore,
-      onError: options.onError,
-      rateLimitStore,
-      renderPage: options.renderPage,
-      ssr,
-      renderCsrfForms,
-    });
+        return await handleRequestWithManifest(manifest, request, {
+          cacheStore: options.cacheStore,
+          onError: options.onError,
+          rateLimitStore,
+          renderPage: options.renderPage,
+          runtimeInstrumentation: options.runtimeInstrumentation,
+          runtimeRequestSpan,
+          ssr,
+          renderCsrfForms,
+        });
+      },
+    );
   };
 }
 
@@ -257,6 +298,27 @@ export async function handleRequestWithManifest(
     rateLimitStore: defaultRateLimitStore,
   },
 ) {
+  if (!options.runtimeRequestSpan) {
+    return await instrumentRequest(
+      request,
+      options.runtimeInstrumentation,
+      options.responseBodyObservation ?? "completion",
+      async (runtimeRequestSpan) =>
+        await dispatchRequestWithManifest(manifest, request, {
+          ...options,
+          runtimeRequestSpan,
+        }),
+    );
+  }
+
+  return await dispatchRequestWithManifest(manifest, request, options);
+}
+
+async function dispatchRequestWithManifest(
+  manifest: RouteManifest,
+  request: Request,
+  options: RequestRuntimeOptions,
+) {
   const url = new URL(request.url);
   const routePathname = options.routePathname ?? url.pathname;
   const fallbackOptions = createFallbackOptions(url, options);
@@ -280,12 +342,20 @@ export async function handleRequestWithManifest(
       : response;
   }
 
+  if (routeMatch) {
+    const method = runtimeRequestMethod(request.method);
+    const routePattern = toRoutePattern(routeMatch.route.segments);
+    options.runtimeRequestSpan?.setName(`${method} ${routePattern}`);
+    options.runtimeRequestSpan?.setAttribute("http.route", routePattern);
+  }
+
   if (!routeMatch) {
     try {
-      const response = await renderNotFoundResponse(
+      const response = await renderInstrumentedNotFoundResponse(
         manifest,
         request,
         fallbackOptions,
+        options,
       );
 
       return navigationDataRequest
@@ -330,12 +400,13 @@ export async function handleRequestWithManifest(
     // module, resolving its capability or inherited policy, or a middleware
     // throwing. That is the one failure site with no committed response shape,
     // so it negotiates on `accept` the way an unmatched path does.
-    const response = await renderFailureResponse(
+    const response = await renderInstrumentedFailureResponse(
       manifest,
       request,
       error,
       "middleware",
       fallbackOptions,
+      options,
     );
 
     return navigationDataRequest
@@ -471,7 +542,7 @@ async function handleMatchedRoute(
     let response: Response;
 
     try {
-      response = await runRouteMiddleware(middlewares, context, async () => {
+      response = await runRuntimeMiddleware(middlewares, context, options, async () => {
         // A page render has already committed to a document, so a failure here
         // renders the error document rather than negotiating. Returning the
         // response instead of throwing keeps the failure site distinguishable
@@ -487,20 +558,27 @@ async function handleMatchedRoute(
             return denial;
           }
 
-          const match = await loadPageRoute(
-            manifest,
-            routePathname,
-            request,
-            undefined,
-            cache,
-            { locale: options.ssr?.locale, requestContext },
+          const match = await runRuntimeOperation(
+            options.runtimeInstrumentation,
+            options.runtimeRequestSpan,
+            "demiurge.route.data",
+            {},
+            async () =>
+              await loadPageRoute(
+                manifest,
+                routePathname,
+                request,
+                undefined,
+                cache,
+                { locale: options.ssr?.locale, requestContext },
+              ),
           );
 
           if (match.status !== "ready") {
-            return await renderNotFoundResponse(manifest, request, {
+            return await renderInstrumentedNotFoundResponse(manifest, request, {
               ...fallbackOptions,
               nonce,
-            });
+            }, options);
           }
 
           if (options.locales && options.ssr?.locale) {
@@ -539,28 +617,35 @@ async function handleMatchedRoute(
             csrf?.context.token();
           }
 
-          return await renderPage(match.match, {
-            ...options.ssr,
-            csrf: csrf?.context,
-            dev: options.dev,
-            nonce,
-            onStreamError: (error) => {
-              options.onError?.(error, {
-                pathname: url.pathname,
-                site: "page",
-              });
-            },
-            signal: request.signal,
-          });
+          return await runRuntimeOperation(
+            options.runtimeInstrumentation,
+            options.runtimeRequestSpan,
+            "demiurge.render",
+            { "demiurge.render.mode": match.match.render.mode },
+            async () =>
+              await renderPage(match.match, {
+                ...options.ssr,
+                csrf: csrf?.context,
+                dev: options.dev,
+                nonce,
+                onStreamError: (error) => {
+                  options.onError?.(error, {
+                    pathname: url.pathname,
+                    site: "page",
+                  });
+                },
+                signal: request.signal,
+              }),
+          );
         } catch (error) {
           if (error instanceof RequestBodyTooLargeError) {
             return requestBodyTooLargeResponse();
           }
 
-          return await renderFailureResponse(manifest, request, error, "page", {
+          return await renderInstrumentedFailureResponse(manifest, request, error, "page", {
             ...fallbackOptions,
             nonce,
-          });
+          }, options);
         }
       });
     } catch (error) {
@@ -626,7 +711,7 @@ async function handleMatchedRoute(
   let response: Response;
 
   try {
-    response = await runRouteMiddleware(middlewares, context, async () => {
+    response = await runRuntimeMiddleware(middlewares, context, options, async () => {
       // An API route never gets HTML, whatever the caller asked for.
       try {
         // Authorization runs before the capability, so a mutation denies
@@ -639,8 +724,23 @@ async function handleMatchedRoute(
 
         if (capability.kind === "not-found" && capability.body === undefined) {
           return applyCapabilityInit(
-            await renderNotFoundResponse(manifest, request, fallbackOptions),
+            await renderInstrumentedNotFoundResponse(
+              manifest,
+              request,
+              fallbackOptions,
+              options,
+            ),
             capability.init,
+          );
+        }
+
+        if ("mutation" in capability && capability.mutation === true) {
+          return await runRuntimeOperation(
+            options.runtimeInstrumentation,
+            options.runtimeRequestSpan,
+            "demiurge.route.mutation",
+            {},
+            async () => await toResponse(capability, context),
           );
         }
 
@@ -650,12 +750,13 @@ async function handleMatchedRoute(
           return requestBodyTooLargeResponse();
         }
 
-        return await renderFailureResponse(
+        return await renderInstrumentedFailureResponse(
           manifest,
           request,
           error,
           "route",
           fallbackOptions,
+          options,
         );
       }
     });
@@ -677,12 +778,13 @@ async function handleMatchedRoute(
     );
   } catch (error) {
     return withFetchMetadataVary(
-      await renderFailureResponse(
+      await renderInstrumentedFailureResponse(
         manifest,
         request,
         error,
         "route",
         fallbackOptions,
+        options,
       ),
     );
   }
@@ -943,6 +1045,219 @@ async function runRouteMiddleware(
   }
 
   return await dispatch(0);
+}
+
+async function runRuntimeMiddleware(
+  middlewares: RouteMiddleware[],
+  context: HttpRouteContext,
+  options: RequestRuntimeOptions,
+  handler: () => Promise<Response>,
+) {
+  if (middlewares.length === 0) return await handler();
+
+  return await runRuntimeOperation(
+    options.runtimeInstrumentation,
+    options.runtimeRequestSpan,
+    "demiurge.middleware",
+    {},
+    async () => await runRouteMiddleware(middlewares, context, handler),
+  );
+}
+
+async function runRuntimeOperation<T>(
+  instrumentation: RuntimeInstrumentation | undefined,
+  requestSpan: RuntimeSpan | undefined,
+  operation: RuntimeSpanOperation,
+  attributes: Readonly<Record<string, string>>,
+  work: () => Promise<T>,
+) {
+  const span = startRuntimeSpan(instrumentation, {
+    attributes,
+    kind: "internal",
+    operation,
+    parent: requestSpan?.context,
+  });
+
+  try {
+    const result = await work();
+    span?.setAttribute("demiurge.operation.outcome", "success");
+    span?.setStatus("unset");
+    span?.end();
+    return result;
+  } catch (error) {
+    span?.setAttribute("demiurge.operation.outcome", "error");
+    span?.setAttribute("error.type", "exception");
+    span?.addEvent("exception", {
+      attributes: { "error.type": "exception" },
+    });
+    span?.setStatus("error");
+    span?.end();
+    throw error;
+  }
+}
+
+async function renderInstrumentedNotFoundResponse(
+  manifest: RouteManifest,
+  request: Request,
+  renderOptions: Parameters<typeof renderNotFoundResponse>[2],
+  runtimeOptions: Pick<
+    RequestRuntimeOptions,
+    "runtimeInstrumentation" | "runtimeRequestSpan"
+  >,
+) {
+  const render = async () =>
+    await renderNotFoundResponse(manifest, request, renderOptions);
+
+  if (isNavigationDataRequest(request) || !prefersHtmlDocument(request)) {
+    return await render();
+  }
+
+  return await runRuntimeOperation(
+    runtimeOptions.runtimeInstrumentation,
+    runtimeOptions.runtimeRequestSpan,
+    "demiurge.render",
+    { "demiurge.render.mode": "ssr" },
+    render,
+  );
+}
+
+async function renderInstrumentedFailureResponse(
+  manifest: RouteManifest,
+  request: Request,
+  error: unknown,
+  site: FailureSite,
+  renderOptions: Parameters<typeof renderFailureResponse>[4],
+  runtimeOptions: Pick<
+    RequestRuntimeOptions,
+    "runtimeInstrumentation" | "runtimeRequestSpan"
+  >,
+) {
+  const render = async () =>
+    await renderFailureResponse(
+      manifest,
+      request,
+      error,
+      site,
+      renderOptions,
+    );
+  const rendersDocument = !isNavigationDataRequest(request) &&
+    (site === "page" ||
+      (site === "middleware" && prefersHtmlDocument(request)));
+
+  if (!rendersDocument) return await render();
+
+  return await runRuntimeOperation(
+    runtimeOptions.runtimeInstrumentation,
+    runtimeOptions.runtimeRequestSpan,
+    "demiurge.render",
+    { "demiurge.render.mode": "ssr" },
+    render,
+  );
+}
+
+async function instrumentRequest(
+  request: Request,
+  instrumentation: RuntimeInstrumentation | undefined,
+  bodyObservation: "completion" | "handoff",
+  dispatch: (span: RuntimeSpan | undefined) => Promise<Response>,
+) {
+  const method = runtimeRequestMethod(request.method);
+  const span = startRuntimeSpan(instrumentation, {
+    attributes: {
+      "demiurge.response.body_observation": bodyObservation,
+      "http.request.method": method,
+      "url.scheme": new URL(request.url).protocol.slice(0, -1),
+    },
+    kind: "server",
+    name: method,
+    operation: "demiurge.request",
+  });
+
+  try {
+    const response = await dispatch(span);
+    span?.setAttribute("http.response.status_code", response.status);
+    span?.setAttribute(
+      "demiurge.operation.outcome",
+      response.status >= 500 ? "error" : "success",
+    );
+    span?.setStatus(response.status >= 500 ? "error" : "unset");
+
+    if (!span) return response;
+    if (bodyObservation === "handoff") {
+      span.end();
+      return response;
+    }
+
+    return observeResponseBody(response, span);
+  } catch (error) {
+    span?.setAttribute("demiurge.operation.outcome", "error");
+    span?.setAttribute("error.type", "exception");
+    span?.addEvent("exception", {
+      attributes: { "error.type": "exception" },
+    });
+    span?.setStatus("error");
+    span?.end();
+    throw error;
+  }
+}
+
+function observeResponseBody(response: Response, span: RuntimeSpan) {
+  if (!response.body) {
+    span.end();
+    return response;
+  }
+
+  const reader = response.body.getReader();
+  let ended = false;
+  const end = (outcome?: "canceled" | "error") => {
+    if (ended) return;
+    ended = true;
+    if (outcome) span.setAttribute("demiurge.operation.outcome", outcome);
+    if (outcome === "error") {
+      span.setAttribute("error.type", "exception");
+      span.addEvent("exception", {
+        attributes: { "error.type": "exception" },
+      });
+      span.setStatus("error");
+    }
+    span.end();
+  };
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const chunk = await reader.read();
+        if (chunk.done) {
+          controller.close();
+          end();
+        } else {
+          controller.enqueue(chunk.value);
+        }
+      } catch (error) {
+        controller.error(error);
+        end("error");
+      }
+    },
+    async cancel(reason) {
+      try {
+        await reader.cancel(reason);
+      } finally {
+        end("canceled");
+      }
+    },
+  });
+
+  return new Response(body, {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+}
+
+function runtimeRequestMethod(method: string) {
+  const normalized = method.toUpperCase();
+  return supportedMethods.some((supported) => supported === normalized)
+    ? normalized
+    : "_OTHER";
 }
 
 function finalizeRouteResponse(
