@@ -154,7 +154,9 @@ not configure a CDN or browser cache.
 
 A CDN can serve stale content only when the response cache policy and provider
 configuration permit it. The deployment integration owns that policy. The
-integration must document the maximum stale period for mutable responses.
+integration must document its stale-serving mode for mutable responses.
+A bounded mode states the maximum stale period that the provider can enforce.
+A provider-managed mode explicitly states that the framework supplies no maximum stale period.
 
 Data invalidation does not make a CDN entry stale. A purge can be asynchronous,
 and an edge can serve an old representation until purge propagation completes.
