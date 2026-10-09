@@ -20,6 +20,7 @@ that exists in the current source tree. Planned work and delivery status live in
 - [Images](./guides/images.md)
 - [Fonts](./guides/fonts.md)
 - [Analytics and observability](./guides/analytics.md)
+- [OpenTelemetry runtime setup](./guides/opentelemetry.md)
 - [Trace context](./guides/trace-context.md)
 - [Node deployment](./guides/node-deployment.md)
 - [Edge deployment](./guides/edge-deployment.md)

@@ -105,6 +105,10 @@ analytics.openTelemetry({
 declares the exporter endpoint alone, which suits an application that starts
 the SDK from its own client entry.
 
+For server spans and operation metrics, see the
+[OpenTelemetry runtime setup guide](./opentelemetry.md). The browser and server
+integrations have separate setup and data boundaries.
+
 ## Core Web Vitals
 
 Core Web Vitals need no vendor script. The framework collects them in the

@@ -264,6 +264,15 @@ A request span ends when its response body completes, fails, or is canceled.
 An adapter that cannot observe body completion ends the span after it hands off
 the response and records that capability as a bounded attribute.
 
+### Optional OpenTelemetry metrics
+
+The optional OpenTelemetry integration records `demiurge.operation.duration` as a histogram in seconds.
+An application supplies the meter and owns its provider, readers, and exporters.
+Each completed runtime operation records one duration measurement.
+The `demiurge.operation` metric attribute uses the operation names from the runtime operations table.
+Metric attributes omit application attributes and request data.
+A metric recording failure does not prevent the span from ending.
+
 ### Existing public API
 
 The current `defineInstrumentation(...)` API remains unchanged in the current

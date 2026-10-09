@@ -89,15 +89,19 @@ it is a deployment concern, not a framework one.
 
 ## Runtime spans
 
-Production startup configures `defineRuntimeInstrumentation(...)` in `server.js`.
-Each completed span writes its operation and duration to the server console.
-Request context uses W3C trace identifiers and preserves the incoming sampling flag.
-This teaching recorder logs operations without an exporter or a sampling filter.
+Server startup creates OpenTelemetry trace and meter providers in `server.js`.
+Console exporters write spans and operation duration metrics for this example.
+The integration receives the providers' tracer and meter, and the application
+owns provider shutdown. The [OpenTelemetry runtime setup
+guide](../../docs/guides/opentelemetry.md) describes production exporter setup.
+
+Request context uses the W3C trace context propagator and preserves the incoming
+sampling flag. The example uses the SDK default sampling policy.
 
 The home page reads one request cache entry twice.
 These reads produce a cache miss and a cache hit under the route-data span.
 Node startup and graceful shutdown also produce spans.
 
-Application server code can call `trace.inject(headers)` before an outgoing fetch.
-The trace carrier does not enter page data or browser props.
+Application server code can call `trace.inject(headers)` before an outgoing
+fetch. The trace carrier does not enter page data or browser props.
 See the [trace context guide](../../docs/guides/trace-context.md) for the propagation contract.

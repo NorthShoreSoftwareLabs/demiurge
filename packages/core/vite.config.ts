@@ -38,6 +38,9 @@ export default defineConfig({
         "node/index": fileURLToPath(
           new URL("src/node/index.ts", import.meta.url),
         ),
+        opentelemetry: fileURLToPath(
+          new URL("src/opentelemetry.ts", import.meta.url),
+        ),
         "edge/index": fileURLToPath(
           new URL("src/edge/index.ts", import.meta.url),
         ),
