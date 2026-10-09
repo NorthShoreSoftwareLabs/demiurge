@@ -73,7 +73,7 @@ await serveNodeBuild({
 });
 ```
 
-The application controls SDK registration. The integration uses the tracer
+The application controls SDK registration. Demiurge uses the tracer
 and meter that the application passes. Core does not register global providers
 or automatic instrumentations.
 
@@ -102,7 +102,7 @@ an outgoing fetch. Demiurge extracts a valid incoming trace context before it
 starts the request span. The [trace context guide](./trace-context.md) describes
 header limits, baggage policy, and carrier behavior.
 
-The integration does not propagate baggage by default. Demiurge does not copy
+Baggage propagation is disabled by default. Demiurge does not copy
 baggage into span attributes.
 
 ## Flush and shut down providers
@@ -119,12 +119,27 @@ const server = await serveNodeBuild({
 });
 
 async function shutdown() {
-  await server.shutdown();
-  await Promise.all([tracerProvider.forceFlush(), meterProvider.forceFlush()]);
-  await Promise.all([tracerProvider.shutdown(), meterProvider.shutdown()]);
+  const failures = [];
+  const phases = [
+    [() => server.shutdown()],
+    [() => tracerProvider.forceFlush(), () => meterProvider.forceFlush()],
+    [() => tracerProvider.shutdown(), () => meterProvider.shutdown()],
+  ];
+  for (const phase of phases) {
+    const results = await Promise.allSettled(phase.map(async (run) => run()));
+    for (const result of results) {
+      if (result.status === "rejected") failures.push(result.reason);
+    }
+  }
+  if (failures.length) throw new AggregateError(failures, "Shutdown failed.");
 }
 
-process.once("SIGTERM", () => void shutdown());
+process.once("SIGTERM", () => {
+  void shutdown().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+});
 ```
 
 The [OpenTelemetry JavaScript context guide](https://opentelemetry.io/docs/languages/js/context/)
