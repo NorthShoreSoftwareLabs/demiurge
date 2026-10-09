@@ -526,6 +526,20 @@ try {
     installedPeerDependencies?.["@vercel/routing-utils"] === undefined,
     "Packed package must not require @vercel/routing-utils.",
   );
+  assert(
+    !Object.keys(installedDependencies ?? {}).some((name) => name.startsWith("@opentelemetry/")),
+    "The packed core must not require OpenTelemetry runtime packages.",
+  );
+  const peerMetadata = installedPackage.peerDependenciesMeta;
+  const apiMetadata = typeof peerMetadata === "object" && peerMetadata !== null &&
+      "@opentelemetry/api" in peerMetadata
+    ? peerMetadata["@opentelemetry/api"]
+    : undefined;
+  assert(
+    typeof apiMetadata === "object" && apiMetadata !== null &&
+      "optional" in apiMetadata && apiMetadata.optional === true,
+    "The packed OpenTelemetry API peer must be optional.",
+  );
   assert(Array.isArray(installedPackage.keywords) && installedPackage.keywords.includes("react"), "Packed package is missing npm discovery keywords.");
 
   const installedReadme = readFileSync(join(installedRoot, "README.md"), "utf8");
@@ -1204,6 +1218,10 @@ try {
       ),
       "A Node-only consumer must not install @vercel/routing-utils.",
     );
+    assert(
+      !existsSync(join(nodeOnlyScratch, "node_modules", "@opentelemetry", "api")),
+      "A Node consumer must work without the OpenTelemetry API.",
+    );
     writeFileSync(
       join(nodeOnlyScratch, "check.js"),
       [
@@ -1218,6 +1236,27 @@ try {
     if (!nodeOnlyOutput.includes("node-only pack consumer ok")) {
       throw new Error("Node-only packed consumer check did not run to completion.");
     }
+    run("pnpm", ["add", "@opentelemetry/api@^1.9.0", "@opentelemetry/sdk-trace-base@^2.0.1"], nodeOnlyScratch);
+    writeFileSync(join(nodeOnlyScratch, "opentelemetry-check.js"), [
+      `import { defineOpenTelemetryInstrumentation } from "@demiurgejs/core/opentelemetry";`,
+      `import { createRequestHandler, json } from "@demiurgejs/core";`,
+      `import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base";`,
+      `const exporter = new InMemorySpanExporter();`,
+      `const provider = new BasicTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] });`,
+      `const runtimeInstrumentation = defineOpenTelemetryInstrumentation({ tracer: provider.getTracer("packed-consumer") });`,
+      `const handler = createRequestHandler({ runtimeInstrumentation, routes: { "./routes/index.ts": async () => ({ GET: json({ ok: true }), policy: { access: { public: true } } }) } });`,
+      `const response = await handler(new Request("https://example.test/", { headers: { traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" } }));`,
+      `await response.text();`,
+      `await provider.forceFlush();`,
+      `const span = exporter.getFinishedSpans()[0];`,
+      `if (response.status !== 200 || span?.spanContext().traceId !== "4bf92f3577b34da6a3ce929d0e0e4736" || span?.parentSpanContext?.spanId !== "00f067aa0ba902b7") {`,
+      `  throw new Error("The packed integration must preserve the trace parent.");`,
+      `}`,
+      `await provider.shutdown();`,
+      `console.log("opentelemetry pack consumer ok");`,
+    ].join("\n"));
+    const telemetryOutput = run("node", ["opentelemetry-check.js"], nodeOnlyScratch);
+    assert(telemetryOutput.includes("opentelemetry pack consumer ok"), "The packed OpenTelemetry integration must execute.");
   } finally {
     rmSync(nodeOnlyScratch, { force: true, recursive: true });
   }

@@ -1,32 +1,90 @@
-import { performance } from "node:perf_hooks";
 import console from "node:console";
-import { randomBytes } from "node:crypto";
-import { defineRuntimeInstrumentation } from "@demiurgejs/core";
+import process from "node:process";
+import { defineOpenTelemetryInstrumentation } from "@demiurgejs/core/opentelemetry";
+import { W3CTraceContextPropagator } from "@opentelemetry/core";
+import {
+  ConsoleMetricExporter,
+  MeterProvider,
+  PeriodicExportingMetricReader,
+} from "@opentelemetry/sdk-metrics";
+import {
+  ConsoleSpanExporter,
+  SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { serveNodeBuild } from "@demiurgejs/core/node";
 import { createHandler } from "./dist/server/server-entry.js";
 
-const runtimeInstrumentation = defineRuntimeInstrumentation({
-  startSpan({ operation, parent }) {
-    const start = performance.now();
-    const context = {
-      ...parent,
-      spanId: randomBytes(8).toString("hex"),
-      traceFlags: parent?.traceFlags ?? 1,
-      traceId: parent?.traceId ?? randomBytes(16).toString("hex"),
-    };
-    return {
-      context,
-      end() {
-        console.log(JSON.stringify({ operation, duration: performance.now() - start }));
-      },
-    };
-  },
+const tracerProvider = new NodeTracerProvider({
+  spanProcessors: [new SimpleSpanProcessor(new ConsoleSpanExporter())],
+});
+const meterProvider = new MeterProvider({
+  readers: [
+    new PeriodicExportingMetricReader({
+      exporter: new ConsoleMetricExporter(),
+      exportIntervalMillis: 2_000,
+    }),
+  ],
+});
+const instrumentation = defineOpenTelemetryInstrumentation({
+  meter: meterProvider.getMeter("demiurge-observability-example"),
+  propagator: new W3CTraceContextPropagator(),
+  tracer: tracerProvider.getTracer("demiurge-observability-example"),
 });
 
-await serveNodeBuild({
-  base: import.meta.url,
-  createHandler: ({ page }) => createHandler({ ...page, runtimeInstrumentation }),
-  runtimeInstrumentation,
-  name: "Demiurge observability server",
-  port: 4211,
-});
+let server;
+try {
+  server = await serveNodeBuild({
+    base: import.meta.url,
+    createHandler: ({ page }) => createHandler({ ...page, runtimeInstrumentation: instrumentation }),
+    name: "Demiurge observability server",
+    port: 4211,
+    runtimeInstrumentation: instrumentation,
+    shutdown: { signals: [] },
+  });
+} catch (error) {
+  await Promise.allSettled([
+    tracerProvider.shutdown(),
+    meterProvider.shutdown(),
+  ]);
+  throw error;
+}
+
+let shutdownPromise;
+const shutdown = () => {
+  if (shutdownPromise) return shutdownPromise;
+
+  shutdownPromise = (async () => {
+    let shutdownError;
+    try {
+      await server.shutdown();
+    } catch (error) {
+      shutdownError = error;
+    }
+
+    try {
+      await Promise.all([tracerProvider.forceFlush(), meterProvider.forceFlush()]);
+    } catch (error) {
+      shutdownError ??= error;
+    }
+
+    const results = await Promise.allSettled([
+      tracerProvider.shutdown(),
+      meterProvider.shutdown(),
+    ]);
+    shutdownError ??= results.find((result) => result.status === "rejected")?.reason;
+
+    if (shutdownError) {
+      console.error("Demiurge observability telemetry shutdown failed.", shutdownError);
+      process.exitCode = 1;
+    }
+  })();
+
+  return shutdownPromise;
+};
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => {
+    void shutdown();
+  });
+}
