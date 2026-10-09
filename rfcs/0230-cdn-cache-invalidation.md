@@ -211,153 +211,151 @@ The provider must give the integration a clear success or failure result. If
 the provider accepts an asynchronous request, the integration must distinguish
 request acceptance from completion.
 
-## Proposed developer interface
+## Developer interface direction
 
-API names in this section are provisional. Implementation review must confirm their placement in the existing page and request-context types.
+The public interface remains provisional until the Vercel proof establishes the required behavior.
+This RFC selects a provider boundary and acceptance conditions. It does not select final page fields or result types.
 
-A public page declares its response cache policy in its page definition:
+A page explicitly enables shared response caching and states a refresh interval.
+Server application code can request path invalidation after a successful write.
+Provider selection remains in deployment configuration.
+Application routes do not construct provider requests or import provider SDKs.
 
-```ts
-cache: {
-  refreshAfter: 300,
-  stale: "provider-managed",
-  dependencies: {
-    tags: ["articles"],
-    keys: [],
-  },
-}
-```
+The proposed interval name is `refreshAfter`.
+This interval describes request-driven regeneration eligibility.
+Content age, browser lifetime, and data-cache lifetime remain separate concepts.
+Caching requires explicit consent to stale serving after regeneration failure.
+No public strict stale-age field or completion result is added without an implementation that can enforce it.
 
-### Refresh and stale behavior
+Omitted response-cache declarations generate no ISR target.
+The implementation must preserve the existing route and security header contracts when ISR is disabled.
+Disabled ISR must preserve response headers under the existing security contract.
 
-`refreshAfter` is a positive integer in seconds. It specifies when the response becomes eligible for regeneration after a request.
-This interval does not specify a maximum content age, a browser cache lifetime, or a data-cache lifetime.
-Regeneration is request-driven. The framework does not schedule a periodic refresh without traffic.
+### Provider-managed stale serving
 
-`stale` is required whenever response caching is enabled.
-The value `"provider-managed"` permits the provider to serve the prior eligible response while regeneration runs or fails.
-This mode supplies no framework maximum stale age.
-Applications must select it explicitly because a failed regeneration can leave old content visible.
+Vercel Prerender Functions expose an `expiration` interval.
+A positive refresh interval maps to that field.
+The first integration does not use indefinite freshness through `expiration: false`.
 
-A future bounded mode can use `{ maxAge: seconds }` under `stale`.
-That value would measure permitted staleness from the end of the response freshness interval.
-A value of zero would prohibit stale serving after that interval.
-The first implementation rejects this object form because it cannot enforce that guarantee on Vercel ISR.
-The build must report the unsupported capability and identify the source declaration.
-It must not translate a strict limit into an approximate provider setting.
-
-Omitting `cache`, or declaring `cache: false`, disables framework response caching.
-A disabled page receives no ISR artifact or path revalidation target.
-The runtime sends `private, no-store` for that page response.
-Immutable asset caching remains separate.
-`refreshAfter: 0` and negative or noninteger intervals are invalid.
-Indefinite freshness is outside the first implementation.
-
-For Vercel, `refreshAfter` maps directly to the Prerender Function `expiration` value.
-The integration does not use `expiration: false`.
 Vercel regenerates expired responses in the background and retains prior content after regeneration failure.
 Its documented failure behavior uses a 30-second retry TTL. This interval does not bound total stale age.
 The Build Output API exposes no maximum stale-age field in its Prerender Function configuration.
-These facts justify the initial `"provider-managed"` mode and rejection of a bounded mode.
 
-### Path revalidation and result
+The first integration must therefore state that it supplies no maximum stale age.
+An application that requires a strict content-age limit cannot select this mode.
+Inspection and diagnostics must explain that limitation before deployment.
+The final consent field requires API review after the proof.
 
-Server application code requests path revalidation after a successful write:
+### Data freshness during generation
 
-```ts
-const result = await context.revalidatePath("/articles/hello");
-```
+Timed regeneration and explicit path invalidation must both produce data under a documented freshness rule.
+Deleting only a response entry can reproduce old content from the data cache.
+Freshness probes must exercise cached data during both regeneration paths.
 
-The operation coordinates the generated document and navigation response for the selected path.
-The application does not send provider headers or import a provider SDK from a route.
-Provider selection remains in deployment configuration.
+The framework must establish a fresh generation context without duplicating every loader dependency in the page declaration.
+A candidate generation context bypasses shared data-cache reads during generation while retaining request-local deduplication.
+The investigation must define whether generation writes shared data entries and how those writes interact with concurrent invalidation.
+The investigation must evaluate this candidate before it changes accepted data-cache behavior.
 
-Path revalidation returns a discriminated union:
+Existing key and tag declarations remain the source for ordinary data invalidation.
+Page, layout, metadata, and document data all require the selected generation rule.
+External caches remain application-owned and require a documented freshness responsibility.
 
-```ts
-type PathRevalidationResult =
-  | { status: "accepted"; operationId: string }
-  | { status: "completed"; operationId: string }
-  | {
-      status: "failed";
-      operationId: string;
-      stage: "data" | "provider";
-      retryable: boolean;
-      partial: boolean;
-    };
-```
+A bounded proof must test dynamic route keys and concurrent data refresh.
+If the candidate cannot provide the required freshness, the proof must report the missing mechanism before API acceptance.
+Literal page dependency inventories and automatic dependency discovery are outside the first public interface.
+Automatic representation-tag mapping remains deferred.
 
-An invalid path, unavailable capability, or undeclared target throws a configuration error before any invalidation starts.
-Operational failures return `failed` and emit a safe instrumentation signal.
-`operationId` is an opaque correlation identifier. It contains no provider credential, URL, or cache key.
-`partial` states that some required invalidation work succeeded before another step failed.
-`retryable` identifies a transient failure. It does not state that a retry is scheduled.
+### Invalidation result and retries
 
-`accepted` means every required provider request received acknowledgment after declared data invalidation succeeded.
-It does not prove that replacement content is ready.
-`completed` requires evidence that all required representations finished regeneration.
-The first Vercel implementation returns `accepted` after successful provider acknowledgment.
-It does not return `completed` because the initial adapter supplies no completion observation mechanism.
-No result promises immediate visibility at every client or edge.
-A failure result does not change an application write into a failed write.
+The initial operation reports provider acknowledgment or an operational failure.
+It must not report completed regeneration without evidence for every required representation.
+A transport timeout can leave provider acceptance unknown.
+The result must distinguish an unacknowledged operation from proof that the provider performed no work.
+Final result fields follow the observed provider protocol.
 
-### Retry ownership
+Configuration errors fail before provider work starts where the framework can identify them.
+Operational failures emit safe application-owned instrumentation with an opaque correlation identifier.
+No result contains credentials, internal cache keys, or provider response bodies.
+A failed invalidation does not reverse a committed application write.
 
-Demiurge performs one explicit invalidation attempt for each call.
-It reports the result before the call returns and emits its operation identifier through application-owned instrumentation.
-The framework does not schedule a durable retry or create an internal queue.
-
-Vercel owns retries for regeneration that its ISR service has accepted.
-The application owns retries when an explicit invalidation request fails before acknowledgment or only partially succeeds.
-An application that requires guaranteed delivery records a durable invalidation job with its committed write.
-That job retries the path operation and records its terminal result.
-The complete path operation is safe to repeat, although repeated calls can cause additional regeneration work.
+The framework supplies no durable retry queue.
+Vercel owns the regeneration retries that its ISR service accepts.
+Applications own durable delivery of explicit invalidation requests when their product requires that guarantee.
+An application can record an invalidation job with its committed write.
+Retries must be safe when a prior request succeeded but its acknowledgment was lost.
 Request background work cannot supply a durable retry guarantee.
 
-### Data freshness during regeneration
+### Request handling on cache hits
 
-Clearing a response cache can regenerate a page from an unchanged data cache.
-Each cached page therefore declares `dependencies` as `"none"` or a literal object with `keys` and `tags` arrays.
-The field is required. An empty object or two empty arrays cannot substitute for `"none"`.
+A provider cache hit can bypass the origin route pipeline.
+Generation-time checks alone cannot enforce middleware behavior for each later request.
+Request probes must identify which route behavior runs during generation and which behavior must run for every request.
 
-`keys` uses the existing `CacheKey` value shape.
-`tags` contains tag identifiers that the integration converts into existing `CacheTag` values.
-These identifiers invalidate data only. They are not provider representation tags.
-The declaration includes data used by the page, its layouts, metadata, and document contributions.
+Routes that require per-request authorization, session changes, rate limiting, or response headers cannot silently lose that behavior through ISR.
+Vercel route validation rejects such routes unless a verified request boundary preserves their contract.
+A public access declaration alone does not prove response-cache eligibility.
 
-Dependency declarations initially accept statically readable literals only.
-Computed dependency functions and request-dependent keys are unsupported.
-A dynamic page can use a broader literal data tag when that scope remains safe.
-The build rejects a declaration that static inspection cannot resolve.
-Inspection reports dependency declarations without importing route modules or executing data loaders.
+Personalized responses, cookie changes, mutations, and per-request CSP nonces remain outside shared ISR storage.
+Generation must prevent arbitrary incoming cookies and headers from influencing a stored public response.
+Declared public variants need explicit cache keys and controlled generation inputs.
 
-`"none"` asserts that generation does not read cached application data.
-During generation, framework cache reads must match a declared key or carry a declared tag.
-An undeclared read fails generation before the response can enter shared storage.
-This runtime check protects against an incomplete application declaration.
-External caches remain application-owned and require fresh reads during regeneration.
+Tests must exercise cache hits as well as cache misses.
+They must prove that one client cannot populate a response that exposes another client's data.
+A bypass request cannot change a private response into a public cache entry.
 
-Declared data invalidation finishes before the integration requests regeneration.
-If data invalidation fails, the operation returns `failed` with stage `data` and sends no provider request.
-Automatic dependency discovery and automatic representation-tag mapping remain deferred.
+### Document and navigation behavior
 
-Concurrent writes use eventual consistency in the first implementation.
-An acknowledgment does not prove that the page contains the latest committed write.
-The adapter must not claim write ordering or atomic replacement without verified provider evidence.
-Applications that require immediate authoritative reads must use uncached responses.
+Document requests and browser navigation use the same application route and data contracts.
+The current integration distinguishes navigation requests through `x-demiurge-navigation`.
+Representation probes must establish separate provider cache identities for document and navigation responses.
+An untrusted header must not select another representation's cache entry.
 
-### Security and diagnostics
+Vercel grouping revalidates related assets together.
+That fact does not prove that separate function executions read the same data snapshot or replace their entries atomically.
+Concurrency probes must observe mixed versions during concurrent updates and failed regeneration.
 
-The build rejects a shared-cache declaration when its known route policy requires authorization or a per-request CSP nonce.
-A runtime check refuses storage when a response contains private inputs, `Set-Cookie`, or incompatible response headers.
-Provider routing must prevent a bypass request from changing a private response into a public cache entry.
-Mutations and authenticated endpoints remain outside ISR routing.
+The investigation first evaluates a shared generation result for both representations.
+If Vercel requires separate generation, the accepted contract must state the observed consistency limits.
+It must not describe grouping alone as atomic replacement.
+Applications that require immediate authoritative reads retain uncached request handling.
 
-`demiurge inspect` reports eligibility, freshness, stale limits, declared dependencies, and selected provider capabilities.
+### Inspection and local verification
+
+`demiurge inspect` reports eligibility, refresh behavior, stale-serving limits, and provider capabilities.
 Diagnostics identify the source declaration and a repair action.
-Development validates the same declarations and executes regeneration through the shared document and navigation pipelines.
-Local tests use a deterministic representation cache and a provider test implementation.
-Local behavior does not claim to reproduce provider propagation or deployment rollback.
+Inspection does not import route modules or execute loaders.
+
+Development validates the same declarations and uses the shared document and navigation pipelines.
+A deterministic local provider implementation verifies operation order and failure handling.
+Local tests do not prove provider propagation, cache grouping, or deployment rollback.
+
+## Required Vercel proof
+
+[Issue #481](https://github.com/NorthShoreSoftwareLabs/demiurge/issues/481) owns this bounded investigation.
+
+The proof uses one public route with versioned data and one private control route.
+It exercises production artifacts through published package boundaries.
+A private investigation harness can test provider primitives before the public API is accepted.
+Provisional public exports and changes to existing application behavior remain outside the investigation.
+
+The verification record must include these results:
+
+- Timed regeneration observes the selected fresh-data rule after a cached data entry becomes stale.
+- Explicit invalidation observes the same fresh-data rule after an application write.
+- Document and navigation entries have separate cache identities and a documented consistency relationship.
+- Cookie, authorization, navigation-header, and query manipulation cannot populate private data in a shared entry.
+- Cache hits preserve required request behavior or make the route ineligible.
+- Failed regeneration demonstrates the provider's actual stale-serving and retry behavior.
+- Lost acknowledgments and repeated invalidation requests produce the documented failure and retry semantics.
+- Concurrent refresh and deployment rollback do not receive unsupported ordering or completion guarantees.
+
+The record identifies artifact commits, provider configuration, requests, responses, and observed limitations.
+Live probes require separate authorization for a dedicated verification project.
+This RFC does not authorize deployment or provide that access.
+
+API acceptance follows the proof record.
+If the proof fails a required condition, the proposal must change before public implementation starts.
 
 ## Vercel implementation boundary
 
@@ -373,12 +371,12 @@ Redirects cannot forward the token to another host.
 
 HTML documents and navigation payloads need coordinated invalidation.
 The implementation must verify Vercel grouping semantics for both representations before it claims atomic replacement.
-If grouping cannot satisfy the contract, it must report partial failure and define a recovery operation.
+The proof determines the consistency contract and recovery behavior before the public operation is implemented.
 Query parameters, locale, host, and declared header variation require explicit cache keys and invalidation scope.
 
 Build artifacts must retain the shared route, security, and framework-managed document pipelines.
 The integration must preserve explicit `HEAD` handlers, application fallbacks, and unsafe-method ownership.
-Regeneration failure can retain an eligible prior response under the explicit `"provider-managed"` policy.
+Regeneration failure can retain an eligible prior response under an explicitly selected provider-managed policy.
 The first Vercel integration declares that it cannot enforce a maximum stale age.
 
 Vercel documentation defines these primitives:
@@ -454,14 +452,15 @@ Provider references:
 
 ## Implementation stages
 
-1. Accept the refresh policy, dependency declaration, result union, and retry ownership in issue #230.
-2. Add typed capabilities and deterministic local verification.
-3. Generate Vercel ISR artifacts and implement on-demand path revalidation.
-4. Verify document and navigation consistency on a dedicated Vercel project.
+1. Complete the bounded Vercel investigation in issue #481.
+2. Verify fresh generation, cache-hit security, representation identity, and failure behavior.
+3. Review the proof record and accept the smallest supported public contract in issue #230.
+4. Implement that contract with typed capabilities, local tests, and packed-consumer verification.
 5. Create separate GCP and AWS issues when the roadmap promotes those integrations.
 
 Each implementation stage requires a separate GitHub issue with acceptance criteria.
-No implementation starts while its required design decision remains open.
+The bounded investigation can precede API acceptance.
+Public implementation requires the accepted design decision.
 
 ## Rejected alternatives
 
@@ -486,8 +485,8 @@ after its data entry is invalidated.
 
 ## Consequences
 
-Applications keep explicit data and response-cache declarations.
-Demiurge coordinates path revalidation through the selected deployment integration.
+Applications retain existing data declarations and explicitly select response caching.
+The proposed path operation belongs to the selected deployment integration.
 The integration declares the guarantees that its provider can verify.
 
 The first implementation targets Vercel.
@@ -506,19 +505,15 @@ conditions.
 - A deployment purge includes every affected variant.
 - A rollback restores origin data and requests the matching purge set.
 
-Additional Vercel and local tests must prove these conditions.
+Additional implementation tests must verify the accepted proof contract.
 
-- Group invalidation covers the generated document and its navigation response.
-- Completion requires verified evidence for both representations.
-- Declared data dependencies are invalidated before regeneration starts.
-- Concurrent regeneration does not receive an unsupported ordering or completion guarantee.
-- Strict stale-age limits fail during build for the first Vercel integration.
-- Undeclared framework cache reads fail generation before shared storage.
-- Disabled response caching emits no ISR target and sends `private, no-store`.
-- Provider acknowledgment produces `accepted` without an unsupported completion claim.
+- Document and navigation cache identities cannot collide.
+- Both regeneration paths use the accepted fresh-data rule.
+- Cache hits preserve required request behavior or reject the route declaration.
+- Provider acknowledgment does not produce an unsupported completion claim.
+- Unknown provider acceptance remains visible after a transport failure.
 - Private routes, nonce documents, mutations, and cookie-bearing responses cannot enter ISR storage.
 - A bypass token cannot enter browser output, logs, redirects, or an untrusted outbound request.
-- Provider failures produce the declared typed result and safe instrumentation.
 - Unsupported capabilities fail during build or startup where knowable.
 - Inspection reports declarations without executing data loaders.
 - Packed consumers use only published package exports.
