@@ -84,9 +84,15 @@ import { defineLocales, localeDirection, localizeHref, resolveLocale, type Local
 import {
   startRuntimeSpan,
   type RuntimeInstrumentation,
+  type RuntimeSpanContext,
   type RuntimeSpan,
   type RuntimeSpanOperation,
 } from "../platform/runtime-instrumentation";
+import {
+  createRuntimeTraceCarrier,
+  extractRuntimeTraceContext,
+  type RuntimeTraceCarrier,
+} from "../platform/trace-context";
 
 export type RequestErrorReporter = (
   error: unknown,
@@ -132,6 +138,8 @@ type RequestRuntimeOptions = {
   responseBodyObservation?: "completion" | "handoff";
   runtimeInstrumentation?: RuntimeInstrumentation;
   runtimeRequestSpan?: RuntimeSpan;
+  runtimeRequestContext?: RuntimeSpanContext;
+  runtimeTraceCarrier?: RuntimeTraceCarrier;
 };
 
 export type RequestHandler = (request: Request) => Promise<Response>;
@@ -174,7 +182,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
       options.adapter && !options.adapter.capabilities.responseBodyCompletion
         ? "handoff"
         : "completion",
-      async (runtimeRequestSpan) => {
+      async (runtimeRequestSpan, runtimeRequestContext, runtimeTraceCarrier) => {
         let ssr = options.ssr;
         if (locales) {
           const resolution = resolveLocale(request, locales);
@@ -185,7 +193,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
               lang: resolution.locale,
               locale: resolution.locale,
               pathname: resolution.pathname,
-            }, { runtimeInstrumentation: options.runtimeInstrumentation, runtimeRequestSpan });
+            }, { runtimeInstrumentation: options.runtimeInstrumentation, runtimeRequestSpan, runtimeRequestContext, runtimeTraceCarrier });
           }
           if (resolution.redirect) {
             if (request.method !== "GET" && request.method !== "HEAD") {
@@ -206,6 +214,8 @@ export function createRequestHandler(options: RequestHandlerOptions) {
                 renderPage: options.renderPage,
                 runtimeInstrumentation: options.runtimeInstrumentation,
                 runtimeRequestSpan,
+                runtimeRequestContext,
+                runtimeTraceCarrier,
                 routePathname: resolution.pathname,
                 ssr: {
                   ...options.ssr,
@@ -245,6 +255,8 @@ export function createRequestHandler(options: RequestHandlerOptions) {
             renderPage: options.renderPage,
             runtimeInstrumentation: options.runtimeInstrumentation,
             runtimeRequestSpan,
+            runtimeRequestContext,
+            runtimeTraceCarrier,
             routePathname: resolution.pathname,
             ssr,
             renderCsrfForms,
@@ -259,6 +271,8 @@ export function createRequestHandler(options: RequestHandlerOptions) {
           renderPage: options.renderPage,
           runtimeInstrumentation: options.runtimeInstrumentation,
           runtimeRequestSpan,
+          runtimeRequestContext,
+          runtimeTraceCarrier,
           ssr,
           renderCsrfForms,
         });
@@ -298,15 +312,17 @@ export async function handleRequestWithManifest(
     rateLimitStore: defaultRateLimitStore,
   },
 ) {
-  if (!options.runtimeRequestSpan) {
+  if (!options.runtimeRequestSpan && !options.runtimeRequestContext) {
     return await instrumentRequest(
       request,
       options.runtimeInstrumentation,
       options.responseBodyObservation ?? "completion",
-      async (runtimeRequestSpan) =>
+      async (runtimeRequestSpan, runtimeRequestContext, runtimeTraceCarrier) =>
         await dispatchRequestWithManifest(manifest, request, {
           ...options,
           runtimeRequestSpan,
+          runtimeRequestContext,
+          runtimeTraceCarrier,
         }),
     );
   }
@@ -517,7 +533,14 @@ async function handleMatchedRoute(
 
   request = limitRequestBody(routeSecurity?.request, request);
   const requestContext: Record<string, unknown> = {};
-  const cache = createRequestCache(options.cacheStore, options.ssr?.locale);
+  const requestParent = options.runtimeRequestSpan?.context ?? options.runtimeRequestContext;
+  let cacheParent = requestParent;
+  const cache = createRequestCache(
+    options.cacheStore,
+    options.ssr?.locale,
+    options.runtimeInstrumentation,
+    () => cacheParent,
+  );
 
   if (capability.kind === "page") {
     const csrf = options.renderCsrfForms === false
@@ -530,6 +553,7 @@ async function handleMatchedRoute(
       request,
       context: requestContext,
       search: url.searchParams,
+      trace: options.runtimeTraceCarrier,
       url,
     } satisfies HttpRouteContext;
     const middlewares = await loadInheritedRouteMiddleware(
@@ -563,15 +587,26 @@ async function handleMatchedRoute(
             options.runtimeRequestSpan,
             "demiurge.route.data",
             {},
-            async () =>
-              await loadPageRoute(
-                manifest,
-                routePathname,
-                request,
-                undefined,
-                cache,
-                { locale: options.ssr?.locale, requestContext },
-              ),
+            async (span) => {
+              cacheParent = span?.context ?? requestParent;
+              try {
+                return await loadPageRoute(
+                  manifest,
+                  routePathname,
+                  request,
+                  undefined,
+                  cache,
+                  {
+                    locale: options.ssr?.locale,
+                    requestContext,
+                    trace: createRuntimeTraceCarrier(cacheParent, options.runtimeInstrumentation?.traceContext),
+                  },
+                );
+              } finally {
+                cacheParent = requestParent;
+              }
+            },
+            options.runtimeRequestContext,
           );
 
           if (match.status !== "ready") {
@@ -636,6 +671,7 @@ async function handleMatchedRoute(
                 },
                 signal: request.signal,
               }),
+            options.runtimeRequestContext,
           );
         } catch (error) {
           if (error instanceof RequestBodyTooLargeError) {
@@ -702,6 +738,7 @@ async function handleMatchedRoute(
     request,
     context: requestContext,
     search: url.searchParams,
+    trace: options.runtimeTraceCarrier,
     url,
   } satisfies HttpRouteContext;
   const middlewares = await loadInheritedRouteMiddleware(
@@ -740,7 +777,14 @@ async function handleMatchedRoute(
             options.runtimeRequestSpan,
             "demiurge.route.mutation",
             {},
-            async () => await toResponse(capability, context),
+            async (span) => await toResponse(capability, {
+              ...context,
+              trace: createRuntimeTraceCarrier(
+                span?.context ?? requestParent,
+                options.runtimeInstrumentation?.traceContext,
+              ),
+            }),
+            options.runtimeRequestContext,
           );
         }
 
@@ -885,10 +929,13 @@ function invalidMutationInvalidation() {
 function createRequestCache(
   options: RequestCacheStoreOptions | undefined,
   locale?: string,
+  runtimeInstrumentation?: RuntimeInstrumentation,
+  runtimeParent?: () => RuntimeSpanContext | undefined,
 ) {
+  const telemetry = { runtimeInstrumentation, runtimeParent };
   const cache = options
-    ? createCache(options)
-    : createMemoryCache();
+    ? createCache({ ...options, ...telemetry })
+    : createMemoryCache(telemetry);
 
   if (!locale) return cache;
 
@@ -1061,6 +1108,7 @@ async function runRuntimeMiddleware(
     "demiurge.middleware",
     {},
     async () => await runRouteMiddleware(middlewares, context, handler),
+    options.runtimeRequestContext,
   );
 }
 
@@ -1069,17 +1117,18 @@ async function runRuntimeOperation<T>(
   requestSpan: RuntimeSpan | undefined,
   operation: RuntimeSpanOperation,
   attributes: Readonly<Record<string, string>>,
-  work: () => Promise<T>,
+  work: (span?: RuntimeSpan) => Promise<T>,
+  requestContext?: RuntimeSpanContext,
 ) {
   const span = startRuntimeSpan(instrumentation, {
     attributes,
     kind: "internal",
     operation,
-    parent: requestSpan?.context,
+    parent: requestSpan?.context ?? requestContext,
   });
 
   try {
-    const result = await work();
+    const result = await work(span);
     span?.setAttribute("demiurge.operation.outcome", "success");
     span?.setStatus("unset");
     span?.end();
@@ -1102,7 +1151,7 @@ async function renderInstrumentedNotFoundResponse(
   renderOptions: Parameters<typeof renderNotFoundResponse>[2],
   runtimeOptions: Pick<
     RequestRuntimeOptions,
-    "runtimeInstrumentation" | "runtimeRequestSpan"
+    "runtimeInstrumentation" | "runtimeRequestSpan" | "runtimeRequestContext" | "runtimeTraceCarrier"
   >,
 ) {
   const render = async () =>
@@ -1118,6 +1167,7 @@ async function renderInstrumentedNotFoundResponse(
     "demiurge.render",
     { "demiurge.render.mode": "ssr" },
     render,
+    runtimeOptions.runtimeRequestContext,
   );
 }
 
@@ -1129,7 +1179,7 @@ async function renderInstrumentedFailureResponse(
   renderOptions: Parameters<typeof renderFailureResponse>[4],
   runtimeOptions: Pick<
     RequestRuntimeOptions,
-    "runtimeInstrumentation" | "runtimeRequestSpan"
+    "runtimeInstrumentation" | "runtimeRequestSpan" | "runtimeRequestContext" | "runtimeTraceCarrier"
   >,
 ) {
   const render = async () =>
@@ -1152,6 +1202,7 @@ async function renderInstrumentedFailureResponse(
     "demiurge.render",
     { "demiurge.render.mode": "ssr" },
     render,
+    runtimeOptions.runtimeRequestContext,
   );
 }
 
@@ -1159,9 +1210,17 @@ async function instrumentRequest(
   request: Request,
   instrumentation: RuntimeInstrumentation | undefined,
   bodyObservation: "completion" | "handoff",
-  dispatch: (span: RuntimeSpan | undefined) => Promise<Response>,
+  dispatch: (
+    span: RuntimeSpan | undefined,
+    context: RuntimeSpanContext | undefined,
+    traceCarrier: RuntimeTraceCarrier,
+  ) => Promise<Response>,
 ) {
   const method = runtimeRequestMethod(request.method);
+  const remoteContext = extractRuntimeTraceContext(
+    request.headers,
+    instrumentation?.traceContext,
+  );
   const span = startRuntimeSpan(instrumentation, {
     attributes: {
       "demiurge.response.body_observation": bodyObservation,
@@ -1171,10 +1230,16 @@ async function instrumentRequest(
     kind: "server",
     name: method,
     operation: "demiurge.request",
+    parent: remoteContext,
   });
+  const context = span?.context ?? remoteContext;
+  const traceCarrier = createRuntimeTraceCarrier(
+    context,
+    instrumentation?.traceContext,
+  );
 
   try {
-    const response = await dispatch(span);
+    const response = await dispatch(span, context, traceCarrier);
     span?.setAttribute("http.response.status_code", response.status);
     span?.setAttribute(
       "demiurge.operation.outcome",

@@ -1,6 +1,8 @@
+import { parseTraceContext } from "../../src/platform/trace-context";
 import { describe, expect, it } from "vitest";
 import {
   verifyDeploymentContract,
+  verifyDeploymentTraceContextContract,
   type DeploymentClaims,
   type DeploymentContractProbes,
   type DeploymentReadinessHost,
@@ -224,5 +226,30 @@ describe("verifyDeploymentContract", () => {
     await expect(
       verifyDeploymentContract(everyClaim, probes),
     ).rejects.toThrow("stop reporting ready once shutdown starts");
+  });
+});
+
+
+describe("deployment trace context contract", () => {
+  it("accepts preserved sampling and safely discarded malformed input", async () => {
+    await expect(verifyDeploymentTraceContextContract((headers) =>
+      Response.json(parseTraceContext(headers) ?? null)
+    )).resolves.toBeUndefined();
+  });
+
+  it("rejects a deployment that removes trace headers", async () => {
+    await expect(verifyDeploymentTraceContextContract(() => Response.json(null)))
+      .rejects.toThrow("preserve trace identifiers");
+  });
+
+  it("rejects an unsuccessful probe", async () => {
+    await expect(verifyDeploymentTraceContextContract(() => new Response("<h1>Unavailable</h1>", { status: 500 })))
+      .rejects.toThrow("successful response");
+  });
+
+  it("rejects a deployment that accepts malformed trace input", async () => {
+    await expect(verifyDeploymentTraceContextContract((headers) =>
+      Response.json(parseTraceContext(headers) ?? {})
+    )).rejects.toThrow("must not supply a remote context");
   });
 });

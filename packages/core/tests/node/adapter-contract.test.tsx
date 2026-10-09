@@ -1,9 +1,10 @@
-import { once } from "node:events";
+import { errorMonitor, once, type EventEmitter } from "node:events";
 import { Suspense, use } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   createRequestHandler,
   defineRoutePolicy,
+  defineRuntimeInstrumentation,
   page,
   security,
   type RouteModule,
@@ -74,6 +75,31 @@ const routes = {
 
 let server: NodeServer;
 let origin: string;
+const lifecycleSpans: Array<{
+  attributes: Record<string, unknown>;
+  ends: number;
+  operation: string;
+}> = [];
+const runtimeInstrumentation = defineRuntimeInstrumentation({
+  startSpan(options) {
+    const span = {
+      attributes: { ...options.attributes },
+      ends: 0,
+      operation: options.operation,
+    };
+    lifecycleSpans.push(span);
+    return {
+      context: {},
+      end() {
+        span.ends += 1;
+      },
+      setAttribute(name, value) {
+        span.attributes[name] = value;
+      },
+      setStatus() {},
+    };
+  },
+});
 
 beforeAll(async () => {
   server = createNodeServer({
@@ -83,6 +109,7 @@ beforeAll(async () => {
       routes,
       ssr: { clientEntry: "/assets/client.js" },
     }),
+    runtimeInstrumentation,
     shutdown: { gracePeriod: 1_000, signals: [] },
   });
   server.listen(0, "127.0.0.1");
@@ -94,6 +121,16 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await server.shutdown();
+  expect(lifecycleSpans.map((span) => span.operation)).toEqual([
+    "demiurge.adapter.start",
+    "demiurge.adapter.shutdown",
+  ]);
+  expect(lifecycleSpans.map((span) => span.attributes["demiurge.operation.outcome"]))
+    .toEqual(["success", "success"]);
+  expect(lifecycleSpans.map((span) => span.ends)).toEqual([1, 1]);
+  const errorEvents: EventEmitter = server;
+  errorEvents.emit(errorMonitor, new Error("late observed error"));
+  expect(lifecycleSpans[0]?.ends).toBe(1);
 });
 
 function backgroundHost() {
@@ -114,6 +151,91 @@ function backgroundHost() {
 }
 
 describe("Node adapter contract", () => {
+  it("ends pending startup when shutdown precedes listening", async () => {
+    const spans: Array<{ operation: string; ends: number; attributes: Record<string, unknown> }> = [];
+    const idle = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler: async () => new Response("ok"),
+      shutdown: { signals: [] },
+      runtimeInstrumentation: defineRuntimeInstrumentation({
+        startSpan(options) {
+          const span = { operation: options.operation, ends: 0, attributes: { ...options.attributes } };
+          spans.push(span);
+          return {
+            context: {},
+            end() { span.ends += 1; },
+            setAttribute(name, value) { span.attributes[name] = value; },
+          };
+        },
+      }),
+    });
+    const listeningHandlers = idle.listeners("listening").length;
+    await idle.shutdown();
+    await idle.shutdown();
+    expect(spans.map((span) => [span.operation, span.ends])).toEqual([
+      ["demiurge.adapter.start", 1],
+      ["demiurge.adapter.shutdown", 1],
+    ]);
+    expect(spans[0]?.attributes["demiurge.operation.outcome"]).toBe("canceled");
+    expect(spans[1]?.attributes["demiurge.operation.outcome"]).toBe("success");
+    const events: EventEmitter = idle;
+    expect(events.listeners(errorMonitor)).toHaveLength(0);
+    expect(idle.listeners("listening")).toHaveLength(listeningHandlers - 1);
+  });
+
+  it("ends a failed startup span once and preserves the listener error", async () => {
+    const occupied = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler: async () => new Response("ok"),
+    });
+    occupied.listen(0, "127.0.0.1");
+    await once(occupied, "listening");
+    const failureSpans: Array<{
+      attributes: Record<string, unknown>;
+      ends: number;
+      operation: string;
+    }> = [];
+    const failing = createNodeServer({
+      allowedHosts: ["127.0.0.1"],
+      handler: async () => new Response("ok"),
+      runtimeInstrumentation: defineRuntimeInstrumentation({
+        startSpan(options) {
+          const span = {
+            attributes: { ...options.attributes },
+            ends: 0,
+            operation: options.operation,
+          };
+          failureSpans.push(span);
+          return {
+            context: {},
+            end() {
+              span.ends += 1;
+            },
+            setAttribute(name, value) {
+              span.attributes[name] = value;
+            },
+            setStatus() {},
+          };
+        },
+      }),
+    });
+    const address = occupied.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+
+    failing.listen(port, "127.0.0.1");
+    await once(failing, "error");
+    expect(failureSpans.map((span) => span.operation)).toEqual([
+      "demiurge.adapter.start",
+    ]);
+    expect(failureSpans[0]?.attributes["demiurge.operation.outcome"]).toBe("error");
+    expect(failureSpans[0]?.ends).toBe(1);
+    const errorEvents: EventEmitter = failing;
+    expect(errorEvents.listeners(errorMonitor)).toHaveLength(0);
+
+    await failing.shutdown();
+    await occupied.shutdown();
+  });
+
   it("proves every capability the Node adapter declares", async () => {
     await expect(
       verifyAdapterContract(nodeAdapter, {

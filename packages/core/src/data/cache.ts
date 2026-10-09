@@ -1,3 +1,10 @@
+import {
+  startRuntimeSpan,
+  type RuntimeInstrumentation,
+  type RuntimeSpan,
+  type RuntimeSpanContext,
+} from "../platform/runtime-instrumentation";
+
 export type CacheScope =
   | "build"
   | "none"
@@ -22,6 +29,14 @@ export type CacheTag = {
 export type CacheDuration = number | `${number}${"h" | "m" | "ms" | "s"}`;
 
 type MaybePromise<T> = T | Promise<T>;
+type StoreOperation =
+  | "acquire_refresh_lease"
+  | "delete"
+  | "get"
+  | "invalidate_tags"
+  | "publish_refresh"
+  | "release_refresh_lease"
+  | "set";
 
 export type CacheRequest<TResult> = {
   fn: () => MaybePromise<TResult>;
@@ -105,6 +120,8 @@ export type CreateCacheOptions = {
   now?: () => number;
   onBackgroundError?: (error: unknown) => void;
   refreshLeaseTtl?: CacheDuration;
+  runtimeInstrumentation?: RuntimeInstrumentation;
+  runtimeParent?: RuntimeSpanContext | (() => RuntimeSpanContext | undefined);
   store: CacheStore;
   waitUntil?: (promise: Promise<void>) => void;
 };
@@ -148,6 +165,8 @@ export type MemoryCacheOptions = {
   now?: () => number;
   onBackgroundError?: (error: unknown) => void;
   refreshLeaseTtl?: CacheDuration;
+  runtimeInstrumentation?: RuntimeInstrumentation;
+  runtimeParent?: RuntimeSpanContext | (() => RuntimeSpanContext | undefined);
   waitUntil?: (promise: Promise<void>) => void;
 };
 
@@ -224,166 +243,234 @@ export function createCache(options: CreateCacheOptions): Cache {
   const requestEntries = new Map<string, RequestCacheEntry<unknown>>();
   const sharedPending = new Map<string, PendingStoreEntry>();
 
+  const runtimeParent = () => {
+    try {
+      return typeof options.runtimeParent === "function"
+        ? options.runtimeParent()
+        : options.runtimeParent;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const storeOperation = <T>(
+    operation: StoreOperation,
+    parent: RuntimeSpan | undefined,
+    action: () => MaybePromise<T>,
+  ) => runInstrumentedOperation(
+    options.runtimeInstrumentation,
+    "demiurge.store",
+    {
+      "demiurge.store.operation": operation,
+      ...(options.runtimeInstrumentation
+        ? storeAtomicityAttribute(options.store)
+        : {}),
+    },
+    parent?.context ?? runtimeParent(),
+    action,
+  );
+
   return {
     async get<TResult>(request: CacheRequest<TResult>) {
       const scope = request.scope ?? "request";
+      return await runCacheOperation(
+        options.runtimeInstrumentation,
+        "get",
+        scope,
+        runtimeParent(),
+        async (cacheSpan) => {
+          if (scope === "none") {
+            cacheSpan?.setAttribute("demiurge.cache.outcome", "miss");
+            return await request.fn();
+          }
 
-      if (scope === "none") {
-        return await request.fn();
-      }
+          const rawKey = serializeCacheKey(request.key);
 
-      const rawKey = serializeCacheKey(request.key);
+          if (scope === "request") {
+            const existing = requestEntries.get(rawKey);
+            cacheSpan?.setAttribute(
+              "demiurge.cache.outcome",
+              existing && existing.expiresAt > now() ? "hit" : "miss",
+            );
+            return await getRequestValue(requestEntries, rawKey, request, now);
+          }
 
-      if (scope === "request") {
-        return await getRequestValue(requestEntries, rawKey, request, now);
-      }
-
-      const key = serializeStoreKey(namespace, scope, rawKey);
-      const tags = (request.tags ?? []).map((value) =>
-        serializeStoreTag(namespace, scope, serializeCacheTag(value))
-      );
-      const existing = await options.store.get(key);
-
-      if (
-        existing &&
-        (existing.expiresAt === null || existing.expiresAt > now())
-      ) {
-        if (existing.negative) {
-          throw new CacheNotFoundError(
-            typeof existing.value === "string" ? existing.value : undefined,
+          const key = serializeStoreKey(namespace, scope, rawKey);
+          const tags = (request.tags ?? []).map((value) =>
+            serializeStoreTag(namespace, scope, serializeCacheTag(value))
           );
-        }
+          const existing = await storeOperation("get", cacheSpan, () => options.store.get(key));
 
-        // TYPE-EVIDENCE: the store entry holds a value that the caller stored as TResult. The cast restores that generic type after storage erased it.
-        return existing.value as TResult;
-      }
+          if (
+            existing &&
+            (existing.expiresAt === null || existing.expiresAt > now())
+          ) {
+            cacheSpan?.setAttribute("demiurge.cache.outcome", "hit");
+            if (existing.negative) {
+              throw new CacheNotFoundError(
+                typeof existing.value === "string" ? existing.value : undefined,
+              );
+            }
 
-      if (existing && isStaleEntryUsable(existing, now())) {
-        const refreshStore = requireRefreshStore(options.store);
-        const token = globalThis.crypto.randomUUID();
-        const acquired = await refreshStore.acquireRefreshLease(
-          key,
-          token,
-          now() + refreshLeaseTtl,
-        );
+            // TYPE-EVIDENCE: the store entry holds a value that the caller stored as TResult. The cast restores that generic type after storage erased it.
+            return existing.value as TResult;
+          }
 
-        if (acquired) {
-          const refresh = refreshStaleEntry({
-            key,
-            now,
-            onBackgroundError: options.onBackgroundError,
-            refreshStore,
-            request,
-            tags,
-            token,
-          });
-
-          options.waitUntil?.(refresh);
-        }
-
-        // TYPE-EVIDENCE: the store entry holds a value that the caller stored as TResult. The cast restores that generic type after storage erased it.
-        return existing.value as TResult;
-      }
-
-      if (existing) {
-        await options.store.delete(key);
-      }
-
-      const currentPending = sharedPending.get(key);
-
-      if (currentPending) {
-        // TYPE-EVIDENCE: the pending entry wraps the request function that returns TResult. The cast restores that generic type.
-        return await currentPending.promise as TResult;
-      }
-
-      const state = { invalidated: false };
-      const value = Promise.resolve().then(request.fn).then(
-        async (result) => {
-          if (!state.invalidated) {
-            await options.store.set(key, {
-              expiresAt: storeExpirationTime(now(), request.ttl),
-              staleUntil: storeStaleTime(
-                now(),
-                request.ttl,
-                request.staleWhileRevalidate,
+          if (existing && isStaleEntryUsable(existing, now())) {
+            cacheSpan?.setAttribute("demiurge.cache.outcome", "stale");
+            const refreshStore = requireRefreshStore(options.store);
+            const token = globalThis.crypto.randomUUID();
+            const acquired = await storeOperation(
+              "acquire_refresh_lease",
+              cacheSpan,
+              () => refreshStore.acquireRefreshLease(
+                key,
+                token,
+                now() + refreshLeaseTtl,
               ),
-              tags,
-              value: result,
-            });
+            );
+
+            if (acquired) {
+              const refresh = refreshStaleEntry({
+                instrumentation: options.runtimeInstrumentation,
+                key,
+                link: cacheSpan?.context ?? runtimeParent(),
+                now,
+                onBackgroundError: options.onBackgroundError,
+                refreshStore,
+                request,
+                tags,
+                token,
+              });
+
+              options.waitUntil?.(refresh);
+            }
+
+            // TYPE-EVIDENCE: the store entry holds a value that the caller stored as TResult. The cast restores that generic type after storage erased it.
+            return existing.value as TResult;
           }
 
-          return result;
-        },
-        async (error) => {
-          if (!state.invalidated && error instanceof CacheNotFoundError) {
-            await options.store.set(key, negativeStoreEntry(now(), request, tags, error));
+          cacheSpan?.setAttribute("demiurge.cache.outcome", "miss");
+          if (existing) {
+            await storeOperation("delete", cacheSpan, () => options.store.delete(key));
           }
 
-          throw error;
+          const currentPending = sharedPending.get(key);
+
+          if (currentPending) {
+            cacheSpan?.setAttribute("demiurge.cache.outcome", "coalesced");
+            // TYPE-EVIDENCE: the pending entry wraps the request function that returns TResult. The cast restores that generic type.
+            return await currentPending.promise as TResult;
+          }
+
+          const state = { invalidated: false };
+          const value = Promise.resolve().then(request.fn).then(
+            async (result) => {
+              if (!state.invalidated) {
+                await storeOperation("set", cacheSpan, () => options.store.set(key, {
+                  expiresAt: storeExpirationTime(now(), request.ttl),
+                  staleUntil: storeStaleTime(
+                    now(),
+                    request.ttl,
+                    request.staleWhileRevalidate,
+                  ),
+                  tags,
+                  value: result,
+                }));
+              }
+
+              return result;
+            },
+            async (error) => {
+              if (!state.invalidated && error instanceof CacheNotFoundError) {
+                await storeOperation("set", cacheSpan, () => options.store.set(key, negativeStoreEntry(now(), request, tags, error)));
+              }
+
+              throw error;
+            },
+          );
+          const pending: PendingStoreEntry = { promise: value, state, tags };
+          sharedPending.set(key, pending);
+
+          try {
+            return await value;
+          } finally {
+            if (sharedPending.get(key) === pending) {
+              sharedPending.delete(key);
+            }
+          }
         },
       );
-      const pending: PendingStoreEntry = {
-        promise: value,
-        state,
-        tags,
-      };
-      sharedPending.set(key, pending);
-
-      try {
-        return await value;
-      } finally {
-        if (sharedPending.get(key) === pending) {
-          sharedPending.delete(key);
-        }
-      }
     },
     async invalidateKey(key: CacheKey) {
-      const rawKey = serializeCacheKey(key);
-      const deletedRequest = requestEntries.delete(rawKey);
-      let deletedPending = false;
+      return await runCacheOperation(
+        options.runtimeInstrumentation,
+        "invalidate_key",
+        undefined,
+        runtimeParent(),
+        async (cacheSpan) => {
+          const rawKey = serializeCacheKey(key);
+          const deletedRequest = requestEntries.delete(rawKey);
+          let deletedPending = false;
 
-      const deletedShared = await Promise.all(
-        sharedScopes.map((scope) => {
-          const storeKey = serializeStoreKey(namespace, scope, rawKey);
-          const pending = sharedPending.get(storeKey);
+          const deletedShared = await Promise.all(
+            sharedScopes.map((scope) => {
+              const storeKey = serializeStoreKey(namespace, scope, rawKey);
+              const pending = sharedPending.get(storeKey);
 
-          if (pending) {
-            pending.state.invalidated = true;
-            deletedPending = true;
-          }
+              if (pending) {
+                pending.state.invalidated = true;
+                deletedPending = true;
+              }
 
-          return options.store.delete(storeKey);
-        }),
+              return storeOperation("delete", cacheSpan, () => options.store.delete(storeKey));
+            }),
+          );
+
+          cacheSpan?.setAttribute("demiurge.cache.outcome", "invalidation");
+          return deletedRequest || deletedPending || deletedShared.some(Boolean);
+        },
       );
-
-      return deletedRequest || deletedPending || deletedShared.some(Boolean);
     },
     async invalidateTags(tags: readonly CacheTag[]) {
-      const rawTags = tags.map(serializeCacheTag);
-      const deletedRequest = deleteMatchingRequestTags(
-        requestEntries,
-        new Set(rawTags),
+      return await runCacheOperation(
+        options.runtimeInstrumentation,
+        "invalidate_tags",
+        undefined,
+        runtimeParent(),
+        async (cacheSpan) => {
+          const rawTags = tags.map(serializeCacheTag);
+          const deletedRequest = deleteMatchingRequestTags(
+            requestEntries,
+            new Set(rawTags),
+          );
+          const storeTags = new Set(
+            sharedScopes.flatMap((scope) =>
+              rawTags.map((value) => serializeStoreTag(namespace, scope, value))
+            ),
+          );
+          let deletedPending = 0;
+
+          for (const pending of sharedPending.values()) {
+            if (
+              !pending.state.invalidated &&
+              pending.tags.some((value) => storeTags.has(value))
+            ) {
+              pending.state.invalidated = true;
+              deletedPending += 1;
+            }
+          }
+
+          const deletedShared = await storeOperation(
+            "invalidate_tags",
+            cacheSpan,
+            () => options.store.invalidateTags([...storeTags]),
+          );
+
+          cacheSpan?.setAttribute("demiurge.cache.outcome", "invalidation");
+          return deletedRequest + deletedPending + deletedShared;
+        },
       );
-      const storeTags = new Set(
-        sharedScopes.flatMap((scope) =>
-          rawTags.map((value) => serializeStoreTag(namespace, scope, value))
-        ),
-      );
-      let deletedPending = 0;
-
-      for (const pending of sharedPending.values()) {
-        if (
-          !pending.state.invalidated &&
-          pending.tags.some((value) => storeTags.has(value))
-        ) {
-          pending.state.invalidated = true;
-          deletedPending += 1;
-        }
-      }
-
-      const deletedShared = await options.store.invalidateTags([...storeTags]);
-
-      return deletedRequest + deletedPending + deletedShared;
     },
   };
 }
@@ -396,6 +483,8 @@ export function createMemoryCache(options: MemoryCacheOptions = {}): Cache {
     now,
     onBackgroundError: options.onBackgroundError,
     refreshLeaseTtl: options.refreshLeaseTtl,
+    runtimeInstrumentation: options.runtimeInstrumentation,
+    runtimeParent: options.runtimeParent,
     store: createMemoryCacheStore({
       maximumEntries: options.maximumEntries,
       now,
@@ -821,7 +910,9 @@ function requireRefreshStore(store: CacheStore): CoordinatedCacheStore {
 }
 
 async function refreshStaleEntry<TResult>(options: {
+  instrumentation?: RuntimeInstrumentation;
   key: string;
+  link?: RuntimeSpanContext;
   now: () => number;
   onBackgroundError: ((error: unknown) => void) | undefined;
   refreshStore: CoordinatedCacheStore;
@@ -829,37 +920,205 @@ async function refreshStaleEntry<TResult>(options: {
   tags: readonly string[];
   token: string;
 }) {
+  const backgroundSpan = startRuntimeSpan(options.instrumentation, {
+    kind: "internal",
+    links: options.link ? [{ context: options.link }] : undefined,
+    operation: "demiurge.background",
+  });
+  let reportedRefreshFailure: unknown;
+  let refreshFailureReported = false;
+  let releaseFailed = false;
   try {
-    const result = await options.request.fn();
-    const currentTime = options.now();
-    await options.refreshStore.publishRefresh(options.key, options.token, {
-      expiresAt: storeExpirationTime(currentTime, options.request.ttl),
-      staleUntil: storeStaleTime(
-        currentTime,
-        options.request.ttl,
-        options.request.staleWhileRevalidate,
-      ),
-      tags: options.tags,
-      value: result,
-    });
-  } catch (error) {
-    if (error instanceof CacheNotFoundError) {
-      await options.refreshStore.publishRefresh(
-        options.key,
-        options.token,
-        negativeStoreEntry(options.now(), options.request, options.tags, error),
-      );
-      return;
-    }
+    await Promise.resolve(runCacheOperation(
+      options.instrumentation,
+      "refresh",
+      options.request.scope ?? "request",
+      backgroundSpan?.context,
+      async (cacheSpan) => {
+        const instrumentStore = <T>(
+          operation: StoreOperation,
+          action: () => MaybePromise<T>,
+        ) => runInstrumentedOperation(
+          options.instrumentation,
+          "demiurge.store",
+          {
+            "demiurge.store.operation": operation,
+            ...(options.instrumentation
+              ? storeAtomicityAttribute(options.refreshStore)
+              : {}),
+          },
+          cacheSpan?.context ?? backgroundSpan?.context,
+          action,
+        );
+        let pendingFailure: unknown;
+        let hasPendingFailure = false;
 
-    if (options.onBackgroundError) {
-      options.onBackgroundError(error);
-    } else {
-      console.error("Demiurge stale cache refresh failed.", error);
+        try {
+          const result = await options.request.fn();
+          const currentTime = options.now();
+          await instrumentStore("publish_refresh", () => options.refreshStore.publishRefresh(
+            options.key,
+            options.token,
+            {
+              expiresAt: storeExpirationTime(currentTime, options.request.ttl),
+              staleUntil: storeStaleTime(
+                currentTime,
+                options.request.ttl,
+                options.request.staleWhileRevalidate,
+              ),
+              tags: options.tags,
+              value: result,
+            },
+          ));
+          cacheSpan?.setAttribute("demiurge.cache.outcome", "refresh");
+        } catch (error) {
+          if (error instanceof CacheNotFoundError) {
+            try {
+              await instrumentStore("publish_refresh", () => options.refreshStore.publishRefresh(
+                options.key,
+                options.token,
+                negativeStoreEntry(options.now(), options.request, options.tags, error),
+              ));
+              cacheSpan?.setAttribute("demiurge.cache.outcome", "refresh");
+            } catch (publishError) {
+              pendingFailure = publishError;
+              hasPendingFailure = true;
+            }
+          } else {
+            try {
+              if (options.onBackgroundError) {
+                options.onBackgroundError(error);
+              } else {
+                console.error("Demiurge stale cache refresh failed.", error);
+              }
+              reportedRefreshFailure = error;
+              refreshFailureReported = true;
+            } catch (reportingError) {
+              pendingFailure = reportingError;
+              hasPendingFailure = true;
+            }
+            if (refreshFailureReported) {
+              pendingFailure = error;
+              hasPendingFailure = true;
+            }
+          }
+        }
+
+        try {
+          await instrumentStore("release_refresh_lease", () => options.refreshStore.releaseRefreshLease(options.key, options.token));
+        } catch (error) {
+          releaseFailed = true;
+          throw error;
+        }
+
+        if (hasPendingFailure) throw pendingFailure;
+      },
+    ));
+    backgroundSpan?.setAttribute("demiurge.operation.outcome", "success");
+    backgroundSpan?.setStatus("unset");
+  } catch (error) {
+    backgroundSpan?.setAttribute("demiurge.operation.outcome", "error");
+    backgroundSpan?.setAttribute("error.type", "exception");
+    backgroundSpan?.setStatus("error");
+    if (
+      !refreshFailureReported ||
+      releaseFailed ||
+      !Object.is(reportedRefreshFailure, error)
+    ) {
+      throw error;
     }
   } finally {
-    await options.refreshStore.releaseRefreshLease(options.key, options.token);
+    backgroundSpan?.end();
   }
+}
+
+function runCacheOperation<T>(
+  instrumentation: RuntimeInstrumentation | undefined,
+  operation: "get" | "invalidate_key" | "invalidate_tags" | "refresh",
+  scope: CacheScope | undefined,
+  parent: RuntimeSpanContext | undefined,
+  work: (span: RuntimeSpan | undefined) => MaybePromise<T>,
+): MaybePromise<T> {
+  if (!instrumentation) return work(undefined);
+
+  return runInstrumentedOperation(
+    instrumentation,
+    "demiurge.cache",
+    {
+      "demiurge.cache.operation": operation,
+      ...(isCacheScope(scope) ? { "demiurge.cache.scope": scope } : {}),
+    },
+    parent,
+    async (span) => {
+      try {
+        return await work(span);
+      } catch (error) {
+        span?.setAttribute("demiurge.cache.outcome", "error");
+        throw error;
+      }
+    },
+  );
+}
+
+function storeAtomicityAttribute(
+  store: CacheStore,
+): Readonly<Record<string, string>> {
+  try {
+    const atomicity = store.capabilities?.atomicity;
+    return atomicity === "best-effort" || atomicity === "strong"
+      ? { "demiurge.store.atomicity": atomicity }
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function isCacheScope(value: unknown): value is CacheScope {
+  return value === "build" || value === "none" || value === "private" ||
+    value === "public" || value === "request";
+}
+
+function runInstrumentedOperation<T>(
+  instrumentation: RuntimeInstrumentation | undefined,
+  operation: "demiurge.cache" | "demiurge.store",
+  attributes: Readonly<Record<string, string>>,
+  parent: RuntimeSpanContext | undefined,
+  work: (span: RuntimeSpan | undefined) => MaybePromise<T>,
+): MaybePromise<T> {
+  if (!instrumentation) return work(undefined);
+
+  const span = startRuntimeSpan(instrumentation, {
+    attributes,
+    kind: operation === "demiurge.store" ? "client" : "internal",
+    operation,
+    parent,
+  });
+  let result: MaybePromise<T>;
+  try {
+    result = work(span);
+  } catch (error) {
+    span?.setAttribute("demiurge.operation.outcome", "error");
+    span?.setAttribute("error.type", "exception");
+    span?.addEvent("exception", { attributes: { "error.type": "exception" } });
+    span?.setStatus("error");
+    span?.end();
+    throw error;
+  }
+
+  return Promise.resolve(result).then(
+    (value) => {
+      span?.setAttribute("demiurge.operation.outcome", "success");
+      span?.setStatus("unset");
+      return value;
+    },
+    (error: unknown) => {
+      span?.setAttribute("demiurge.operation.outcome", "error");
+      span?.setAttribute("error.type", "exception");
+      span?.addEvent("exception", { attributes: { "error.type": "exception" } });
+      span?.setStatus("error");
+      throw error;
+    },
+  ).finally(() => span?.end());
 }
 
 function validateNamespacePart(name: string, value: string) {

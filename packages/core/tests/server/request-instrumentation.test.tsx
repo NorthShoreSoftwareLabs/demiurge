@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
   createRequestHandler,
+  createMemoryCacheStore,
   defineRuntimeInstrumentation,
   defineMiddleware,
   json,
@@ -105,6 +106,131 @@ function instrumentedRoutes() {
 }
 
 describe("request pipeline instrumentation", () => {
+  it("parents cache spans to route data and ends each span once", async () => {
+    const starts: Array<{ context: RuntimeSpanContext; options: RuntimeSpanStartOptions; end: ReturnType<typeof vi.fn> }> = [];
+    const runtimeInstrumentation = defineRuntimeInstrumentation({
+      startSpan(options) {
+        const context = { spanId: String(starts.length + 1) };
+        const end = vi.fn();
+        starts.push({ context, options, end });
+        return { context, end };
+      },
+    });
+    const handler = createRequestHandler({
+      cacheStore: {
+        namespace: { app: "test", environment: "test", schemaVersion: 1 },
+        store: createMemoryCacheStore(),
+      },
+      routes: {
+        "./routes/index.tsx": routeModule({
+          GET: page({
+            data: async ({ cache }) => ({ message: await cache.get({
+              fn: () => "Hello",
+              key: ["secret-key"],
+              scope: "public",
+            }) }),
+            view: View,
+          }),
+        }),
+      },
+      runtimeInstrumentation,
+    });
+    const result = await handler(new Request("http://localhost/"));
+    expect(result.status).toBe(200);
+    await result.text();
+    const data = starts.find((span) => span.options.operation === "demiurge.route.data");
+    const cache = starts.find((span) => span.options.operation === "demiurge.cache");
+    const stores = starts.filter((span) => span.options.operation === "demiurge.store");
+    expect(cache?.options.parent).toBe(data?.context);
+    expect(stores).toHaveLength(2);
+    expect(stores.every((span) => span.options.parent === cache?.context)).toBe(true);
+    expect(JSON.stringify(starts.map((span) => span.options))).not.toContain("secret-key");
+    for (const span of starts) expect(span.end).toHaveBeenCalledTimes(1);
+  });
+
+  it("translates the remote context and exposes an explicit application carrier", async () => {
+    const outbound = new Headers();
+    const mutationOutbound = new Headers();
+    const parents: Array<RuntimeSpanStartOptions["parent"]> = [];
+    const handler = createRequestHandler({
+      routes: {
+        "./routes/posts/[slug].tsx": routeModule({
+          GET: page<string, { message: string }>({
+            data: ({ trace }) => {
+              trace?.inject(outbound);
+              return { message: "Hello" };
+            },
+            view: View as ComponentType<RouteProps<string, { message: string }>>,
+          }),
+          POST: mutation({
+            handler: ({ trace }) => {
+              trace?.inject(mutationOutbound);
+              return json({ saved: true });
+            },
+          }),
+        }),
+      },
+      runtimeInstrumentation: defineRuntimeInstrumentation({
+        traceContext: {
+          extract(_headers, fallback) {
+            return { ...fallback, providerContext: "translated" };
+          },
+          inject(context, headers) {
+            headers.set("x-provider-context", String(context.providerContext));
+            headers.set(
+              "traceparent",
+              "00-4bf92f3577b34da6a3ce929d0e0e4736-828c5d0d435ba505-01",
+            );
+          },
+        },
+        startSpan(options) {
+          parents.push(options.parent);
+          return {
+            context: {
+              providerContext: "request-span",
+              spanId: "828c5d0d435ba505",
+              traceFlags: 1,
+              traceId: "4bf92f3577b34da6a3ce929d0e0e4736",
+            },
+            end() {},
+          };
+        },
+      }),
+    });
+
+    const response = await handler(new Request("https://example.test/posts/one", {
+      headers: {
+        baggage: "user.id=private",
+        traceparent:
+          "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      },
+    }));
+
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(parents[0]).toMatchObject({
+      providerContext: "translated",
+      sampled: true,
+    });
+    expect(outbound.get("x-provider-context")).toBe("request-span");
+    expect(outbound.get("traceparent")).toBe(
+      "00-4bf92f3577b34da6a3ce929d0e0e4736-828c5d0d435ba505-01",
+    );
+    expect(outbound.get("baggage")).toBeNull();
+
+    const mutationResponse = await handler(new Request("https://example.test/posts/one", {
+      method: "POST",
+      headers: {
+        [MUTATION_REQUEST_HEADER]: MUTATION_REQUEST_VALUE,
+        traceparent:
+          "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+      },
+    }));
+    expect(mutationResponse.status).toBe(200);
+    await mutationResponse.text();
+    expect(mutationOutbound.get("x-provider-context")).toBe("request-span");
+  });
+
   it("records the document lifecycle with direct request children", async () => {
     const recorder = createRecorder();
     const handler = createRequestHandler({

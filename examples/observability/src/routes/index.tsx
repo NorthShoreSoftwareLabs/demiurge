@@ -40,5 +40,11 @@ function HomePage() {
 }
 
 export const GET = page({
+  data: async ({ cache }) => {
+    const request = { fn: () => "ready", key: ["observability"], scope: "request" as const };
+    await cache.get(request);
+    await cache.get(request);
+    return {};
+  },
   view: HomePage,
 });

@@ -21,6 +21,7 @@ import type {
   RouteProps,
 } from "../route";
 import { assertSerializableValue } from "../route/serialization";
+import type { RuntimeTraceCarrier } from "../platform/trace-context";
 
 export type RouteRecord = {
   file: string;
@@ -320,6 +321,7 @@ export async function loadPageRoute(
     documentContributions?: boolean;
     locale?: string;
     requestContext?: Record<string, unknown>;
+    trace?: RuntimeTraceCarrier;
   } = {},
 ): Promise<PendingRouteMatch> {
   const documentContributions = options.documentContributions ?? true;
@@ -369,6 +371,7 @@ export async function loadPageRoute(
     pathname,
     request,
     search: url.searchParams,
+    trace: options.trace,
     url,
   };
 

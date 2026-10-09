@@ -86,3 +86,18 @@ forward the metrics to a tracing backend, and the application code never
 needs to know that backend exists. This example proves the header itself
 is correct and parseable. Wiring a specific vendor's collector in front of
 it is a deployment concern, not a framework one.
+
+## Runtime spans
+
+Production startup configures `defineRuntimeInstrumentation(...)` in `server.js`.
+Each completed span writes its operation and duration to the server console.
+Request context uses W3C trace identifiers and preserves the incoming sampling flag.
+This teaching recorder logs operations without an exporter or a sampling filter.
+
+The home page reads one request cache entry twice.
+These reads produce a cache miss and a cache hit under the route-data span.
+Node startup and graceful shutdown also produce spans.
+
+Application server code can call `trace.inject(headers)` before an outgoing fetch.
+The trace carrier does not enter page data or browser props.
+See the [trace context guide](../../docs/guides/trace-context.md) for the propagation contract.

@@ -289,6 +289,20 @@ const handler = createRequestHandler({
 Core emits request, middleware, route-data, mutation, and render spans. Each
 pipeline span uses the request span as its parent.
 
+Pass the same instrumentation to `createCache` to record cache and store
+operations. Set `runtimeParent` to a span context or a function that returns
+the active context when a cache call starts.
+
+Cache spans record bounded operations, outcomes, and cache scopes. Store spans
+record bounded store operations and the declared atomicity capability. Spans
+exclude cache keys, tags, values, namespace fields, and provider credentials.
+Each span duration measures the operation. A stale refresh uses a background
+span with a link to its scheduling span.
+
+Pass `runtimeInstrumentation` to `createNodeServer` or `serveNodeBuild` to
+record Node startup and shutdown spans. Edge runtimes do not expose a shutdown
+operation.
+
 Request attributes contain the matched route template. They exclude raw paths,
 query values, headers, bodies, route parameters, and error messages.
 

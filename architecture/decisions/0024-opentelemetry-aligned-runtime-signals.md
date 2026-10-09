@@ -155,7 +155,9 @@ version 1:
 | `demiurge.cache.operation` | string | Bounded framework cache operation |
 | `demiurge.cache.outcome` | string | Bounded framework cache result |
 | `demiurge.cache.namespace` | string | Declared cache family or namespace |
+| `demiurge.cache.scope` | string | Cache scope: `build`, `none`, `private`, `public`, or `request` |
 | `demiurge.store.operation` | string | Bounded framework store operation |
+| `demiurge.store.atomicity` | string | Store capability: `best-effort` or `strong` |
 | `demiurge.adapter.name` | string | Registered adapter technical name |
 | `demiurge.runtime.kind` | string | Runtime class: `node` or `edge` |
 | `demiurge.response.body_observation` | string | Adapter capability: `completion` or `handoff` |
@@ -163,6 +165,17 @@ version 1:
 The operation contract can use only applicable attributes from this table.
 An implementation issue must define each bounded enum before it adds the
 related operation. A new enum value is additive within convention version 1.
+
+Cache operations use `get`, `invalidate_key`, `invalidate_tags`, or `refresh`.
+Cache outcomes use `hit`, `miss`, `stale`, `coalesced`, `refresh`,
+`invalidation`, or `error`. Store operations use `get`, `set`, `delete`,
+`invalidate_tags`, `acquire_refresh_lease`, `publish_refresh`, or
+`release_refresh_lease`.
+
+A cache span excludes its key, tags, value, and cache namespace fields. The
+bounded scope identifies the cache path. A store span records its declared
+atomicity capability and operation duration. It excludes provider credentials
+and keyspace values.
 
 Attribute values use the OpenTelemetry attribute value set:
 
@@ -199,9 +212,9 @@ Core never records these values by default:
 - Client network addresses.
 - Error messages, causes, or stack traces.
 
-Core uses a matched route template instead of a raw pathname. A cache span uses
-a declared cache family or namespace. Each cache span excludes raw and hashed
-keys.
+Core uses a matched route template instead of a raw pathname. A cache span can use a declared cache family or namespace.
+Current cache operations use a bounded scope and omit namespace fields.
+Each cache span excludes raw and hashed keys.
 
 Framework enums stay bounded. Their values come from framework declarations or
 closed implementation contracts.

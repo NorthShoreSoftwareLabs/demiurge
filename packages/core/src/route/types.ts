@@ -19,6 +19,7 @@ import type {
   RouteSecurityPolicy,
 } from "../security/types";
 import type { HttpErrorStatus } from "./http-error";
+import type { RuntimeTraceCarrier } from "../platform/trace-context";
 export type { RoutePolicy } from "../security/types";
 export type { RouteRequestContexts } from "../routing/types";
 
@@ -69,6 +70,7 @@ export type HttpRouteContext<
   TValues extends object = RouteRequestContextFor<TPath>,
 > = RouteContext<TPath> & RequestContextField<TValues> & {
   request: Request;
+  trace?: RuntimeTraceCarrier;
   search: URLSearchParams;
   url: URL;
 };
