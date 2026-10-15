@@ -55,27 +55,22 @@ const shutdown = () => {
   if (shutdownPromise) return shutdownPromise;
 
   shutdownPromise = (async () => {
-    let shutdownError;
-    try {
-      await server.shutdown();
-    } catch (error) {
-      shutdownError = error;
+    const failures = [];
+    const phases = [
+      [() => server.shutdown()],
+      [() => tracerProvider.forceFlush(), () => meterProvider.forceFlush()],
+      [() => tracerProvider.shutdown(), () => meterProvider.shutdown()],
+    ];
+    for (const phase of phases) {
+      const results = await Promise.allSettled(phase.map(async (run) => run()));
+      for (const result of results) {
+        if (result.status === "rejected") failures.push(result.reason);
+      }
     }
 
-    try {
-      await Promise.all([tracerProvider.forceFlush(), meterProvider.forceFlush()]);
-    } catch (error) {
-      shutdownError ??= error;
-    }
-
-    const results = await Promise.allSettled([
-      tracerProvider.shutdown(),
-      meterProvider.shutdown(),
-    ]);
-    shutdownError ??= results.find((result) => result.status === "rejected")?.reason;
-
-    if (shutdownError) {
-      console.error("Demiurge observability telemetry shutdown failed.", shutdownError);
+    if (failures.length) {
+      console.error("Demiurge observability telemetry shutdown failed.",
+        new AggregateError(failures, "Shutdown failed."));
       process.exitCode = 1;
     }
   })();
