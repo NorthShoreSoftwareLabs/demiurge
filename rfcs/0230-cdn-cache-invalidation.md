@@ -333,6 +333,7 @@ Local tests do not prove provider propagation, cache grouping, or deployment rol
 ## Required Vercel proof
 
 [Issue #481](https://github.com/NorthShoreSoftwareLabs/demiurge/issues/481) owns this bounded investigation.
+The [local investigation record](../docs/maintainers/vercel-isr-investigation.md) separates local evidence from required live provider proof.
 
 The proof uses one public route with versioned data and one private control route.
 It exercises production artifacts through published package boundaries.
