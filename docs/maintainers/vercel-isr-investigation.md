@@ -133,7 +133,7 @@ These artifacts enable no public response cache API.
 | Credentials and invalid navigation | Cookie, authorization, and invalid navigation requests returned 400. | These tested requests reached the rejection target. |
 | Direct targets and mutation | Direct function paths and a public `POST` returned 400. | These tested paths did not bypass routing controls. |
 | Private controls | Two cookie identities received their own values, `Set-Cookie`, and `private, no-store` responses. | The tested private responses remained separate. |
-| Nonce controls | Repeated responses used different nonces. Each CSP nonce matched its document. | The tested nonce documents remained outside ISR storage. |
+| Nonce controls | Repeated responses used different CSP nonces. The original runner recorded body matches. | The original check accepted missing body nonces and partial matches. Body equality requires another live run. |
 | Hostile public inputs | The public response contained neither tested hostile value. | These probes observed no private input disclosure. |
 | Bypass cookies | Valid and invalid bypass cookies returned 400. | The cookie rejection rule prevented a Draft Mode test. |
 
@@ -144,6 +144,10 @@ Neither result establishes a private data disclosure in these probes.
 RFC 0230 requires review before public implementation.
 
 ### Unverified conditions
+
+The corrected runner requires at least one body nonce and complete quoted CSP sources.
+Regression tests cover missing nonces, partial matches, and multiple body nonces.
+The historical evidence retains the original observations and source hashes.
 
 This run does not establish global propagation or a maximum stale age.
 It does not verify arbitrary `Vary` declarations or every cold and populated security case.

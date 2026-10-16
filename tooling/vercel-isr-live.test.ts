@@ -2,10 +2,23 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import { test } from "node:test";
+import { nonceMatchesBody } from "./vercel-isr-live-security";
 import {
   createLiveListener,
   type LiveListenerOptions,
 } from "../examples/vercel-node/tests/isr-live-entry";
+
+void test("nonce evidence requires body nonces and complete policy sources", () => {
+  const policy = "script-src 'nonce-abcdef'; style-src 'nonce-other'";
+  assert.equal(nonceMatchesBody(policy, "<html></html>"), false);
+  assert.equal(nonceMatchesBody(policy, '<script nonce="abc"></script>'), false);
+  assert.equal(nonceMatchesBody(policy, '<script nonce="abcdef"></script>'), true);
+  assert.equal(nonceMatchesBody(policy, '<script nonce="abcdef"></script><style nonce="other"></style>'), true);
+  assert.equal(nonceMatchesBody(policy, '<script nonce="abcdef"></script><style nonce="missing"></style>'), false);
+  assert.equal(nonceMatchesBody("script-src x'nonce-abcdef'", '<script nonce="abcdef"></script>'), false);
+  assert.equal(nonceMatchesBody(null, '<script nonce="abcdef"></script>'), null);
+  assert.equal(nonceMatchesBody("script-src 'self'", "<html></html>"), null);
+});
 
 async function listen(server: Server) {
   server.listen(0, "127.0.0.1");

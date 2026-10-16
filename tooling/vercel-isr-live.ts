@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { nonceMatchesBody } from "./vercel-isr-live-security";
 import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
@@ -168,7 +169,7 @@ export default createLiveListener(${JSON.stringify({ representation: "control", 
       privateIdentityMatches: path === "/private" ? body.includes(headers.cookie ?? "no-cookie-supplied") : null,
       hostileReflection: body.includes("synthetic-private") || body.includes("attacker.invalid"),
       id: /data-id="([^"]+)"/.exec(body)?.[1] ?? /"id":"([^"]+)"/.exec(body)?.[1] ?? null,
-      nonceMatchesBody: get("content-security-policy")?.includes("nonce-") ? [...body.matchAll(/nonce="([^"]+)"/g)].every((match) => get("content-security-policy")!.includes(`nonce-${match[1]}`)) : null,
+      nonceMatchesBody: nonceMatchesBody(get("content-security-policy"), body),
       generation: get("x-origin-generation"), middleware: get("x-origin-middleware"),
       version: Number(/data-version="(\d+)"/.exec(body)?.[1] ?? /"version":(\d+)/.exec(body)?.[1] ?? NaN),
       edition: /data-edition="([^"]+)"/.exec(body)?.[1] ?? /"edition":"([^"]+)"/.exec(body)?.[1] ?? null,
