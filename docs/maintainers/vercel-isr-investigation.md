@@ -14,7 +14,8 @@ This investigation adds no public response cache API.
 Provider documentation describes platform behavior.
 A local provider model tests framework mechanisms under explicit assumptions.
 Neither source proves the deployed behavior of Demiurge artifacts.
-No live provider probe result appears in this record.
+The live record below tests disposable provider artifacts.
+Its results reject the tested representation configuration.
 
 Build the package and example before the local investigation probe:
 
@@ -32,7 +33,7 @@ Never record bypass credentials or private response bodies.
 
 The local probe exercises these mechanisms and boundaries.
 Its configuration templates do not replace the actual provider routing configuration.
-Candidate artifacts require further work before deployment.
+The live runner builds separate disposable candidate artifacts.
 The probe reuses example client assets as packaging input.
 It does not verify browser hydration of the investigation fixture.
 
@@ -68,6 +69,92 @@ Review date: October 14, 2026.
 | [Routing Middleware](https://vercel.com/docs/routing-middleware) | Provider middleware runs before the cache. | Origin route middleware does not inherit this execution boundary. |
 | [CDN cache](https://vercel.com/docs/caching/cdn-cache) | General CDN rules describe `Vary` and private response exclusions. | These rules require separate verification for Prerender Functions. |
 | [CDN request flow](https://vercel.com/docs/how-vercel-cdn-works) | Routing precedes cache lookup. CDN and durable ISR hits can skip function execution. | Local function invocation cannot reproduce either cache tier. |
+
+## Live observations: October 15, 2026
+
+Authorized probes ran in the dedicated `demiurge-verification` project.
+[Request evidence](evidence/vercel-isr-2026-10-15.json) records the deployment, source events, response hashes, and artifact hashes.
+The preview configured `nodejs22.x` in `iad1`, a 10-second expiration, and groups `481` and `482`.
+The run did not record `process.version` in the function.
+Each route had separate document and navigation function targets.
+Related targets shared a group.
+
+Source baseline: `1228f37`.
+The deployed fixture and runner had uncommitted changes, so the evidence records `sourceCommit: null`.
+Their SHA-256 digests identify the working sources:
+
+- Fixture: `abe4246226c433c77a6b4e21539630db72a244eaeab44f37d9be5aedab8054d6`.
+- Runner: `0cd2f706780aa7cce7974e53a47c356ca4c0454b6867cb6f6a25f7825867f4a0`.
+- Full artifact: `9cd5f5603595c3c76deaad6595bfa21b0086a7d06588921392378be18db4fb73`.
+
+A temporary ngrok endpoint provided one shared synthetic source.
+Source reads required a random bearer token.
+Only the local runner could change source versions, failures, and delays.
+The endpoint exposed no mutation operation.
+The runner stopped the endpoint after the probes.
+The operator removed all three preview deployments created during this session.
+Production aliases did not change.
+Stored evidence excludes source and bypass credentials.
+
+With an authenticated Vercel CLI and ngrok available, the runner command was:
+
+```sh
+node --import tsx tooling/vercel-isr-live.ts --run
+```
+
+The run used the current ngrok executable through `PATH`.
+It deployed prebuilt artifacts to the verification project.
+Assess the stored observations without deployment:
+
+```sh
+node --import tsx tooling/vercel-isr-live.ts --assess docs/maintainers/evidence/vercel-isr-2026-10-15.json
+```
+
+This assessment returns exit code 1 for the three failed conditions.
+The ordinary adapter still disables runtime response caching.
+These artifacts enable no public response cache API.
+
+### Observed results
+
+| Probe | Observed result | Conclusion |
+| --- | --- | --- |
+| Repeated document | A `HIT` retained the body hash, generation, and middleware counter. | Provider storage skipped a new generation for this request. |
+| Cached navigation | Navigation requests returned HTML from the document wrapper. | The tested configuration failed representation identity. |
+| Uncached navigation control | `/raw-nav` returned JSON with the navigation marker and `Vary: x-demiurge-navigation`. | Direct framework navigation generation worked. |
+| Concurrent revalidation | Document revalidation returned version 5. Navigation revalidation returned version 6. | The operations used different source versions. |
+| Document after concurrent revalidation | A request without the navigation marker received cached navigation JSON and version 6. | Representation identity failed in both directions. |
+| Timed expiration | A stale version 1 response preceded a version 2 `HIT`. | Regeneration read the changed source. |
+| Repeated explicit revalidation | Both requests returned `REVALIDATED` and version 3. | These requests reached fresh generation. |
+| Generation failure | Explicit revalidation returned 500. A later public request returned stale version 3. | This failure retained an earlier public response. |
+| Recovery | Source events recorded version 4 reads before the 31-second wait ended. Later requests returned version 4. | Recovery occurred. This run does not verify the documented 30-second retry interval. |
+| Route and edition variants | `/public/two` returned `id: two`. Editions `a` and `b` returned their respective values. | These tested inputs reached separate intended values. |
+| Unknown query | `?preview=synthetic-private` returned a cached 200 response. | Provider lookup bypassed the candidate's strict query rejection. |
+| Repeated query | Two `edition` values returned 400 on a `MISS`. | This request failed validation. Other duplicate-value cache cases remain unverified. |
+| Credentials and invalid navigation | Cookie, authorization, and invalid navigation requests returned 400. | These tested requests reached the rejection target. |
+| Direct targets and mutation | Direct function paths and a public `POST` returned 400. | These tested paths did not bypass routing controls. |
+| Private controls | Two cookie identities received their own values, `Set-Cookie`, and `private, no-store` responses. | The tested private responses remained separate. |
+| Nonce controls | Repeated responses used different CSP nonces. The original runner recorded body matches. | The original check accepted missing body nonces and partial matches. Body equality requires another live run. |
+| Hostile public inputs | The public response contained neither tested hostile value. | These probes observed no private input disclosure. |
+| Bypass cookies | Valid and invalid bypass cookies returned 400. | The cookie rejection rule prevented a Draft Mode test. |
+
+The grouped configuration did not preserve document and navigation identity.
+The evidence does not isolate the provider mechanism that caused this failure.
+An unknown query also avoided the intended strict rejection.
+Neither result establishes a private data disclosure in these probes.
+RFC 0230 requires review before public implementation.
+
+### Unverified conditions
+
+The corrected runner requires at least one body nonce and complete quoted CSP sources.
+Regression tests cover missing nonces, partial matches, and multiple body nonces.
+The historical evidence retains the original observations and source hashes.
+
+This run does not establish global propagation or a maximum stale age.
+It does not verify arbitrary `Vary` declarations or every cold and populated security case.
+No probe injected a lost HTTP invalidation acknowledgment.
+No probe replaced a deployment or tested rollback across deployments.
+The single-region results do not establish atomic publication across representations.
+The complete acceptance boundary remains open.
 
 ## Local generation candidate
 
@@ -113,7 +200,7 @@ Use deterministic counters to distinguish generation from cache hits.
 
 ## Live verification protocol
 
-Live probes require separate authorization and access to the dedicated project.
+Further live probes require authorization and access to the dedicated project.
 Record the artifact commit, deployment identifier, runtime, region, expiration, group, and routing configuration.
 Record each request method, path, query, safe headers, response status, cache status, version, and invocation counter.
 Preserve response security headers in the evidence.
