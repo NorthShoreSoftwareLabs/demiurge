@@ -291,14 +291,15 @@ export default createLiveListener(${JSON.stringify({ representation: "control", 
     let transportFailed = false;
     try {
       await request("lost-acknowledgment-response", "/public/one", { "x-prerender-revalidate": token }, "GET", "1");
-    } catch {
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("curl: (28)")) throw error;
       transportFailed = true;
     }
-    results.push({ name: "lost-acknowledgment", transportFailed, acknowledgment: "unknown" });
+    results.push({ name: "lost-acknowledgment", transportFailed, transportFailure: transportFailed ? "curl-timeout-28" : null, acknowledgment: transportFailed ? "unknown" : "received" });
     await pause(6_000);
+    results.push({ name: "lost-acknowledgment-origin", observed: sourceEvents.some((event) => event.version === 7), observedAt: new Date().toISOString() });
     state.delayMs = 0;
     await request("lost-acknowledgment-result");
-    results.push({ name: "lost-acknowledgment-origin", observed: sourceEvents.some((event) => event.version === 7) });
   }
   const failures = isolated ? assessIsolated(results) : assess(results);
   results.push({ summary: "Live observations completed.", sameGenerationOnRepeat: doc.generation === hit.generation, sourceReads, failures });

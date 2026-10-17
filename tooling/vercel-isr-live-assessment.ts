@@ -63,8 +63,16 @@ export function assessIsolated(rows: readonly Row[]): string[] {
   for (const [name, version] of [["timed-fresh", 2], ["explicit-document-result", 3], ["explicit-navigation-result", 3], ["failed-regeneration-stale", 3], ["retry-result", 4], ["race-document-revalidation", 5], ["race-navigation-revalidation", 6], ["race-document-result", 5], ["race-navigation-result", 6]] as const) check(name, named(name), "version", version);
   check("failed-revalidation", named("failed-revalidation"), "status", 500);
   check("lost-acknowledgment", named("lost-acknowledgment"), "transportFailed", true);
+  check("lost-acknowledgment", named("lost-acknowledgment"), "transportFailure", "curl-timeout-28");
   check("lost-acknowledgment", named("lost-acknowledgment"), "acknowledgment", "unknown");
-  check("lost-acknowledgment-origin", named("lost-acknowledgment-origin"), "observed", true);
+  const origin = named("lost-acknowledgment-origin");
+  check("lost-acknowledgment-origin", origin, "observed", true);
+  const result = named("lost-acknowledgment-result");
+  const observedAt = typeof origin.observedAt === "string" ? Date.parse(origin.observedAt) : NaN;
+  const requestedAt = typeof result.startedAt === "string" ? Date.parse(result.startedAt) : NaN;
+  if (!Number.isFinite(observedAt) || !Number.isFinite(requestedAt) || observedAt > requestedAt) {
+    failures.push("lost-acknowledgment-origin: origin evidence must precede the result request.");
+  }
   check("lost-acknowledgment-result", named("lost-acknowledgment-result"), "version", 7);
   return [...new Set(failures)];
 }

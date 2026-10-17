@@ -13,9 +13,9 @@ function evidence(): Array<Record<string, unknown>> {
   for (const name of ["cold-cookie", "cold-authorization", "cold-unknown-query", "cold-duplicate-query", "unknown-query", "duplicate-query", "reserved-query", "encoded-unknown-query", "encoded-duplicate-query", "unknown-query-second-path", "duplicate-query-second-path", "cookie-hit", "authorization-hit", "invalid-navigation", "direct-document-function", "direct-navigation-function", "mutation", "invalid-bypass", "valid-bypass"]) rows.push({ name, status: 400 });
   for (const name of ["private-control", "private-control-repeat", "nonce-control", "nonce-control-repeat"]) rows.push({ name, status: 200, cacheControl: "private, no-store", privateIdentityMatches: true, nonceMatchesBody: true, setCookiePresent: true, csp: name });
   rows.push({ name: "failed-revalidation", status: 500 });
-  rows.push({ name: "lost-acknowledgment", transportFailed: true, acknowledgment: "unknown" });
-  rows.push({ name: "lost-acknowledgment-origin", observed: true });
-  rows.find((row) => row.name === "lost-acknowledgment-result")!.version = 7;
+  rows.push({ name: "lost-acknowledgment", transportFailed: true, transportFailure: "curl-timeout-28", acknowledgment: "unknown" });
+  rows.push({ name: "lost-acknowledgment-origin", observed: true, observedAt: "2026-10-17T00:00:00Z" });
+  Object.assign(rows.find((row) => row.name === "lost-acknowledgment-result")!, { version: 7, startedAt: "2026-10-17T00:00:01Z" });
   for (const [name, version] of [["timed-fresh", 2], ["explicit-document-result", 3], ["explicit-navigation-result", 3], ["failed-regeneration-stale", 3], ["retry-result", 4], ["race-document-revalidation", 5], ["race-navigation-revalidation", 6], ["race-document-result", 5], ["race-navigation-result", 6]] as const) rows.find((row) => row.name === name)!.version = version;
   for (const edition of ["a", "b"]) rows.find((row) => row.name === `edition-${edition}`)!.edition = edition;
   return rows;
@@ -45,8 +45,10 @@ void test("Cache collisions, skipped guards, stale versions, and false security 
     ["cold-navigation", "version", null],
     ["cold-document", "csp", "script-src 'nonce-secret'"],
     ["lost-acknowledgment", "transportFailed", false],
+    ["lost-acknowledgment", "transportFailure", "other-error"],
     ["lost-acknowledgment", "acknowledgment", "success"],
     ["lost-acknowledgment-origin", "observed", false],
+    ["lost-acknowledgment-origin", "observedAt", "2026-10-18T00:00:00Z"],
     ["lost-acknowledgment-result", "version", 6],
     ["repeat-navigation", "generation", "changed"],
     ["repeat-document", "bodySha256", "changed"],
