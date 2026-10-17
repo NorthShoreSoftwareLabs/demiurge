@@ -299,6 +299,8 @@ export default createLiveListener(${JSON.stringify({ representation: "control", 
     await pause(6_000);
     results.push({ name: "lost-acknowledgment-origin", observed: sourceEvents.some((event) => event.version === 7), observedAt: new Date().toISOString() });
     state.delayMs = 0;
+    await request("lost-acknowledgment-observation");
+    await request("lost-acknowledgment-retry", "/public/one", { "x-prerender-revalidate": token });
     await request("lost-acknowledgment-result");
   }
   const failures = isolated ? assessIsolated(results) : assess(results);

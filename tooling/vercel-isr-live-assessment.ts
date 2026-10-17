@@ -13,7 +13,7 @@ export function assessIsolated(rows: readonly Row[]): string[] {
   const present = (name: string, row: Row, key: string) => {
     if (typeof row[key] !== "string" || row[key].length === 0) failures.push(`${name}: missing ${key}.`);
   };
-  const documents = ["cold-document", "repeat-document", "document-after-navigation", "second-path", "edition-a", "edition-b", "warm-before-security", "hostile-headers", "timed-stale", "timed-fresh", "explicit-revalidation", "explicit-revalidation-repeat", "explicit-document-result", "failed-regeneration-stale", "retry-trigger", "retry-result", "race-document-revalidation", "race-document-result", "public-after-bypass", "lost-acknowledgment-result"];
+  const documents = ["cold-document", "repeat-document", "document-after-navigation", "second-path", "edition-a", "edition-b", "warm-before-security", "hostile-headers", "timed-stale", "timed-fresh", "explicit-revalidation", "explicit-revalidation-repeat", "explicit-document-result", "failed-regeneration-stale", "retry-trigger", "retry-result", "race-document-revalidation", "race-document-result", "public-after-bypass", "lost-acknowledgment-result", "lost-acknowledgment-observation", "lost-acknowledgment-retry"];
   const navigations = ["cold-navigation", "repeat-navigation", "cold-navigation-first", "repeat-navigation-first", "timed-navigation", "explicit-navigation-result", "race-navigation-revalidation", "race-navigation-result"];
   for (const [names, representation] of [[documents, "document"], [navigations, "navigation"]] as const) {
     for (const name of names) {
@@ -67,12 +67,14 @@ export function assessIsolated(rows: readonly Row[]): string[] {
   check("lost-acknowledgment", named("lost-acknowledgment"), "acknowledgment", "unknown");
   const origin = named("lost-acknowledgment-origin");
   check("lost-acknowledgment-origin", origin, "observed", true);
-  const result = named("lost-acknowledgment-result");
+  const result = named("lost-acknowledgment-observation");
   const observedAt = typeof origin.observedAt === "string" ? Date.parse(origin.observedAt) : NaN;
   const requestedAt = typeof result.startedAt === "string" ? Date.parse(result.startedAt) : NaN;
   if (!Number.isFinite(observedAt) || !Number.isFinite(requestedAt) || observedAt > requestedAt) {
     failures.push("lost-acknowledgment-origin: origin evidence must precede the result request.");
   }
+  if (result.version !== 5 && result.version !== 7) failures.push("lost-acknowledgment-observation: expected the previous or attempted version.");
+  check("lost-acknowledgment-retry", named("lost-acknowledgment-retry"), "version", 7);
   check("lost-acknowledgment-result", named("lost-acknowledgment-result"), "version", 7);
   return [...new Set(failures)];
 }

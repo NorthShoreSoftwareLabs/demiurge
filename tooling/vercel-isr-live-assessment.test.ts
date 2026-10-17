@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { assessIsolated } from "./vercel-isr-live-assessment";
 
 function evidence(): Array<Record<string, unknown>> {
-  const documents = ["cold-document", "repeat-document", "document-after-navigation", "second-path", "edition-a", "edition-b", "warm-before-security", "hostile-headers", "timed-stale", "timed-fresh", "explicit-revalidation", "explicit-revalidation-repeat", "explicit-document-result", "failed-regeneration-stale", "retry-trigger", "retry-result", "race-document-revalidation", "race-document-result", "public-after-bypass", "lost-acknowledgment-result"];
+  const documents = ["cold-document", "repeat-document", "document-after-navigation", "second-path", "edition-a", "edition-b", "warm-before-security", "hostile-headers", "timed-stale", "timed-fresh", "explicit-revalidation", "explicit-revalidation-repeat", "explicit-document-result", "failed-regeneration-stale", "retry-trigger", "retry-result", "race-document-revalidation", "race-document-result", "public-after-bypass", "lost-acknowledgment-result", "lost-acknowledgment-observation", "lost-acknowledgment-retry"];
   const navigations = ["cold-navigation", "repeat-navigation", "cold-navigation-first", "repeat-navigation-first", "timed-navigation", "explicit-navigation-result", "race-navigation-revalidation", "race-navigation-result", "raw-navigation"];
   const rows: Array<Record<string, unknown>> = [...documents, ...navigations].map((name) => {
     const navigation = navigations.includes(name);
@@ -15,7 +15,9 @@ function evidence(): Array<Record<string, unknown>> {
   rows.push({ name: "failed-revalidation", status: 500 });
   rows.push({ name: "lost-acknowledgment", transportFailed: true, transportFailure: "curl-timeout-28", acknowledgment: "unknown" });
   rows.push({ name: "lost-acknowledgment-origin", observed: true, observedAt: "2026-10-17T00:00:00Z" });
-  Object.assign(rows.find((row) => row.name === "lost-acknowledgment-result")!, { version: 7, startedAt: "2026-10-17T00:00:01Z" });
+  rows.find((row) => row.name === "lost-acknowledgment-result")!.version = 7;
+  rows.find((row) => row.name === "lost-acknowledgment-retry")!.version = 7;
+  Object.assign(rows.find((row) => row.name === "lost-acknowledgment-observation")!, { version: 5, startedAt: "2026-10-17T00:00:01Z" });
   for (const [name, version] of [["timed-fresh", 2], ["explicit-document-result", 3], ["explicit-navigation-result", 3], ["failed-regeneration-stale", 3], ["retry-result", 4], ["race-document-revalidation", 5], ["race-navigation-revalidation", 6], ["race-document-result", 5], ["race-navigation-result", 6]] as const) rows.find((row) => row.name === name)!.version = version;
   for (const edition of ["a", "b"]) rows.find((row) => row.name === `edition-${edition}`)!.edition = edition;
   return rows;
@@ -50,6 +52,8 @@ void test("Cache collisions, skipped guards, stale versions, and false security 
     ["lost-acknowledgment-origin", "observed", false],
     ["lost-acknowledgment-origin", "observedAt", "2026-10-18T00:00:00Z"],
     ["lost-acknowledgment-result", "version", 6],
+    ["lost-acknowledgment-retry", "version", 5],
+    ["lost-acknowledgment-observation", "version", 6],
     ["repeat-navigation", "generation", "changed"],
     ["repeat-document", "bodySha256", "changed"],
     ["repeat-navigation", "cache", "MISS"],
