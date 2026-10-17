@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assessIsolated } from "./vercel-isr-live-assessment";
 import { nonceMatchesBody } from "./vercel-isr-live-security";
 import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -8,11 +9,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { generateVercelNodeOutput, vercelNode } from "@demiurgejs/core/vercel";
 
+const isolated = process.argv.includes("--isolated");
 const assessmentIndex = process.argv.indexOf("--assess");
 if (assessmentIndex >= 0) {
   const record = JSON.parse(await readFile(process.argv[assessmentIndex + 1], "utf8"));
   assert.ok(Array.isArray(record.results));
-  const failures = assess(record.results);
+  const failures = record.candidate === "representation-query-and-edge-guard" ? assessIsolated(record.results) : assess(record.results);
   console.log(JSON.stringify({ passed: failures.length === 0, failures }, null, 2));
   process.exit(failures.length ? 1 : 0);
 }
@@ -23,9 +25,15 @@ if (!process.argv.includes("--run")) {
 
 const scratch = await mkdtemp(join(tmpdir(), "demiurge-isr-live-"));
 const sourceBaseline = (await command("git", ["rev-parse", "HEAD"], process.cwd())).trim();
+const sourceFiles = ["tooling/vercel-isr-live.ts", "tooling/vercel-isr-live-security.ts", "tooling/vercel-isr-live-assessment.ts", "tooling/vercel-isr-live-guard.ts", "examples/vercel-node/tests/isr-live-entry.ts"];
+const sourceStatus = await command("git", ["status", "--porcelain", "--", ...sourceFiles], process.cwd());
+const sourceCommit = sourceStatus.trim() === "" ? sourceBaseline : null;
 const workingTreeSources = {
+  security: createHash("sha256").update(await readFile("tooling/vercel-isr-live-security.ts")).digest("hex"),
+  assessment: createHash("sha256").update(await readFile("tooling/vercel-isr-live-assessment.ts")).digest("hex"),
   fixture: createHash("sha256").update(await readFile("examples/vercel-node/tests/isr-live-entry.ts")).digest("hex"),
   runner: createHash("sha256").update(await readFile("tooling/vercel-isr-live.ts")).digest("hex"),
+  ...(isolated ? { guard: createHash("sha256").update(await readFile("tooling/vercel-isr-live-guard.ts")).digest("hex") } : {}),
 };
 const evidenceFile = join(tmpdir(), `demiurge-isr-live-${Date.now()}.json`);
 const token = randomBytes(32).toString("hex");
@@ -47,6 +55,7 @@ let tunnel: ReturnType<typeof spawn> | undefined;
 let deployment = "";
 let artifactHash = "";
 let fullArtifactHash = "";
+let routing: unknown = null;
 let requestSequence = 0;
 const sourceEvents: Array<{version: number; fail: boolean; at: string}> = [];
 
@@ -110,8 +119,13 @@ try {
       await cp(base, directory, { recursive: true });
       await writeFile(join(directory, "index.mjs"), `import { createLiveListener } from "./server/server-entry.js";
 const listener = createLiveListener(${JSON.stringify({ representation, logicalPath: `/public/${id}`, sourceOrigin, sourceToken })});
-export default (request, response) => { response.setHeader("x-proof-wrapper", ${JSON.stringify(representation)}); return listener(request, response); };`);
-      await writeFile(join(functions, `${name}.prerender-config.json`), JSON.stringify({ expiration: 10, group: id === "one" ? 481 : 482, allowQuery: ["edition"], passQuery: true, bypassToken: token }));
+export default (request, response) => {
+  if (${isolated}) { const url = new URL(request.url, "https://proof.invalid"); url.searchParams.delete("__proof_representation"); request.url = url.pathname + url.search; }
+  response.setHeader("x-proof-runtime", process.version);
+  response.setHeader("x-proof-wrapper", ${JSON.stringify(representation)});
+  return listener(request, response);
+};`);
+      await writeFile(join(functions, `${name}.prerender-config.json`), JSON.stringify({ expiration: 10, group: id === "one" ? 481 : 482, allowQuery: isolated ? ["edition", "__proof_representation"] : ["edition"], passQuery: true, bypassToken: token }));
     }
   }
   await cp(base, join(functions, "raw-nav.func"), { recursive: true });
@@ -128,18 +142,29 @@ export default createLiveListener(${JSON.stringify({ representation: "control", 
   await mkdir(join(functions, "reject.func"));
   await writeFile(join(functions, "reject.func/.vc-config.json"), JSON.stringify({ runtime: "nodejs22.x", handler: "index.mjs", launcherType: "Nodejs" }));
   await writeFile(join(functions, "reject.func/index.mjs"), 'export default (_request, response) => { response.writeHead(400, { "cache-control": "no-store" }); response.end("Ineligible proof request."); };');
+  if (isolated) {
+    const guard = join(functions, "proof-guard.func");
+    await mkdir(guard);
+    const guardConfig = join(scratch, "guard.vite.config.mjs");
+    await writeFile(guardConfig, 'export default { build: { rollupOptions: { output: { entryFileNames: "index.js" } } } };');
+    await command(resolve(example, "node_modules/.bin/vite"), ["build", "--config", guardConfig, "--ssr", resolve("tooling/vercel-isr-live-guard.ts"), "--outDir", guard], example);
+    await writeFile(join(guard, ".vc-config.json"), JSON.stringify({ runtime: "edge", entrypoint: "index.js" }));
+  }
+
   const routes = [
+    ...(isolated ? [{ src: "^/public/.*$", middlewarePath: "proof-guard", continue: true }] : []),
     { src: "^/proof-.*$", dest: "/reject" },
     { src: "^/public/.*$", has: [{ type: "header", key: "cookie" }], dest: "/reject" },
     { src: "^/public/.*$", has: [{ type: "header", key: "authorization" }], dest: "/reject" },
-    { src: "^/public/(one|two)$", methods: ["GET", "HEAD"], has: [{ type: "header", key: "x-demiurge-navigation", value: "^data$" }], dest: "/proof-nav-$1" },
-    { src: "^/public/(one|two)$", methods: ["GET", "HEAD"], missing: [{ type: "header", key: "x-demiurge-navigation" }], dest: "/proof-doc-$1" },
+    { src: "^/public/(one|two)$", methods: ["GET", "HEAD"], has: [{ type: "header", key: "x-demiurge-navigation", value: "^data$" }], dest: isolated ? "/proof-nav-$1?__proof_representation=navigation" : "/proof-nav-$1" },
+    { src: "^/public/(one|two)$", methods: ["GET", "HEAD"], missing: [{ type: "header", key: "x-demiurge-navigation" }], dest: isolated ? "/proof-doc-$1?__proof_representation=document" : "/proof-doc-$1" },
     { src: "^/raw-nav$", dest: "/raw-nav" },
     { src: "^/private$", dest: "/private" },
     { src: "^/nonce$", dest: "/nonce" },
     { src: "^/.*$", dest: "/reject" },
   ];
-  await writeFile(join(output, "config.json"), JSON.stringify({ version: 3, routes }));
+  routing = { version: 3, routes };
+  await writeFile(join(output, "config.json"), JSON.stringify(routing));
   fullArtifactHash = await hashArtifact(output);
   console.log("Deploying isolated preview artifacts to demiurge-verification.");
   const deployed = await command("vercel", ["deploy", "--prebuilt", "--yes", "--cwd", scratch, "--scope", "north-shore-software-labs"], scratch);
@@ -148,19 +173,23 @@ export default createLiveListener(${JSON.stringify({ representation: "control", 
   deployment = matches.at(-1)!;
   console.log(`Deployment ready: ${deployment}`);
 
-  const request = async (name: string, path = "/public/one", headers: Record<string, string> = {}, method = "GET") => {
+  const request = async (name: string, path = "/public/one", headers: Record<string, string> = {}, method = "GET", timeout = "30") => {
     assert.ok(path.startsWith("/") && !path.startsWith("//") && !/[\r\n]/.test(path));
+    const startedAt = new Date().toISOString();
     const sequence = requestSequence++;
     const headerFile = join(scratch, `headers-${sequence}`);
     const bodyFile = join(scratch, `body-${sequence}`);
     const curlConfig = Object.entries(headers).map(([key, value]) => `header = ${JSON.stringify(`${key}: ${value}`)}`).join("\n");
-    const status = await command("vercel", ["curl", path, "--deployment", deployment, "--", "--silent", "--show-error", "--max-time", "30", "--request", method, "--dump-header", headerFile, "--output", bodyFile, "--write-out", "%{http_code}", "--config", "-"], scratch, curlConfig);
+    const status = await command("vercel", ["curl", path, "--deployment", deployment, "--", "--silent", "--show-error", "--max-time", timeout, "--request", method, "--dump-header", headerFile, "--output", bodyFile, "--write-out", "%{http_code}", "--config", "-"], scratch, curlConfig);
     const rawHeaders = await readFile(headerFile, "utf8");
     const body = await readFile(bodyFile, "utf8");
     const get = (key: string) => new RegExp(`^${key}: (.*)$`, "im").exec(rawHeaders)?.[1].trim() ?? null;
     const row = {
-      name, path, method, status: Number(status.trim().slice(-3)),
+      name, path, method, startedAt, finishedAt: new Date().toISOString(),
+      requestHeaders: Object.fromEntries(Object.entries(headers).map(([key, value]) => [key, ["cookie", "authorization", "x-prerender-revalidate"].includes(key.toLowerCase()) ? "[redacted]" : value])),
+      status: Number(status.trim().slice(-3)),
       cache: get("x-vercel-cache"), age: get("age"), contentType: get("content-type"),
+      guard: get("x-proof-guard"), runtime: get("x-proof-runtime"),
       cacheControl: get("cache-control"), csp: get("content-security-policy"),
       wrapper: get("x-proof-wrapper"), navigationMarker: get("x-demiurge-navigation"), vary: get("vary"),
       bodyKind: body.trim().startsWith("{") ? "json" : body.includes("<html") ? "html" : "other",
@@ -187,6 +216,20 @@ export default createLiveListener(${JSON.stringify({ representation: "control", 
   await request("cold-navigation", "/public/one", { "x-demiurge-navigation": "data" });
   await request("repeat-navigation", "/public/one", { "x-demiurge-navigation": "data" });
   await request("raw-navigation", "/raw-nav");
+  if (isolated) {
+    await request("cold-cookie", "/public/two", { cookie: "session=synthetic-private" });
+    await request("cold-authorization", "/public/two", { authorization: "Bearer synthetic-private" });
+    await request("cold-unknown-query", "/public/two?preview=synthetic-private");
+    await request("cold-duplicate-query", "/public/two?edition=a&edition=b");
+    await request("cold-navigation-first", "/public/two", { "x-demiurge-navigation": "data" });
+    await request("document-after-navigation", "/public/two");
+    await request("repeat-navigation-first", "/public/two", { "x-demiurge-navigation": "data" });
+    await request("unknown-query-second-path", "/public/two?preview=synthetic-private");
+    await request("duplicate-query-second-path", "/public/two?edition=a&edition=b");
+    await request("reserved-query", "/public/one?__proof_representation=navigation");
+    await request("encoded-unknown-query", "/public/one?%70review=synthetic-private");
+    await request("encoded-duplicate-query", "/public/one?edition=a&%65dition=b");
+  }
   await request("second-path", "/public/two");
   await request("edition-a", "/public/one?edition=a");
   await request("edition-b", "/public/one?edition=b");
@@ -242,7 +285,22 @@ export default createLiveListener(${JSON.stringify({ representation: "control", 
   await request("invalid-bypass", "/public/one", { cookie: "__prerender_bypass=invalid" });
   await request("valid-bypass", "/public/one", { cookie: `__prerender_bypass=${token}` });
   await request("public-after-bypass");
-  const failures = assess(results);
+  if (isolated) {
+    state.version = 7;
+    state.delayMs = 4_000;
+    let transportFailed = false;
+    try {
+      await request("lost-acknowledgment-response", "/public/one", { "x-prerender-revalidate": token }, "GET", "1");
+    } catch {
+      transportFailed = true;
+    }
+    results.push({ name: "lost-acknowledgment", transportFailed, acknowledgment: "unknown" });
+    await pause(6_000);
+    state.delayMs = 0;
+    await request("lost-acknowledgment-result");
+    results.push({ name: "lost-acknowledgment-origin", observed: sourceEvents.some((event) => event.version === 7) });
+  }
+  const failures = isolated ? assessIsolated(results) : assess(results);
   results.push({ summary: "Live observations completed.", sameGenerationOnRepeat: doc.generation === hit.generation, sourceReads, failures });
   if (failures.length) process.exitCode = 1;
   await save();
@@ -258,7 +316,7 @@ export default createLiveListener(${JSON.stringify({ representation: "control", 
 }
 
 async function save() {
-  await writeFile(evidenceFile, JSON.stringify({ sourceBaseline, sourceCommit: null, workingTreeSources, artifactHash, fullArtifactHash, deployment, runtime: "nodejs22.x", region: "iad1", expiration: 10, groups: [481, 482], sourceEvents, results }, null, 2));
+  await writeFile(evidenceFile, JSON.stringify({ sourceBaseline, sourceCommit, routing, prerender: { expiration: 10, groups: [481, 482], allowQuery: isolated ? ["edition", "__proof_representation"] : ["edition"], passQuery: true, bypassToken: "[redacted]" }, candidate: isolated ? "representation-query-and-edge-guard" : "original", workingTreeSources, artifactHash, fullArtifactHash, deployment, runtime: "nodejs22.x", region: "iad1", expiration: 10, groups: [481, 482], sourceEvents, results }, null, 2));
 }
 
 function command(binary: string, args: string[], cwd: string, input = ""): Promise<string> {
