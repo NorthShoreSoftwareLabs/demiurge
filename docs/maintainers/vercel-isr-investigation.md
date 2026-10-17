@@ -17,6 +17,8 @@ Neither source proves the deployed behavior of Demiurge artifacts.
 The live record below tests disposable provider artifacts.
 Its results reject the tested representation configuration.
 
+An [October 17 proof](vercel-isr-isolated-proof.md) tests a revised private configuration with explicit representation identity and request validation before cache lookup.
+
 Build the package and example before the local investigation probe:
 
 ```sh
