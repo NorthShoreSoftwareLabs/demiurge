@@ -34,4 +34,5 @@ export type {
   RequestErrorReporter,
   RequestHandler,
   RequestHandlerOptions,
+  RequestBackgroundOptions,
 } from "./request-handler";

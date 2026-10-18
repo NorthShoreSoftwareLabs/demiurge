@@ -563,4 +563,5 @@ export type {
   PageRenderer,
   RequestHandler,
   RequestHandlerOptions,
+  RequestBackgroundOptions,
 } from "./server";

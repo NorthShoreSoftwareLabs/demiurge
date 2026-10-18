@@ -10,6 +10,7 @@ import {
   type ScriptTag,
 } from "../document";
 import type {
+  HttpRouteContext,
   LayoutProps,
   NotFoundProps,
   PageRenderOptions,
@@ -318,6 +319,7 @@ export async function loadPageRoute(
   initialData?: InitialRouteData,
   cache: Cache = createMemoryCache(),
   options: {
+    background?: HttpRouteContext["background"];
     documentContributions?: boolean;
     locale?: string;
     requestContext?: Record<string, unknown>;
@@ -364,6 +366,7 @@ export async function loadPageRoute(
       : await Promise.all(matchingLayouts.map((layout) => layout.load()));
   const url = new URL(request.url);
   const context = {
+    background: options.background,
     cache,
     context: options.requestContext ?? {},
     locale: options.locale,
