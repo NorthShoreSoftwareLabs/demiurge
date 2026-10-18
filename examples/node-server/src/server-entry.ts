@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { createMemoryCacheStore } from "@demiurgejs/core";
 import {
   createFontAssetHandler,
+  nodeAdapter,
   createImageOptimizer,
   createStaticFileHandler,
   type NodeBuildContext,
@@ -18,6 +19,8 @@ const reportBackgroundError = (error: unknown) => {
 export function createHandler({ page, waitUntil }: NodeBuildContext) {
   return createDemiurgeHandler({
     ...page,
+    adapter: nodeAdapter,
+    background: { waitUntil, onError: reportBackgroundError },
     cacheStore: {
       namespace: {
         app: "demiurge-node-example",

@@ -62,3 +62,13 @@ Deploy `dist/client`, `dist/server`, `server.js`, `package.json`, and installed
 production dependencies together. The server defaults to `127.0.0.1:4173`.
 Override `PORT` as needed and set `HOST=0.0.0.0` when a container or platform
 must connect directly to the process.
+
+## Request background work
+
+`POST /api/background` registers a callback through the configured Node lifetime and returns status 202.
+The application logs completion and reports task errors through its server error callback.
+The route uses the inherited CSRF and request-security policy.
+Without a configured lifetime, it returns status 503 before work starts.
+Node drains accepted tasks during graceful shutdown, within the configured deadline.
+Completion is not durable and can be lost after process failure.
+See the [request background work guide](../../docs/guides/request-background-work.md).

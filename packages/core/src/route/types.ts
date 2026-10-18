@@ -69,6 +69,7 @@ export type HttpRouteContext<
   TPath extends string = string,
   TValues extends object = RouteRequestContextFor<TPath>,
 > = RouteContext<TPath> & RequestContextField<TValues> & {
+  background?: { run: (task: () => void | Promise<void>) => void };
   request: Request;
   trace?: RuntimeTraceCarrier;
   search: URLSearchParams;

@@ -106,6 +106,7 @@ export function createEdgeRequestHandler(
   const serveAsset = toEdgeAssetHandler(options.assets);
   const handleRequest = createRequestHandler({
     adapter: edgeAdapter,
+    background: options.background,
     cacheStore,
     onError: options.onError,
     rateLimitStore,

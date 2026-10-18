@@ -99,7 +99,13 @@ export type RequestErrorReporter = (
   context: { pathname: string; site: FailureSite },
 ) => void;
 
+export type RequestBackgroundOptions = {
+  onError: (error: unknown) => void | Promise<void>;
+  waitUntil: (promise: Promise<void>) => void;
+};
+
 export type RequestHandlerOptions = {
+  background?: RequestBackgroundOptions;
   adapter?: Adapter;
   cacheStore?: RequestCacheStoreOptions;
   onError?: RequestErrorReporter;
@@ -125,6 +131,8 @@ export type RequestCacheStoreOptions = {
 // `handleRequestWithManifest` directly. An application cannot enable this mode
 // in production and expose a stack trace.
 type RequestRuntimeOptions = {
+  background?: RequestBackgroundOptions;
+  backgroundActive?: () => boolean;
   cacheStore?: RequestCacheStoreOptions;
   dev?: boolean;
   onError?: RequestErrorReporter;
@@ -162,6 +170,15 @@ const supportedMethods = [
 const defaultRateLimitStore = createMemoryRateLimitStore();
 
 export function createRequestHandler(options: RequestHandlerOptions) {
+  if (options.background && !options.adapter?.capabilities.backgroundLifetime) {
+    throw new Error("Request background work requires an adapter with backgroundLifetime support.");
+  }
+  if (options.background && (
+    typeof options.background.waitUntil !== "function" ||
+    typeof options.background.onError !== "function"
+  )) {
+    throw new TypeError("Request background work requires waitUntil and onError functions.");
+  }
   if (options.routeModules) {
     validateRouteModules(options.routeModules, { adapter: options.adapter });
   }
@@ -208,6 +225,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
               preference && !(await isPagePath(manifest, resolution.pathname))
             ) {
               return await handleRequestWithManifest(manifest, request, {
+                background: options.background,
                 cacheStore: options.cacheStore,
                 onError: options.onError,
                 rateLimitStore,
@@ -248,6 +266,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
             locale: resolution.locale,
           };
           const response = await handleRequestWithManifest(manifest, request, {
+            background: options.background,
             cacheStore: options.cacheStore,
             locales,
             onError: options.onError,
@@ -265,6 +284,7 @@ export function createRequestHandler(options: RequestHandlerOptions) {
           return response;
         }
         return await handleRequestWithManifest(manifest, request, {
+          background: options.background,
           cacheStore: options.cacheStore,
           onError: options.onError,
           rateLimitStore,
@@ -312,22 +332,28 @@ export async function handleRequestWithManifest(
     rateLimitStore: defaultRateLimitStore,
   },
 ) {
-  if (!options.runtimeRequestSpan && !options.runtimeRequestContext) {
-    return await instrumentRequest(
-      request,
-      options.runtimeInstrumentation,
-      options.responseBodyObservation ?? "completion",
-      async (runtimeRequestSpan, runtimeRequestContext, runtimeTraceCarrier) =>
-        await dispatchRequestWithManifest(manifest, request, {
-          ...options,
-          runtimeRequestSpan,
-          runtimeRequestContext,
-          runtimeTraceCarrier,
-        }),
-    );
-  }
+  let active = true;
+  options = { ...options, backgroundActive: () => active };
+  try {
+    if (!options.runtimeRequestSpan && !options.runtimeRequestContext) {
+      return await instrumentRequest(
+        request,
+        options.runtimeInstrumentation,
+        options.responseBodyObservation ?? "completion",
+        async (runtimeRequestSpan, runtimeRequestContext, runtimeTraceCarrier) =>
+          await dispatchRequestWithManifest(manifest, request, {
+            ...options,
+            runtimeRequestSpan,
+            runtimeRequestContext,
+            runtimeTraceCarrier,
+          }),
+      );
+    }
 
-  return await dispatchRequestWithManifest(manifest, request, options);
+    return await dispatchRequestWithManifest(manifest, request, options);
+  } finally {
+    active = false;
+  }
 }
 
 async function dispatchRequestWithManifest(
@@ -551,6 +577,7 @@ async function handleMatchedRoute(
       path: routeMatch.path,
       pathname: routePathname,
       request,
+      background: createRequestBackground(options),
       context: requestContext,
       search: url.searchParams,
       trace: options.runtimeTraceCarrier,
@@ -597,6 +624,7 @@ async function handleMatchedRoute(
                   undefined,
                   cache,
                   {
+                    background: context.background,
                     locale: options.ssr?.locale,
                     requestContext,
                     trace: createRuntimeTraceCarrier(cacheParent, options.runtimeInstrumentation?.traceContext),
@@ -736,6 +764,7 @@ async function handleMatchedRoute(
     path: routeMatch.path,
     pathname: routePathname,
     request,
+    background: createRequestBackground(options),
     context: requestContext,
     search: url.searchParams,
     trace: options.runtimeTraceCarrier,
@@ -1387,4 +1416,46 @@ function allowedMethods(routeModule: RouteModule) {
   }
 
   return methods;
+}
+
+function createRequestBackground(options: RequestRuntimeOptions) {
+  const background = options.background;
+  if (!background) {
+    return undefined;
+  }
+  return {
+    run(task: () => void | Promise<void>) {
+      if (options.backgroundActive?.() === false) {
+        throw new Error("Request background work cannot start after the response returns.");
+      }
+      let start: (() => void) | undefined;
+      const registered = new Promise<void>((resolve) => { start = resolve; });
+      const work = registered.then(async () => {
+        const link = options.runtimeRequestSpan?.context ?? options.runtimeRequestContext;
+        const span = startRuntimeSpan(options.runtimeInstrumentation, {
+          kind: "internal",
+          links: link ? [{ context: link }] : undefined,
+          operation: "demiurge.background",
+        });
+        try {
+          await task();
+          span?.setAttribute("demiurge.operation.outcome", "success");
+          span?.setStatus("unset");
+        } catch (error) {
+          span?.setAttribute("demiurge.operation.outcome", "error");
+          span?.setAttribute("error.type", "exception");
+          span?.setStatus("error");
+          try {
+            await background.onError(error);
+          } catch {
+            // Application error reporting cannot change the response or shutdown.
+          }
+        } finally {
+          span?.end();
+        }
+      });
+      background.waitUntil(work);
+      start?.();
+    },
+  };
 }

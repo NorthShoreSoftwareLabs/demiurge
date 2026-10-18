@@ -230,3 +230,9 @@ from the `createHandler` context to the cache store.
 Ship `dist/client`, `dist/server`, `package.json`, and installed
 production dependencies together. The server defaults to `127.0.0.1:4173`.
 Override `PORT` and `HOST` for the target environment.
+
+## Request background work
+
+The [request background work guide](./request-background-work.md) describes the optional route interface.
+Configure its lifetime with the same Node `waitUntil` binding that drains cache refresh work.
+Accepted tasks remain subject to process failure and the graceful shutdown deadline.
