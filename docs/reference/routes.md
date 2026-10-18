@@ -452,6 +452,29 @@ the route handler.
 The generated route declarations intersect the contribution types from each
 ancestor `@middleware.ts` file. A route helper needs its path only.
 
+### Middleware deployment boundary
+
+Application `@middleware.ts` files run only in the shared Demiurge route
+pipeline. Each applicable file runs once, in root-to-leaf order. Adapters
+normalize the request before application middleware receives it.
+
+Request-security checks run before application middleware. Authorization runs
+after middleware calls `next()` and before the route capability runs.
+Response finalization also applies when middleware returns a response early.
+
+Provider middleware handles deployment routing and provider-required checks.
+It cannot execute application middleware or supply trusted request context
+through public request headers. A provider rejection before Demiurge receives
+the request uses provider-owned response behavior.
+
+Demiurge exposes no host middleware API or capability. A future integration
+requires an explicit adapter capability, a verified typed boundary, and
+adapter and deployment conformance tests.
+[ADR 0025](../../architecture/decisions/0025-host-middleware-integration-boundary.md)
+defines that boundary.
+
+### Server context disclosure
+
 The framework does not pass request context to browser route props or
 navigation data. Keep context values server-only. Dynamic values are called
 `path`, not `params`:
