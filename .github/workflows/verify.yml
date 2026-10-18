@@ -57,7 +57,7 @@ jobs:
             redis: true
             coverage: true
           - name: scaffold and tooling
-            command: pnpm test:scaffold && pnpm test:tooling
+            command: pnpm --filter @demiurgejs/core build && pnpm test:scaffold && pnpm test:tooling
           - name: examples and integration
             command: pnpm --filter @demiurgejs/core build && pnpm build:examples && pnpm test:examples
             redis: true
