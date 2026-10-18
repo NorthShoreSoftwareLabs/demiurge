@@ -12,7 +12,9 @@ function evidence(): Array<Record<string, unknown>> {
   });
   for (const name of ["cold-cookie", "cold-authorization", "cold-unknown-query", "cold-duplicate-query", "unknown-query", "duplicate-query", "reserved-query", "encoded-unknown-query", "encoded-duplicate-query", "unknown-query-second-path", "duplicate-query-second-path", "cookie-hit", "authorization-hit", "invalid-navigation", "direct-document-function", "direct-navigation-function", "mutation", "invalid-bypass", "valid-bypass"]) rows.push({ name, status: 400 });
   for (const name of ["private-control", "private-control-repeat", "nonce-control", "nonce-control-repeat"]) rows.push({ name, status: 200, cacheControl: "private, no-store", privateIdentityMatches: true, nonceMatchesBody: true, setCookiePresent: true, csp: name });
-  rows.push({ name: "failed-revalidation", status: 500 });
+  rows.push({ name: "failed-revalidation", status: 500, cache: "REVALIDATED" });
+  for (const name of ["timed-stale", "timed-navigation", "failed-regeneration-stale", "retry-trigger"]) rows.find((row) => row.name === name)!.cache = "STALE";
+  for (const name of ["explicit-revalidation", "explicit-revalidation-repeat", "race-document-revalidation", "race-navigation-revalidation", "lost-acknowledgment-retry"]) rows.find((row) => row.name === name)!.cache = "REVALIDATED";
   rows.push({ name: "lost-acknowledgment", transportFailed: true, transportFailure: "curl-timeout-28", acknowledgment: "unknown" });
   rows.push({ name: "lost-acknowledgment-origin", observed: true, observedAt: "2026-10-17T00:00:00Z" });
   rows.find((row) => row.name === "lost-acknowledgment-result")!.version = 7;
@@ -65,6 +67,38 @@ void test("Cache collisions, skipped guards, stale versions, and false security 
     ["private-control-repeat", "privateIdentityMatches", false],
     ["private-control", "cacheControl", "public"],
     ["hostile-headers", "hostileReflection", true],
+  ];
+  for (const [name, key, value] of mutations) {
+    const rows = evidence();
+    rows.find((row) => row.name === name)![key] = value;
+    assert.ok(assessIsolated(rows).some((failure) => failure.startsWith(`${name}:`)), `${name}.${key}`);
+  }
+});
+
+void test("Lifecycle evidence requires stale serving and published retry output.", () => {
+  const mutations: Array<[string, string, unknown]> = [
+    ["timed-stale", "version", 2],
+    ["timed-stale", "cache", "MISS"],
+    ["timed-navigation", "cache", "HIT"],
+    ["timed-fresh", "cache", "MISS"],
+    ["explicit-revalidation", "cache", "HIT"],
+    ["explicit-revalidation-repeat", "cache", "MISS"],
+    ["explicit-document-result", "cache", "MISS"],
+    ["explicit-navigation-result", "cache", "MISS"],
+    ["failed-revalidation", "cache", "MISS"],
+    ["failed-regeneration-stale", "cache", "MISS"],
+    ["retry-trigger", "cache", "MISS"],
+    ["retry-result", "cache", "MISS"],
+    ["race-document-revalidation", "cache", "MISS"],
+    ["race-navigation-revalidation", "cache", "MISS"],
+    ["race-document-result", "cache", "MISS"],
+    ["race-navigation-result", "cache", "MISS"],
+    ["lost-acknowledgment-retry", "cache", "MISS"],
+    ["lost-acknowledgment-result", "cache", "MISS"],
+    ["lost-acknowledgment-result", "generation", "different-generation"],
+    ["lost-acknowledgment-result", "bodySha256", "different-body"],
+    ["failed-regeneration-stale", "generation", "different-generation"],
+    ["race-document-result", "bodySha256", "different-body"],
   ];
   for (const [name, key, value] of mutations) {
     const rows = evidence();

@@ -60,7 +60,32 @@ export function assessIsolated(rows: readonly Row[]): string[] {
   const nonce = named("nonce-control");
   const repeatNonce = named("nonce-control-repeat");
   if (typeof nonce.csp !== "string" || typeof repeatNonce.csp !== "string" || nonce.csp === repeatNonce.csp) failures.push("nonce-control-repeat: missing or repeated CSP nonce.");
-  for (const [name, version] of [["timed-fresh", 2], ["explicit-document-result", 3], ["explicit-navigation-result", 3], ["failed-regeneration-stale", 3], ["retry-result", 4], ["race-document-revalidation", 5], ["race-navigation-revalidation", 6], ["race-document-result", 5], ["race-navigation-result", 6]] as const) check(name, named(name), "version", version);
+  for (const [name, version] of [["timed-stale", 1], ["timed-fresh", 2], ["explicit-document-result", 3], ["explicit-navigation-result", 3], ["failed-regeneration-stale", 3], ["retry-result", 4], ["race-document-revalidation", 5], ["race-navigation-revalidation", 6], ["race-document-result", 5], ["race-navigation-result", 6]] as const) check(name, named(name), "version", version);
+  for (const [name, cache] of [
+    ["timed-stale", "STALE"], ["timed-navigation", "STALE"], ["timed-fresh", "HIT"],
+    ["explicit-revalidation", "REVALIDATED"], ["explicit-revalidation-repeat", "REVALIDATED"],
+    ["explicit-document-result", "HIT"], ["explicit-navigation-result", "HIT"],
+    ["failed-revalidation", "REVALIDATED"], ["failed-regeneration-stale", "STALE"],
+    ["retry-trigger", "STALE"], ["retry-result", "HIT"],
+    ["race-document-revalidation", "REVALIDATED"], ["race-navigation-revalidation", "REVALIDATED"],
+    ["race-document-result", "HIT"], ["race-navigation-result", "HIT"],
+    ["lost-acknowledgment-retry", "REVALIDATED"], ["lost-acknowledgment-result", "HIT"],
+  ]) check(name, named(name), "cache", cache);
+  for (const [generation, publication] of [
+    ["explicit-revalidation-repeat", "explicit-document-result"],
+    ["explicit-document-result", "failed-regeneration-stale"],
+    ["race-document-revalidation", "race-document-result"],
+    ["race-navigation-revalidation", "race-navigation-result"],
+    ["lost-acknowledgment-retry", "lost-acknowledgment-result"],
+  ]) {
+    const generated = named(generation);
+    const published = named(publication);
+    for (const key of ["generation", "bodySha256"]) {
+      if (typeof generated[key] !== "string" || generated[key] !== published[key]) {
+        failures.push(`${publication}: changed or missing ${key} from ${generation}.`);
+      }
+    }
+  }
   check("failed-revalidation", named("failed-revalidation"), "status", 500);
   check("lost-acknowledgment", named("lost-acknowledgment"), "transportFailed", true);
   check("lost-acknowledgment", named("lost-acknowledgment"), "transportFailure", "curl-timeout-28");
