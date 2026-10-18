@@ -97,11 +97,11 @@ export async function serveNodeBuild(
     ? undefined
     : options.readyPath ?? defaultNodeBuildReadyPath;
 
-  // A caller's createHandler may call waitUntil synchronously (for example to
-  // warm a cache at startup), before the server exists. Buffer those promises
-  // here and flush them into the real server once it is constructed, so an
-  // early call just works instead of throwing.
+  // Handler construction can register work before the server exists.
   const pendingWaitUntil: Promise<unknown>[] = [];
+  let registerWaitUntil = (promise: Promise<unknown>) => {
+    pendingWaitUntil.push(promise);
+  };
   const context: NodeBuildContext = {
     page: {
       clientEntry: manifest.clientEntry,
@@ -110,7 +110,7 @@ export async function serveNodeBuild(
     },
     root,
     waitUntil(promise) {
-      pendingWaitUntil.push(promise);
+      registerWaitUntil(promise);
     },
   };
   const handler = await options.createHandler(context);
@@ -127,10 +127,10 @@ export async function serveNodeBuild(
     trustProxy: options.trustProxy,
   });
 
-  context.waitUntil = (promise) => {
+  registerWaitUntil = (promise) => {
     server.waitUntil(promise);
   };
-  for (const promise of pendingWaitUntil) {
+  for (const promise of pendingWaitUntil.splice(0)) {
     server.waitUntil(promise);
   }
 

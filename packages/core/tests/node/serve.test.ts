@@ -3,11 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { defineRuntimeInstrumentation } from "@demiurgejs/core";
+import { createRequestHandler, defineRuntimeInstrumentation, response } from "@demiurgejs/core";
 import {
   createNodeServer,
   createStaticFileHandler,
   defaultNodeBuildReadyPath,
+  nodeAdapter,
   serveNodeBuild,
   type NodeServer,
 } from "@demiurgejs/core/node";
@@ -217,6 +218,48 @@ describe("serveNodeBuild", () => {
     started.pop();
 
     expect(states).toEqual(["ready", "draining", "stopped"]);
+  });
+
+  it("drains request work through a captured startup lifetime callback", async () => {
+    const output = await createBuildOutput();
+    let finish = () => undefined as void;
+    const task = new Promise<void>((resolve) => { finish = resolve; });
+    const onError = vi.fn();
+    const server = await serveNodeBuild({
+      base: output.base,
+      createHandler: ({ waitUntil }) => createRequestHandler({
+        adapter: nodeAdapter,
+        background: { waitUntil, onError },
+        routes: {
+          "./routes/index.ts": async () => ({
+            policy: { access: { public: true } },
+            GET: response(({ background }) => {
+              background?.run(() => task);
+              return new Response("accepted");
+            }),
+          }),
+        },
+      }),
+      onListen: () => undefined,
+      port: 0,
+      shutdown: { gracePeriod: 1_000, signals: [] },
+    });
+    const origin = track(server);
+    const registered = vi.spyOn(server, "waitUntil");
+    let stopped = false;
+    let shutdown: Promise<void> | undefined;
+    try {
+      expect(await (await fetch(`${origin}/`)).text()).toBe("accepted");
+      expect(registered).toHaveBeenCalledOnce();
+      shutdown = server.shutdown().then(() => { stopped = true; });
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(stopped).toBe(false);
+    } finally {
+      finish();
+      await shutdown;
+    }
+    expect(stopped).toBe(true);
+    expect(onError).not.toHaveBeenCalled();
   });
 
   it("tracks a waitUntil call made synchronously during createHandler", async () => {

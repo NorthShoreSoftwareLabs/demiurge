@@ -29,6 +29,9 @@ export function createHandler({ page, waitUntil }: NodeBuildContext) {
 }
 ```
 
+The Node lifetime callback stays valid when the server starts.
+A handler can retain the callback received during construction.
+
 `onError` belongs to the application.
 It receives task failures without changing an already returned response.
 Keep credentials and private data out of telemetry that your callback exports.
