@@ -1,3 +1,5 @@
+import { assessRollback } from "./vercel-isr-live-rollback-assessment";
+
 type Row = Record<string, unknown>;
 
 export function assessIsolated(rows: readonly Row[]): string[] {
@@ -101,5 +103,39 @@ export function assessIsolated(rows: readonly Row[]): string[] {
   if (result.version !== 5 && result.version !== 7) failures.push("lost-acknowledgment-observation: expected the previous or attempted version.");
   check("lost-acknowledgment-retry", named("lost-acknowledgment-retry"), "version", 7);
   check("lost-acknowledgment-result", named("lost-acknowledgment-result"), "version", 7);
+  return [...new Set(failures)];
+}
+
+export function assessCompletion(rows: readonly Row[]): string[] {
+  const failures = [...assessIsolated(rows), ...assessRollback(rows)];
+  const eligibility = rows.filter((candidate) => candidate.name === "artifact-eligibility");
+  if (eligibility.length !== 1) failures.push("artifact-eligibility: expected exactly one observation.");
+  const artifact = eligibility[0] ?? {};
+  const expectedTargets = ["proof-doc-one.prerender-config.json", "proof-doc-two.prerender-config.json", "proof-nav-one.prerender-config.json", "proof-nav-two.prerender-config.json"];
+  if (JSON.stringify(artifact.prerenderTargets) !== JSON.stringify(expectedTargets)) failures.push("artifact-eligibility: unexpected prerender targets.");
+  for (const property of ["privateControlExcluded", "nonceControlExcluded", "publicCredentialsAbsent", "runtimeResponseValidation"]) {
+    if (artifact[property] !== true) failures.push(`artifact-eligibility: missing ${property}.`);
+  }
+  for (const property of ["arbitraryMiddlewareEligible", "headerVariantsEligible"]) {
+    if (artifact[property] !== false) failures.push(`artifact-eligibility: unsupported ${property}.`);
+  }
+  for (const name of ["cold-document", "repeat-document", "cold-navigation", "repeat-navigation", "timed-fresh", "explicit-document-result", "explicit-navigation-result", "retry-result"]) {
+    const row = rows.find((candidate) => candidate.name === name) ?? {};
+    for (const contribution of ["layoutVersion", "metadataVersion", "documentVersion"]) {
+      if (!Number.isSafeInteger(row[contribution]) || row[contribution] !== row.version) {
+        failures.push(`${name}: ${contribution} does not match the fresh page version.`);
+      }
+    }
+  }
+  const browser = rows.filter((row) => row.name === "browser-hydration-navigation");
+  if (browser.length !== 1) failures.push("browser-hydration-navigation: expected exactly one observation.");
+  const row = browser[0] ?? {};
+  for (const property of ["hydrated", "interaction", "history", "documentContributions"]) {
+    if (row[property] !== true) failures.push(`browser-hydration-navigation: missing ${property}.`);
+  }
+  if (row.documentRequests !== 1 || typeof row.navigationRequests !== "number" || row.navigationRequests < 2 || typeof row.assetRequests !== "number" || row.assetRequests < 1) {
+    failures.push("browser-hydration-navigation: missing document, asset, or navigation requests.");
+  }
+  if (!Array.isArray(row.errors) || row.errors.length !== 0) failures.push("browser-hydration-navigation: browser errors occurred.");
   return [...new Set(failures)];
 }

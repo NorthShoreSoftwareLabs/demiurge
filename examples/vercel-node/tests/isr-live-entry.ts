@@ -1,40 +1,37 @@
 import { randomUUID } from "node:crypto";
 import { createElement } from "react";
 import {
+  createCache,
+  cspHash,
   createMemoryCacheStore,
+  defineLinks,
+  defineMetadata,
   createRequestHandler,
   defineMiddleware,
   defineRoutePolicy,
   page,
   response,
   security,
-  type RouteProps,
 } from "@demiurgejs/core";
 import { createNodeRequestListener } from "@demiurgejs/core/node";
 import { vercelNodeAdapter } from "@demiurgejs/core/vercel";
+import { LiveLayout, LiveView, type LiveData } from "./isr-live-view";
 
 export type LiveListenerOptions = {
   representation: "document" | "navigation" | "control";
   sourceOrigin: string;
   sourceToken: string;
   logicalPath?: string;
-};
-
-type LiveData = {
-  version: number;
-  id: string;
-  edition: string;
-  generation: string;
-  middlewareCalls: number;
+  allowedHosts?: string[];
 };
 
 let middlewareCalls = 0;
 
-async function readSource(options: LiveListenerOptions): Promise<number> {
+async function readSource(options: LiveListenerOptions, contribution: string): Promise<number> {
   const result = await fetch(new URL("/state", options.sourceOrigin), {
     cache: "no-store",
     redirect: "error",
-    headers: { authorization: `Bearer ${options.sourceToken}` },
+    headers: { authorization: `Bearer ${options.sourceToken}`, "x-proof-contribution": contribution },
     signal: AbortSignal.timeout(20_000),
   });
   if (!result.ok) throw new Error("The live source request failed.");
@@ -47,22 +44,32 @@ async function readSource(options: LiveListenerOptions): Promise<number> {
     throw new Error("The live source state is invalid.");
   }
   const delayMs = state.delayMs;
-  if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+  if (delayMs > 0 && contribution === "page") await new Promise((resolve) => setTimeout(resolve, delayMs));
   if (state.fail) throw new Error("The live source generation failed.");
   return Number(state.version);
 }
 
 function createGeneration(options: LiveListenerOptions) {
   const generation = randomUUID();
+  const namespace = { app: "private-live-isr-proof", environment: "verification", schemaVersion: 1 };
+  const store = createMemoryCacheStore();
+  const contributions = createCache({ namespace, store });
+  const loadContribution = (name: string) => contributions.get({
+    key: ["contribution", name], scope: "public", fn: () => readSource(options, name),
+  });
   return createRequestHandler({
+    ssr: { clientEntry: "/proof-client.js" },
     adapter: vercelNodeAdapter,
     cacheStore: {
-      namespace: { app: "private-live-isr-proof", environment: "verification", schemaVersion: 1 },
-      store: createMemoryCacheStore(),
+      namespace,
+      store,
     },
     routes: {
       "./routes/@policy.ts": async () => ({
-        policy: defineRoutePolicy({ access: { public: true }, document: security.static() }),
+        policy: defineRoutePolicy({
+          access: { public: true },
+          document: security.static({ csp: { styleSrc: ["'self'", await cspHash(".demiurge-navigation-status{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0, 0, 0, 0);white-space:nowrap;border:0}")] } }),
+        }),
       }),
       "./routes/@middleware.ts": async () => ({
         middleware: defineMiddleware(async (_context, next) => {
@@ -73,7 +80,13 @@ function createGeneration(options: LiveListenerOptions) {
           return result;
         }),
       }),
+      "./routes/@layout.tsx": async () => ({
+        default: LiveLayout,
+        metadata: async () => defineMetadata({ description: `Layout version ${await loadContribution("layout")}` }),
+      }),
       "./routes/public/[id].tsx": async () => ({
+        metadata: async () => defineMetadata({ title: `Metadata version ${await loadContribution("metadata")}` }),
+        links: defineLinks(async () => [{ kind: "link", rel: "canonical", href: `/proof-document-v${await loadContribution("document")}` }]),
         GET: page<string, LiveData>({
           async data({ cache, request }) {
             const url = new URL(request.url);
@@ -82,19 +95,13 @@ function createGeneration(options: LiveListenerOptions) {
             const load = () => cache.get({
               key: ["live-version", id, edition],
               scope: "public",
-              fn: async () => ({ version: await readSource(options), id, edition, generation, middlewareCalls }),
+              fn: async () => ({ version: await readSource(options, "page"), id, edition, generation, middlewareCalls }),
             });
             const [first, second] = await Promise.all([load(), load()]);
             if (first !== second) throw new Error("The generation data was not deduplicated.");
             return first;
           },
-          view: ({ data }: RouteProps<string, LiveData>) => createElement("main", {
-            "data-version": data.version,
-            "data-id": data.id,
-            "data-edition": data.edition,
-            "data-generation": data.generation,
-            "data-middleware": data.middlewareCalls,
-          }, `Version ${data.version}`),
+          view: LiveView,
         }),
       }),
       "./routes/private.ts": async () => ({
@@ -115,7 +122,7 @@ export function createLiveListener(options: LiveListenerOptions) {
   if (options.logicalPath !== undefined && !/^\/public\/[a-z0-9-]+$/.test(options.logicalPath)) {
     throw new Error("The live proof logical path is invalid.");
   }
-  const allowedHosts = [process.env.VERCEL_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL]
+  const allowedHosts = [...(options.allowedHosts ?? []), process.env.VERCEL_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL]
     .filter((host): host is string => Boolean(host));
   return createNodeRequestListener({
     allowedHosts,
@@ -141,11 +148,26 @@ export function createLiveListener(options: LiveListenerOptions) {
           if (value !== null) headers.set(name, value);
         }
       }
-      return createGeneration(options)(new Request(`https://generation.invalid${pathname}${url.search}`, {
+      const result = await createGeneration(options)(new Request(`https://generation.invalid${pathname}${url.search}`, {
         method: incoming.method,
         headers,
         signal: incoming.signal,
       }));
+      if (!control && !eligibleLiveResponse(result, options.representation)) {
+        return new Response("The generation is ineligible for shared storage.", { status: 500, headers: { "cache-control": "no-store" } });
+      }
+      return result;
     },
   });
+}
+
+export function eligibleLiveResponse(result: Response, representation: LiveListenerOptions["representation"]): boolean {
+  const control = result.headers.get("cache-control") ?? "";
+  const vary = (result.headers.get("vary") ?? "").toLowerCase().split(/\s*,\s*/);
+  const csp = result.headers.get("content-security-policy") ?? "";
+  return result.status === 200 && !result.headers.has("set-cookie") &&
+    !/\bprivate\b/i.test(control) &&
+    (representation === "navigation" || !/\bno-store\b/i.test(control)) &&
+    !vary.some((name) => name && !["x-demiurge-navigation", "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest"].includes(name)) &&
+    !csp.includes("nonce-") && /(?:^|;)\s*script-src\s/.test(csp);
 }

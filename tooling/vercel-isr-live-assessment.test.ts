@@ -106,3 +106,21 @@ void test("Lifecycle evidence requires stale serving and published retry output.
     assert.ok(assessIsolated(rows).some((failure) => failure.startsWith(`${name}:`)), `${name}.${key}`);
   }
 });
+
+void test("Completion rejects missing independent freshness and browser evidence.", async () => {
+  const { assessCompletion } = await import("./vercel-isr-live-assessment");
+  const rows = evidence();
+  assert.ok(assessCompletion(rows).some((failure) => failure.startsWith("timed-fresh:")));
+  assert.ok(assessCompletion(rows).some((failure) => failure.startsWith("browser-hydration-navigation:")));
+  for (const row of rows) {
+    if (Number.isSafeInteger(row.version)) Object.assign(row, { layoutVersion: row.version, metadataVersion: row.version, documentVersion: row.version });
+  }
+  rows.push({ name: "browser-hydration-navigation", hydrated: true, interaction: true, history: true, documentContributions: true, documentRequests: 1, navigationRequests: 2, assetRequests: 1, errors: [] });
+  rows.push({ name: "artifact-eligibility", prerenderTargets: ["proof-doc-one.prerender-config.json", "proof-doc-two.prerender-config.json", "proof-nav-one.prerender-config.json", "proof-nav-two.prerender-config.json"], privateControlExcluded: true, nonceControlExcluded: true, publicCredentialsAbsent: true, runtimeResponseValidation: true, arbitraryMiddlewareEligible: false, headerVariantsEligible: false });
+  assert.ok(assessCompletion(rows).every((failure) => failure.startsWith("rollback-")));
+  for (const [name, key, value] of [["timed-fresh", "layoutVersion", 1], ["explicit-navigation-result", "metadataVersion", 2], ["explicit-document-result", "documentVersion", 2], ["browser-hydration-navigation", "hydrated", false], ["browser-hydration-navigation", "documentRequests", 2], ["browser-hydration-navigation", "errors", ["Hydration mismatch"]], ["artifact-eligibility", "privateControlExcluded", false], ["artifact-eligibility", "prerenderTargets", []]] as const) {
+    const changed = structuredClone(rows);
+    changed.find((row) => row.name === name)![key] = value;
+    assert.ok(assessCompletion(changed).some((failure) => failure.startsWith(`${name}:`)), `${name}.${key}`);
+  }
+});

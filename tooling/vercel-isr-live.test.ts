@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { nonceMatchesBody } from "./vercel-isr-live-security";
 import {
   createLiveListener,
+  eligibleLiveResponse,
   type LiveListenerOptions,
 } from "../examples/vercel-node/tests/isr-live-entry";
 
@@ -39,12 +40,14 @@ void test("the live ISR fixture preserves its local response contracts", async (
   const servers: Server[] = [];
   let version = 1;
   let reads = 0;
+  const contributionReads: string[] = [];
   const source = createServer((request, response) => {
     if (request.url !== "/state" || request.headers.authorization !== "Bearer fixture-token") {
       response.writeHead(401).end();
       return;
     }
     reads++;
+    contributionReads.push(String(request.headers["x-proof-contribution"]));
     response.setHeader("content-type", "application/json");
     response.end(JSON.stringify({ version, fail: false, delayMs: 0 }));
   });
@@ -71,12 +74,20 @@ void test("the live ISR fixture preserves its local response contracts", async (
       assert.match(firstBody, /data-version="1"/);
       assert.match(firstBody, /data-id="one"/);
       assert.match(firstBody, /data-edition="blue"/);
-      assert.equal(reads, before + 1);
+      assert.equal(reads, before + 4);
+      assert.deepEqual(contributionReads.slice(-4).sort(), ["document", "layout", "metadata", "page"]);
+      assert.match(firstBody, /Layout version 1/);
+      assert.match(firstBody, /Metadata version 1/);
+      assert.match(firstBody, /proof-document-v1/);
       version = 2;
       const second = await fetch(`${documentOrigin}/public/one?edition=blue`);
-      assert.match(await second.text(), /data-version="2"/);
+      const secondBody = await second.text();
+      assert.match(secondBody, /data-version="2"/);
+      assert.match(secondBody, /Layout version 2/);
+      assert.match(secondBody, /Metadata version 2/);
+      assert.match(secondBody, /proof-document-v2/);
       assert.notEqual(second.headers.get("x-origin-generation"), first.headers.get("x-origin-generation"));
-      assert.equal(reads, before + 2);
+      assert.equal(reads, before + 8);
     });
 
     await context.test("navigation returns JSON with the navigation response marker", async () => {
@@ -94,7 +105,11 @@ void test("the live ISR fixture preserves its local response contracts", async (
       assert.equal(data.version, 2);
       assert.equal(data.id, "two");
       assert.equal(data.edition, "green");
-      assert.equal(reads, before + 1);
+      assert.equal(reads, before + 4);
+      assert.deepEqual(contributionReads.slice(-4).sort(), ["document", "layout", "metadata", "page"]);
+      assert.match(JSON.stringify(body), /Layout version 2/);
+      assert.match(JSON.stringify(body), /Metadata version 2/);
+      assert.match(JSON.stringify(body), /proof-document-v2/);
     });
 
     await context.test("private controls preserve each identity and prohibit storage", async () => {
@@ -148,4 +163,24 @@ void test("the live ISR fixture preserves its local response contracts", async (
     if (originalProductionHost === undefined) delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
     else process.env.VERCEL_PROJECT_PRODUCTION_URL = originalProductionHost;
   }
+});
+
+void test("The candidate refuses private response outputs before provider storage.", () => {
+  const publicHeaders = { "content-security-policy": "script-src 'self'", "cache-control": "public, max-age=0" };
+  assert.equal(eligibleLiveResponse(new Response("public", { headers: publicHeaders }), "document"), true);
+  const privateHeaders: Array<Record<string, string>> = [
+    { "set-cookie": "private=value" },
+    { "cache-control": "private, max-age=60" },
+    { "cache-control": "no-store" },
+    { vary: "Cookie" },
+    { vary: "*" },
+    { vary: "Authorization" },
+    { vary: "X-Private-Input" },
+    { "content-security-policy": "script-src 'nonce-private'" },
+  ];
+  for (const headers of privateHeaders) {
+    assert.equal(eligibleLiveResponse(new Response("private", { headers: { ...publicHeaders, ...headers } }), "document"), false);
+  }
+  assert.equal(eligibleLiveResponse(new Response("failed", { status: 500, headers: publicHeaders }), "document"), false);
+  assert.equal(eligibleLiveResponse(new Response("navigation", { headers: { ...publicHeaders, "cache-control": "no-store" } }), "navigation"), true);
 });
