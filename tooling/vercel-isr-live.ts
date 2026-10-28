@@ -172,8 +172,8 @@ export default createLiveListener(${JSON.stringify({ representation: "control", 
     { src: "^/proof-.*$", dest: "/reject" },
     { src: "^/public/.*$", has: [{ type: "header", key: "cookie" }], dest: "/reject" },
     { src: "^/public/.*$", has: [{ type: "header", key: "authorization" }], dest: "/reject" },
-    { src: "^/public/(one|two)$", methods: ["GET", "HEAD"], has: [{ type: "header", key: "x-demiurge-navigation", value: "^data$" }], dest: isolated ? "/proof-nav-$1?__proof_representation=navigation" : "/proof-nav-$1" },
-    { src: "^/public/(one|two)$", methods: ["GET", "HEAD"], missing: [{ type: "header", key: "x-demiurge-navigation" }], dest: isolated ? "/proof-doc-$1?__proof_representation=document" : "/proof-doc-$1" },
+    { src: "^/public/(one|two)$", methods: ["GET", "HEAD"], has: [{ type: "header", key: "x-demiurge-navigation", value: "^data$" }], dest: isolated ? "/proof-nav-$1?__proof_representation=navigation-original" : "/proof-nav-$1" },
+    { src: "^/public/(one|two)$", methods: ["GET", "HEAD"], missing: [{ type: "header", key: "x-demiurge-navigation" }], dest: isolated ? "/proof-doc-$1?__proof_representation=document-original" : "/proof-doc-$1" },
     { src: "^/raw-nav$", dest: "/raw-nav" },
     { src: "^/private$", dest: "/private" },
     { src: "^/nonce$", dest: "/nonce" },
@@ -250,7 +250,7 @@ export default createLiveListener(${JSON.stringify({ representation: "control", 
     await request("repeat-navigation-first", "/public/two", { "x-demiurge-navigation": "data" });
     await request("unknown-query-second-path", "/public/two?preview=synthetic-private");
     await request("duplicate-query-second-path", "/public/two?edition=a&edition=b");
-    await request("reserved-query", "/public/one?__proof_representation=navigation");
+    await request("reserved-query", "/public/one?__proof_representation=navigation-original");
     await request("encoded-unknown-query", "/public/one?%70review=synthetic-private");
     await request("encoded-duplicate-query", "/public/one?edition=a&%65dition=b");
   }

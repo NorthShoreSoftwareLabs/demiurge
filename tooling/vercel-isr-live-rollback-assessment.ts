@@ -33,6 +33,7 @@ export function assessRollback(rows: readonly Row[]): string[] {
   if (originalHost === replacementHost) failures.push("rollback-deployments: deployment identities must differ.");
   if (typeof deployed.alias !== "string" || !/^demiurge-isr-rollback-\d+\.vercel\.app$/.test(deployed.alias)) failures.push("rollback-deployments: invalid temporary alias.");
   check("rollback-deployments", deployed, "productionChanged", false);
+  check("rollback-deployments", deployed, "explicitDeploymentNamespace", true);
 
   const originalNames = ["rollback-original", "rollback-original-navigation", "rollback-original-hit", "rollback-restored", "rollback-restored-navigation"];
   const replacementNames = ["rollback-forward", "rollback-forward-navigation", "rollback-forward-hit", "rollback-inflight-generation", "rollback-replacement-retained"];

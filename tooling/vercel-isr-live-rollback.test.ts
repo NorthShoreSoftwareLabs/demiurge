@@ -22,7 +22,7 @@ function evidence(): Row[] {
     };
   });
   rows.push(
-    { name: "rollback-deployments", original: "https://original.vercel.app", replacement: "https://replacement.vercel.app", alias: "demiurge-isr-rollback-123.vercel.app", productionChanged: false },
+    { name: "rollback-deployments", original: "https://original.vercel.app", replacement: "https://replacement.vercel.app", alias: "demiurge-isr-rollback-123.vercel.app", productionChanged: false, explicitDeploymentNamespace: true },
     { name: "rollback-generation-started", version: 10, sourceStartedAt: time(11), observedAt: time(12) },
     { name: "rollback-alias-restored", completedAt: time(15) },
     { name: "rollback-scope", aliasRestored: true, originalVersion: 8, restoredVersion: 8, replacementVersion: 10, globalPropagationVerified: false, atomicPublicationVerified: false },

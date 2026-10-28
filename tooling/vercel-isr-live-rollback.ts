@@ -25,6 +25,17 @@ export async function verifyRollback(options: Options): Promise<void> {
   let replacement = "";
   let aliasCreated = false;
   let cleanupFailure: unknown;
+  const observeRelease = async (name: string, release: string, target: string, navigation = false, version?: number, cache?: string): Promise<Row> => {
+    for (let attempt = 0; attempt < 15; attempt++) {
+      const row = await request(`${name}-attempt-${attempt}`, "/public/two", navigation ? { "x-demiurge-navigation": "data" } : {}, "GET", "30", target);
+      if (row.release === release && (version === undefined || row.version === version) && (cache === undefined || row.cache === cache)) {
+        row.name = name;
+        await save();
+        return row;
+      }
+    }
+    throw new Error(`The alias did not expose the expected ${name} observation.`);
+  };
   try {
     for (const entry of await readdir(join(output, "functions"))) {
       if (!/^proof-(doc|nav)-(one|two)\.func$/.test(entry)) continue;
@@ -33,28 +44,33 @@ export async function verifyRollback(options: Options): Promise<void> {
       assert.ok(source.includes('"x-proof-release", "original"'));
       await writeFile(file, source.replace('"x-proof-release", "original"', '"x-proof-release", "replacement"'));
     }
+    const configFile = join(output, "config.json");
+    const routing = await readFile(configFile, "utf8");
+    assert.ok(routing.includes("__proof_representation=document-original"));
+    assert.ok(routing.includes("__proof_representation=navigation-original"));
+    await writeFile(configFile, routing.replaceAll("__proof_representation=document-original", "__proof_representation=document-replacement").replaceAll("__proof_representation=navigation-original", "__proof_representation=navigation-replacement"));
     const deployed = await command("vercel", ["deploy", "--prebuilt", "--yes", "--cwd", scratch, ...scope], scratch);
     const matches = deployed.match(/https:\/\/[^\s]+\.vercel\.app/g);
     assert.ok(matches?.length);
     replacement = matches.at(-1)!;
-    results.push({ name: "rollback-deployments", original: deployment, replacement, alias, productionChanged: false, replacementArtifactHash: await hashArtifact(output) });
+    results.push({ name: "rollback-deployments", original: deployment, replacement, alias, productionChanged: false, explicitDeploymentNamespace: true, replacementArtifactHash: await hashArtifact(output) });
     await save();
     await command("vercel", ["alias", "set", deployment, alias, ...scope], scratch);
     aliasCreated = true;
     state.version = 8;
-    const original = await request("rollback-original", "/public/two", {}, "GET", "30", `https://${alias}`);
+    const original = await observeRelease("rollback-original", "original", `https://${alias}`);
     assert.equal(original.release, "original");
-    await request("rollback-original-navigation", "/public/two", { "x-demiurge-navigation": "data" }, "GET", "30", `https://${alias}`);
-    await request("rollback-original-hit", "/public/two", {}, "GET", "30", `https://${alias}`);
+    await observeRelease("rollback-original-navigation", "original", `https://${alias}`, true);
+    await observeRelease("rollback-original-hit", "original", `https://${alias}`, false, undefined, "HIT");
     await command("vercel", ["alias", "set", replacement, alias, ...scope], scratch);
     state.version = 9;
-    const forward = await request("rollback-forward", "/public/two", {}, "GET", "30", `https://${alias}`);
+    const forward = await observeRelease("rollback-forward", "replacement", `https://${alias}`, false, 9);
     assert.equal(forward.release, "replacement");
     assert.equal(forward.version, 9);
-    const forwardNavigation = await request("rollback-forward-navigation", "/public/two", { "x-demiurge-navigation": "data" }, "GET", "30", `https://${alias}`);
+    const forwardNavigation = await observeRelease("rollback-forward-navigation", "replacement", `https://${alias}`, true, 9);
     assert.equal(forwardNavigation.release, "replacement");
     assert.equal(forwardNavigation.version, 9);
-    await request("rollback-forward-hit", "/public/two", {}, "GET", "30", `https://${alias}`);
+    await observeRelease("rollback-forward-hit", "replacement", `https://${alias}`, false, 9, "HIT");
     state.version = 10;
     state.delayMs = 12_000;
     const pending = request("rollback-inflight-generation", "/public/two", { "x-prerender-revalidate": token }, "GET", "30", replacement).then((value) => ({ value }), (error: unknown) => ({ error }));
@@ -71,8 +87,8 @@ export async function verifyRollback(options: Options): Promise<void> {
     assert.equal(completed.release, "replacement");
     assert.equal(completed.version, 10);
     state.delayMs = 0;
-    const restored = await request("rollback-restored", "/public/two", {}, "GET", "30", `https://${alias}`);
-    const restoredNavigation = await request("rollback-restored-navigation", "/public/two", { "x-demiurge-navigation": "data" }, "GET", "30", `https://${alias}`);
+    const restored = await observeRelease("rollback-restored", "original", `https://${alias}`);
+    const restoredNavigation = await observeRelease("rollback-restored-navigation", "original", `https://${alias}`, true);
     assert.equal(restored.release, "original");
     assert.equal(restoredNavigation.release, "original");
     const replacementAfter = await request("rollback-replacement-retained", "/public/two", {}, "GET", "30", replacement);
