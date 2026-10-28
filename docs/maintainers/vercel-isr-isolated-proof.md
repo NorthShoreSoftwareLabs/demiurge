@@ -76,8 +76,8 @@ A lost acknowledgment leaves acceptance unknown until separate observations esta
 All five temporary previews were removed after their probes.
 Source tunnels stopped, and production aliases did not change.
 
-Issue #481 remains open for the remaining requirements.
-RFC 0230 still requires owner acceptance before public implementation.
+This proof left issue #481 open for additional evidence.
+The [October 28 completion proof](vercel-isr-completion-proof.md) supplies the later observations and accepted limits.
 
 ## Proposal follow-up
 

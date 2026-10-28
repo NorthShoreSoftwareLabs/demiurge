@@ -1,8 +1,8 @@
 # Vercel ISR investigation
 
 This record defines the technical evidence boundary for [issue #481](https://github.com/NorthShoreSoftwareLabs/demiurge/issues/481).
-[RFC 0230](../../rfcs/0230-cdn-cache-invalidation.md) contains the proposed representation cache contract.
-Public API acceptance requires the provider proof specified in that RFC.
+[RFC 0230](../../rfcs/0230-cdn-cache-invalidation.md) links to the accepted response-cache contract.
+The [completion proof](vercel-isr-completion-proof.md) records the later provider evidence and accepted limits.
 
 ## Baseline and evidence boundary
 

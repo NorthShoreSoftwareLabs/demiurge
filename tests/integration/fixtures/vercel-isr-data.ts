@@ -69,8 +69,28 @@ export async function verifyFreshGenerationData(): Promise<void> {
   const nextGeneration = createCache({ namespace, store: createMemoryCacheStore() });
   assert.equal(await nextGeneration.get(product("alpha")), "alpha:3");
 
+  const contributionNames = ["page", "layout", "metadata", "document"];
+  const contribution = (name: string): CacheRequest<number> => ({
+    key: ["contribution", name], scope: "public", fn: () => { reads++; return version; },
+  });
+  for (const name of contributionNames) assert.equal(await shared.get(contribution(name)), 3);
+  const beforeContributions = [...sharedEntries];
+  version = 4;
+  for (const name of contributionNames) assert.equal(await shared.get(contribution(name)), 3);
+  const freshContributions = createCache({ namespace, store: createMemoryCacheStore() });
+  const beforeReads = reads;
+  for (const name of contributionNames) {
+    assert.deepEqual(await Promise.all([
+      freshContributions.get(contribution(name)),
+      freshContributions.get(contribution(name)),
+    ]), [4, 4]);
+  }
+  assert.equal(reads, beforeReads + contributionNames.length);
+  assert.deepEqual([...sharedEntries], beforeContributions);
+
   // Separate representation reads do not establish a source snapshot.
   const representation = () => createCache({ namespace, store: createMemoryCacheStore() });
+  version = 3;
   const documentVersion = await representation().get(product("alpha"));
   version = 4;
   const navigationVersion = await representation().get(product("alpha"));

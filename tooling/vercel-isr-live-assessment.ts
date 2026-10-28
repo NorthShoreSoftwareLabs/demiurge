@@ -1,3 +1,5 @@
+import { assessRollback } from "./vercel-isr-live-rollback-assessment";
+
 type Row = Record<string, unknown>;
 
 export function assessIsolated(rows: readonly Row[]): string[] {
@@ -101,5 +103,67 @@ export function assessIsolated(rows: readonly Row[]): string[] {
   if (result.version !== 5 && result.version !== 7) failures.push("lost-acknowledgment-observation: expected the previous or attempted version.");
   check("lost-acknowledgment-retry", named("lost-acknowledgment-retry"), "version", 7);
   check("lost-acknowledgment-result", named("lost-acknowledgment-result"), "version", 7);
+  return [...new Set(failures)];
+}
+
+export function assessCompletion(rows: readonly Row[]): string[] {
+  const failures = [...assessIsolated(rows), ...assessRollback(rows)];
+  const cleanup = rows.filter((candidate) => candidate.name === "original-deployment-cleanup");
+  if (cleanup.length !== 1 || cleanup[0]?.removed !== true) failures.push("original-deployment-cleanup: missing preview removal.");
+  const eligibility = rows.filter((candidate) => candidate.name === "artifact-eligibility");
+  if (eligibility.length !== 1) failures.push("artifact-eligibility: expected exactly one observation.");
+  const artifact = eligibility[0] ?? {};
+  const expectedTargets = ["proof-doc-one.prerender-config.json", "proof-doc-two.prerender-config.json", "proof-nav-one.prerender-config.json", "proof-nav-two.prerender-config.json"];
+  if (JSON.stringify(artifact.prerenderTargets) !== JSON.stringify(expectedTargets)) failures.push("artifact-eligibility: unexpected prerender targets.");
+  for (const property of ["privateControlExcluded", "nonceControlExcluded", "publicCredentialsAbsent", "runtimeResponseValidation"]) {
+    if (artifact[property] !== true) failures.push(`artifact-eligibility: missing ${property}.`);
+  }
+  for (const property of ["arbitraryMiddlewareEligible", "headerVariantsEligible"]) {
+    if (artifact[property] !== false) failures.push(`artifact-eligibility: unsupported ${property}.`);
+  }
+  for (const name of ["cold-document", "repeat-document", "cold-navigation", "repeat-navigation", "timed-fresh", "explicit-document-result", "explicit-navigation-result", "retry-result"]) {
+    const row = rows.find((candidate) => candidate.name === name) ?? {};
+    for (const contribution of ["layoutVersion", "metadataVersion", "documentVersion"]) {
+      if (!Number.isSafeInteger(row[contribution]) || row[contribution] !== row.version) {
+        failures.push(`${name}: ${contribution} does not match the fresh page version.`);
+      }
+    }
+  }
+  for (const name of ["browser-target-navigation-revalidation", "browser-target-navigation-result"]) {
+    const observations = rows.filter((row) => row.name === name);
+    const row = observations[0] ?? {};
+    if (observations.length !== 1 || row.status !== 200 || row.version !== 8 ||
+      row.contentType !== "application/json" || row.navigationMarker !== "data" ||
+      row.cache !== (name.endsWith("-result") ? "HIT" : "REVALIDATED")) {
+      failures.push(`${name}: missing verified navigation publication.`);
+    }
+  }
+  const browser = rows.filter((row) => row.name === "browser-hydration-navigation");
+  if (browser.length !== 1) failures.push("browser-hydration-navigation: expected exactly one observation.");
+  const row = browser[0] ?? {};
+  for (const property of ["hydrated", "interaction", "history", "documentContributions"]) {
+    if (row[property] !== true) failures.push(`browser-hydration-navigation: missing ${property}.`);
+  }
+  if (row.documentRequests !== 1 || typeof row.navigationRequests !== "number" || row.navigationRequests < 2 || typeof row.assetRequests !== "number" || row.assetRequests < 1) {
+    failures.push("browser-hydration-navigation: missing document, asset, or navigation requests.");
+  }
+  if (row.transport !== "vercel-curl-bridge") failures.push("browser-hydration-navigation: unexpected transport.");
+  if (!Number.isSafeInteger(row.initialVersion) || !Number.isSafeInteger(row.targetVersion) || !Number.isSafeInteger(row.restoredVersion) || row.initialVersion === row.targetVersion) {
+    failures.push("browser-hydration-navigation: missing distinct destination versions.");
+  }
+  for (const [key, versionKey] of [["initialContributions", "initialVersion"], ["targetContributions", "targetVersion"], ["restoredContributions", "restoredVersion"]]) {
+    const snapshot = row[key];
+    if (typeof snapshot !== "object" || snapshot === null || !("version" in snapshot) || snapshot.version !== row[versionKey] ||
+      !("title" in snapshot) || snapshot.title !== `Metadata version ${String(row[versionKey])}` ||
+      !("layoutDescription" in snapshot) || snapshot.layoutDescription !== `Layout version ${String(row[versionKey])}` ||
+      !("canonical" in snapshot) || snapshot.canonical !== `/proof-document-v${String(row[versionKey])}`) {
+      failures.push(`browser-hydration-navigation: stale or missing ${key}.`);
+    }
+  }
+  const revalidation = rows.filter((candidate) => candidate.name === "browser-target-revalidation");
+  if (revalidation.length !== 1 || revalidation[0]?.status !== 200 || revalidation[0]?.cache !== "REVALIDATED" || revalidation[0]?.version !== row.targetVersion) {
+    failures.push("browser-target-revalidation: missing authenticated destination generation.");
+  }
+  if (!Array.isArray(row.errors) || row.errors.length !== 0) failures.push("browser-hydration-navigation: browser errors occurred.");
   return [...new Set(failures)];
 }

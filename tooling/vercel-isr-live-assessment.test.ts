@@ -106,3 +106,26 @@ void test("Lifecycle evidence requires stale serving and published retry output.
     assert.ok(assessIsolated(rows).some((failure) => failure.startsWith(`${name}:`)), `${name}.${key}`);
   }
 });
+
+void test("Completion rejects missing independent freshness and browser evidence.", async () => {
+  const { assessCompletion } = await import("./vercel-isr-live-assessment");
+  const rows = evidence();
+  assert.ok(assessCompletion(rows).some((failure) => failure.startsWith("timed-fresh:")));
+  assert.ok(assessCompletion(rows).some((failure) => failure.startsWith("browser-hydration-navigation:")));
+  for (const row of rows) {
+    if (Number.isSafeInteger(row.version)) Object.assign(row, { layoutVersion: row.version, metadataVersion: row.version, documentVersion: row.version });
+  }
+  const snapshot = (version: number) => ({ version, title: `Metadata version ${version}`, layoutDescription: `Layout version ${version}`, canonical: `/proof-document-v${version}` });
+  rows.push({ name: "browser-hydration-navigation", transport: "vercel-curl-bridge", hydrated: true, interaction: true, history: true, documentContributions: true, documentRequests: 1, navigationRequests: 2, assetRequests: 1, initialVersion: 7, targetVersion: 8, restoredVersion: 7, initialContributions: snapshot(7), targetContributions: snapshot(8), restoredContributions: snapshot(7), errors: [] });
+  rows.push({ name: "browser-target-revalidation", status: 200, cache: "REVALIDATED", version: 8 });
+  rows.push({ name: "browser-target-navigation-revalidation", status: 200, cache: "REVALIDATED", version: 8, contentType: "application/json", navigationMarker: "data" });
+  rows.push({ name: "browser-target-navigation-result", status: 200, cache: "HIT", version: 8, contentType: "application/json", navigationMarker: "data" });
+  rows.push({ name: "original-deployment-cleanup", removed: true });
+  rows.push({ name: "artifact-eligibility", prerenderTargets: ["proof-doc-one.prerender-config.json", "proof-doc-two.prerender-config.json", "proof-nav-one.prerender-config.json", "proof-nav-two.prerender-config.json"], privateControlExcluded: true, nonceControlExcluded: true, publicCredentialsAbsent: true, runtimeResponseValidation: true, arbitraryMiddlewareEligible: false, headerVariantsEligible: false });
+  assert.ok(assessCompletion(rows).every((failure) => failure.startsWith("rollback-")));
+  for (const [name, key, value] of [["timed-fresh", "layoutVersion", 1], ["explicit-navigation-result", "metadataVersion", 2], ["explicit-document-result", "documentVersion", 2], ["browser-hydration-navigation", "hydrated", false], ["browser-hydration-navigation", "documentRequests", 2], ["browser-hydration-navigation", "errors", ["Hydration mismatch"]], ["artifact-eligibility", "privateControlExcluded", false], ["artifact-eligibility", "prerenderTargets", []], ["browser-hydration-navigation", "transport", "other"], ["browser-hydration-navigation", "targetVersion", 7], ["browser-hydration-navigation", "targetContributions", snapshot(7)], ["browser-hydration-navigation", "restoredContributions", snapshot(8)], ["browser-target-revalidation", "version", 7], ["original-deployment-cleanup", "removed", false]] as const) {
+    const changed = structuredClone(rows);
+    changed.find((row) => row.name === name)![key] = value;
+    assert.ok(assessCompletion(changed).some((failure) => failure.startsWith(`${name}:`)), `${name}.${key}`);
+  }
+});
