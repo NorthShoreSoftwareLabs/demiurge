@@ -129,6 +129,15 @@ export function assessCompletion(rows: readonly Row[]): string[] {
       }
     }
   }
+  for (const name of ["browser-target-navigation-revalidation", "browser-target-navigation-result"]) {
+    const observations = rows.filter((row) => row.name === name);
+    const row = observations[0] ?? {};
+    if (observations.length !== 1 || row.status !== 200 || row.version !== 8 ||
+      row.contentType !== "application/json" || row.navigationMarker !== "data" ||
+      row.cache !== (name.endsWith("-result") ? "HIT" : "REVALIDATED")) {
+      failures.push(`${name}: missing verified navigation publication.`);
+    }
+  }
   const browser = rows.filter((row) => row.name === "browser-hydration-navigation");
   if (browser.length !== 1) failures.push("browser-hydration-navigation: expected exactly one observation.");
   const row = browser[0] ?? {};

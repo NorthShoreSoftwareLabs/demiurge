@@ -118,6 +118,8 @@ void test("Completion rejects missing independent freshness and browser evidence
   const snapshot = (version: number) => ({ version, title: `Metadata version ${version}`, layoutDescription: `Layout version ${version}`, canonical: `/proof-document-v${version}` });
   rows.push({ name: "browser-hydration-navigation", transport: "vercel-curl-bridge", hydrated: true, interaction: true, history: true, documentContributions: true, documentRequests: 1, navigationRequests: 2, assetRequests: 1, initialVersion: 7, targetVersion: 8, restoredVersion: 7, initialContributions: snapshot(7), targetContributions: snapshot(8), restoredContributions: snapshot(7), errors: [] });
   rows.push({ name: "browser-target-revalidation", status: 200, cache: "REVALIDATED", version: 8 });
+  rows.push({ name: "browser-target-navigation-revalidation", status: 200, cache: "REVALIDATED", version: 8, contentType: "application/json", navigationMarker: "data" });
+  rows.push({ name: "browser-target-navigation-result", status: 200, cache: "HIT", version: 8, contentType: "application/json", navigationMarker: "data" });
   rows.push({ name: "original-deployment-cleanup", removed: true });
   rows.push({ name: "artifact-eligibility", prerenderTargets: ["proof-doc-one.prerender-config.json", "proof-doc-two.prerender-config.json", "proof-nav-one.prerender-config.json", "proof-nav-two.prerender-config.json"], privateControlExcluded: true, nonceControlExcluded: true, publicCredentialsAbsent: true, runtimeResponseValidation: true, arbitraryMiddlewareEligible: false, headerVariantsEligible: false });
   assert.ok(assessCompletion(rows).every((failure) => failure.startsWith("rollback-")));

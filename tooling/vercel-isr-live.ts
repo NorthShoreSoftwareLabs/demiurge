@@ -328,6 +328,14 @@ export default createLiveListener(${JSON.stringify({ representation: "control", 
     await request("lost-acknowledgment-result");
     state.version = 8;
     await request("browser-target-revalidation", "/public/two", { "x-prerender-revalidate": token });
+    await request("browser-target-navigation-revalidation", "/public/two", { "x-demiurge-navigation": "data", "x-prerender-revalidate": token });
+    let targetReady = false;
+    for (let attempt = 0; attempt < 10 && !targetReady; attempt++) {
+      const row = await request(`browser-target-navigation-wait-${attempt}`, "/public/two", { "x-demiurge-navigation": "data" });
+      targetReady = row.version === 8 && row.cache === "HIT";
+    }
+    assert.ok(targetReady, "The browser destination navigation was not published.");
+    await request("browser-target-navigation-result", "/public/two", { "x-demiurge-navigation": "data" });
     await verifyBrowser({ scratch, deployment, results, save, targetVersion: 8 });
     await verifyRollback({ scratch, output, deployment, alias: rollbackAlias, state, sourceEvents, request, results, save, token });
   }
