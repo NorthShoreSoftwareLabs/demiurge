@@ -117,9 +117,15 @@ Shared caches must never store authenticated responses. Responses that vary on
 not shared-cacheable.
 
 A response that contains a per-request CSP nonce is not shared-cacheable. A
-cached nonce can permit reuse of a security value across clients. Before shared
-caching, an operator must use `private, no-store` or a representation without
-a per-request nonce.
+cached nonce can permit reuse of a security value across clients.
+An integration must keep nonce-dependent documents outside every shared target.
+
+Navigation cache hits occurred despite the origin `no-store` header in the isolated proof.
+An explicit prerender target can therefore override an intended response exclusion.
+Before target generation and cache lookup, an integration must enforce eligibility.
+It cannot use that header alone as proof that private output stays outside ISR.
+API review must define browser policy and provider storage policy separately.
+Unexpected private generation output requires a verified publication exclusion before public implementation.
 
 An application must treat authorization, session state, anti-CSRF values,
 personalized metadata, and user-specific redirects as private response inputs.
@@ -255,7 +261,11 @@ Freshness probes must exercise cached data during both regeneration paths.
 The framework must establish a fresh generation context without duplicating every loader dependency in the page declaration.
 A candidate generation context bypasses shared data-cache reads during generation while retaining request-local deduplication.
 The investigation must define whether generation writes shared data entries and how those writes interact with concurrent invalidation.
-The investigation must evaluate this candidate before it changes accepted data-cache behavior.
+Each local candidate generation starts with an empty disposable store.
+It retains request-local deduplication and makes no writes to the ordinary shared store.
+This isolates candidate generation from concurrent invalidation of that store.
+Accepted data-cache behavior remains unchanged by this proof.
+Independent page, layout, metadata, and document probes remain required before this becomes a public contract.
 
 Existing key and tag declarations remain the source for ordinary data invalidation.
 Page, layout, metadata, and document data all require the selected generation rule.
@@ -295,6 +305,11 @@ Request probes must identify which route behavior runs during generation and whi
 Routes that require per-request authorization, session changes, rate limiting, or response headers cannot silently lose that behavior through ISR.
 Vercel route validation rejects such routes unless a verified request boundary preserves their contract.
 A public access declaration alone does not prove response-cache eligibility.
+
+[ADR 0025](../architecture/decisions/0025-host-middleware-integration-boundary.md) retains application middleware in the shared route pipeline.
+Provider guard code validates deployment inputs and imports no application middleware.
+It does not provide an accepted extension for moving application behavior before cache lookup.
+A route that needs application middleware on every request remains ineligible under the current decision.
 
 Personalized responses, cookie changes, mutations, and per-request CSP nonces remain outside shared ISR storage.
 Generation must prevent arbitrary incoming cookies and headers from influencing a stored public response.
@@ -358,6 +373,51 @@ This RFC does not authorize deployment or provide that access.
 API acceptance follows the proof record.
 If the proof fails a required condition, the proposal must change before public implementation starts.
 
+## Evidence applied to this proposal
+
+An [October 17 isolated proof](../docs/maintainers/vercel-isr-isolated-proof.md) supersedes the rejected October 15 routing candidate.
+Main commit `c5881c646cd902b7236704f2dc56d945f78b03ea` records that proof through PR #485.
+A [request record](../docs/maintainers/evidence/vercel-isr-2026-10-17.json) identifies committed fixture sources, artifact hashes, provider configuration, and redacted observations.
+Its source commit differs from the later record merge commit.
+Merged verification passed `pnpm verify` and the Node 22.13 package contract.
+
+These observations constrain the proposal.
+They do not accept its public API.
+
+| Boundary | Observed evidence | Proposal constraint |
+| --- | --- | --- |
+| Representation identity | Both warming orders retain separate HTML and JSON cache hits. | Include explicit representation identity in the provider key. Reject a client-supplied reserved identity before lookup. |
+| Request checks | Guard markers change while generation and origin markers remain unchanged on hits. | Validate eligible deployment inputs before lookup. Keep per-request application middleware routes ineligible. |
+| Hostile inputs | Cold and populated entries reject tested cookies, authorization, unknown or repeated query names, and invalid navigation markers. | Admit only declared inputs. Keep unsupported request variants outside shared targets. |
+| Fresh generation | Timed refresh reaches version 2. Explicit refresh reaches version 3. | Use the documented disposable generation context. Verify every framework data contribution before implementation acceptance. |
+| Consistency | Concurrent HTML and JSON generations retain versions 5 and 6. | Permit independently published versions. Claim no atomic replacement or shared source snapshot. |
+| Failure and recovery | Failed regeneration returns 500 while public requests retain version 3. Later recovery reaches version 4. | Require explicit provider-managed stale consent. Promise no maximum stale age or exact retry interval. |
+| Unknown acknowledgment | Origin work starts before timeout confirmation. Authenticated retry restores public version 7. | Report unknown acceptance after transport failure. Keep retry safe and distinguish acknowledgment from observed publication. |
+| Private output | Artifact configuration excludes private and nonce controls. An explicit navigation target caches output despite `no-store`. | Verify target admission and publication exclusions. Do not infer them from origin headers alone. |
+
+Recorded observations cover one configured region and the tested request variants.
+This evidence establishes no global propagation deadline, all-variant completion result, or durable invalidation delivery.
+Fixture results do not prove browser hydration, arbitrary `Vary`, external stores, or independent metadata and layout freshness.
+Deployment replacement and rollback remain unobserved.
+
+### Remaining acceptance work
+
+Issue #481 remains open.
+Its investigation must identify each unproved condition before owner review of this RFC.
+Acceptance retains these requirements.
+
+- Verify generation freshness for page, layout, metadata, and document contributions through the shared pipeline.
+- Define the supported variant set and reject every unsupported declared variant before deployment.
+- Verify direct target access and private publication exclusions for the proposed production artifact.
+- Observe deployment replacement and rollback before claiming their cache scope or ordering behavior.
+- Verify browser navigation against the proposed cacheable production artifact.
+- Retain explicit limits for global propagation, external data stores, and regeneration retry timing.
+- Obtain owner acceptance of the evidence and resulting public contract in issue #230.
+
+A saved-record assessment cannot replace a missing live observation.
+New live probes require authorization for their dedicated verification deployment.
+Until an accepted implementation changes it, the public adapter retains its current uncached behavior.
+
 ## Vercel implementation boundary
 
 The existing Vercel build integration generates Node functions and hybrid static routes.
@@ -371,7 +431,9 @@ Incoming `Host` headers cannot select the revalidation destination.
 Redirects cannot forward the token to another host.
 
 HTML documents and navigation payloads need coordinated invalidation.
-The implementation must verify Vercel grouping semantics for both representations before it claims atomic replacement.
+Observed grouping behavior does not provide atomic replacement for both representations.
+An initial integration must document independently published versions.
+A stronger guarantee requires separate evidence and design acceptance.
 The proof determines the consistency contract and recovery behavior before the public operation is implemented.
 Query parameters, locale, host, and declared header variation require explicit cache keys and invalidation scope.
 

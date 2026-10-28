@@ -78,3 +78,12 @@ Source tunnels stopped, and production aliases did not change.
 
 Issue #481 remains open for the remaining requirements.
 RFC 0230 still requires owner acceptance before public implementation.
+
+## Proposal follow-up
+
+[RFC 0230](../../rfcs/0230-cdn-cache-invalidation.md#evidence-applied-to-this-proposal) applies these observations to the proposed response-cache contract.
+The proposal retains independent representation versions and explicit provider-managed stale consent.
+It also retains the missing freshness, publication exclusion, browser, and rollback checks.
+The request guard validates deployment inputs only.
+[ADR 0025](../../architecture/decisions/0025-host-middleware-integration-boundary.md) keeps application middleware in the shared route pipeline.
+The guard does not establish an application middleware extension.
