@@ -1,7 +1,7 @@
 import { hydrateFileRouter, page } from "@demiurgejs/core";
 import { LiveLayout, LiveView } from "./isr-live-view";
 
-await hydrateFileRouter({
+void hydrateFileRouter({
   navigation: "server",
   routes: {
     "./routes/@layout.tsx": async () => ({ default: LiveLayout }),

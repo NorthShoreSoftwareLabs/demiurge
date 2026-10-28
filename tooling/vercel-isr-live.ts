@@ -65,6 +65,7 @@ let artifactHash = "";
 let fullArtifactHash = "";
 let routing: unknown = null;
 let requestSequence = 0;
+let observationsComplete = false;
 const sourceEvents: Array<{contribution: string; version: number; fail: boolean; at: string}> = [];
 
 try {
@@ -325,19 +326,34 @@ export default createLiveListener(${JSON.stringify({ representation: "control", 
     await request("lost-acknowledgment-observation");
     await request("lost-acknowledgment-retry", "/public/one", { "x-prerender-revalidate": token });
     await request("lost-acknowledgment-result");
-    await verifyBrowser({ scratch, deployment, results, save });
+    state.version = 8;
+    await request("browser-target-revalidation", "/public/two", { "x-prerender-revalidate": token });
+    await verifyBrowser({ scratch, deployment, results, save, targetVersion: 8 });
     await verifyRollback({ scratch, output, deployment, alias: rollbackAlias, state, sourceEvents, request, results, save, token });
   }
-  const failures = isolated ? assessCompletion(results) : assess(results);
-  results.push({ summary: "Live observations completed.", sameGenerationOnRepeat: doc.generation === hit.generation, sourceReads, failures });
-  if (failures.length) process.exitCode = 1;
-  await save();
-  console.log(`Live evidence saved: ${evidenceFile}`);
+  observationsComplete = true;
+  results.push({ summary: "Live observations completed.", sameGenerationOnRepeat: doc.generation === hit.generation, sourceReads });
 } catch (error) {
   results.push({ failure: error instanceof Error ? error.message.replaceAll(token, "[redacted]").replaceAll(sourceToken, "[redacted]") : "The live probe failed." });
   await save();
   throw error;
 } finally {
+  if (deployment) {
+    try {
+      await command("vercel", ["remove", deployment, "--yes", "--scope", "north-shore-software-labs"], scratch);
+      results.push({ name: "original-deployment-cleanup", removed: true });
+    } catch {
+      results.push({ name: "original-deployment-cleanup", removed: false });
+      process.exitCode = 1;
+    }
+  }
+  if (observationsComplete) {
+    const failures = isolated ? assessCompletion(results) : assess(results);
+    results.push({ name: "completion-assessment", failures });
+    if (failures.length) process.exitCode = 1;
+  }
+  await save();
+  console.log(`Live evidence saved: ${evidenceFile}`);
   tunnel?.kill("SIGTERM");
   if (source.listening) await new Promise<void>((done) => source.close(() => done()));
   await rm(scratch, { force: true, recursive: true });
