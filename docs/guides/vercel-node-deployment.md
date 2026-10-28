@@ -77,3 +77,33 @@ Use an application platform that can serve those browser-asset rules.
 
 See [`examples/vercel-node`](../../examples/vercel-node) for a buildable contact endpoint.
 Run a preview deployment before production use.
+
+## Production verification
+
+Local artifact probes do not establish provider behavior.
+Run the dedicated live fixture when production verification requires new evidence:
+
+```sh
+pnpm --filter @demiurgejs/core build
+pnpm --filter @demiurge-examples/vercel-node build
+node --import tsx tooling/vercel-node-live.ts --run
+```
+
+This command requires Vercel CLI authentication and an authenticated ngrok executable.
+It accepts only the dedicated `demiurge-verification` project.
+Synthetic data keeps the temporary preview separate from application data.
+Its event collector requires a random credential.
+After the probes, the runner removes the preview and stops the collector.
+
+Evidence includes artifact and source hashes, response headers, public synthetic response bodies, stream timing, and origin cancellation events.
+Standard output contains the evidence file path.
+Assess a saved record with this command:
+
+```sh
+node --import tsx tooling/vercel-node-live.ts --assess /path/to/evidence.json
+```
+
+A passing record requires distinct document nonces and generations, separate cookies, private navigation data, and private response storage exclusions.
+It also requires early stream delivery, origin cancellation, and rejection of unsupported portable background work.
+Each record identifies the observed runtime and region.
+These observations establish no global propagation, process shutdown, durable background execution, or external shared-store guarantee.
