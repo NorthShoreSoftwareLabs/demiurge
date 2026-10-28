@@ -107,3 +107,5 @@ A passing record requires distinct document nonces and generations, separate coo
 It also requires early stream delivery, origin cancellation, and rejection of unsupported portable background work.
 Each record identifies the observed runtime and region.
 These observations establish no global propagation, process shutdown, durable background execution, or external shared-store guarantee.
+
+The [October 28 production record](../maintainers/vercel-node-verification.md) contains observed provider results and their limits.

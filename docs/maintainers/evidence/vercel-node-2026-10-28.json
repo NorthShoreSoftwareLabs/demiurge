@@ -1,0 +1,204 @@
+{
+  "sourceBaseline": "a8a5bc144aeb2031f716e4eed482787f7373c74b",
+  "sourceCommit": "a8a5bc144aeb2031f716e4eed482787f7373c74b",
+  "workingTreeSources": {
+    "tooling/vercel-node-live.ts": "fdd98e794012f69946ffe0046f77d77f6e8e0cdd913d8bf342a11b55236f3fd1",
+    "tooling/vercel-node-live-assessment.ts": "1b429012ddaced146192fdbc1071594f36e5b4419fb59e983071d38a6d06b143",
+    "examples/vercel-node/tests/node-live-entry.ts": "f677e12ee95ab14f92d946fe52af698d96ac60c369dd200f10e6e40bd60a3890"
+  },
+  "artifactHash": "746d61a689501ffb234e03292130b0f4b442bf0bb3ae4e955445451c8cd2ee52",
+  "deployment": "https://demiurge-verification-24aqlzr9z-north-shore-software-labs.vercel.app",
+  "runtime": "nodejs22.x",
+  "region": "iad1",
+  "observedAt": "2026-10-28T03:08:31.131Z",
+  "results": [
+    {
+      "name": "document-first",
+      "status": 200,
+      "firstByteMs": 335.109,
+      "totalMs": 335.87600000000003,
+      "contentType": "text/html; charset=utf-8",
+      "cacheControl": "private, no-store",
+      "cache": "MISS",
+      "csp": "base-uri 'self'; connect-src 'self'; default-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; object-src 'none'; script-src 'nonce-gjGXKn+RWfzGI8gzVDljOw==' 'strict-dynamic'; style-src 'self' 'nonce-gjGXKn+RWfzGI8gzVDljOw=='; upgrade-insecure-requests",
+      "nosniff": "nosniff",
+      "generation": "ff4ff49d-7bbf-4eb9-8b3b-156202efad3c",
+      "runtime": "v22.23.2",
+      "cookies": [],
+      "body": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n    <title>Demiurge App</title>\n  </head>\n  <body>\n    <style data-demiurge-navigation-status-style nonce=\"gjGXKn+RWfzGI8gzVDljOw==\">.demiurge-navigation-status{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0, 0, 0, 0);white-space:nowrap;border:0}</style>\n    <div id=\"__demiurge_navigation_status\" data-demiurge-navigation-status class=\"demiurge-navigation-status\" role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"></div>\n    <div id=\"root\" data-demiurge-hydrate=\"\"><main>Vercel production conformance</main></div>\n    <template id=\"__demiurge_data\">{\"hasData\":true}</template>\n  </body>\n</html>\n<script async data-explicit-opt-in=\"true\" data-deployment-id=\"dpl_7R4BuwsG5ZEE3LMZ4aYKgfFiE1vA\" src=\"https://vercel.live/_next-live/feedback/feedback.js\"></script>"
+    },
+    {
+      "name": "document-second",
+      "status": 200,
+      "firstByteMs": 157.601,
+      "totalMs": 158.111,
+      "contentType": "text/html; charset=utf-8",
+      "cacheControl": "private, no-store",
+      "cache": "MISS",
+      "csp": "base-uri 'self'; connect-src 'self'; default-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; object-src 'none'; script-src 'nonce-t+a2H473JY2TQ6h2+j46aQ==' 'strict-dynamic'; style-src 'self' 'nonce-t+a2H473JY2TQ6h2+j46aQ=='; upgrade-insecure-requests",
+      "nosniff": "nosniff",
+      "generation": "d6d006c0-4234-41b2-8c67-7e7b7372eb80",
+      "runtime": "v22.23.2",
+      "cookies": [],
+      "body": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"utf-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n    <title>Demiurge App</title>\n  </head>\n  <body>\n    <style data-demiurge-navigation-status-style nonce=\"t+a2H473JY2TQ6h2+j46aQ==\">.demiurge-navigation-status{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0, 0, 0, 0);white-space:nowrap;border:0}</style>\n    <div id=\"__demiurge_navigation_status\" data-demiurge-navigation-status class=\"demiurge-navigation-status\" role=\"status\" aria-live=\"polite\" aria-atomic=\"true\"></div>\n    <div id=\"root\" data-demiurge-hydrate=\"\"><main>Vercel production conformance</main></div>\n    <template id=\"__demiurge_data\">{\"hasData\":true}</template>\n  </body>\n</html>\n<script async data-explicit-opt-in=\"true\" data-deployment-id=\"dpl_7R4BuwsG5ZEE3LMZ4aYKgfFiE1vA\" src=\"https://vercel.live/_next-live/feedback/feedback.js\"></script>"
+    },
+    {
+      "name": "navigation",
+      "status": 200,
+      "firstByteMs": 155.29999999999998,
+      "totalMs": 155.723,
+      "contentType": "application/json",
+      "cacheControl": "private, no-store",
+      "cache": "MISS",
+      "csp": "base-uri 'self'; connect-src 'self'; default-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; object-src 'none'; script-src 'nonce-zC7cvdLT3ec74Drcp+dTgA==' 'strict-dynamic'; style-src 'self' 'nonce-zC7cvdLT3ec74Drcp+dTgA=='; upgrade-insecure-requests",
+      "nosniff": "nosniff",
+      "generation": "c6a20abc-b52a-4408-b5ba-7cd0d5d36f78",
+      "runtime": "v22.23.2",
+      "cookies": [],
+      "body": "{\"document\":{\"links\":[],\"metadata\":{\"charset\":\"utf-8\",\"custom\":[],\"structuredData\":[],\"viewport\":\"width=device-width, initial-scale=1\"},\"scripts\":[],\"title\":\"Demiurge App\"},\"hasData\":true}"
+    },
+    {
+      "name": "cookies",
+      "status": 200,
+      "firstByteMs": 101.45,
+      "totalMs": 101.88,
+      "contentType": "text/plain;charset=UTF-8",
+      "cacheControl": "private, no-store",
+      "cache": "MISS",
+      "csp": null,
+      "nosniff": null,
+      "generation": "70767277-846a-4e6c-a812-d53c60fc0152",
+      "runtime": "v22.23.2",
+      "cookies": [
+        "proof-a=[redacted]; Path=/; Secure; HttpOnly; SameSite=Lax",
+        "proof-b=[redacted]; Path=/; Secure; HttpOnly; SameSite=Lax"
+      ],
+      "body": "cookies"
+    },
+    {
+      "name": "private-one",
+      "status": 200,
+      "firstByteMs": 85.85,
+      "totalMs": 86.232,
+      "contentType": "application/json",
+      "cacheControl": "private, no-store",
+      "cache": "MISS",
+      "csp": null,
+      "nosniff": null,
+      "generation": "80d29fee-2d7c-4cda-8f47-b2d7e58b2acc",
+      "runtime": "v22.23.2",
+      "cookies": [],
+      "body": "[redacted]",
+      "privateIdentityMatches": true
+    },
+    {
+      "name": "private-two",
+      "status": 200,
+      "firstByteMs": 93.202,
+      "totalMs": 93.579,
+      "contentType": "application/json",
+      "cacheControl": "private, no-store",
+      "cache": "MISS",
+      "csp": null,
+      "nosniff": null,
+      "generation": "60f1ba67-0445-4735-8fe0-1daeb79fc871",
+      "runtime": "v22.23.2",
+      "cookies": [],
+      "body": "[redacted]",
+      "privateIdentityMatches": true
+    },
+    {
+      "name": "request",
+      "status": 200,
+      "firstByteMs": 109.02000000000001,
+      "totalMs": 109.334,
+      "contentType": "application/json",
+      "cacheControl": "private, no-store",
+      "cache": "MISS",
+      "csp": null,
+      "nosniff": null,
+      "generation": "1142feb2-672f-4c7d-80fe-00b614f9b93f",
+      "runtime": "v22.23.2",
+      "cookies": [],
+      "body": "{\"pathname\":\"/probe/request\",\"search\":\"?edition=one&edition=two\",\"address\":\"[redacted-provider-address]\"}"
+    },
+    {
+      "name": "capabilities",
+      "status": 200,
+      "firstByteMs": 101.885,
+      "totalMs": 102.337,
+      "contentType": "application/json",
+      "cacheControl": "private, no-store",
+      "cache": "MISS",
+      "csp": null,
+      "nosniff": null,
+      "generation": "fef9b32d-4dd0-44cb-b3f2-496df285567e",
+      "runtime": "v22.23.2",
+      "cookies": [],
+      "body": "{\"backgroundLifetime\":false,\"crossOriginIsolationHeaders\":true,\"nonceInjection\":true,\"requestTimeoutEnforcement\":false,\"responseBodyCompletion\":true,\"sharedCache\":false,\"staticOutput\":false,\"streaming\":true,\"webSocket\":false,\"webTransport\":false,\"backgroundRejected\":true}"
+    },
+    {
+      "name": "stream",
+      "status": 200,
+      "firstByteMs": 179.283,
+      "totalMs": 7260.137000000001,
+      "contentType": "text/plain; charset=utf-8",
+      "cacheControl": "private, no-store",
+      "cache": "MISS",
+      "csp": null,
+      "nosniff": null,
+      "generation": "8deeb9cb-71e4-43d8-9029-63711f83d044",
+      "runtime": "v22.23.2",
+      "cookies": [],
+      "body": "started\ncontinued\ncontinued\ncontinued\ncontinued\ncontinued\ncontinued\ncontinued\n"
+    },
+    {
+      "name": "cancelled-stream",
+      "status": 200,
+      "firstByteMs": 154.336,
+      "totalMs": 505.397,
+      "contentType": "text/plain; charset=utf-8",
+      "cacheControl": "private, no-store",
+      "cache": "MISS",
+      "csp": null,
+      "nosniff": null,
+      "generation": "c5b4e434-d29f-4051-8c70-39371f72c7ac",
+      "runtime": "v22.23.2",
+      "cookies": [],
+      "body": "started\n"
+    }
+  ],
+  "events": [
+    {
+      "id": "complete",
+      "event": "started",
+      "at": "2026-10-28T03:08:17.283Z"
+    },
+    {
+      "id": "complete",
+      "event": "completed",
+      "at": "2026-10-28T03:08:24.364Z"
+    },
+    {
+      "id": "cancel",
+      "event": "started",
+      "at": "2026-10-28T03:08:25.575Z"
+    },
+    {
+      "id": "cancel",
+      "event": "aborted",
+      "at": "2026-10-28T03:08:25.978Z"
+    }
+  ],
+  "errorMessage": null,
+  "cleanupComplete": true,
+  "limits": [
+    "One region was observed.",
+    "No process shutdown or durable background lifetime is claimed.",
+    "No shared external store was configured."
+  ],
+  "redactions": [
+    "Private response bodies and cookie values were removed by the runner.",
+    "The saved request probe removes the operator public address. The provider replaced the supplied synthetic address."
+  ]
+}
