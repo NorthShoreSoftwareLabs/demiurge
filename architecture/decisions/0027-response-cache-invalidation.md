@@ -40,7 +40,7 @@ Application server code uses an explicit framework operation after a successful 
 Provider selection remains in deployment configuration.
 Routes do not construct authenticated provider requests.
 
-The framework does not automatically map data tags to response paths or surrogate keys.
+Data tags do not automatically map to response paths or surrogate keys.
 An invalidation request identifies a concrete application path and its supported variants.
 Unknown paths, unsupported variants, and invalid configuration fail before provider work starts when knowable.
 
@@ -191,7 +191,7 @@ Rollback supplies no immediate global completion guarantee.
 
 ### Capabilities and implementation gates
 
-A provider capability belongs to a verified runtime and service configuration.
+Each provider capability belongs to a verified runtime and service configuration.
 Build or startup validation rejects a known unsupported declaration.
 A provider name alone cannot establish eligibility, stale limits, or cache consistency.
 
@@ -218,6 +218,18 @@ Live controls establish the recorded request exclusions and provider behavior.
 Alias changes exposed mixed releases before later requests observed the selected artifact.
 The namespaced proof establishes no global cutover deadline or atomic publication.
 The public Vercel adapter retains uncached behavior until a separately verified implementation changes it.
+
+## Later provider integrations
+
+GCP configuration identifies its origin, CDN cache policy, URL map, permissions, and invalidation scope.
+AWS configuration identifies its origin, distribution, IAM permissions, cache policy, and invalidation completion state.
+Provider removal and origin regeneration remain separate operations.
+Multiple origin instances require declared shared state and regeneration coordination.
+
+Each integration verifies private-response exclusions, supported variants, stale limits, deployment namespaces, rollback, and application-owned retry delivery.
+Firebase App Hosting and Amplify require separate assessments of their managed runtime boundaries.
+No integration inherits a guarantee from a provider name or another implementation.
+New integrations require their own capability contract, deployment probes, browser tests, and packed-consumer verification.
 
 ## Consequences
 
