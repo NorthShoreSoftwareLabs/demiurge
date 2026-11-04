@@ -3,7 +3,13 @@
 Released framework changes are grouped below by version. Open work and delivery
 status live in GitHub issues and milestones.
 
-## 0.2.0-beta.10 — Prepared on main
+## 0.2.0-beta.11 — Prepared on main
+
+Managed Node startup now passes page options and the Node adapter to generated server entries.
+Production documents include their client entry and styles (#491).
+Explicit application server entries retain their existing context contract.
+
+## 0.2.0-beta.10 — 2026-11-03
 
 - Enhanced mutations send CSRF tokens through the framework transport.
   Route security declarations can identify style and font resource needs.
