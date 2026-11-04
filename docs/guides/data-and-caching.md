@@ -453,10 +453,12 @@ vercelStatic({
 });
 ```
 
-Vercel applies every matching route in order. A later route replaces an earlier
-header of the same name. The generated output therefore repeats each
-application rule after the framework file rules. An application rule keeps the
-last word for a served file.
+File headers run in the initial routing phase, before document headers and
+application cache rules. Later rules in this phase replace earlier headers.
+Document policy and application overrides therefore retain their precedence.
+After the filesystem lookup, unmatched requests receive the default cache
+policy, application rules, and fallback headers. A missing hashed asset does not inherit immutable
+caching from its requested filename.
 
 Vercel reads a root `vercel.json` before the build starts. Keep project settings
 there only when the application needs settings that Build Output API does not

@@ -7,6 +7,7 @@ import {
   createVercelOutputConfig,
   generateVercelStaticOutput,
   vercelStatic,
+  type VercelOutputConfig,
 } from "../../src/static/vercel";
 
 const manifest: StaticOutputManifest = {
@@ -63,6 +64,43 @@ const manifest: StaticOutputManifest = {
   version: 1,
 };
 
+type RoutingResult = {
+  headers: Record<string, string>;
+  pathname: string;
+  status: number;
+};
+
+function evaluateRouting(
+  config: VercelOutputConfig,
+  pathname: string,
+  files = new Set([
+    "/assets/app-12345678.js",
+    "/assets/app-Abcd_123.css",
+    "/assets/font-12345678.woff2",
+    "/site.webmanifest",
+  ]),
+): RoutingResult {
+  const headers: Record<string, string> = {};
+  let status = 200;
+
+  for (const route of config.routes) {
+    if ("handle" in route) {
+      if (route.handle === "filesystem" && files.has(pathname)) break;
+      continue;
+    }
+    if (!new RegExp(route.src).test(pathname)) continue;
+
+    for (const [name, value] of Object.entries(route.headers ?? {})) {
+      headers[name.toLowerCase()] = value;
+    }
+    pathname = route.dest ?? pathname;
+    status = route.status ?? status;
+    if (!route.continue) break;
+  }
+
+  return { headers, pathname, status };
+}
+
 describe("Vercel static output", () => {
   it("maps route policy, ordered file rules, overrides, and the fallback", () => {
     const config = createVercelOutputConfig(
@@ -97,6 +135,16 @@ describe("Vercel static output", () => {
       { continue: true, dest: "/", src: "^/index\\.html/?$" },
       {
         continue: true,
+        headers: { "cache-control": "public, max-age=0, must-revalidate" },
+        src: "^/.*$",
+      },
+      {
+        continue: true,
+        headers: { "cache-control": "public, max-age=31536000, immutable" },
+        src: "^/(?:.*/)?[^/]*-[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9]+$",
+      },
+      {
+        continue: true,
         headers: { "content-security-policy": "default-src 'none'" },
         src: "^/404\\.html/?$",
       },
@@ -124,23 +172,12 @@ describe("Vercel static output", () => {
       { dest: "/about", src: "^/about/?$" },
       { dest: "/index.html", src: "^/$" },
       { dest: "/robots.txt", src: "^/robots\\.txt/?$" },
-      { handle: "hit" },
+      { handle: "filesystem" },
       {
         continue: true,
         headers: { "cache-control": "public, max-age=0, must-revalidate" },
         src: "^/.*$",
       },
-      {
-        continue: true,
-        headers: { "cache-control": "public, max-age=31536000, immutable" },
-        src: "^/(?:.*/)?[^/]*-[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9]+$",
-      },
-      {
-        continue: true,
-        headers: { "cache-control": "public, max-age=604800" },
-        src: "^/videos(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?$",
-      },
-      { handle: "error" },
       {
         continue: true,
         headers: { "cache-control": "public, max-age=604800" },
@@ -155,21 +192,21 @@ describe("Vercel static output", () => {
     ]);
   });
 
-  it("keeps the fallback headers on the final error rewrite", () => {
+  it("keeps the fallback headers after file lookup", () => {
     const config = createVercelOutputConfig(manifest, vercelStatic());
-    const errorIndex = config.routes.findIndex((route) =>
-      "handle" in route && route.handle === "error"
+    const filesystemIndex = config.routes.findIndex((route) =>
+      "handle" in route && route.handle === "filesystem"
     );
     const fallbackRoute = config.routes.at(-1);
 
-    expect(errorIndex).toBeGreaterThanOrEqual(0);
+    expect(filesystemIndex).toBeGreaterThanOrEqual(0);
     expect(fallbackRoute).toEqual({
       dest: "/404.html",
       headers: { "content-security-policy": "default-src 'none'" },
       src: "^/.*$",
       status: 404,
     });
-    expect(config.routes.slice(errorIndex + 1, -1)).not.toContainEqual(
+    expect(config.routes.slice(filesystemIndex + 1, -1)).not.toContainEqual(
       expect.objectContaining({
         headers: { "content-security-policy": "default-src 'none'" },
       }),
@@ -279,53 +316,87 @@ describe("Vercel static output", () => {
 
     expect(config.routes).toContainEqual(declaredRule);
 
-    // Vercel applies every matching hit-phase rule in order, and a later rule
-    // overrides an earlier header. A declared rule wins the manifest match, so
-    // the translator must emit it after each framework rule.
-    const sourceRoutes = config.routes.flatMap((route) =>
-      "handle" in route ? [] : [route],
-    );
-    const declaredIndex = sourceRoutes.findIndex(
-      (route) => route.src === declaredRule.src,
-    );
-    const catchAllIndex = sourceRoutes.findIndex(
-      (route) => route.src === "^/.*$" && route.continue === true,
-    );
-
-    expect(catchAllIndex).toBeGreaterThanOrEqual(0);
-    expect(declaredIndex).toBeGreaterThan(catchAllIndex);
+    const result = evaluateRouting(config, "/assets/font-12345678.woff2");
+    expect(result.headers["cross-origin-resource-policy"]).toBe("cross-origin");
   });
 
-  it("keeps an application cache rule after every framework file rule", () => {
+  it.each(["/assets/app-12345678.js", "/assets/app-Abcd_123.css"])(
+    "sets immutable caching before file lookup for %s",
+    (pathname) => {
+      const config = createVercelOutputConfig(manifest, vercelStatic());
+      const routing = evaluateRouting(config, pathname);
+      expect(routing.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
+      expect(routing.status).toBe(200);
+      expect(routing.pathname).toBe(pathname);
+    },
+  );
+
+  it("revalidates an unhashed public file before file lookup", () => {
+    const config = createVercelOutputConfig(manifest, vercelStatic());
+    const routing = evaluateRouting(config, "/site.webmanifest");
+    expect(routing.headers["cache-control"]).toBe("public, max-age=0, must-revalidate");
+  });
+
+  it("preserves an entry cache policy after generic file rules", () => {
+    const config = createVercelOutputConfig(manifest, vercelStatic());
+    const routing = evaluateRouting(config, "/robots.txt");
+    expect(routing.headers["cache-control"]).toBe("public, max-age=60");
+    expect(routing.status).toBe(200);
+  });
+
+  it.each(["/site.webmanifest", "/assets/app-12345678.js", "/robots.txt"])(
+    "preserves the application cache policy for %s",
+    (pathname) => {
+      const config = createVercelOutputConfig(
+        manifest,
+        vercelStatic({ cache: [{ source: pathname, value: "public, max-age=3600" }] }),
+      );
+      const routing = evaluateRouting(config, pathname);
+      expect(routing.headers["cache-control"]).toBe("public, max-age=3600");
+      expect(routing.status).toBe(200);
+    },
+  );
+
+  it("preserves entry policy through a physical file alias", () => {
+    const config = createVercelOutputConfig(manifest, vercelStatic());
+    const routing = evaluateRouting(config, "/about/index.html");
+    expect(routing.pathname).toBe("/about");
+    expect(routing.headers["content-security-policy"]).toBe("default-src 'self'");
+    expect(routing.status).toBe(200);
+  });
+
+  it("uses fallback policy after a missing hashed file", () => {
+    const config = createVercelOutputConfig(manifest, vercelStatic());
+    const routing = evaluateRouting(config, "/assets/missing-12345678.js");
+    expect(routing.pathname).toBe("/404.html");
+    expect(routing.status).toBe(404);
+    expect(routing.headers["content-security-policy"]).toBe("default-src 'none'");
+    expect(routing.headers["cache-control"]).toBe("public, max-age=0, must-revalidate");
+  });
+
+  it("preserves an application cache rule on the error response", () => {
     const config = createVercelOutputConfig(
       manifest,
-      vercelStatic({
-        cache: [{ source: "/site.webmanifest", value: "public, max-age=3600" }],
-      }),
+      vercelStatic({ cache: [{ source: "/missing.txt", value: "public, max-age=30" }] }),
     );
+    const routing = evaluateRouting(config, "/missing.txt");
+    expect(routing.status).toBe(404);
+    expect(routing.headers["cache-control"]).toBe("public, max-age=30");
+  });
 
-    // The header a path receives is the header of the last matching route.
-    // Compute that value the way Vercel does, so this test fails if a
-    // framework rule ever lands after the application rule.
-    const matched = config.routes.flatMap((route) =>
-      "handle" in route || !route.headers || !route.src
-        || !new RegExp(route.src).test("/site.webmanifest")
-        ? []
-        : [route.headers],
+  it("preserves an explicit fallback cache policy", () => {
+    const config = createVercelOutputConfig(
+      {
+        ...manifest,
+        entries: manifest.entries.map((entry) => entry.pathname === "*"
+          ? { ...entry, headers: { ...entry.headers, "cache-control": "no-store" } }
+          : entry),
+      },
+      vercelStatic(),
     );
-    const effective = new Map<string, string>();
-    for (const headers of matched) {
-      for (const [name, value] of Object.entries(headers)) {
-        effective.set(name, value);
-      }
-    }
-
-    // The framework catch-all rule must match this path too. Without it the
-    // assertion below would pass for the wrong reason.
-    expect(matched).toContainEqual({
-      "cache-control": "public, max-age=0, must-revalidate",
-    });
-    expect(effective.get("cache-control")).toBe("public, max-age=3600");
+    const routing = evaluateRouting(config, "/assets/missing-12345678.js");
+    expect(routing.status).toBe(404);
+    expect(routing.headers["cache-control"]).toBe("no-store");
   });
 
   it("reflects a declared Vercel CORS policy in access-control-allow-origin", () => {

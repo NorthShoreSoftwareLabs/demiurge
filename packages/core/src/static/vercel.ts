@@ -9,6 +9,7 @@ import {
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { pathToRegexp } from "path-to-regexp";
 import { validateCorsPolicy } from "../security";
+import { REVALIDATED_FILE_CACHE_CONTROL } from "../static-files";
 import type { CorsPolicy } from "../security";
 import { translateFileHeaderPattern } from "./file-header-pattern";
 import type {
@@ -44,7 +45,7 @@ export type VercelOutputSourceRoute = {
 };
 
 export type VercelOutputHandleRoute = {
-  handle: "error" | "hit";
+  handle: "error" | "filesystem" | "hit";
 };
 
 export type VercelOutputRoute =
@@ -157,6 +158,14 @@ export function createVercelOutputConfig(
     }
   }
 
+  for (const rule of [...manifest.fileHeaderRules].reverse()) {
+    routes.push({
+      continue: true,
+      headers: { ...rule.headers },
+      src: translateFileHeaderPattern(rule.pattern),
+    });
+  }
+
   for (const entry of manifest.entries) {
     const headers = withoutContentType(entry.headers);
     if (Object.keys(headers).length === 0) continue;
@@ -185,23 +194,13 @@ export function createVercelOutputConfig(
     });
   }
 
-  routes.push({ handle: "hit" });
-  for (const rule of [...manifest.fileHeaderRules].reverse()) {
-    routes.push({
-      continue: true,
-      headers: { ...rule.headers },
-      src: translateFileHeaderPattern(rule.pattern),
-    });
-  }
-  // Vercel applies every matching route in order, and a later route replaces
-  // an earlier header of the same name. The hit phase runs after the routing
-  // phase, so a framework file rule would replace the cache policy that the
-  // application declared. The application rules repeat here to keep the last
-  // word for a served file.
-  routes.push(...applicationRoutes.map((route) => ({ ...route })));
-
-  routes.push({ handle: "error" });
+  routes.push({ handle: "filesystem" });
   const fallbackHeaders = withoutContentType(fallback.headers);
+  routes.push({
+    continue: true,
+    headers: { "cache-control": REVALIDATED_FILE_CACHE_CONTROL },
+    src: "^/.*$",
+  });
   routes.push(...applicationRoutes.map((route) => ({ ...route })));
   routes.push({
     dest: `/${fallback.file}`,
