@@ -265,6 +265,17 @@ try {
     );
     const denied = await fetch(`${managedApplication.origin}/account`);
     assert(page.status === 200, "The generated managed page did not answer.");
+    const document = await page.text();
+    const clientManifest = JSON.parse(
+      readFileSync(join(generatedRoot, "dist/client/demiurge-manifest.json"), "utf8"),
+    ) as { clientEntry: string; styles: string[] };
+    assert(document.includes(clientManifest.clientEntry), "The managed document omitted its client entry.");
+    assert(clientManifest.styles.length > 0, "The generated application has no stylesheet probe.");
+    for (const asset of [clientManifest.clientEntry, ...clientManifest.styles]) {
+      assert(document.includes(asset), "The managed document omitted a declared asset.");
+      const result = await fetch(new URL(asset, managedApplication.origin));
+      assert(result.status === 200 && (await result.text()).length > 0, "A managed document asset did not answer.");
+    }
     assert(readiness.status === 200, "The generated readiness probe did not answer.");
     assert(denied.status === 401, "The generated authorization policy did not deny access.");
   } finally {

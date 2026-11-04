@@ -5,7 +5,8 @@ import type { InlineConfig } from "vite";
 import { createDemiurgeViteConfig } from "./config/vite";
 import type { ResolvedDemiurgeConfig } from "./config/types";
 import { parseClientManifest } from "./manifest";
-import type { NodeBuildRuntime, ServeNodeBuildOptions } from "./node";
+import type { NodeBuildPageOptions, NodeBuildRuntime, ServeNodeBuildOptions } from "./node";
+import type { Adapter } from "./adapter";
 import type { RouteImporter } from "./route";
 import {
   generateVercelStaticOutput,
@@ -26,6 +27,12 @@ export {
 export type { InspectCommandResult } from "./inspect";
 
 type CliEnvironment = Record<string, string | undefined>;
+
+type GeneratedNodeBuildRuntime = {
+  createHandler: (
+    options: NodeBuildPageOptions & { adapter: Adapter },
+  ) => ReturnType<NodeBuildRuntime["createHandler"]>;
+};
 
 const cliOptionNames = new Set(["--host", "--origin", "--out-dir", "--port"]);
 
@@ -305,10 +312,20 @@ export async function runStart(
   const serverEntry = runtime
     ? await runtime.importModule(serverEntryUrl)
     : await import(serverEntryUrl);
-  if (!isNodeBuildRuntime(serverEntry)) {
-    throw new Error(
-      "The application server bundle does not export a Node build runtime.",
-    );
+  let createHandler: NodeBuildRuntime["createHandler"];
+  let createStatic: NodeBuildRuntime["createStatic"];
+  if (applicationServer.entry) {
+    if (!isNodeBuildRuntime(serverEntry)) {
+      throw new Error("The application server bundle does not export a Node build runtime.");
+    }
+    createHandler = serverEntry.createHandler;
+    createStatic = serverEntry.createStatic;
+  } else {
+    if (!isGeneratedNodeBuildRuntime(serverEntry)) {
+      throw new Error("The generated server bundle does not export a page handler factory.");
+    }
+    const { nodeAdapter } = await import("./node");
+    createHandler = ({ page }) => serverEntry.createHandler({ ...page, adapter: nodeAdapter });
   }
 
   const serve = runtime?.serve ?? (await import("./node")).serveNodeBuild;
@@ -316,14 +333,18 @@ export async function runStart(
     allowedHosts,
     base: pathToFileURL(`${root}/`).href,
     clientDir: relative(root, clientDir),
-    createHandler: serverEntry.createHandler,
+    createHandler,
     env: environment,
     host: options.host,
     port: options.port,
     readyPath: "/.well-known/ready",
     shutdown: { signals: ["SIGINT", "SIGTERM"] },
-    static: serverEntry.createStatic,
+    static: createStatic,
   });
+}
+
+function isGeneratedNodeBuildRuntime(value: Record<string, unknown>): value is GeneratedNodeBuildRuntime {
+  return typeof value.createHandler === "function";
 }
 
 function isNodeBuildRuntime(value: Record<string, unknown>): value is NodeBuildRuntime {
