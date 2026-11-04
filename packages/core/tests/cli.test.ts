@@ -14,6 +14,7 @@ import {
 } from "../src/cli";
 import type { ResolvedDemiurgeConfig } from "../src/config/types";
 import { vercelNode } from "../src/vercel";
+import { nodeAdapter, renderNodePageResponse, type ServeNodeBuildOptions } from "../src/node";
 
 function resolvedConfig(
   config: Partial<ResolvedDemiurgeConfig> = {},
@@ -369,6 +370,43 @@ describe("Demiurge start", () => {
       readyPath: "/.well-known/ready",
       shutdown: { signals: ["SIGINT", "SIGTERM"] },
     }));
+  });
+
+  it("adapts generated page options without changing explicit application contexts", async () => {
+    const factory = vi.fn(() => async () => new Response("ok"));
+    const staticFactory = vi.fn();
+    const serve = vi.fn(async (_options: ServeNodeBuildOptions) => undefined);
+    const context = {
+      page: { clientEntry: "/client.js", styles: ["/style.css"], renderPage: renderNodePageResponse },
+      root: "/application/app/dist/client",
+      waitUntil: vi.fn(),
+    };
+    for (const entry of [undefined, "src/server-entry.ts"]) {
+      await runStart(
+        parseCliArguments(["start"]),
+        resolvedConfig({ deployment: { server: { entry } } }),
+        { ALLOWED_HOSTS: "app.example.test" },
+        { importModule: async () => ({ createHandler: factory, ...(entry ? { createStatic: staticFactory } : {}) }), serve },
+      );
+      const options = serve.mock.calls.at(-1)![0];
+      await options.createHandler(context);
+      expect(factory).toHaveBeenLastCalledWith(entry ? context : { ...context.page, adapter: nodeAdapter });
+      expect(options.static).toBe(entry ? staticFactory : undefined);
+    }
+  });
+
+  it("rejects missing factories and invalid explicit static factories before startup", async () => {
+    for (const [entry, exports] of [
+      [undefined, {}],
+      ["src/server-entry.ts", { createHandler: () => undefined, createStatic: 42 }],
+    ] as const) {
+      await expect(runStart(
+        parseCliArguments(["start"]),
+        resolvedConfig({ deployment: { server: { entry } } }),
+        { ALLOWED_HOSTS: "app.example.test" },
+        { importModule: async () => exports, serve: vi.fn() },
+      )).rejects.toThrow(/server bundle/);
+    }
   });
 
   it("requires an application server entry and an allowed-host policy", async () => {
