@@ -95,7 +95,12 @@ function evaluateRouting(
     }
     pathname = route.dest ?? pathname;
     status = route.status ?? status;
-    if (!route.continue) break;
+    if (!route.continue) {
+      for (const transform of route.transforms ?? []) {
+        delete headers[transform.target.key.toLowerCase()];
+      }
+      break;
+    }
   }
 
   return { headers, pathname, status };
@@ -372,6 +377,55 @@ describe("Vercel static output", () => {
     expect(routing.status).toBe(404);
     expect(routing.headers["content-security-policy"]).toBe("default-src 'none'");
     expect(routing.headers["cache-control"]).toBe("public, max-age=0, must-revalidate");
+  });
+
+  it("removes file-only headers from documents and missing-file fallbacks", () => {
+    const config = createVercelOutputConfig({
+      ...manifest,
+      fileHeaderRules: [{
+        pattern: "\\.woff2$",
+        headers: {
+          "cross-origin-resource-policy": "cross-origin",
+          "x-file-only": "font",
+        },
+      }, {
+        pattern: ".*",
+        headers: { "x-file-only": "asset" },
+      }, ...manifest.fileHeaderRules],
+    }, vercelStatic());
+
+    expect(evaluateRouting(config, "/assets/font-12345678.woff2").headers)
+      .toMatchObject({
+        "cross-origin-resource-policy": "cross-origin",
+        "x-file-only": "font",
+      });
+    for (const pathname of ["/", "/about/index.html", "/404.html"]) {
+      expect(evaluateRouting(config, pathname).headers).not.toHaveProperty("x-file-only");
+    }
+    const fallback = evaluateRouting(config, "/assets/missing-12345678.woff2");
+    expect(fallback.status).toBe(404);
+    expect(fallback.headers).not.toHaveProperty("cross-origin-resource-policy");
+    expect(fallback.headers).not.toHaveProperty("x-file-only");
+    expect(fallback.headers["content-security-policy"]).toBe("default-src 'none'");
+    expect(fallback.headers["access-control-allow-origin"]).toBe("https://example.test");
+  });
+
+  it("keeps an explicit document header over a different file policy", () => {
+    const config = createVercelOutputConfig({
+      ...manifest,
+      entries: manifest.entries.map((entry) => ({
+        ...entry,
+        headers: { ...entry.headers, "cross-origin-resource-policy": "same-origin" },
+      })),
+      fileHeaderRules: [{
+        pattern: ".*",
+        headers: { "cross-origin-resource-policy": "cross-origin" },
+      }, ...manifest.fileHeaderRules],
+    }, vercelStatic());
+    for (const pathname of ["/", "/about/index.html", "/404.html", "/missing.woff2"]) {
+      expect(evaluateRouting(config, pathname).headers["cross-origin-resource-policy"])
+        .toBe("same-origin");
+    }
   });
 
   it("preserves an application cache rule on the error response", () => {

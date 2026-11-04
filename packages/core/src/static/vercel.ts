@@ -42,6 +42,11 @@ export type VercelOutputSourceRoute = {
   headers?: Record<string, string>;
   src: string;
   status?: number;
+  transforms?: Array<{
+    type: "response.headers";
+    op: "delete";
+    target: { key: string };
+  }>;
 };
 
 export type VercelOutputHandleRoute = {
@@ -185,12 +190,14 @@ export function createVercelOutputConfig(
         dest: `/${entry.file}`,
         src: exactPathPattern(`/${entry.file}`),
         status: 404,
+        ...documentHeaderCleanup(manifest, entry.headers),
       });
       continue;
     }
     routes.push({
       dest: entry.pathname === "/" ? `/${entry.file}` : entry.pathname,
       src: exactPathPattern(entry.pathname),
+      ...documentHeaderCleanup(manifest, entry.headers),
     });
   }
 
@@ -207,6 +214,7 @@ export function createVercelOutputConfig(
     headers: fallbackHeaders,
     src: "^/.*$",
     status: 404,
+    ...documentHeaderCleanup(manifest, fallback.headers),
   });
 
   validateVercelRoutes(routes);
@@ -218,6 +226,27 @@ export function createVercelOutputConfig(
     routes,
     version: 3,
   };
+}
+
+function documentHeaderCleanup(
+  manifest: StaticOutputManifest,
+  headers: Record<string, string>,
+): Pick<VercelOutputSourceRoute, "transforms"> {
+  const retained = new Set([
+    "cache-control",
+    "content-type",
+    ...Object.keys(headers).map((name) => name.toLowerCase()),
+  ]);
+  const fileHeaders = new Set(manifest.fileHeaderRules.flatMap((rule) =>
+    Object.keys(rule.headers).map((name) => name.toLowerCase())
+  ));
+  const transforms: NonNullable<VercelOutputSourceRoute["transforms"]> =
+    [...fileHeaders].filter((name) => !retained.has(name)).map((name) => ({
+      type: "response.headers",
+      op: "delete",
+      target: { key: name },
+    }));
+  return transforms.length ? { transforms } : {};
 }
 
 function createOverride(entry: StaticOutputEntry) {

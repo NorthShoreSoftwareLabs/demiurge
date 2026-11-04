@@ -456,6 +456,7 @@ vercelStatic({
 File headers run in the initial routing phase, before document headers and
 application cache rules. Later rules in this phase replace earlier headers.
 Document policy and application overrides therefore retain their precedence.
+Document responses remove file-only headers that their document policy omits.
 After the filesystem lookup, unmatched requests receive the default cache
 policy, application rules, and fallback headers. A missing hashed asset does not inherit immutable
 caching from its requested filename.
