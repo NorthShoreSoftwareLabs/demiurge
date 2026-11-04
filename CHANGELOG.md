@@ -3,6 +3,24 @@
 Released framework changes are grouped below by version. Open work and delivery
 status live in GitHub issues and milestones.
 
+## 0.2.0-beta.10 — Prepared on main
+
+- Enhanced mutations send CSRF tokens through the framework transport.
+  Route security declarations can identify style and font resource needs.
+  Development audits verify declared CSP resources in document JSX and collect CSP reports.
+- Vercel builds support hybrid static routes through the shared provider boundary.
+  Function builds use `ServerBuildPageOptions` and explicit shared-store choices.
+  The production guide records verified streaming, cookies, origin cancellation, and runtime limits.
+- The scaffold supports a noninteractive application workflow.
+  External application examples verify testing contracts and security boundaries.
+- Runtime instrumentation covers requests, data operations, and trace propagation.
+  Optional OpenTelemetry integration exports application-owned signals.
+- Configured server routes can schedule best-effort work through `background.run(task)`.
+  Unsupported adapters reject this configuration before they accept requests.
+
+The response-cache decision is accepted in ADR 0027.
+Public response-cache API implementation remains deferred in issue #489.
+
 ## 0.2.0 — Unreleased
 
 - Managed function builds use the provider-neutral
