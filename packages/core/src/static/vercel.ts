@@ -9,6 +9,7 @@ import {
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { pathToRegexp } from "path-to-regexp";
 import { validateCorsPolicy } from "../security";
+import { REVALIDATED_FILE_CACHE_CONTROL } from "../static-files";
 import type { CorsPolicy } from "../security";
 import { translateFileHeaderPattern } from "./file-header-pattern";
 import type {
@@ -41,10 +42,15 @@ export type VercelOutputSourceRoute = {
   headers?: Record<string, string>;
   src: string;
   status?: number;
+  transforms?: Array<{
+    type: "response.headers";
+    op: "delete";
+    target: { key: string };
+  }>;
 };
 
 export type VercelOutputHandleRoute = {
-  handle: "error" | "hit";
+  handle: "error" | "filesystem" | "hit";
 };
 
 export type VercelOutputRoute =
@@ -157,6 +163,14 @@ export function createVercelOutputConfig(
     }
   }
 
+  for (const rule of [...manifest.fileHeaderRules].reverse()) {
+    routes.push({
+      continue: true,
+      headers: { ...rule.headers },
+      src: translateFileHeaderPattern(rule.pattern),
+    });
+  }
+
   for (const entry of manifest.entries) {
     const headers = withoutContentType(entry.headers);
     if (Object.keys(headers).length === 0) continue;
@@ -176,38 +190,31 @@ export function createVercelOutputConfig(
         dest: `/${entry.file}`,
         src: exactPathPattern(`/${entry.file}`),
         status: 404,
+        ...documentHeaderCleanup(manifest, entry.headers),
       });
       continue;
     }
     routes.push({
       dest: entry.pathname === "/" ? `/${entry.file}` : entry.pathname,
       src: exactPathPattern(entry.pathname),
+      ...documentHeaderCleanup(manifest, entry.headers),
     });
   }
 
-  routes.push({ handle: "hit" });
-  for (const rule of [...manifest.fileHeaderRules].reverse()) {
-    routes.push({
-      continue: true,
-      headers: { ...rule.headers },
-      src: translateFileHeaderPattern(rule.pattern),
-    });
-  }
-  // Vercel applies every matching route in order, and a later route replaces
-  // an earlier header of the same name. The hit phase runs after the routing
-  // phase, so a framework file rule would replace the cache policy that the
-  // application declared. The application rules repeat here to keep the last
-  // word for a served file.
-  routes.push(...applicationRoutes.map((route) => ({ ...route })));
-
-  routes.push({ handle: "error" });
+  routes.push({ handle: "filesystem" });
   const fallbackHeaders = withoutContentType(fallback.headers);
+  routes.push({
+    continue: true,
+    headers: { "cache-control": REVALIDATED_FILE_CACHE_CONTROL },
+    src: "^/.*$",
+  });
   routes.push(...applicationRoutes.map((route) => ({ ...route })));
   routes.push({
     dest: `/${fallback.file}`,
     headers: fallbackHeaders,
     src: "^/.*$",
     status: 404,
+    ...documentHeaderCleanup(manifest, fallback.headers),
   });
 
   validateVercelRoutes(routes);
@@ -219,6 +226,27 @@ export function createVercelOutputConfig(
     routes,
     version: 3,
   };
+}
+
+function documentHeaderCleanup(
+  manifest: StaticOutputManifest,
+  headers: Record<string, string>,
+): Pick<VercelOutputSourceRoute, "transforms"> {
+  const retained = new Set([
+    "cache-control",
+    "content-type",
+    ...Object.keys(headers).map((name) => name.toLowerCase()),
+  ]);
+  const fileHeaders = new Set(manifest.fileHeaderRules.flatMap((rule) =>
+    Object.keys(rule.headers).map((name) => name.toLowerCase())
+  ));
+  const transforms: NonNullable<VercelOutputSourceRoute["transforms"]> =
+    [...fileHeaders].filter((name) => !retained.has(name)).map((name) => ({
+      type: "response.headers",
+      op: "delete",
+      target: { key: name },
+    }));
+  return transforms.length ? { transforms } : {};
 }
 
 function createOverride(entry: StaticOutputEntry) {
